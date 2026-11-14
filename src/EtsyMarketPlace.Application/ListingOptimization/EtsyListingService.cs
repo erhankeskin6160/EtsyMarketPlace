@@ -12,6 +12,7 @@ using EtsyMarketPlace.Application.EtsyIntegration;
 public sealed class EtsyListingService : IEtsyListingService
 {
     private static readonly ConcurrentDictionary<string, string> ListingPrimaryImgCache = new();
+    private static readonly ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, IReadOnlyList<ShopListingItemDto> Items)> ShopListingsCache = new();
     private static readonly string[] TrademarkTerms =
     [
         "ben 10", "omnitrix", "thor", "mjolnir", "marvel", "disney", "valorant", "kratos",
@@ -36,7 +37,26 @@ public sealed class EtsyListingService : IEtsyListingService
         int limit,
         CancellationToken cancellationToken = default)
     {
-        var rawJson = await _listingClient.GetShopListingsRawJsonAsync(shopId, limit, cancellationToken);
+        var cacheKey = $"{shopId}:{limit}";
+        if (ShopListingsCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.Items;
+        }
+
+        string rawJson;
+        try
+        {
+            rawJson = await _listingClient.GetShopListingsRawJsonAsync(shopId, limit, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return cached.Items ?? Array.Empty<ShopListingItemDto>();
+        }
+
         using var doc = JsonDocument.Parse(rawJson);
         if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
         {
@@ -271,6 +291,7 @@ public sealed class EtsyListingService : IEtsyListingService
                 SavedAudit: savedAuditObj));
         }
 
+        ShopListingsCache[cacheKey] = (DateTimeOffset.UtcNow.AddMinutes(2), items);
         return items;
     }
 

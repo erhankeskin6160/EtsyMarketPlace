@@ -15,6 +15,7 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
     private readonly IEtsyLogisticsApiClient _apiClient;
     private readonly IEtsyTaxonomyRepository? _taxonomyRepository;
     private static readonly ConcurrentDictionary<string, List<EtsyTaxonomyNodeItemDto>> TaxonomyCache = new();
+    private static readonly ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, IReadOnlyList<EtsyShippingProfileDto> Profiles)> ShippingProfileCache = new();
 
     public EtsyLogisticsService(
         IEtsyLogisticsApiClient apiClient,
@@ -30,8 +31,26 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
     {
         if (string.IsNullOrWhiteSpace(shopId)) return [];
 
-        var json = await _apiClient.GetRawShippingProfilesJsonAsync(shopId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(json)) return [];
+        if (ShippingProfileCache.TryGetValue(shopId, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.Profiles;
+        }
+
+        string? json;
+        try
+        {
+            json = await _apiClient.GetRawShippingProfilesJsonAsync(shopId, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return cached.Profiles ?? Array.Empty<EtsyShippingProfileDto>();
+        }
+
+        if (string.IsNullOrWhiteSpace(json)) return cached.Profiles ?? Array.Empty<EtsyShippingProfileDto>();
 
         using var doc = JsonDocument.Parse(json);
         var list = new List<EtsyShippingProfileDto>();
@@ -53,6 +72,7 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
             }
         }
 
+        ShippingProfileCache[shopId] = (DateTimeOffset.UtcNow.AddMinutes(10), list);
         return list;
     }
 
