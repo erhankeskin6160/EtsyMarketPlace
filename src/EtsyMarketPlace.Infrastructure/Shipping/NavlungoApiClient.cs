@@ -94,8 +94,8 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                     if (chunkRes.IsSuccessStatusCode)
                     {
                         string js = await chunkRes.Content.ReadAsStringAsync(ct);
-                        var anonMatch = Regex.Match(js, @"createServerReference\(""([a-f0-9]+)""[^,]+,[^,]+,[^,]+,""callCalculationAnonymousApi""\)");
-                        var authMatch = Regex.Match(js, @"createServerReference\(""([a-f0-9]+)""[^,]+,[^,]+,[^,]+,""callCalculationApi""\)");
+                        var anonMatch = Regex.Match(js, @"createServerReference\)?\(""([a-f0-9]{40,})""[^""]+""callCalculationAnonymousApi""\)");
+                        var authMatch = Regex.Match(js, @"createServerReference\)?\(""([a-f0-9]{40,})""[^""]+""callCalculationApi""\)");
                         
                         if (anonMatch.Success) _cachedAnonymousActionId = anonMatch.Groups[1].Value;
                         if (authMatch.Success) _cachedAuthenticatedActionId = authMatch.Groups[1].Value;
@@ -510,13 +510,62 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         }
         else if (element.ValueKind == JsonValueKind.Object)
         {
+            // Resmi Navlungo Quotes API kök nesnesi: { "shipmentSummary": ..., "quotes": [ ... ] }
+            if (element.TryGetProperty("quotes", out var quotesArray) && quotesArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var qItem in quotesArray.EnumerateArray())
+                {
+                    ExtractFromJsonElement(qItem, list);
+                }
+                return;
+            }
+
             string carrier = string.Empty;
+            string customerName = string.Empty;
+            string quoteId = string.Empty;
+            string shipmentId = string.Empty;
+            string searchId = string.Empty;
+            string quoteDescription = string.Empty;
             decimal price = 0;
             string currency = "USD";
             string delivery = "1-4 iş günü";
             string serviceType = "Express";
             bool isBestExpress = false;
             bool isBestEconomy = false;
+            double chargeableWeightKg = 0;
+            double volumetricWeightKg = 0;
+            decimal baseSystemOfferUsd = 0;
+            decimal fuelSurchargeUsd = 0;
+            decimal peakSeasonSurchargeUsd = 0;
+            decimal ddpFeeUsd = 0;
+            decimal insuranceFeeUsd = 0;
+            decimal premiumTrackingFeeUsd = 0;
+            decimal signatureRequiredFeeUsd = 0;
+            decimal tryEquivalentAmount = 0;
+            bool earlyTrackingEnabled = false;
+            bool isDdpRequired = false;
+
+            // 0. Kimlik ve meta alanları
+            if (element.TryGetProperty("quoteId", out var qIdProp) && qIdProp.ValueKind == JsonValueKind.String)
+                quoteId = qIdProp.GetString() ?? "";
+            if (element.TryGetProperty("shipmentId", out var shIdProp) && shIdProp.ValueKind == JsonValueKind.String)
+                shipmentId = shIdProp.GetString() ?? "";
+            if (element.TryGetProperty("searchId", out var seIdProp) && seIdProp.ValueKind == JsonValueKind.String)
+                searchId = seIdProp.GetString() ?? "";
+            if (element.TryGetProperty("customerName", out var custProp) && custProp.ValueKind == JsonValueKind.String)
+                customerName = custProp.GetString() ?? "";
+            if (element.TryGetProperty("quoteDescription", out var qDescProp) && qDescProp.ValueKind == JsonValueKind.String)
+                quoteDescription = qDescProp.GetString() ?? "";
+            if (element.TryGetProperty("chargeableWeight", out var cwProp) && cwProp.ValueKind == JsonValueKind.Number)
+                chargeableWeightKg = cwProp.GetDouble();
+            if (element.TryGetProperty("totalVolumetricWeight", out var vwProp) && vwProp.ValueKind == JsonValueKind.Number)
+                volumetricWeightKg = vwProp.GetDouble();
+            if (element.TryGetProperty("tryEquivalentAmount", out var tryProp) && tryProp.ValueKind == JsonValueKind.Number)
+                tryEquivalentAmount = tryProp.GetDecimal();
+            if (element.TryGetProperty("earlyTrackingEnabled", out var etProp) && (etProp.ValueKind == JsonValueKind.True || etProp.ValueKind == JsonValueKind.False))
+                earlyTrackingEnabled = etProp.GetBoolean();
+            if (element.TryGetProperty("isDDPRequired", out var ddpReqProp) && (ddpReqProp.ValueKind == JsonValueKind.True || ddpReqProp.ValueKind == JsonValueKind.False))
+                isDdpRequired = ddpReqProp.GetBoolean();
 
             // 1. lastMile kontrolü (Navlungo API standart yanıtı: thy -> Widect, fedex -> FedEx, ups -> UPS, dhl -> DHL)
             if (element.TryGetProperty("lastMile", out var lmProp))
@@ -536,22 +585,105 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             else if (element.TryGetProperty("carrier", out var cProp)) carrier = cProp.GetString() ?? "";
             else if (element.TryGetProperty("name", out var nProp)) carrier = nProp.GetString() ?? "";
 
-            // 2. Fiyat kontrolü
-            if (element.TryGetProperty("price", out var pProp))
+            // 2. Fiyat kontrolü (resmi quotePrice.amount + eski price / amount alanları)
+            if (element.TryGetProperty("quotePrice", out var qpProp) && TryReadMoneyObject(qpProp, out decimal qpAmt, out string? qpCurr))
             {
-                if (pProp.ValueKind == JsonValueKind.Number) price = pProp.GetDecimal();
-                else if (decimal.TryParse(pProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal p)) price = p;
+                price = qpAmt;
+                if (!string.IsNullOrWhiteSpace(qpCurr)) currency = qpCurr;
+            }
+            else if (element.TryGetProperty("price", out var pProp))
+            {
+                if (TryReadMoneyObject(pProp, out decimal pAmt, out string? pCurr))
+                {
+                    price = pAmt;
+                    if (!string.IsNullOrWhiteSpace(pCurr)) currency = pCurr;
+                }
             }
             else if (element.TryGetProperty("amount", out var aProp))
             {
-                if (aProp.ValueKind == JsonValueKind.Number) price = aProp.GetDecimal();
-                else if (decimal.TryParse(aProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal a)) price = a;
+                TryReadMoneyObject(aProp, out price, out _);
+            }
+
+            // 2b. priceLines (system-offer)
+            if (element.TryGetProperty("priceLines", out var plProp) && plProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var line in plProp.EnumerateArray())
+                {
+                    string code = line.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
+                    if (line.TryGetProperty("price", out var lp) && TryReadMoneyObject(lp, out decimal lineAmt, out _))
+                    {
+                        if (code.Equals("system-offer", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseSystemOfferUsd += lineAmt;
+                        }
+                    }
+                }
+            }
+
+            // 2c. surcharges (fuel-surcharge, peak-season-surcharge)
+            if (element.TryGetProperty("surcharges", out var scProp) && scProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var sc in scProp.EnumerateArray())
+                {
+                    string code = sc.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
+                    if (sc.TryGetProperty("price", out var sp) && TryReadMoneyObject(sp, out decimal scAmt, out _))
+                    {
+                        if (code.Equals("fuel-surcharge", StringComparison.OrdinalIgnoreCase))
+                        {
+                            fuelSurchargeUsd += scAmt;
+                        }
+                        else
+                        {
+                            peakSeasonSurchargeUsd += scAmt;
+                        }
+                    }
+                }
+            }
+
+            // 2d. valueAddedServices (ddp, insurance, premium-tracking, signature-required)
+            if (element.TryGetProperty("valueAddedServices", out var vasProp) && vasProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var vas in vasProp.EnumerateArray())
+                {
+                    string code = vas.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
+                    if (vas.TryGetProperty("price", out var vp) && TryReadMoneyObject(vp, out decimal vasAmt, out _))
+                    {
+                        switch (code.ToLowerInvariant())
+                        {
+                            case "ddp":
+                                ddpFeeUsd = vasAmt;
+                                break;
+                            case "insurance":
+                                insuranceFeeUsd = vasAmt;
+                                break;
+                            case "premium-tracking":
+                                premiumTrackingFeeUsd = vasAmt;
+                                break;
+                            case "signature-required":
+                                signatureRequiredFeeUsd = vasAmt;
+                                break;
+                        }
+                    }
+                }
             }
 
             // 3. Para birimi
-            if (element.TryGetProperty("currency", out var currProp)) currency = currProp.GetString() ?? "USD";
+            if (element.TryGetProperty("currency", out var currProp))
+            {
+                if (currProp.ValueKind == JsonValueKind.String)
+                {
+                    currency = currProp.GetString() ?? currency;
+                }
+                else if (currProp.ValueKind == JsonValueKind.Object)
+                {
+                    if (currProp.TryGetProperty("value", out var cv) && cv.ValueKind == JsonValueKind.String)
+                        currency = cv.GetString() ?? currency;
+                    else if (currProp.TryGetProperty("name", out var cn) && cn.ValueKind == JsonValueKind.String)
+                        currency = cn.GetString() ?? currency;
+                }
+            }
 
-            // 4. Servis tipi
+            // 4. Servis tipi (UPS Express vs UPS Expedited ayrımı dahil)
             if (element.TryGetProperty("serviceType", out var stProp))
             {
                 string rawSt = stProp.GetString() ?? "";
@@ -560,8 +692,16 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 else if (!string.IsNullOrWhiteSpace(rawSt)) serviceType = rawSt;
             }
 
-            // 5. Teslimat süresi
-            if (element.TryGetProperty("minTransitTime", out var minT) && element.TryGetProperty("maxTransitTime", out var maxT))
+            if (carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase) &&
+                (customerName.Contains("Expedited", StringComparison.OrdinalIgnoreCase) ||
+                 customerName.Contains("Saver", StringComparison.OrdinalIgnoreCase)))
+            {
+                serviceType = "Express Saver";
+            }
+
+            // 5. Teslimat süresi (minTransitTime/maxTransitTime ve official minimumTransitTime/maximumTransitTime)
+            if ((element.TryGetProperty("minTransitTime", out var minT) && element.TryGetProperty("maxTransitTime", out var maxT)) ||
+                (element.TryGetProperty("minimumTransitTime", out minT) && element.TryGetProperty("maximumTransitTime", out maxT)))
             {
                 if (minT.TryGetInt32(out int minDays) && maxT.TryGetInt32(out int maxDays))
                 {
@@ -570,97 +710,135 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             }
             else if (element.TryGetProperty("deliveryTime", out var dProp)) delivery = dProp.GetString() ?? delivery;
 
-            // 6. Etiketler (best-express-price, best-economy-price vb.)
+            // 6. Etiketler (best-express-price, best-economy-price, best-price vb.)
             if (element.TryGetProperty("tags", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
             {
                 foreach (var tag in tagsProp.EnumerateArray())
                 {
                     string t = tag.GetString() ?? "";
                     if (t.Contains("best-express", StringComparison.OrdinalIgnoreCase)) isBestExpress = true;
-                    if (t.Contains("best-economy", StringComparison.OrdinalIgnoreCase)) isBestEconomy = true;
+                    if (t.Contains("best-economy", StringComparison.OrdinalIgnoreCase) ||
+                        t.Equals("best-price", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isBestEconomy = true;
+                    }
                 }
             }
 
+            if (baseSystemOfferUsd <= 0 && price > 0)
+            {
+                decimal nonBase = fuelSurchargeUsd + peakSeasonSurchargeUsd;
+                if (price > nonBase)
+                {
+                    baseSystemOfferUsd = Math.Round(price - nonBase, 2);
+                }
+            }
+
+            string serviceName = carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase) &&
+                                 serviceType.Equals("Express Saver", StringComparison.OrdinalIgnoreCase)
+                ? $"UPS Expedited {delivery}"
+                : $"{carrier} {delivery}";
+
             if (!string.IsNullOrWhiteSpace(carrier) && price > 0)
             {
-                if (!list.Exists(x => x.Carrier.Equals(carrier, StringComparison.OrdinalIgnoreCase) && x.Price == price && x.ServiceType.Equals(serviceType, StringComparison.OrdinalIgnoreCase)))
+                if (!list.Exists(x =>
+                    x.Carrier.Equals(carrier, StringComparison.OrdinalIgnoreCase) &&
+                    x.Price == price &&
+                    x.ServiceType.Equals(serviceType, StringComparison.OrdinalIgnoreCase) &&
+                    x.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase)))
                 {
                     list.Add(new NavlungoQuoteOffer
                     {
                         Carrier = carrier,
-                        ServiceName = $"{carrier} {delivery}",
+                        ServiceName = serviceName,
                         ServiceType = serviceType,
                         DeliveryEstimate = delivery,
                         Price = price,
                         Currency = currency,
                         IsBestExpress = isBestExpress,
                         IsBestEconomy = isBestEconomy,
-                        Note = "Navlungo API Canlı Teklif"
+                        Note = "Navlungo API Canlı Teklif",
+                        QuoteId = quoteId,
+                        ShipmentId = shipmentId,
+                        SearchId = searchId,
+                        CustomerName = customerName,
+                        ChargeableWeightKg = chargeableWeightKg,
+                        VolumetricWeightKg = volumetricWeightKg,
+                        BaseSystemOfferUsd = baseSystemOfferUsd,
+                        FuelSurchargeUsd = fuelSurchargeUsd,
+                        PeakSeasonSurchargeUsd = peakSeasonSurchargeUsd,
+                        DdpFeeUsd = ddpFeeUsd,
+                        InsuranceFeeUsd = insuranceFeeUsd,
+                        PremiumTrackingFeeUsd = premiumTrackingFeeUsd,
+                        SignatureRequiredFeeUsd = signatureRequiredFeeUsd,
+                        TryEquivalentAmount = tryEquivalentAmount,
+                        EarlyTrackingEnabled = earlyTrackingEnabled,
+                        IsDdpRequired = isDdpRequired,
+                        QuoteDescription = quoteDescription
                     });
                 }
             }
         }
     }
 
+    private static bool TryReadMoneyObject(JsonElement prop, out decimal amount, out string? currency)
+    {
+        amount = 0;
+        currency = null;
+
+        if (prop.ValueKind == JsonValueKind.Number)
+        {
+            amount = prop.GetDecimal();
+            return true;
+        }
+
+        if (prop.ValueKind == JsonValueKind.String)
+        {
+            return decimal.TryParse(prop.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out amount);
+        }
+
+        if (prop.ValueKind == JsonValueKind.Object)
+        {
+            bool foundAmount = false;
+            if (prop.TryGetProperty("amount", out var aProp))
+            {
+                if (aProp.ValueKind == JsonValueKind.Number)
+                {
+                    amount = aProp.GetDecimal();
+                    foundAmount = true;
+                }
+                else if (aProp.ValueKind == JsonValueKind.String &&
+                         decimal.TryParse(aProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal parsed))
+                {
+                    amount = parsed;
+                    foundAmount = true;
+                }
+            }
+
+            if (prop.TryGetProperty("currency", out var currProp))
+            {
+                if (currProp.ValueKind == JsonValueKind.String)
+                {
+                    currency = currProp.GetString();
+                }
+                else if (currProp.ValueKind == JsonValueKind.Object)
+                {
+                    if (currProp.TryGetProperty("value", out var cv) && cv.ValueKind == JsonValueKind.String)
+                        currency = cv.GetString();
+                    else if (currProp.TryGetProperty("name", out var cn) && cn.ValueKind == JsonValueKind.String)
+                        currency = cn.GetString();
+                }
+            }
+
+            return foundAmount;
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Çevrimdışı veya Cloudflare koruması devredeyken gerçeğe uygun piyasa fiyatlarını üretir.
     /// </summary>
     public static List<NavlungoQuoteOffer> GenerateRealisticFallbackQuotes(NavlungoQuoteRequest request)
-    {
-        double billable = request.BillableWeightKg;
-
-        // Navlungo Portal Üye Fiyatlarına Tam Kalibre Edilmiş Oranlar:
-        // Referans: 0.60 desi -> Widect $15.03, FedEx $20.75, UPS Express $34.00, UPS Saver $38.85
-        decimal b = (decimal)billable;
-        decimal widectBase = 10.50m + (b * 7.55m);
-        decimal fedexBase = 14.50m + (b * 10.41666666666666666666666667m);
-        decimal upsExpressBase = 24.00m + (b * 16.66666666666666666666666667m);
-        decimal upsSaverBase = 27.50m + (b * 18.91666666666666666666666667m);
-
-        return new List<NavlungoQuoteOffer>
-        {
-            new()
-            {
-                Carrier = "Widect",
-                ServiceName = "Widect 3-7 iş günü",
-                ServiceType = "Ekonomi",
-                DeliveryEstimate = "3-7 iş günü",
-                Price = Math.Round(widectBase, 2),
-                Currency = "USD",
-                IsBestEconomy = true,
-                Note = "Navlungo Portalı Referans Fiyatı"
-            },
-            new()
-            {
-                Carrier = "FedEx",
-                ServiceName = "FedEx 1-3 iş günü",
-                ServiceType = "Express",
-                DeliveryEstimate = "1-3 iş günü",
-                Price = Math.Round(fedexBase, 2),
-                Currency = "USD",
-                IsBestExpress = true,
-                Note = "Navlungo Portalı Referans Fiyatı"
-            },
-            new()
-            {
-                Carrier = "UPS",
-                ServiceName = "UPS 1-3 iş günü",
-                ServiceType = "Express",
-                DeliveryEstimate = "1-3 iş günü",
-                Price = Math.Round(upsExpressBase, 2),
-                Currency = "USD",
-                Note = "Navlungo Portalı Referans Fiyatı"
-            },
-            new()
-            {
-                Carrier = "UPS",
-                ServiceName = "UPS 2-5 iş günü",
-                ServiceType = "Express Saver",
-                DeliveryEstimate = "2-5 iş günü",
-                Price = Math.Round(upsSaverBase, 2),
-                Currency = "USD",
-                Note = "Navlungo Portalı Referans Fiyatı"
-            }
-        };
-    }
+        => NavlungoFallbackPricing.GenerateRealisticQuotes(request);
 }

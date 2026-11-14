@@ -24,6 +24,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
     private readonly EtsyOrderService? _orderService;
     private readonly IOrderAddressRepository? _addressRepository;
     private readonly IShippingSessionManager? _sessionManager;
+    private readonly INavlungoApiClient? _navlungoApiClient;
 
     public ShipmentOrchestratorService(
         ShipmentCreationManager creationManager,
@@ -34,7 +35,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         EtsyOrderService? orderService = null,
         IArasGlobalApiClient? arasGlobalApiClient = null,
         IOrderAddressRepository? addressRepository = null,
-        IShippingSessionManager? sessionManager = null)
+        IShippingSessionManager? sessionManager = null,
+        INavlungoApiClient? navlungoApiClient = null)
     {
         _creationManager = creationManager ?? throw new ArgumentNullException(nameof(creationManager));
         _logisticsApiClient = logisticsApiClient ?? throw new ArgumentNullException(nameof(logisticsApiClient));
@@ -45,6 +47,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         _arasGlobalApiClient = arasGlobalApiClient;
         _addressRepository = addressRepository;
         _sessionManager = sessionManager;
+        _navlungoApiClient = navlungoApiClient;
     }
 
     public async Task<CreateCarrierShipmentResult> CreateShipmentAsync(
@@ -670,7 +673,23 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             ? SafeSearchShiptomoreHsAsync(_shiptomoreApi, hsCode[..Math.Min(8, hsCode.Length)], cancellationToken)
             : Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(Array.Empty<ShiptomoreHsCode>());
 
-        await Task.WhenAll(seTask, arasTask, stmTask, stmHsTask);
+        var navReq = new NavlungoQuoteRequest
+        {
+            FromCountry = "TR",
+            ToCountry = country,
+            WeightKg = weight,
+            LengthCm = length,
+            WidthCm = width,
+            HeightCm = height,
+            PostalCode = string.IsNullOrWhiteSpace(query.PostalCode) ? "10001" : query.PostalCode,
+            DeclaredValueUsd = Math.Round(declaredValue * quantity, 2)
+        };
+        var navSettings = NavlungoSettingsStore.Load();
+        Task<List<NavlungoQuoteOffer>> navTask = _navlungoApiClient != null
+            ? SafeFetchNavlungoQuotesAsync(_navlungoApiClient, navReq, navSettings, cancellationToken)
+            : Task.FromResult(new List<NavlungoQuoteOffer>());
+
+        await Task.WhenAll(seTask, arasTask, stmTask, stmHsTask, navTask);
 
         var seResult = await seTask;
         var arasResult = await arasTask;
@@ -870,60 +889,96 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             quotes.Add(stmExpQuote);
         }
 
-        // 4. Navlungo Teklifleri (Navlun tek kalem, sahte yakıt/bölme yok; DDP tarife + işlem ücreti kırılımı)
+        // 4. Navlungo Teklifleri (Canlı API veya 4 Kademeli Navlungo Referans Tarifesi + Tam Kalem & DDP Kırılımı)
         {
-            var navSettings = NavlungoSettingsStore.Load();
-            bool navLive = !string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie);
-            double extraUnits = Math.Max(0, Math.Ceiling((billable - 0.5) / 0.5));
-            double mult = country == "US" ? 1.0 : country == "CA" ? 1.08 : 0.92;
-            decimal navEco = Math.Round((decimal)((11.80 + extraUnits * 2.25) * mult), 2);
-            decimal navExp = Math.Round((decimal)((14.60 + extraUnits * 2.70) * mult), 2);
-
-            var (navEcoFee, navEcoList, navEcoLabel) = ResolveCarrierDdpProcessingFee("navlungo", "Widect", "navlungo-eco");
-            var navEcoQuote = new UnifiedCarrierQuoteDto
+            List<NavlungoQuoteOffer> navOffers = await navTask;
+            bool navUsingLive = navOffers.Count > 0;
+            if (!navUsingLive)
             {
-                CarrierKey = "navlungo",
-                CarrierName = "Navlungo",
-                ServiceCode = "navlungo-eco",
-                ServiceType = "Widect Eco — Navlungo",
-                SubCarrier = "Widect",
-                EstimatedDays = "4-8 İş Günü",
-                PriceUsd = navEco,
-                PriceTry = Math.Round(navEco * usdTry, 2),
-                IsLive = navLive,
-                QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife",
-                HasDetailedBreakdown = false,
-                BillableWeightKg = billable
-            };
-            ApplyCustomsBreakdownToQuote(
-                navEcoQuote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
-                navEcoFee, navEcoList, navEcoLabel,
-                country == "US" ? "ABD Tarife + Taşıyıcı DDP Ücreti" : "Tahmini Gümrük Tarifesi",
-                usdTry);
-            quotes.Add(navEcoQuote);
+                navOffers = NavlungoFallbackPricing.GenerateRealisticQuotes(navReq);
+            }
 
-            var (navExpFee, navExpList, navExpLabel) = ResolveCarrierDdpProcessingFee("navlungo", "UPS", "navlungo-ups-express");
-            var navExpQuote = new UnifiedCarrierQuoteDto
+            foreach (var offer in navOffers)
             {
-                CarrierKey = "navlungo",
-                CarrierName = "Navlungo",
-                ServiceCode = "navlungo-ups-express",
-                ServiceType = "UPS Express — Navlungo",
-                SubCarrier = "UPS",
-                EstimatedDays = "2-4 İş Günü",
-                PriceUsd = navExp,
-                PriceTry = Math.Round(navExp * usdTry, 2),
-                IsLive = navLive,
-                QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife",
-                HasDetailedBreakdown = false,
-                BillableWeightKg = billable
-            };
-            ApplyCustomsBreakdownToQuote(
-                navExpQuote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
-                navExpFee, navExpList, navExpLabel,
-                country == "US" ? "ABD Tarife + Taşıyıcı DDP Ücreti" : "Tahmini Gümrük Tarifesi",
-                usdTry);
-            quotes.Add(navExpQuote);
+                decimal priceUsd = Math.Round(offer.Price, 2, MidpointRounding.AwayFromZero);
+                decimal baseSystem = offer.BaseSystemOfferUsd > 0m
+                    ? Math.Round(offer.BaseSystemOfferUsd, 2, MidpointRounding.AwayFromZero)
+                    : Math.Round(Math.Max(0m, priceUsd - offer.FuelSurchargeUsd - offer.PeakSeasonSurchargeUsd), 2, MidpointRounding.AwayFromZero);
+                decimal fuelCost = Math.Round(offer.FuelSurchargeUsd, 2, MidpointRounding.AwayFromZero);
+                decimal peakFee = Math.Round(offer.PeakSeasonSurchargeUsd, 2, MidpointRounding.AwayFromZero);
+                decimal fuelPct = baseSystem > 0m && fuelCost > 0m
+                    ? Math.Round((fuelCost / baseSystem) * 100m, 2, MidpointRounding.AwayFromZero)
+                    : 0m;
+
+                string carrierSlug = offer.Carrier.ToLowerInvariant() switch
+                {
+                    "widect" => "nav-widect",
+                    "fedex" => "nav-fedex",
+                    "ups" when offer.ServiceType.Contains("Saver", StringComparison.OrdinalIgnoreCase) ||
+                               offer.CustomerName.Contains("Expedited", StringComparison.OrdinalIgnoreCase) => "nav-ups-saver",
+                    "ups" => "nav-ups-express",
+                    _ => $"nav-{offer.Carrier.ToLowerInvariant().Replace(" ", "-")}"
+                };
+
+                string serviceLabel = carrierSlug switch
+                {
+                    "nav-widect" => "Widect — Navlungo",
+                    "nav-fedex" => "FedEx Express — Navlungo",
+                    "nav-ups-saver" => "UPS Expedited — Navlungo",
+                    "nav-ups-express" => "UPS Express — Navlungo",
+                    _ => $"{offer.Carrier} {offer.ServiceType} — Navlungo"
+                };
+
+                bool offerLive = navUsingLive && offer.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase);
+                double offerBillable = offer.ChargeableWeightKg > 0 ? offer.ChargeableWeightKg : billable;
+
+                var (navFee, navListFee, navLabel) = ResolveCarrierDdpProcessingFee(
+                    "navlungo", offer.Carrier, offer.ServiceType,
+                    navDdpFeeUsd: offer.DdpFeeUsd,
+                    declaredTotalUsd: declaredTotalUsd,
+                    generalDutyRatePercent: baseGenRate,
+                    additionalDutyRatePercent: baseAddRate);
+
+                var notes = new List<string>();
+                if (offer.InsuranceFeeUsd > 0m) notes.Add($"Opsiyonel Sigorta: ${offer.InsuranceFeeUsd:0.00}");
+                if (offer.PremiumTrackingFeeUsd > 0m) notes.Add($"Premium Takip: ${offer.PremiumTrackingFeeUsd:0.00}");
+                if (offer.SignatureRequiredFeeUsd > 0m) notes.Add($"İmzalı Teslimat: ${offer.SignatureRequiredFeeUsd:0.00}");
+
+                var navQuote = new UnifiedCarrierQuoteDto
+                {
+                    CarrierKey = "navlungo",
+                    CarrierName = "Navlungo",
+                    ServiceCode = carrierSlug,
+                    ServiceType = serviceLabel,
+                    SubCarrier = offer.Carrier,
+                    EstimatedDays = string.IsNullOrWhiteSpace(offer.DeliveryEstimate) ? "2-5 İş Günü" : offer.DeliveryEstimate,
+                    PriceUsd = priceUsd,
+                    PriceTry = Math.Round(priceUsd * usdTry, 2, MidpointRounding.AwayFromZero),
+                    IsLive = offerLive,
+                    QuoteSourceBadge = offerLive ? "Canlı teklif" : "Tahmini tarife",
+                    HasDetailedBreakdown = true,
+                    BillableWeightKg = offerBillable,
+                    BaseCargoPriceUsd = baseSystem,
+                    FuelCostUsd = fuelCost,
+                    FuelMultiplierPercent = fuelPct,
+                    AdditionalFeeUsd = peakFee,
+                    AdditionalFeeDescription = peakFee > 0m ? "Yoğun Sezon Ek Ücreti (Peak Season Surcharge)" : string.Empty,
+                    PricingTemplate = offer.EarlyTrackingEnabled ? "Erken Takip No Aktif (Navlungo)" : "Navlungo Portal",
+                    InsuranceNote = notes.Count > 0 ? string.Join(" · ", notes) : "Navlungo standart kapsam",
+                    ReturnPolicyNote = offer.IsDdpRequired
+                        ? "DDP/DDU Seçilebilir · ABD & AB gönderilerinde gümrük peşin ödenebilir"
+                        : "DDU seçilirse alıcı vergisi/iade riski göndericiye yansır"
+                };
+
+                string navCustomsBadge = navUsingLive && offer.DdpFeeUsd > 0m
+                    ? "Navlungo Canlı DDP API"
+                    : (country == "US" ? "Navlungo DDP Hizmeti + ABD Tarife" : "Navlungo DDP Tarife");
+
+                ApplyCustomsBreakdownToQuote(
+                    navQuote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
+                    navFee, navListFee, navLabel, navCustomsBadge, usdTry);
+                quotes.Add(navQuote);
+            }
         }
 
         quotes = quotes.OrderBy(q => q.PriceUsd).ToList();
@@ -1066,12 +1121,43 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         }
     }
 
+    private static async Task<List<NavlungoQuoteOffer>> SafeFetchNavlungoQuotesAsync(
+        INavlungoApiClient api,
+        NavlungoQuoteRequest request,
+        NavlungoSettings settings,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await api.FetchLiveQuotesAsync(request, settings, ct);
+        }
+        catch
+        {
+            return new List<NavlungoQuoteOffer>();
+        }
+    }
+
     private static (decimal FeeUsd, decimal? ListFeeUsd, string Label) ResolveCarrierDdpProcessingFee(
         string carrierKey,
         string? subCarrier,
         string? serviceCode,
-        ShiptomoreQuoteOffer? stmOffer = null)
+        ShiptomoreQuoteOffer? stmOffer = null,
+        decimal navDdpFeeUsd = 0m,
+        decimal declaredTotalUsd = 1m,
+        decimal generalDutyRatePercent = 0m,
+        decimal additionalDutyRatePercent = 0m)
     {
+        if (carrierKey == "navlungo" && navDdpFeeUsd > 0m)
+        {
+            decimal expectedTax = Math.Round(declaredTotalUsd * (generalDutyRatePercent / 100m), 2, MidpointRounding.AwayFromZero)
+                                + Math.Round(declaredTotalUsd * (additionalDutyRatePercent / 100m), 2, MidpointRounding.AwayFromZero);
+            decimal inferredProcessing = Math.Round(Math.Max(0m, navDdpFeeUsd - expectedTax), 2, MidpointRounding.AwayFromZero);
+            string navLbl = (subCarrier ?? string.Empty).Contains("widect", StringComparison.OrdinalIgnoreCase)
+                ? "Navlungo DDP Hizmeti (Widect)"
+                : "Navlungo DDP Hizmeti (Express)";
+            return (inferredProcessing, null, navLbl);
+        }
+
         if (stmOffer != null && stmOffer.DdpFeeUsd > 0m)
         {
             decimal? listFee = stmOffer.DdpFeeUnDiscountedUsd.HasValue && stmOffer.DdpFeeUnDiscountedUsd.Value > stmOffer.DdpFeeUsd
@@ -1084,6 +1170,13 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         }
 
         string sub = $"{subCarrier} {serviceCode}".ToLowerInvariant();
+        if (carrierKey == "navlungo")
+        {
+            if (sub.Contains("widect") || sub.Contains("eco"))
+                return (1.55m, null, "Navlungo DDP Hizmeti (Widect)");
+            return (4.55m, null, "Navlungo DDP Hizmeti (Express)");
+        }
+
         if (sub.Contains("fedex"))
         {
             decimal? fedexList = carrierKey == "shiptomore" ? 4.50m : null;
@@ -1112,8 +1205,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         string customsSourceBadge,
         decimal usdTry)
     {
-        decimal generalDutyUsd = Math.Round(declaredTotalUsd * (generalRatePercent / 100m), 2);
-        decimal additionalDutyUsd = Math.Round(declaredTotalUsd * (additionalRatePercent / 100m), 2);
+        decimal generalDutyUsd = Math.Round(declaredTotalUsd * (generalRatePercent / 100m), 2, MidpointRounding.AwayFromZero);
+        decimal additionalDutyUsd = Math.Round(declaredTotalUsd * (additionalRatePercent / 100m), 2, MidpointRounding.AwayFromZero);
         decimal taxSubtotal = Math.Round(generalDutyUsd + additionalDutyUsd, 2);
         decimal fastCustomsUsd = Math.Round(taxSubtotal + processingFeeUsd, 2);
         decimal grandTotalUsd = Math.Round(quote.PriceUsd + fastCustomsUsd, 2);

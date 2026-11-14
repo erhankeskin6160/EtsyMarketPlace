@@ -222,6 +222,16 @@ public sealed class ShipmentOrchestratorServiceTests
         Assert.True(result.IsConnected);
     }
 
+    private sealed class FakeNavlungoApiClient : INavlungoApiClient
+    {
+        public List<NavlungoQuoteOffer> OffersToReturn { get; set; } = new();
+
+        public Task<List<NavlungoQuoteOffer>> FetchLiveQuotesAsync(
+            NavlungoQuoteRequest request,
+            NavlungoSettings? settings = null,
+            CancellationToken cancellationToken = default) => Task.FromResult(OffersToReturn);
+    }
+
     private sealed class FakeShiptomoreOfficialApi : IShiptomoreOfficialApi
     {
         public string BaseUrl { get; set; } = "https://dev.shiptomore.com";
@@ -290,7 +300,7 @@ public sealed class ShipmentOrchestratorServiceTests
     }
 
     [Fact]
-    public async Task GetCarrierQuotesAsync_OnlyPopulatesDetailedBreakdownForShipEntegra()
+    public async Task GetCarrierQuotesAsync_PopulatesDetailedBreakdownForShipEntegraAndNavlungoOnly()
     {
         var manager = new ShipmentCreationManager();
         var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
@@ -341,6 +351,18 @@ public sealed class ShipmentOrchestratorServiceTests
             Assert.True(q.FastCustomsPaymentUsd > 0m);
         });
 
+        var navQuotes = response.Quotes.Where(q => q.CarrierKey == "navlungo").ToList();
+        Assert.Equal(4, navQuotes.Count);
+        Assert.All(navQuotes, q =>
+        {
+            Assert.True(q.HasDetailedBreakdown);
+            Assert.True(q.HasCustomsBreakdown);
+            Assert.True(q.BaseCargoPriceUsd > 0m);
+            Assert.True(q.AdditionalFeeUsd > 0m);
+            Assert.True(q.FastCustomsPaymentUsd > 0m);
+            Assert.Equal(Math.Round(q.PriceUsd + q.FastCustomsPaymentUsd, 2), q.GrandTotalUsd);
+        });
+
         var stmQuote = Assert.Single(response.Quotes, q => q.CarrierKey == "shiptomore");
         Assert.False(stmQuote.HasDetailedBreakdown);
         Assert.True(stmQuote.HasCustomsBreakdown);
@@ -353,9 +375,9 @@ public sealed class ShipmentOrchestratorServiceTests
         Assert.True(stmQuote.FastCustomsPaymentUsd > 0.45m);
         Assert.Equal(Math.Round(stmQuote.PriceUsd + stmQuote.FastCustomsPaymentUsd, 2), stmQuote.GrandTotalUsd);
 
-        var otherCarriers = response.Quotes.Where(q => q.CarrierKey != "shipentegra").ToList();
-        Assert.NotEmpty(otherCarriers);
-        Assert.All(otherCarriers, q =>
+        var flatCarriers = response.Quotes.Where(q => q.CarrierKey is "shiptomore" or "aras").ToList();
+        Assert.NotEmpty(flatCarriers);
+        Assert.All(flatCarriers, q =>
         {
             Assert.False(q.HasDetailedBreakdown);
             Assert.True(q.HasCustomsBreakdown);
@@ -365,6 +387,139 @@ public sealed class ShipmentOrchestratorServiceTests
             Assert.True(q.FastCustomsPaymentUsd > 0m);
             Assert.Equal(Math.Round(q.PriceUsd + q.FastCustomsPaymentUsd, 2), q.GrandTotalUsd);
         });
+    }
+
+    [Fact]
+    public async Task GetCarrierQuotesAsync_MapsOfficialNavlungoQuotesWithExactDdpAndComparesWithShipEntegra()
+    {
+        var manager = new ShipmentCreationManager();
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+        var fakeNavlungo = new FakeNavlungoApiClient
+        {
+            OffersToReturn = new List<NavlungoQuoteOffer>
+            {
+                new()
+                {
+                    Carrier = "Widect",
+                    CustomerName = "THY Widect Amazon Shipping",
+                    ServiceType = "Ekonomi",
+                    DeliveryEstimate = "3-7 iş günü",
+                    Price = 23.20m,
+                    BaseSystemOfferUsd = 21.20m,
+                    PeakSeasonSurchargeUsd = 2.00m,
+                    DdpFeeUsd = 1.73m,
+                    InsuranceFeeUsd = 3.00m,
+                    ChargeableWeightKg = 1.6,
+                    EarlyTrackingEnabled = true,
+                    IsDdpRequired = true,
+                    Note = "Navlungo API Canlı Teklif"
+                },
+                new()
+                {
+                    Carrier = "FedEx",
+                    CustomerName = "Federal Express Express",
+                    ServiceType = "Express",
+                    DeliveryEstimate = "1-3 iş günü",
+                    Price = 25.64m,
+                    BaseSystemOfferUsd = 24.64m,
+                    PeakSeasonSurchargeUsd = 1.00m,
+                    DdpFeeUsd = 4.73m,
+                    PremiumTrackingFeeUsd = 5.00m,
+                    SignatureRequiredFeeUsd = 5.00m,
+                    ChargeableWeightKg = 1.6,
+                    EarlyTrackingEnabled = true,
+                    IsDdpRequired = true,
+                    Note = "Navlungo API Canlı Teklif"
+                },
+                new()
+                {
+                    Carrier = "UPS",
+                    CustomerName = "United Parcel Service Express",
+                    ServiceType = "Express",
+                    DeliveryEstimate = "1-3 iş günü",
+                    Price = 44.46m,
+                    BaseSystemOfferUsd = 28.53m,
+                    FuelSurchargeUsd = 14.93m,
+                    PeakSeasonSurchargeUsd = 1.00m,
+                    DdpFeeUsd = 4.73m,
+                    ChargeableWeightKg = 1.6,
+                    EarlyTrackingEnabled = true,
+                    IsDdpRequired = true,
+                    Note = "Navlungo API Canlı Teklif"
+                },
+                new()
+                {
+                    Carrier = "UPS",
+                    CustomerName = "United Parcel Service Expedited",
+                    ServiceType = "Express Saver",
+                    DeliveryEstimate = "1-3 iş günü",
+                    Price = 48.48m,
+                    BaseSystemOfferUsd = 31.16m,
+                    FuelSurchargeUsd = 16.32m,
+                    PeakSeasonSurchargeUsd = 1.00m,
+                    DdpFeeUsd = 4.73m,
+                    ChargeableWeightKg = 1.6,
+                    EarlyTrackingEnabled = true,
+                    IsDdpRequired = true,
+                    Note = "Navlungo API Canlı Teklif"
+                }
+            }
+        };
+
+        var orchestrator = new ShipmentOrchestratorService(
+            manager,
+            fakeLogisticsApi,
+            navlungoApiClient: fakeNavlungo);
+
+        var res160 = await orchestrator.GetCarrierQuotesAsync(new CarrierQuotesQuery
+        {
+            CountryCode = "US",
+            PostalCode = "78654",
+            WeightKg = 1.0,
+            WidthCm = 16,
+            LengthCm = 25,
+            HeightCm = 20, // (16 * 25 * 20) / 5000 = 1.60 desi
+            HsCode = "3926400000",
+            Quantity = 1,
+            DeclaredValueUsd = new decimalUsdValueOrDefault(1.00m),
+            UsdTryRate = 51.91m
+        });
+
+        var navWidect = Assert.Single(res160.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-widect");
+        Assert.True(navWidect.IsLive);
+        Assert.Equal(23.20m, navWidect.PriceUsd);
+        Assert.Equal(21.20m, navWidect.BaseCargoPriceUsd);
+        Assert.Equal(2.00m, navWidect.AdditionalFeeUsd);
+        Assert.Equal(1.73m, navWidect.FastCustomsPaymentUsd);
+        Assert.Equal(24.93m, navWidect.GrandTotalUsd);
+
+        var navFedEx = Assert.Single(res160.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-fedex");
+        Assert.Equal(25.64m, navFedEx.PriceUsd);
+        Assert.Equal(24.64m, navFedEx.BaseCargoPriceUsd);
+        Assert.Equal(1.00m, navFedEx.AdditionalFeeUsd);
+        Assert.Equal(4.73m, navFedEx.FastCustomsPaymentUsd);
+        Assert.Equal(30.37m, navFedEx.GrandTotalUsd);
+
+        var navUpsExp = Assert.Single(res160.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-ups-express");
+        Assert.Equal(44.46m, navUpsExp.PriceUsd);
+        Assert.Equal(28.53m, navUpsExp.BaseCargoPriceUsd);
+        Assert.Equal(14.93m, navUpsExp.FuelCostUsd);
+        Assert.Equal(1.00m, navUpsExp.AdditionalFeeUsd);
+        Assert.Equal(4.73m, navUpsExp.FastCustomsPaymentUsd);
+        Assert.Equal(49.19m, navUpsExp.GrandTotalUsd);
+
+        var navUpsSaver = Assert.Single(res160.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-ups-saver");
+        Assert.Equal(48.48m, navUpsSaver.PriceUsd);
+        Assert.Equal(31.16m, navUpsSaver.BaseCargoPriceUsd);
+        Assert.Equal(16.32m, navUpsSaver.FuelCostUsd);
+        Assert.Equal(4.73m, navUpsSaver.FastCustomsPaymentUsd);
+        Assert.Equal(53.21m, navUpsSaver.GrandTotalUsd);
+
+        // ShipEntegra 1.60 desi fallback vs Navlungo karşılaştırması
+        var seEco = Assert.Single(res160.Quotes, q => q.CarrierKey == "shipentegra" && q.ServiceCode == "shipentegra-amerika-eko-plus");
+        Assert.True(seEco.GrandTotalUsd < navWidect.GrandTotalUsd);
+        var seUps = Assert.Single(res160.Quotes, q => q.CarrierKey == "shipentegra" && q.ServiceCode == "shipentegra-ups-express");
+        Assert.True(navUpsExp.GrandTotalUsd < seUps.GrandTotalUsd);
     }
 
     [Fact]

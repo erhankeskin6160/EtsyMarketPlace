@@ -289,6 +289,167 @@ content-length: 118";
         Assert.Equal("nv_attr_lt=abc; EXP_identity=123; _ga=456", extracted);
     }
 
+    [Fact]
+    public void ParseNavlungoResponse_ParsesOfficialShipmentsQuotesJsonWithDdpAndSurcharges()
+    {
+        string officialJson = @"{
+  ""shipmentSummary"": {
+    ""fromPostalCode"": ""06130"",
+    ""fromCountryName"": ""Türkiye"",
+    ""destinationPostalCode"": ""78654"",
+    ""destinationCountryName"": ""Amerika Birlesik Devletleri"",
+    ""totalWeight"": 1,
+    ""totalProformaPrice"": 1,
+    ""proformaCurrency"": ""USD""
+  },
+  ""quotes"": [
+    {
+      ""shipmentId"": ""5b6084ea-92da-4b1b-af52-28b40cb7107a"",
+      ""searchId"": ""fda614c8-027d-4f7e-af2c-2c51247d2710"",
+      ""quoteId"": ""dd590411-bf5c-403a-a5c3-61189beb925c"",
+      ""serviceType"": ""economy"",
+      ""lastMile"": ""thy"",
+      ""customerName"": ""THY Widect Amazon Shipping"",
+      ""minimumTransitTime"": 3,
+      ""maximumTransitTime"": 7,
+      ""totalVolumetricWeight"": 1.6,
+      ""chargeableWeight"": 1.6,
+      ""quotePrice"": { ""amount"": 23.2, ""currency"": { ""name"": ""USD"", ""value"": ""USD"" } },
+      ""priceLines"": [{ ""code"": ""system-offer"", ""price"": { ""amount"": 21.2, ""currency"": { ""value"": ""USD"" } } }],
+      ""surcharges"": [{ ""code"": ""peak-season-surcharge"", ""price"": { ""amount"": 2, ""currency"": { ""value"": ""USD"" } } }],
+      ""valueAddedServices"": [
+        { ""code"": ""ddp"", ""price"": { ""amount"": 1.73, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""insurance"", ""price"": { ""amount"": 3, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""tags"": [""best-price""],
+      ""earlyTrackingEnabled"": true,
+      ""tryEquivalentAmount"": 1204.312,
+      ""isDDPRequired"": true
+    },
+    {
+      ""shipmentId"": ""5b6084ea-92da-4b1b-af52-28b40cb7107a"",
+      ""searchId"": ""fda614c8-027d-4f7e-af2c-2c51247d2710"",
+      ""quoteId"": ""0920db43-2754-4090-af59-249d48b3eecd"",
+      ""serviceType"": ""express"",
+      ""lastMile"": ""fedex"",
+      ""customerName"": ""Federal Express Express"",
+      ""minimumTransitTime"": 1,
+      ""maximumTransitTime"": 3,
+      ""totalVolumetricWeight"": 1.6,
+      ""chargeableWeight"": 1.6,
+      ""quotePrice"": { ""amount"": 25.64, ""currency"": { ""name"": ""USD"", ""value"": ""USD"" } },
+      ""priceLines"": [{ ""code"": ""system-offer"", ""price"": { ""amount"": 24.64, ""currency"": { ""value"": ""USD"" } } }],
+      ""surcharges"": [{ ""code"": ""peak-season-surcharge"", ""price"": { ""amount"": 1, ""currency"": { ""value"": ""USD"" } } }],
+      ""valueAddedServices"": [
+        { ""code"": ""ddp"", ""price"": { ""amount"": 4.73, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""premium-tracking"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""signature-required"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""tags"": [""best-express-price""],
+      ""earlyTrackingEnabled"": true,
+      ""tryEquivalentAmount"": 1330.9724,
+      ""isDDPRequired"": true
+    },
+    {
+      ""shipmentId"": ""5b6084ea-92da-4b1b-af52-28b40cb7107a"",
+      ""searchId"": ""fda614c8-027d-4f7e-af2c-2c51247d2710"",
+      ""quoteId"": ""e9b0c8a9-d2ac-4097-8028-0819cc9a464d"",
+      ""serviceType"": ""express"",
+      ""lastMile"": ""ups"",
+      ""customerName"": ""United Parcel Service Express"",
+      ""minimumTransitTime"": 1,
+      ""maximumTransitTime"": 3,
+      ""totalVolumetricWeight"": 1.6,
+      ""chargeableWeight"": 1.6,
+      ""quotePrice"": { ""amount"": 44.46, ""currency"": { ""name"": ""USD"", ""value"": ""USD"" } },
+      ""priceLines"": [{ ""code"": ""system-offer"", ""price"": { ""amount"": 28.53, ""currency"": { ""value"": ""USD"" } } }],
+      ""surcharges"": [
+        { ""code"": ""fuel-surcharge"", ""price"": { ""amount"": 14.93, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""peak-season-surcharge"", ""price"": { ""amount"": 1, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""valueAddedServices"": [
+        { ""code"": ""ddp"", ""price"": { ""amount"": 4.73, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""premium-tracking"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""signature-required"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""tags"": [],
+      ""earlyTrackingEnabled"": true,
+      ""tryEquivalentAmount"": 2307.9186,
+      ""isDDPRequired"": true
+    },
+    {
+      ""shipmentId"": ""5b6084ea-92da-4b1b-af52-28b40cb7107a"",
+      ""searchId"": ""fda614c8-027d-4f7e-af2c-2c51247d2710"",
+      ""quoteId"": ""f77a0123-0000-4000-8000-000000000004"",
+      ""serviceType"": ""express"",
+      ""lastMile"": ""ups"",
+      ""customerName"": ""United Parcel Service Expedited"",
+      ""minimumTransitTime"": 1,
+      ""maximumTransitTime"": 3,
+      ""totalVolumetricWeight"": 1.6,
+      ""chargeableWeight"": 1.6,
+      ""quotePrice"": { ""amount"": 48.48, ""currency"": { ""name"": ""USD"", ""value"": ""USD"" } },
+      ""priceLines"": [{ ""code"": ""system-offer"", ""price"": { ""amount"": 31.16, ""currency"": { ""value"": ""USD"" } } }],
+      ""surcharges"": [
+        { ""code"": ""fuel-surcharge"", ""price"": { ""amount"": 16.32, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""peak-season-surcharge"", ""price"": { ""amount"": 1, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""valueAddedServices"": [
+        { ""code"": ""ddp"", ""price"": { ""amount"": 4.73, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""premium-tracking"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } },
+        { ""code"": ""signature-required"", ""price"": { ""amount"": 5, ""currency"": { ""value"": ""USD"" } } }
+      ],
+      ""tags"": [],
+      ""earlyTrackingEnabled"": true,
+      ""tryEquivalentAmount"": 2516.5968,
+      ""isDDPRequired"": true
+    }
+  ]
+}";
+
+        var offers = NavlungoApiClient.ParseNavlungoResponse(officialJson, new NavlungoQuoteRequest { WeightKg = 1.0 });
+
+        Assert.Equal(4, offers.Count);
+
+        var widect = Assert.Single(offers, o => o.Carrier == "Widect");
+        Assert.Equal(23.20m, widect.Price);
+        Assert.Equal(21.20m, widect.BaseSystemOfferUsd);
+        Assert.Equal(2.00m, widect.PeakSeasonSurchargeUsd);
+        Assert.Equal(0m, widect.FuelSurchargeUsd);
+        Assert.Equal(1.73m, widect.DdpFeeUsd);
+        Assert.Equal(24.93m, widect.DdpIncludedTotalUsd);
+        Assert.Equal(3.00m, widect.InsuranceFeeUsd);
+        Assert.True(widect.IsBestEconomy);
+        Assert.True(widect.IsDdpRequired);
+        Assert.True(widect.EarlyTrackingEnabled);
+        Assert.Equal(1.6, widect.ChargeableWeightKg);
+        Assert.Equal(1204.312m, widect.TryEquivalentAmount);
+
+        var fedex = Assert.Single(offers, o => o.Carrier == "FedEx");
+        Assert.Equal(25.64m, fedex.Price);
+        Assert.Equal(24.64m, fedex.BaseSystemOfferUsd);
+        Assert.Equal(1.00m, fedex.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.73m, fedex.DdpFeeUsd);
+        Assert.Equal(30.37m, fedex.DdpIncludedTotalUsd);
+        Assert.True(fedex.IsBestExpress);
+
+        var upsExpress = Assert.Single(offers, o => o.Carrier == "UPS" && o.ServiceType == "Express");
+        Assert.Equal(44.46m, upsExpress.Price);
+        Assert.Equal(28.53m, upsExpress.BaseSystemOfferUsd);
+        Assert.Equal(14.93m, upsExpress.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsExpress.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.73m, upsExpress.DdpFeeUsd);
+        Assert.Equal(49.19m, upsExpress.DdpIncludedTotalUsd);
+
+        var upsExpedited = Assert.Single(offers, o => o.Carrier == "UPS" && o.ServiceType == "Express Saver");
+        Assert.Equal(48.48m, upsExpedited.Price);
+        Assert.Equal(31.16m, upsExpedited.BaseSystemOfferUsd);
+        Assert.Equal(16.32m, upsExpedited.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsExpedited.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.73m, upsExpedited.DdpFeeUsd);
+        Assert.Equal(53.21m, upsExpedited.DdpIncludedTotalUsd);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _responseFactory;

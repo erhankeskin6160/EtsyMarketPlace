@@ -673,8 +673,11 @@
                 <div class="tile-right-price">
                   <div class="tile-price-stack">
                     <span class="tile-usd">&#36;{{ getDisplayPriceUsd(quote) | number:'1.2-2' }}</span>
-                    <span class="tile-mode-tag" [class.ddp]="quoteDisplayMode === 'all_in_ddp' && hasCustomsBreakdown(quote)">
-                      {{ (quoteDisplayMode === 'all_in_ddp' && hasCustomsBreakdown(quote)) ? 'DDP Dahil' : 'Sadece Navlun' }}
+                    <span class="tile-mode-tag" [class.ddp]="isDdpEnabled && hasCustomsBreakdown(quote)">
+                      {{ hasCustomsBreakdown(quote) ? (isDdpEnabled ? "DDP'li Toplam" : "DDP'siz Toplam") : 'Sadece Navlun' }}
+                    </span>
+                    <span class="tile-sub-compare" *ngIf="hasCustomsBreakdown(quote)">
+                      {{ isDdpEnabled ? ("DDP'siz: $" + (quote.priceUsd | number:'1.2-2')) : ("DDP'li: $" + ((quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2')) }}
                     </span>
                     <span class="tile-try">₺{{ getDisplayPriceTry(quote) | number:'1.2-2' }}</span>
                   </div>
@@ -838,20 +841,24 @@
                   </div>
                 </div>
 
-                <!-- 3. TOPLAM FİYAT (DDP DAHİL / SADECE NAVLUN) -->
+                <!-- 3. TOPLAM FİYAT KARŞILAŞTIRMASI (DDP'SİZ vs DDP'Lİ) -->
                 <div class="receipt-section grand" *ngIf="hasCustomsBreakdown(quote)">
-                  <div class="receipt-row muted">
-                    <span>Navlun Ücreti</span>
+                  <div class="receipt-row" [class.active-total-row]="!isDdpEnabled">
+                    <span>DDP'siz Toplam Tutar (Sadece Navlun · DAP)</span>
                     <span>&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row muted">
-                    <span>DDP Gümrük &amp; İşlem Ücreti</span>
+                    <span>+ DDP Ücreti <small>({{ isDdpEnabled ? 'Dahil' : 'DDP: False — Hariç' }})</small></span>
                     <span>
-                      {{ isDdpEnabled ? ('+$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2')) : '&#36;0.00 (DDP: False)' }}
+                      {{ isDdpEnabled ? ('+$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2')) : ('$0.00 (Opsiyonel: +$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2') + ')') }}
                     </span>
                   </div>
+                  <div class="receipt-row" [class.active-total-row]="isDdpEnabled">
+                    <span>DDP'li Toplam Tutar (Navlun + DDP)</span>
+                    <span>&#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
+                  </div>
                   <div class="receipt-row grand-total">
-                    <span>{{ isDdpEnabled ? '3. TOPLAM FİYAT (DDP DAHİL)' : '3. TOPLAM FİYAT (SADECE NAVLUN • DAP)' }}</span>
+                    <span>{{ isDdpEnabled ? '3. SEÇİLİ TOPLAM (DDP: TRUE)' : '3. SEÇİLİ TOPLAM (DDP: FALSE • DAP)' }}</span>
                     <span>&#36;{{ getDisplayPriceUsd(quote) | number:'1.2-2' }} <small>(₺{{ getDisplayPriceTry(quote) | number:'1.2-2' }})</small></span>
                   </div>
                   <div class="receipt-row prepay" *ngIf="isDdpEnabled && quote.discountedGrandTotalUsd">

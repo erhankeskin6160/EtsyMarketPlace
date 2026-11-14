@@ -192,6 +192,7 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IAiLi
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsApiClient, EtsyMarketPlace.Infrastructure.Shipping.EtsyLogisticsApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsService, EtsyMarketPlace.Application.Shipping.EtsyLogisticsService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient, EtsyMarketPlace.Infrastructure.Shipping.ShipEntegraApiClient>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.INavlungoApiClient, EtsyMarketPlace.Infrastructure.Shipping.NavlungoApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient, EtsyMarketPlace.Infrastructure.Shipping.ArasGlobalApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShiptomoreOfficialApi, EtsyMarketPlace.Infrastructure.Shipping.ShiptomoreOfficialApiClient>();
 EtsyMarketPlace.Application.Shipping.ShippingSecretProtector.Current =

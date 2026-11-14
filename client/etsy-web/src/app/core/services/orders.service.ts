@@ -977,7 +977,7 @@ export class OrdersService {
           }
 
           const mapped: CarrierQuote[] = rawQuotes.map((q: any, idx: number) => {
-            const hasBreakdown = Boolean(q.hasDetailedBreakdown) || q.carrierKey === 'shipentegra';
+            const hasBreakdown = Boolean(q.hasDetailedBreakdown) || q.carrierKey === 'shipentegra' || q.carrierKey === 'navlungo';
             const hasCustoms = Boolean(q.hasCustomsBreakdown) || q.fastCustomsPaymentUsd !== undefined || hasBreakdown;
             const priceUsd = Number(q.priceUsd || 0);
             const priceTry = Number(q.priceTry || 0);
@@ -1363,7 +1363,7 @@ export class OrdersService {
     }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, 'Yoğun sezon ek ücreti'));
 
     // ==========================================
-    // 3. NAVLUNGO (4 TEKLİF)
+    // 3. NAVLUNGO (4 TEKLİF — TAM KIRILIM + DDP ÜCRETİ)
     // ==========================================
     const isNavlungoLive = this.isCarrierSessionLive('navlungo');
     const b = billable;
@@ -1371,74 +1371,120 @@ export class OrdersService {
     const navFedEx = Number((14.50 + (b * 10.42)).toFixed(2));
     const navUpsExpress = Number((24.00 + (b * 16.67)).toFixed(2));
     const navUpsSaver = Number((27.50 + (b * 18.92)).toFixed(2));
+    const navWidectPeak = 2.00;
+    const navExpPeak = 1.00;
+    const navWidectBase = Number(Math.max(0, navWidect - navWidectPeak).toFixed(2));
+    const navFedExBase = Number(Math.max(0, navFedEx - navExpPeak).toFixed(2));
+    const navUpsExpressFuel = Number((Math.max(0, navUpsExpress - navExpPeak) * 0.3435).toFixed(2));
+    const navUpsExpressBase = Number(Math.max(0, navUpsExpress - navExpPeak - navUpsExpressFuel).toFixed(2));
+    const navUpsSaverFuel = Number((Math.max(0, navUpsSaver - navExpPeak) * 0.3437).toFixed(2));
+    const navUpsSaverBase = Number(Math.max(0, navUpsSaver - navExpPeak - navUpsSaverFuel).toFixed(2));
+    const navDdpBadge = 'Navlungo valueAddedServices (DDP)';
+    const navReturnNote = 'DDP/DDU Seçilebilir · ABD & AB gönderilerinde gümrük peşin ödenebilir';
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-widect',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
+      serviceCode: 'nav-widect',
       serviceType: 'Widect',
       subCarrier: 'Widect',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '4-8 Gün',
+      estimatedDays: '3-7 iş günü',
       priceUsd: navWidect,
       priceTry: Number((navWidect * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
       quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
-      hasDetailedBreakdown: false,
-      billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.45, 'DDP Ücreti (Widect)', undefined, standardDdpBadge));
+      hasDetailedBreakdown: true,
+      billableWeightKg: billable,
+      baseCargoPriceUsd: navWidectBase,
+      fuelCostUsd: 0,
+      fuelMultiplierPercent: 0,
+      additionalFeeUsd: navWidectPeak,
+      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
+      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
+      insuranceNote: 'Opsiyonel Sigorta: $3.00',
+      returnPolicyNote: navReturnNote
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.55, 'Navlungo DDP Hizmeti (Widect)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-fedex',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
-      serviceType: 'FedEx Priority',
+      serviceCode: 'nav-fedex',
+      serviceType: 'FedEx Express',
       subCarrier: 'FedEx',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '2-4 Gün',
+      estimatedDays: '1-3 iş günü',
       priceUsd: navFedEx,
       priceTry: Number((navFedEx * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
       quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
-      hasDetailedBreakdown: false,
-      billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 2.50, 'DDP Taşıyıcı İşlem Bedeli (FedEx)', undefined, standardDdpBadge));
+      hasDetailedBreakdown: true,
+      billableWeightKg: billable,
+      baseCargoPriceUsd: navFedExBase,
+      fuelCostUsd: 0,
+      fuelMultiplierPercent: 0,
+      additionalFeeUsd: navExpPeak,
+      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
+      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
+      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      returnPolicyNote: navReturnNote
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-express',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
+      serviceCode: 'nav-ups-express',
       serviceType: 'UPS Express',
       subCarrier: 'UPS',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '1-3 Gün',
+      estimatedDays: '1-3 iş günü',
       priceUsd: navUpsExpress,
       priceTry: Number((navUpsExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
       quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
-      hasDetailedBreakdown: false,
-      billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.45, 'DDP Taşıyıcı İşlem Bedeli (Express)', undefined, standardDdpBadge));
+      hasDetailedBreakdown: true,
+      billableWeightKg: billable,
+      baseCargoPriceUsd: navUpsExpressBase,
+      fuelCostUsd: navUpsExpressFuel,
+      fuelMultiplierPercent: navUpsExpressBase > 0 ? Number(((navUpsExpressFuel / navUpsExpressBase) * 100).toFixed(2)) : 0,
+      additionalFeeUsd: navExpPeak,
+      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
+      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
+      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      returnPolicyNote: navReturnNote
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-saver',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
-      serviceType: 'UPS Saver',
+      serviceCode: 'nav-ups-saver',
+      serviceType: 'UPS Expedited',
       subCarrier: 'UPS',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '2-4 Gün',
+      estimatedDays: '1-3 iş günü',
       priceUsd: navUpsSaver,
       priceTry: Number((navUpsSaver * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
       quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
-      hasDetailedBreakdown: false,
-      billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.45, 'DDP Taşıyıcı İşlem Bedeli (Express)', undefined, standardDdpBadge));
+      hasDetailedBreakdown: true,
+      billableWeightKg: billable,
+      baseCargoPriceUsd: navUpsSaverBase,
+      fuelCostUsd: navUpsSaverFuel,
+      fuelMultiplierPercent: navUpsSaverBase > 0 ? Number(((navUpsSaverFuel / navUpsSaverBase) * 100).toFixed(2)) : 0,
+      additionalFeeUsd: navExpPeak,
+      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
+      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
+      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      returnPolicyNote: navReturnNote
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     // ==========================================
     // 4. SHIPTOMORE (2 TEKLİF: 1 CANLI, 1 TAHMİNİ)
