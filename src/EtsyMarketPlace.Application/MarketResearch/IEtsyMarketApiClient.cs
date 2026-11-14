@@ -37,4 +37,8 @@ public interface IEtsyMarketApiClient
         string authShopId,
         long listingId,
         CancellationToken cancellationToken = default) => Task.FromResult("{\"products\":[]}");
+
+    Task<string> GetPublicListingPageHtmlAsync(
+        long listingId,
+        CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
 }

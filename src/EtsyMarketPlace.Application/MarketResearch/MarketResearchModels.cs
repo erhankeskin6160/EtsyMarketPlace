@@ -235,6 +235,8 @@ public sealed class CompetitorVariationOfferingDto
     public decimal Price { get; set; }
     public int Quantity { get; set; }
     public bool Active { get; set; } = true;
+    public string? Sku { get; set; }
+    public long? ImageId { get; set; }
 }
 
 public sealed class CompetitorListingInventoryDto
@@ -248,6 +250,8 @@ public sealed class CompetitorListingInventoryDto
     public string? VarValues2 { get; set; }
     public List<CompetitorVariationGroupDto> Groups { get; set; } = [];
     public List<CompetitorVariationOfferingDto> Offerings { get; set; } = [];
+    public string Source { get; set; } = "none";
+    public string? WarningMessage { get; set; }
 }
 
 public sealed record AiLqsImprovementCommand(

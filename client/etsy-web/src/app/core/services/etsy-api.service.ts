@@ -1452,6 +1452,8 @@ export interface CompetitorVariationOfferingDto {
   price: number;
   quantity: number;
   active: boolean;
+  sku?: string;
+  imageId?: number;
 }
 
 export interface CompetitorListingInventoryDto {
@@ -1464,6 +1466,8 @@ export interface CompetitorListingInventoryDto {
   varValues2?: string;
   groups: CompetitorVariationGroupDto[];
   offerings: CompetitorVariationOfferingDto[];
+  source?: string;
+  warningMessage?: string;
 }
 
 export interface AiLqsImprovementCommandDto {

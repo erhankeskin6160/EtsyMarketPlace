@@ -60,11 +60,17 @@ public sealed class MarketResearchServiceTests
 
         public string? InventoryRawJson { get; set; }
         public int InventoryCallCount { get; private set; }
+        public string? PublicListingHtml { get; set; }
 
         public Task<string> GetListingInventoryRawJsonAsync(string authShopId, long listingId, CancellationToken ct)
         {
             InventoryCallCount++;
             return Task.FromResult(InventoryRawJson ?? """{ "products": [] }""");
+        }
+
+        public Task<string> GetPublicListingPageHtmlAsync(long listingId, CancellationToken ct = default)
+        {
+            return Task.FromResult(PublicListingHtml ?? string.Empty);
         }
     }
 
@@ -729,6 +735,123 @@ public sealed class MarketResearchServiceTests
         Assert.Equal(2, result.Offerings.Count);
         Assert.Equal(17.38m, result.Offerings[0].Price);
         Assert.Equal(29.90m, result.Offerings[1].Price);
+        Assert.Equal("etsy_api_v3", result.Source);
+    }
+
+    [Fact]
+    public async Task GetListingInventoryAsync_FiltersDeletedOfferingsDecodesHtmlAndKeepsGroupOrder()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient
+        {
+            InventoryRawJson = """
+            {
+                "products": [
+                    {
+                        "product_id": 1001,
+                        "sku": "DMP-RNB-01",
+                        "image_ids": [778899],
+                        "is_deleted": false,
+                        "property_values": [
+                            { "property_name": "Size", "scale_name": "Inches", "values": ["10"] },
+                            { "property_name": "Style", "values": ["Dumpling &amp; Korb"] }
+                        ],
+                        "offerings": [
+                            {
+                                "is_deleted": true,
+                                "price": { "amount": 9900, "divisor": 100, "currency_code": "USD" },
+                                "quantity": 1,
+                                "is_enabled": true
+                            },
+                            {
+                                "is_deleted": false,
+                                "price": { "amount": 1125, "divisor": 100, "currency_code": "USD" },
+                                "quantity": 12,
+                                "is_enabled": true
+                            }
+                        ]
+                    },
+                    {
+                        "product_id": 1002,
+                        "sku": "DMP-GLD-02",
+                        "is_deleted": false,
+                        "property_values": [
+                            { "property_name": "Style", "values": ["Dumpling only"] },
+                            { "property_name": "Size", "scale_name": "Inches", "values": ["8"] }
+                        ],
+                        "offerings": [
+                            {
+                                "is_deleted": false,
+                                "price": { "amount": 750, "divisor": 100, "currency_code": "USD" },
+                                "quantity": 5,
+                                "is_enabled": true
+                            }
+                        ]
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeClient);
+        var result = await service.GetListingInventoryAsync(4521943505, "53236321");
+
+        Assert.True(result.HasVariations);
+        Assert.Equal("Size", result.VarType1);
+        Assert.Equal("Style", result.VarType2);
+        Assert.Equal(2, result.Offerings.Count);
+        Assert.Equal("10 Inches / Dumpling & Korb", result.Offerings[0].Key);
+        Assert.Equal(11.25m, result.Offerings[0].Price);
+        Assert.Equal("DMP-RNB-01", result.Offerings[0].Sku);
+        Assert.Equal(778899L, result.Offerings[0].ImageId);
+        // İkinci product'ta property sırası ters gelse bile key grup sırasına göre (Size / Style) üretilmeli
+        Assert.Equal("8 Inches / Dumpling only", result.Offerings[1].Key);
+        Assert.Equal(7.50m, result.Offerings[1].Price);
+    }
+
+    [Fact]
+    public async Task GetListingInventoryAsync_WhenApiReturnsEmpty_FallsBackToPublicListingHtmlVariations()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient
+        {
+            InventoryRawJson = """{ "products": [] }""",
+            PublicListingHtml = """
+            <html>
+              <head>
+                <script type="application/ld+json">{"offers":{"lowPrice":"7.50","priceCurrency":"USD"}}</script>
+              </head>
+              <body>
+                <label for="variation-selector-0">Choose your color</label>
+                <select id="variation-selector-0">
+                  <option value="">Select an option</option>
+                  <option value="1">Rainbow</option>
+                  <option value="2">Beige</option>
+                  <option value="3">Matte Rainbow</option>
+                  <option value="4">Gold</option>
+                </select>
+                <label for="variation-selector-1">Choose your style</label>
+                <select id="variation-selector-1">
+                  <option value="">Select an option</option>
+                  <option value="10">Dumpling only (US$7.50)</option>
+                  <option value="11">Dumpling and Korb (US$11.25)</option>
+                </select>
+              </body>
+            </html>
+            """
+        };
+
+        var service = new MarketResearchService(fakeClient);
+        var result = await service.GetListingInventoryAsync(4521943505, "53236321");
+
+        Assert.True(result.HasVariations);
+        Assert.Equal("etsy_public_page", result.Source);
+        Assert.Equal("color", result.VarType1);
+        Assert.Equal("Rainbow, Beige, Matte Rainbow, Gold", result.VarValues1);
+        Assert.True(result.EnableVar2);
+        Assert.Equal("style", result.VarType2);
+        Assert.Equal("Dumpling only, Dumpling and Korb", result.VarValues2);
+        Assert.Equal(8, result.Offerings.Count);
+        Assert.Contains(result.Offerings, o => o.Key == "Rainbow / Dumpling only" && o.Price == 7.50m);
+        Assert.Contains(result.Offerings, o => o.Key == "Gold / Dumpling and Korb" && o.Price == 11.25m);
     }
 
     [Fact]

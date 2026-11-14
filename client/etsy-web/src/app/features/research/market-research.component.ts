@@ -668,26 +668,56 @@ export class MarketResearchComponent implements OnInit {
   // 1. 🚀 Taslağa Klonla -> FastCreatorComponent
   cloneSelectedListing(): void {
     if (!this.selectedItem) return;
+    const item = this.selectedItem;
     const cloned: ClonedMarketListing = {
-      id: this.selectedItem.id,
-      title: this.selectedItem.title,
-      priceUsd: this.selectedItem.priceUsd,
-      tags: [...this.selectedItem.tags],
-      description: this.selectedItem.description,
-      imageUrl: this.selectedItem.imageUrl,
-      imageUrls: (this.selectedItem.imageUrls && this.selectedItem.imageUrls.length > 0)
-        ? [...this.selectedItem.imageUrls]
-        : (this.selectedItem.imageUrl ? [this.selectedItem.imageUrl] : []),
-      shopName: this.selectedItem.shopName,
-      seoScore: this.selectedItem.seoScore,
-      marketScore: this.selectedItem.marketScore,
-      taxonomyId: this.selectedItem.taxonomyId
+      id: item.id,
+      title: item.title,
+      priceUsd: item.priceUsd,
+      tags: [...item.tags],
+      description: item.description,
+      imageUrl: item.imageUrl,
+      imageUrls: (item.imageUrls && item.imageUrls.length > 0)
+        ? [...item.imageUrls]
+        : (item.imageUrl ? [item.imageUrl] : []),
+      shopName: item.shopName,
+      seoScore: item.seoScore,
+      marketScore: item.marketScore,
+      taxonomyId: item.taxonomyId
     };
+
+    this.etsyApi.getCompetitorListingInventory(item.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (inv) => {
+        if (inv && inv.hasVariations) {
+          cloned.hasVariations = true;
+          cloned.varType1 = inv.varType1;
+          cloned.varValues1 = inv.varValues1;
+          cloned.enableVar2 = inv.enableVar2;
+          cloned.varType2 = inv.varType2;
+          cloned.varValues2 = inv.varValues2;
+          if (inv.offerings && inv.offerings.length > 0) {
+            cloned.variationRows = inv.offerings.map(o => ({
+              key: o.key,
+              price: o.price,
+              quantity: o.quantity,
+              active: o.active
+            }));
+          }
+        }
+        this.finalizeMarketClone(cloned, item.id);
+      },
+      error: () => {
+        this.finalizeMarketClone(cloned, item.id);
+      }
+    });
+  }
+
+  private finalizeMarketClone(cloned: ClonedMarketListing, listingId: number): void {
     this.aiService.setClonedListing(cloned);
-    this.showToastMsg(`🚀 #${this.selectedItem.id} ürünü Fast Creator'a klonlandı, yönlendiriliyorsunuz...`);
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` (+${cloned.variationRows.length} varyasyon)` : '';
+    this.showToastMsg(`🚀 #${listingId} ürünü${varText} Fast Creator'a klonlandı, yönlendiriliyorsunuz...`);
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
-    }, 600);
+    }, 350);
   }
 
   // 2. ✨ AI Optimizasyon
