@@ -27,8 +27,8 @@ public class ValidationBehaviour<TRequest, TResponse>(IEnumerable<IValidator<TRe
         if (failures.Count != 0)
         {
             var errors = failures
-                .GroupBy(e => e.PropertyName, e => e.ErrorMessage)
-                .ToDictionary(failureGroup => failureGroup.Key, failureGroup => failureGroup.ToArray());
+                .GroupBy(e => NormalizePropertyName(e.PropertyName), e => e.ErrorMessage)
+                .ToDictionary(failureGroup => failureGroup.Key, failureGroup => failureGroup.Distinct().ToArray());
 
             if (typeof(ServiceResponse).IsAssignableFrom(typeof(TResponse)))
             {
@@ -40,5 +40,16 @@ public class ValidationBehaviour<TRequest, TResponse>(IEnumerable<IValidator<TRe
         }
 
         return await next();
+    }
+
+    private static string NormalizePropertyName(string? propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(propertyName))
+            return "General";
+
+        const string commandPrefix = "Command.";
+        return propertyName.StartsWith(commandPrefix, System.StringComparison.OrdinalIgnoreCase)
+            ? propertyName[commandPrefix.Length..]
+            : propertyName;
     }
 }

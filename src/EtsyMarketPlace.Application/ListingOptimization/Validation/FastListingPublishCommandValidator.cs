@@ -11,6 +11,10 @@ public sealed class FastListingPublishCommandValidator : AbstractValidator<FastL
 
     public FastListingPublishCommandValidator()
     {
+        RuleFor(x => x.ShopId)
+            .NotEmpty()
+            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+
         RuleFor(x => x.Title)
             .NotEmpty()
             .WithMessage("Ürün başlığı zorunludur.")

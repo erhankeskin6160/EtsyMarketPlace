@@ -81,6 +81,23 @@
     {{ successMessage }}
   </div>
 
+  <!-- FLUENT VALIDATION ERROR BANNER -->
+  <div *ngIf="validationErrorSummary || validationFieldErrors.length > 0" class="validation-error-banner" role="alert">
+    <div class="validation-error-header">
+      <div class="validation-error-title">
+        <span>⚠️</span>
+        <span>{{ validationErrorSummary || 'Lütfen formdaki doğrulama uyarılarını düzeltin.' }}</span>
+      </div>
+      <button type="button" class="btn-dismiss-validation" (click)="clearValidationErrors()" aria-label="Uyarıyı kapat">✕</button>
+    </div>
+    <ul *ngIf="validationFieldErrors.length > 0" class="validation-error-list">
+      <li *ngFor="let item of validationFieldErrors">
+        <strong>{{ item.label }}:</strong>
+        <span>{{ item.messages.join(' ') }}</span>
+      </li>
+    </ul>
+  </div>
+
   <!-- ========================================== -->
   <!-- 3 RESPONSIVE WORKSPACE COLUMNS             -->
   <!-- ========================================== -->

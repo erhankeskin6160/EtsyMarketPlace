@@ -7,6 +7,7 @@ import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-s
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
+import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -157,6 +158,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   isGeneratingAi = false;
   isSavingDraft = false;
   successMessage = '';
+  validationErrorSummary = '';
+  validationFieldErrors: FieldValidationError[] = [];
   clonedNotice = '';
   hasRestoredDraft = false;
   draftSavedAt = '';
@@ -779,6 +782,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   resetForm(): void {
+    this.clearValidationErrors();
     this.clearDraftFromStorage();
     this.hasRestoredDraft = false;
     this.draftSavedAt = '';
@@ -1546,15 +1550,18 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isActivatingListing = false;
-        const msg = err?.error?.error || err?.message || 'Etsy API aktivasyon hatası.';
-        alert(`❌ Canlıya alma hatası:\n${msg}`);
+        this.applyClientValidationError(err, 'İlan canlıya alınırken doğrulama veya bağlantı hatası oluştu.');
       }
     });
   }
 
   publishListingToEtsy(): void {
+    this.clearValidationErrors();
     if (!this.isTitleReady) {
-      alert('Lütfen geçerli bir ürün başlığı giriniz (1-140 karakter).');
+      this.validationErrorSummary = 'Lütfen formdaki doğrulama uyarılarını düzeltin.';
+      this.validationFieldErrors = [
+        { field: 'Title', label: 'Ürün Başlığı', messages: ['Lütfen geçerli bir ürün başlığı giriniz (1-140 karakter).'] }
+      ];
       return;
     }
 
@@ -1666,10 +1673,20 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isSavingDraft = false;
-        const errDetail = err?.error?.error || err?.message || 'Etsy API bağlantı hatası.';
-        alert(`❌ Etsy İlan Gönderim Hatası:\n${errDetail}`);
+        this.applyClientValidationError(err, 'İlan gönderilirken doğrulama veya bağlantı hatası oluştu.');
       }
     });
+  }
+
+  clearValidationErrors(): void {
+    this.validationErrorSummary = '';
+    this.validationFieldErrors = [];
+  }
+
+  private applyClientValidationError(err: unknown, fallbackMessage: string): void {
+    const parsed = extractClientValidationErrors(err, fallbackMessage);
+    this.validationErrorSummary = parsed.summary;
+    this.validationFieldErrors = parsed.fieldErrors;
   }
 
   private sanitizeMaterialsForPayload(raw: string): string[] {
