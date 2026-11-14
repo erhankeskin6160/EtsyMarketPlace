@@ -622,6 +622,15 @@
               <button type="button" class="btn-toggle-all-details" (click)="toggleAllQuoteDetails()">
                 {{ showAllQuoteDetails ? '▲ Tümünü Kapat' : '▼ Tümünü Aç' }}
               </button>
+              <button
+                *ngIf="selectedCarrierFilter === 'Navlungo' || selectedCarrierFilter === 'Tümü'"
+                type="button"
+                class="btn-toggle-all-details"
+                [disabled]="isCapturingBrowserToken"
+                (click)="triggerNavlungoBrowserCapture(false)"
+                title="Navlungo Bearer JWT ve çerezlerini tek tıkla sessizce yenile">
+                {{ isCapturingBrowserToken ? '⏳ Yenileniyor...' : '🔄 Navlungo Token Yenile' }}
+              </button>
             </div>
 
             <!-- Aras Global / Carrier token expired warning banner matching desktop screenshot -->
@@ -1108,6 +1117,52 @@
                   (click)="triggerArasBrowserCapture(false)"
                   title="Kayıtlı Refresh Token ile tarayıcı açmadan sessizce yenile">
                   🔄 Sessiz Yenile
+                </button>
+              </div>
+
+              <div *ngIf="browserCaptureStatus" style="margin-top: 8px; font-size: 0.78rem; padding: 6px 10px; border-radius: 6px; background: rgba(15, 23, 42, 0.55); color: #e2e8f0;">
+                {{ browserCaptureStatus }}
+              </div>
+            </div>
+
+            <!-- NAVLUNGO AUTOMATIC SESSION REFRESH & TOKEN CAPTURE -->
+            <div *ngIf="activeModalCarrier?.id === 'navlungo'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 12px; border-radius: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.28);">
+              <div class="guide-title" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <span>⚡ <strong>Navlungo Tek Tıkla Token Yenileme (Bearer JWT + Cookie)</strong></span>
+                <span style="font-size: 0.72rem; color: #60a5fa; font-weight: 600;">{{ getCarrierRemainingValidityText(activeModalCarrier) }}</span>
+              </div>
+              <p class="guide-text" style="margin-bottom: 10px;">
+                <code>ship.navlungo.com</code> oturumu ilk girişten sonra tarayıcı profilinde saklanır. Token süresi dolduğunda (tipik 1–24 saat) aşağıdaki <strong>Sessiz Yenile</strong> butonuyla yeni <code>Authorization: Bearer</code> JWT ve çerezleri tek tıkla tazeleyebilirsiniz.
+              </p>
+
+              <div class="form-row-2" style="margin-bottom: 10px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.75rem;">Navlungo E-posta (İsteğe Bağlı):</label>
+                  <input type="text" [(ngModel)]="navlungoEmail" class="form-control" placeholder="ornek@gmail.com" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.75rem;">Şifre (İsteğe Bağlı):</label>
+                  <input type="password" [(ngModel)]="navlungoPassword" class="form-control" placeholder="••••••••" />
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button
+                  type="button"
+                  class="btn-save-session"
+                  style="flex: 1; background: linear-gradient(135deg, #2563eb, #3b82f6); border: none;"
+                  [disabled]="isCapturingBrowserToken"
+                  (click)="triggerNavlungoBrowserCapture(false)">
+                  <span *ngIf="!isCapturingBrowserToken">🔄 Tek Tıkla Sessiz Yenile</span>
+                  <span *ngIf="isCapturingBrowserToken">⏳ Oturum Yenileniyor...</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-test-session"
+                  [disabled]="isCapturingBrowserToken"
+                  (click)="triggerNavlungoBrowserCapture(true)"
+                  title="Navlungo giriş penceresini aç ve reCAPTCHA sonrası otomatik yakala">
+                  🌐 Tarayıcıda Giriş Yap &amp; Yakala
                 </button>
               </div>
 

@@ -88,6 +88,7 @@ export interface CarrierAccountSession {
   email?: string;
   password?: string;
   lastUpdated?: string;
+  expiresAtUtc?: string;
   notes?: string;
 }
 

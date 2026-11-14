@@ -74,6 +74,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   seApiSecret: string = '';
   arasEmail: string = '';
   arasPassword: string = '';
+  navlungoEmail: string = '';
+  navlungoPassword: string = '';
   isCapturingBrowserToken: boolean = false;
   browserCaptureStatus: string | null = null;
   isConnectingCarrier: boolean = false;
@@ -1131,9 +1133,86 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.arasEmail = localStorage.getItem('aras_saved_email') || '';
         // Sunucuda aktif veya yenilenebilir token varsa modal açılırken senkronize et
         this.ordersService.syncCarrierSessionsFromServer();
+      } else if (carrier.id === 'navlungo') {
+        this.navlungoEmail = localStorage.getItem('navlungo_saved_email') || '';
+        this.ordersService.syncCarrierSessionsFromServer();
       }
     }
     this.isSessionModalOpen = true;
+  }
+
+  getCarrierRemainingValidityText(carrier: CarrierAccountSession | null): string {
+    if (!carrier) return '';
+    let expiryMs: number | null = null;
+    if (carrier.expiresAtUtc) {
+      const parsed = Date.parse(carrier.expiresAtUtc);
+      if (!isNaN(parsed)) expiryMs = parsed;
+    }
+    if (expiryMs === null && carrier.tokenOrKey) {
+      const jwt = this.ordersService.validateJwt(carrier.tokenOrKey);
+      if (jwt.expDate) expiryMs = jwt.expDate.getTime();
+    }
+    if (expiryMs === null) {
+      return carrier.isConnected ? 'Aktif (Çerez / Süre Bilinmiyor)' : 'Bağlı değil';
+    }
+    const diffMs = expiryMs - Date.now();
+    if (diffMs <= 0) {
+      return '⚠️ Süresi Doldu (Yenilenmeli)';
+    }
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return hours > 0 ? `🟢 Aktif · Kalan: ${hours} sa ${mins} dk` : `🟡 Aktif · Kalan: ${mins} dk`;
+  }
+
+  triggerNavlungoBrowserCapture(openBrowser: boolean = false): void {
+    const targetId = this.activeModalCarrier?.id || 'navlungo';
+    if (this.navlungoEmail.trim()) {
+      localStorage.setItem('navlungo_saved_email', this.navlungoEmail.trim());
+    }
+
+    this.isCapturingBrowserToken = true;
+    this.browserCaptureStatus = openBrowser
+      ? '🌐 Navlungo giriş penceresi açıldı. Giriş yaptığınız anda Bearer JWT + Çerezler otomatik yakalanacaktır...'
+      : '🔄 Kayıtlı Navlungo oturum profiliyle token sessizce yenileniyor...';
+
+    this.ordersService.triggerCarrierBrowserLogin(
+      targetId,
+      this.navlungoEmail.trim() || undefined,
+      this.navlungoPassword.trim() || undefined,
+      openBrowser
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res: any) => {
+        this.isCapturingBrowserToken = false;
+        if (res && res.isConnected && res.bearerToken) {
+          this.modalTokenInput = res.bearerToken;
+          if (this.activeModalCarrier) {
+            this.activeModalCarrier.isConnected = true;
+            this.activeModalCarrier.tokenOrKey = res.bearerToken;
+            if (res.expiresAtUtc) this.activeModalCarrier.expiresAtUtc = res.expiresAtUtc;
+          }
+          const navSession = this.carrierSessions.find(s => s.id === 'navlungo');
+          if (navSession) {
+            navSession.isConnected = true;
+            navSession.tokenOrKey = res.bearerToken;
+            if (res.expiresAtUtc) navSession.expiresAtUtc = res.expiresAtUtc;
+          }
+          this.browserCaptureStatus = '✅ Navlungo oturum tokenı yenilendi ve canlı teklifler güncellendi!';
+          this.loadQuotesForSelected();
+          this.calculateLiveProfit();
+          this.saveSuccessMessage = '✅ Navlungo oturumu yenilendi ve canlı portal teklifleri çekildi!';
+          setTimeout(() => {
+            this.saveSuccessMessage = null;
+          }, 6000);
+        } else {
+          this.browserCaptureStatus = '⚠️ ' + (res?.message || 'Oturum yenilenemedi. Tarayıcı ile giriş yapıp yakalamayı deneyin.');
+        }
+      },
+      error: (err: any) => {
+        this.isCapturingBrowserToken = false;
+        this.browserCaptureStatus = '❌ Navlungo yenileme hatası: ' + (err?.error?.message || err?.message || 'Sunucuya ulaşılamadı.');
+      }
+    });
   }
 
   triggerArasBrowserCapture(openBrowser: boolean = true): void {

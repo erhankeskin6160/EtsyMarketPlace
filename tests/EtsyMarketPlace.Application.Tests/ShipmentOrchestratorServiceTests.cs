@@ -679,4 +679,116 @@ public sealed class ShipmentOrchestratorServiceTests
         Assert.Equal(4.68m, navUpsSaver.FastCustomsPaymentUsd);
         Assert.Equal(53.16m, navUpsSaver.GrandTotalUsd);
     }
+
+    [Fact]
+    public async Task ConnectCarrierAsync_NavlungoJwtToken_SetsExpiryAndKeepsSessionCookieSeparate()
+    {
+        var originalNav = NavlungoSettingsStore.Load();
+        try
+        {
+            NavlungoSettingsStore.Save(new NavlungoSettings
+            {
+                SessionCookie = "awsalbtg=cookie-keep;"
+            });
+
+            long futureExp = DateTimeOffset.UtcNow.AddHours(6).ToUnixTimeSeconds();
+            string header = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"alg\":\"HS256\",\"typ\":\"JWT\"}")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            string payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{{\"sub\":\"user1\",\"exp\":{futureExp}}}")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            string jwt = $"{header}.{payload}.sig";
+
+            var manager = new ShipmentCreationManager();
+            var orchestrator = new ShipmentOrchestratorService(manager, new FakeEtsyLogisticsApiClient());
+
+            var res = await orchestrator.ConnectCarrierAsync(new ConnectCarrierCommand
+            {
+                CarrierKey = "navlungo",
+                BearerToken = "Bearer " + jwt
+            });
+
+            Assert.True(res.Success);
+            Assert.True(res.IsConnected);
+            Assert.NotNull(res.ExpiresAtUtc);
+            Assert.Equal(jwt, res.BearerToken);
+
+            var saved = NavlungoSettingsStore.Load();
+            Assert.Equal(jwt, saved.IdToken);
+            Assert.Equal("awsalbtg=cookie-keep;", saved.SessionCookie);
+
+            var sessions = await orchestrator.GetCarrierSessionsAsync();
+            var navSession = Assert.Single(sessions, s => s.CarrierKey == "navlungo");
+            Assert.True(navSession.IsConnected);
+            Assert.NotNull(navSession.ExpiresAtUtc);
+        }
+        finally
+        {
+            NavlungoSettingsStore.Save(originalNav);
+        }
+    }
+
+    [Fact]
+    public async Task ConnectCarrierAsync_NavlungoButtonRefresh_CallsSessionManagerAndReturnsExpiry()
+    {
+        var originalNav = NavlungoSettingsStore.Load();
+        try
+        {
+            NavlungoSettingsStore.Save(new NavlungoSettings());
+
+            long futureExp = DateTimeOffset.UtcNow.AddHours(8).ToUnixTimeSeconds();
+            string header = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"alg\":\"HS256\",\"typ\":\"JWT\"}")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            string payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{{\"sub\":\"user1\",\"exp\":{futureExp}}}")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            string refreshedJwt = $"{header}.{payload}.sig2";
+
+            var fakeSessionMgr = new FakeNavlungoSessionManager(refreshedJwt);
+            var manager = new ShipmentCreationManager();
+            var orchestrator = new ShipmentOrchestratorService(manager, new FakeEtsyLogisticsApiClient(), sessionManager: fakeSessionMgr);
+
+            var res = await orchestrator.ConnectCarrierAsync(new ConnectCarrierCommand
+            {
+                CarrierKey = "navlungo",
+                OpenBrowser = false
+            });
+
+            Assert.True(fakeSessionMgr.NavlungoCalled);
+            Assert.False(fakeSessionMgr.LastShowBrowser);
+            Assert.True(res.Success);
+            Assert.True(res.IsConnected);
+            Assert.Equal(refreshedJwt, res.BearerToken);
+            Assert.NotNull(res.ExpiresAtUtc);
+        }
+        finally
+        {
+            NavlungoSettingsStore.Save(originalNav);
+        }
+    }
+
+    private sealed class FakeNavlungoSessionManager : IShippingSessionManager
+    {
+        private readonly string _jwt;
+        public bool NavlungoCalled { get; private set; }
+        public bool LastShowBrowser { get; private set; }
+
+        public FakeNavlungoSessionManager(string jwt) => _jwt = jwt;
+
+        public Task<string?> RefreshArasGlobalTokenAsync(string? email = null, string? password = null, bool showBrowser = false, Action<string>? statusCallback = null, CancellationToken ct = default, string? knownExpiredToken = null)
+            => Task.FromResult<string?>(null);
+
+        public Task<string?> RefreshShipEntegraTokenAsync(string? email = null, string? password = null, bool showBrowser = false, Action<string>? statusCallback = null, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+
+        public Task<string?> RefreshNavlungoTokenAsync(string? email = null, string? password = null, bool showBrowser = false, Action<string>? statusCallback = null, CancellationToken ct = default)
+        {
+            NavlungoCalled = true;
+            LastShowBrowser = showBrowser;
+            var s = NavlungoSettingsStore.Load();
+            s.IdToken = _jwt;
+            s.SessionCookie = "id_token=" + _jwt;
+            s.ExpiresAtUtc = JwtTokenInspector.GetExpirationUtc(_jwt);
+            s.TokenLastUpdatedUtc = DateTime.UtcNow;
+            NavlungoSettingsStore.Save(s);
+            return Task.FromResult<string?>(_jwt);
+        }
+
+        public Task<string?> RefreshShiptomoreTokenAsync(string? email = null, string? password = null, bool showBrowser = false, Action<string>? statusCallback = null, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+    }
 }

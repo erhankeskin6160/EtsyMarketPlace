@@ -484,8 +484,18 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             string token = (command.BearerToken ?? command.ApiKey ?? string.Empty).Trim();
             if (!string.IsNullOrWhiteSpace(token))
             {
-                settings.IdToken = token;
-                settings.SessionCookie = token;
+                if (NavlungoSettings.LooksLikeJwt(token))
+                {
+                    settings.IdToken = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                        ? token["Bearer ".Length..].Trim()
+                        : token;
+                    settings.ExpiresAtUtc = JwtTokenInspector.GetExpirationUtc(settings.CleanToken);
+                }
+                else
+                {
+                    settings.SessionCookie = token;
+                    settings.ExpiresAtUtc = DateTime.UtcNow.AddHours(12);
+                }
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
             }
             if (!string.IsNullOrWhiteSpace(command.Email)) settings.SavedEmail = command.Email.Trim();
@@ -493,9 +503,29 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
 
             NavlungoSettingsStore.Save(settings);
 
-            bool isConnected = !string.IsNullOrWhiteSpace(settings.IdToken) || !string.IsNullOrWhiteSpace(settings.SessionCookie);
-            string? snippet = isConnected && token.Length > 8
-                ? token[..4] + "..." + token[^4..]
+            string? captureError = null;
+            if ((command.OpenBrowser || (string.IsNullOrWhiteSpace(token) && (!settings.IsSessionValid || !string.IsNullOrWhiteSpace(settings.SavedEmail))))
+                && _sessionManager != null)
+            {
+                string? captured = await _sessionManager.RefreshNavlungoTokenAsync(
+                    settings.SavedEmail,
+                    settings.EncryptedPassword,
+                    showBrowser: command.OpenBrowser,
+                    statusCallback: msg => captureError = msg,
+                    ct: cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(captured))
+                {
+                    settings = NavlungoSettingsStore.Load();
+                }
+            }
+
+            string activeToken = !string.IsNullOrWhiteSpace(settings.CleanToken)
+                ? settings.CleanToken
+                : (settings.SessionCookie ?? string.Empty);
+            bool isConnected = settings.IsSessionValid;
+            string? snippet = isConnected && activeToken.Length > 8
+                ? activeToken[..4] + "..." + activeToken[^4..]
                 : null;
 
             return new ConnectCarrierResult
@@ -504,10 +534,11 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 CarrierKey = "navlungo",
                 IsConnected = isConnected,
                 TokenSnippet = snippet,
-                BearerToken = settings.IdToken,
+                BearerToken = isConnected ? activeToken : null,
+                ExpiresAtUtc = settings.GetTokenExpiryUtc(),
                 Message = isConnected
-                    ? "Navlungo oturum bilgileri başarıyla kaydedildi."
-                    : "Navlungo için geçerli bir Token veya Çerez girilmelidir."
+                    ? "Navlungo oturum bilgileri başarıyla yenilendi ve kaydedildi."
+                    : (captureError ?? "Navlungo oturumu yenilenemedi. Lütfen 'Tarayıcıda Giriş Yap & Yakala' ile giriş yapın veya geçerli Token/Çerez girin.")
             };
         }
 
@@ -572,18 +603,18 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
 
         // 3. Navlungo
         var nav = NavlungoSettingsStore.Load();
-        string navToken = (!string.IsNullOrWhiteSpace(nav.IdToken) ? nav.IdToken : nav.SessionCookie) ?? string.Empty;
-        bool navConnected = !string.IsNullOrWhiteSpace(navToken);
+        string navToken = (!string.IsNullOrWhiteSpace(nav.CleanToken) ? nav.CleanToken : nav.SessionCookie) ?? string.Empty;
+        bool navConnected = nav.IsSessionValid;
         list.Add(new CarrierSessionStatusDto
         {
             CarrierKey = "navlungo",
             CarrierName = "Navlungo",
             IsConnected = navConnected,
-            HasRefreshToken = false,
+            HasRefreshToken = !string.IsNullOrWhiteSpace(nav.SavedEmail),
             BearerToken = navConnected ? navToken : null,
             TokenSnippet = navToken.Length > 8 ? navToken[..4] + "..." + navToken[^4..] : null,
             SavedEmail = nav.SavedEmail,
-            ExpiresAtUtc = null,
+            ExpiresAtUtc = nav.GetTokenExpiryUtc(),
             UpdatedAtUtc = nav.TokenLastUpdatedUtc
         });
 
@@ -894,8 +925,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         // 4. Navlungo Teklifleri (Canlı API veya 4 Kademeli Navlungo Referans Tarifesi + Tam Kalem & DDP Kırılımı)
         {
             List<NavlungoQuoteOffer> navOffers = await navTask;
-            bool navSessionActive = navSettings != null &&
-                (!string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie));
+            bool navSessionActive = navSettings != null && navSettings.IsSessionValid;
             bool navUsingLive = navOffers.Count > 0 &&
                 navOffers.Any(o => o.DdpFeeUsd > 0m ||
                                    o.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase) ||

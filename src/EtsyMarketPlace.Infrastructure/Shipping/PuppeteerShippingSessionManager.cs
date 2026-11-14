@@ -501,30 +501,47 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 if (e.Request.Headers.TryGetValue("cookie", out var cookieStr) && !string.IsNullOrWhiteSpace(cookieStr))
                 {
                     if (cookieStr.Contains("id_token=", StringComparison.OrdinalIgnoreCase) ||
-                        cookieStr.Contains("_SessionUser_", StringComparison.OrdinalIgnoreCase))
+                        cookieStr.Contains("_SessionUser_", StringComparison.OrdinalIgnoreCase) ||
+                        cookieStr.Contains("awsalbtg", StringComparison.OrdinalIgnoreCase))
                     {
                         capturedCookies = cookieStr;
                         var m = System.Text.RegularExpressions.Regex.Match(cookieStr, @"id_token=([^;]+)");
-                        if (m.Success) capturedToken = m.Groups[1].Value.Trim();
+                        if (m.Success)
+                        {
+                            string candidate = m.Groups[1].Value.Trim();
+                            if (!JwtTokenInspector.IsExpired(candidate))
+                            {
+                                capturedToken = candidate;
+                            }
+                        }
                     }
                 }
                 if (e.Request.Headers.TryGetValue("authorization", out var auth) &&
                     !string.IsNullOrWhiteSpace(auth) &&
                     auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 {
-                    capturedToken = auth[7..].Trim();
+                    string candidate = auth[7..].Trim();
+                    if (candidate.Length > 20 && !JwtTokenInspector.IsExpired(candidate))
+                    {
+                        capturedToken = candidate;
+                    }
                 }
             };
 
+            string entryUrl = showBrowser ? "https://ship.navlungo.com/login" : "https://ship.navlungo.com/ship";
             statusCallback?.Invoke("🌐 Navlungo paneline bağlanılıyor...");
-            await page.GoToAsync("https://ship.navlungo.com/login", new NavigationOptions
+            await page.GoToAsync(entryUrl, new NavigationOptions
             {
                 WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
                 Timeout = 25000
             });
 
-            // 1. Önce localStorage kontrol et
-            capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+            // 1. Önce localStorage kontrol et (yalnızca süresi dolmamış JWT)
+            string? initialLocal = await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+            if (!string.IsNullOrWhiteSpace(initialLocal) && !JwtTokenInspector.IsExpired(initialLocal))
+            {
+                capturedToken ??= initialLocal;
+            }
 
             // 2. Bilgiler varsa form doldurmayı dene
             if (string.IsNullOrWhiteSpace(capturedToken) && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
@@ -533,7 +550,11 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 await TryFillLoginFormAsync(page, email, password);
                 await Task.Delay(3000, ct);
 
-                capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+                string? afterFill = await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+                if (!string.IsNullOrWhiteSpace(afterFill) && !JwtTokenInspector.IsExpired(afterFill))
+                {
+                    capturedToken ??= afterFill;
+                }
             }
 
             if (showBrowser)
@@ -541,56 +562,69 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Navlungo hesabınıza giriş yapın (Oturum otomatik yakalanacaktır)...");
             }
 
-            int maxWait = showBrowser ? 120 : 15;
+            int maxWait = showBrowser ? 120 : 12;
             int waited = 0;
             while (string.IsNullOrWhiteSpace(capturedToken) && string.IsNullOrWhiteSpace(capturedCookies) && waited < maxWait)
             {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(1000, ct);
                 waited++;
-                capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
 
-                var cookies = await page.GetCookiesAsync("https://ship.navlungo.com", "https://quick-price-calculator.navlungo.com");
+                string? polled = await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+                if (!string.IsNullOrWhiteSpace(polled) && !JwtTokenInspector.IsExpired(polled))
+                {
+                    capturedToken ??= polled;
+                }
+
+                // Sessiz modda doğrudan /login ekranına düştüyse ve şifre/reCAPTCHA gerekiyorsa beklemeden çık
+                bool onLoginPage = page.Url.Contains("/login", StringComparison.OrdinalIgnoreCase) ||
+                                   page.Url.Contains("/giris", StringComparison.OrdinalIgnoreCase) ||
+                                   page.Url.Contains("/auth", StringComparison.OrdinalIgnoreCase);
+                if (!showBrowser && onLoginPage && waited >= 3 && string.IsNullOrWhiteSpace(capturedToken))
+                {
+                    break;
+                }
+
+                var cookies = await page.GetCookiesAsync(
+                    "https://ship.navlungo.com",
+                    "https://api.navlungo.com",
+                    "https://quick-price-calculator.navlungo.com");
                 if (cookies != null && cookies.Length > 0)
                 {
                     var idTokCookie = cookies.FirstOrDefault(c => c.Name.Equals("id_token", StringComparison.OrdinalIgnoreCase));
-                    if (idTokCookie != null && !string.IsNullOrWhiteSpace(idTokCookie.Value))
+                    if (idTokCookie != null && !string.IsNullOrWhiteSpace(idTokCookie.Value) && !JwtTokenInspector.IsExpired(idTokCookie.Value))
                     {
                         capturedToken = idTokCookie.Value;
                     }
 
-                    // Herhangi bir oturum çerezi veya kullanıcı göstergesi varsa (_SessionUser, nv_attr, session, token, auth vb.)
-                    bool hasSessionCookie = cookies.Any(c => 
-                        c.Name.Contains("session", StringComparison.OrdinalIgnoreCase) || 
-                        c.Name.Contains("token", StringComparison.OrdinalIgnoreCase) || 
+                    bool hasSessionCookie = cookies.Any(c =>
+                        c.Name.Contains("session", StringComparison.OrdinalIgnoreCase) ||
+                        c.Name.Contains("token", StringComparison.OrdinalIgnoreCase) ||
                         c.Name.Contains("nv_attr", StringComparison.OrdinalIgnoreCase) ||
                         c.Name.Contains("user", StringComparison.OrdinalIgnoreCase) ||
                         c.Name.Contains("auth", StringComparison.OrdinalIgnoreCase));
 
-                    bool navigatedAwayFromLogin = !page.Url.Contains("/login", StringComparison.OrdinalIgnoreCase) && 
-                                                 !page.Url.Contains("/giris", StringComparison.OrdinalIgnoreCase) &&
-                                                 !page.Url.Contains("/auth", StringComparison.OrdinalIgnoreCase);
-
-                    if ((hasSessionCookie && navigatedAwayFromLogin) || !string.IsNullOrWhiteSpace(capturedToken))
+                    if ((hasSessionCookie && !onLoginPage) || !string.IsNullOrWhiteSpace(capturedToken))
                     {
                         try
                         {
-                            statusCallback?.Invoke("🌐 Hesaplayıcı çerezleri eşitleniyor...");
-                            await page.GoToAsync("https://quick-price-calculator.navlungo.com/tr?source=user", new NavigationOptions
-                            {
-                                WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
-                                Timeout = 8000
-                            });
-                            var allCookies = await page.GetCookiesAsync("https://ship.navlungo.com", "https://quick-price-calculator.navlungo.com");
+                            statusCallback?.Invoke("🌐 Portal ve hesaplayıcı çerezleri eşitleniyor...");
+                            var allCookies = await page.GetCookiesAsync(
+                                "https://ship.navlungo.com",
+                                "https://api.navlungo.com",
+                                "https://quick-price-calculator.navlungo.com");
                             if (allCookies != null && allCookies.Length > 0)
                             {
-                                capturedCookies = string.Join("; ", allCookies.Select(c => $"{c.Name}={c.Value}"));
+                                capturedCookies = string.Join("; ", allCookies
+                                    .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                                    .Select(g => $"{g.First().Name}={g.First().Value}"));
                             }
                         }
                         catch (Exception caught) { AppLog.Swallowed(caught); }
 
-                        capturedCookies ??= string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
-                        capturedToken ??= "navlungo_browser_session";
+                        capturedCookies ??= string.Join("; ", cookies
+                            .GroupBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                            .Select(g => $"{g.First().Name}={g.First().Value}"));
                         break;
                     }
                 }
@@ -600,16 +634,24 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             {
                 statusCallback?.Invoke("✅ Canlı Navlungo oturumu başarıyla yakalandı ve kaydedildi!");
                 var settings = NavlungoSettingsStore.Load();
-                if (!string.IsNullOrWhiteSpace(capturedToken)) settings.IdToken = capturedToken;
+                if (!string.IsNullOrWhiteSpace(capturedToken))
+                {
+                    settings.IdToken = capturedToken;
+                    settings.ExpiresAtUtc = JwtTokenInspector.GetExpirationUtc(capturedToken) ?? DateTime.UtcNow.AddHours(12);
+                }
+                else
+                {
+                    settings.ExpiresAtUtc ??= DateTime.UtcNow.AddHours(12);
+                }
                 if (!string.IsNullOrWhiteSpace(capturedCookies)) settings.SessionCookie = capturedCookies;
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
                 if (!string.IsNullOrWhiteSpace(email)) settings.SavedEmail = email;
                 if (!string.IsNullOrWhiteSpace(password)) settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(password);
                 NavlungoSettingsStore.Save(settings);
-                return capturedToken ?? "connected";
+                return !string.IsNullOrWhiteSpace(capturedToken) ? capturedToken : "connected";
             }
 
-            statusCallback?.Invoke("⚠️ Oturum yakalanamadı. Lütfen 'Tarayıcı' butonunu kullanarak giriş yapın.");
+            statusCallback?.Invoke("⚠️ Navlungo oturumu sessizce yenilenemedi (reCAPTCHA / giriş gerekebilir). Lütfen tarayıcıyla giriş yapın.");
             return null;
         }
         catch (Exception ex)

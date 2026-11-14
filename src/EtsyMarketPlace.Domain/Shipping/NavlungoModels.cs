@@ -72,7 +72,62 @@ public sealed class NavlungoSettings
     public string? SavedEmail { get; set; }
     public string? EncryptedPassword { get; set; }
     public DateTime? TokenLastUpdatedUtc { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
     public bool AutoRefreshEnabled { get; set; } = true;
+
+    public string CleanToken
+    {
+        get
+        {
+            string t = (IdToken ?? string.Empty).Trim();
+            if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                t = t["Bearer ".Length..].Trim();
+            }
+            return t;
+        }
+    }
+
+    public static bool LooksLikeJwt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        string trimmed = value.Trim();
+        if (trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed["Bearer ".Length..].Trim();
+        }
+        return !trimmed.Contains(';') && !trimmed.Contains('=') && trimmed.Count(c => c == '.') == 2;
+    }
+
+    public DateTime? GetTokenExpiryUtc()
+    {
+        string clean = CleanToken;
+        if (LooksLikeJwt(clean))
+        {
+            var jwtExp = JwtTokenInspector.GetExpirationUtc(clean);
+            if (jwtExp.HasValue) return jwtExp;
+        }
+        return ExpiresAtUtc;
+    }
+
+    public bool IsSessionValid
+    {
+        get
+        {
+            string clean = CleanToken;
+            bool hasAny = !string.IsNullOrWhiteSpace(clean) || !string.IsNullOrWhiteSpace(SessionCookie);
+            if (!hasAny) return false;
+            if (LooksLikeJwt(clean) && JwtTokenInspector.IsExpired(clean))
+            {
+                return false;
+            }
+            if (ExpiresAtUtc.HasValue && DateTime.UtcNow >= ExpiresAtUtc.Value)
+            {
+                return false;
+            }
+            return true;
+        }
+    }
 }
 
 /// <summary>

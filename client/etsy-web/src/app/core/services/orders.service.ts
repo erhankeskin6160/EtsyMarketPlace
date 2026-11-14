@@ -38,21 +38,23 @@ export class OrdersService {
           if (idx < 0) continue;
 
           const item = { ...current[idx] };
-          if (srv.bearerToken && srv.bearerToken.length > 20) {
+          if (srv.bearerToken && srv.bearerToken.length > 20 && srv.isConnected) {
             item.tokenOrKey = srv.bearerToken;
             item.isConnected = true;
             item.statusLabel = '🟢 Bağlı';
+            item.expiresAtUtc = srv.expiresAtUtc || undefined;
             if (srv.updatedAtUtc) {
               const dt = new Date(srv.updatedAtUtc);
               item.lastUpdated = dt.toLocaleDateString('tr-TR') + ' ' + dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
             }
             current[idx] = item;
             changed = true;
-          } else if (srv.carrierKey === 'aras' && !srv.isConnected) {
-            // Sunucuda Aras tokenı geçersizse yerel süresi dolmuş tokenı kontrol et
+          } else if ((srv.carrierKey === 'aras' || srv.carrierKey === 'navlungo') && !srv.isConnected) {
+            // Sunucuda Aras/Navlungo tokenı geçersizse yerel süresi dolmuş tokenı kontrol et
             const localValid = this.validateJwt(item.tokenOrKey);
             if (!localValid.isValid || localValid.expired) {
               item.isConnected = false;
+              item.expiresAtUtc = srv.expiresAtUtc || undefined;
               item.statusLabel = '⚠️ Giriş Yap';
               current[idx] = item;
               changed = true;
@@ -86,6 +88,7 @@ export class OrdersService {
                   isConnected: true,
                   statusLabel: '🟢 Bağlı',
                   tokenOrKey: res.bearerToken,
+                  expiresAtUtc: res.expiresAtUtc || s.expiresAtUtc,
                   lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
                 };
               }
