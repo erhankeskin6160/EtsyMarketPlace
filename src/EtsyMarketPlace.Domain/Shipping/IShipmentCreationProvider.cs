@@ -28,6 +28,8 @@ public sealed class ShipmentCreationContext
     public string Category { get; set; } = "Home Decor";
     public ArasShipmentSenderAddress SenderAddress { get; set; } = new();
     public bool NotifyEtsy { get; set; } = true;
+    /// <summary>DDP (Delivered Duty Paid) aktif ise gümrük alıcıya yansıtılmadan gönderici tarafından ödenir; false ise DAP.</summary>
+    public bool IsDdp { get; set; } = true;
 }
 
 /// <summary>

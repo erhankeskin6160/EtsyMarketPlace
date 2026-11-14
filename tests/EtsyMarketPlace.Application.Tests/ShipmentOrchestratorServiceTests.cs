@@ -227,10 +227,11 @@ public sealed class ShipmentOrchestratorServiceTests
         public string BaseUrl { get; set; } = "https://dev.shiptomore.com";
         public bool HasCredentials => true;
         public List<ShiptomorePriceOption> PriceOptionsToReturn { get; set; } = new();
+        public List<ShiptomoreHsCode> HsCodesToReturn { get; set; } = new();
         public Task<IReadOnlyList<string>> GetProvidersAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<string>>(new List<string> { "ups", "fedex", "dhl" });
         public Task<IReadOnlyList<ShiptomoreHsCode>> SearchHsCodesAsync(string query, int limit = 50, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(new List<ShiptomoreHsCode>());
+            Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(HsCodesToReturn);
         public Task<IReadOnlyList<ShiptomorePriceOption>> CalculatePricesAsync(ShiptomorePriceRequest request, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(PriceOptionsToReturn);
         public Task<ShiptomoreShipmentResponse> CreateShipmentAsync(ShiptomoreShipmentRequest request, CancellationToken ct = default) =>
@@ -334,6 +335,7 @@ public sealed class ShipmentOrchestratorServiceTests
         Assert.All(seQuotes, q =>
         {
             Assert.True(q.HasDetailedBreakdown);
+            Assert.True(q.HasCustomsBreakdown);
             Assert.True(q.BaseCargoPriceUsd > 0m);
             Assert.True(q.FuelCostUsd > 0m);
             Assert.True(q.FastCustomsPaymentUsd > 0m);
@@ -341,24 +343,113 @@ public sealed class ShipmentOrchestratorServiceTests
 
         var stmQuote = Assert.Single(response.Quotes, q => q.CarrierKey == "shiptomore");
         Assert.False(stmQuote.HasDetailedBreakdown);
+        Assert.True(stmQuote.HasCustomsBreakdown);
         Assert.Equal("widect:widect_standard", stmQuote.ServiceCode);
         Assert.Equal(14.54m, stmQuote.PriceUsd);
         Assert.Equal(0.40, stmQuote.BillableWeightKg);
         Assert.Equal(0m, stmQuote.BaseCargoPriceUsd);
         Assert.Equal(0m, stmQuote.FuelCostUsd);
-        Assert.Equal(0m, stmQuote.FastCustomsPaymentUsd);
-        Assert.Equal(0m, stmQuote.CarrierProcessingFeeUsd);
+        Assert.Equal(0.45m, stmQuote.CarrierProcessingFeeUsd);
+        Assert.True(stmQuote.FastCustomsPaymentUsd > 0.45m);
+        Assert.Equal(Math.Round(stmQuote.PriceUsd + stmQuote.FastCustomsPaymentUsd, 2), stmQuote.GrandTotalUsd);
 
         var otherCarriers = response.Quotes.Where(q => q.CarrierKey != "shipentegra").ToList();
         Assert.NotEmpty(otherCarriers);
         Assert.All(otherCarriers, q =>
         {
             Assert.False(q.HasDetailedBreakdown);
+            Assert.True(q.HasCustomsBreakdown);
             Assert.Equal(0m, q.BaseCargoPriceUsd);
             Assert.Equal(0m, q.FuelCostUsd);
-            Assert.Equal(0m, q.FastCustomsPaymentUsd);
-            Assert.Equal(0m, q.CarrierProcessingFeeUsd);
-            Assert.Equal(q.PriceUsd, q.GrandTotalUsd);
+            Assert.True(q.CarrierProcessingFeeUsd > 0m);
+            Assert.True(q.FastCustomsPaymentUsd > 0m);
+            Assert.Equal(Math.Round(q.PriceUsd + q.FastCustomsPaymentUsd, 2), q.GrandTotalUsd);
         });
+    }
+
+    [Fact]
+    public async Task GetCarrierQuotesAsync_UsesShiptomoreLiveHsTariffAndCarrierDdpFees()
+    {
+        var manager = new ShipmentCreationManager();
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+        var fakeShiptomoreApi = new FakeShiptomoreOfficialApi
+        {
+            HsCodesToReturn = new List<ShiptomoreHsCode>
+            {
+                new() { Code = "39264000", Description = "Plastic figurines", UsTariffRate = 5.3 }
+            },
+            PriceOptionsToReturn = new List<ShiptomorePriceOption>
+            {
+                new() { ProviderSlug = "widect", ServiceSlug = "widect_standard", Price = 14.54m, Currency = "USD", BillingWeight = 0.40 },
+                new() { ProviderSlug = "fedex", ServiceSlug = "fedex_express_3day", Price = 19.29m, Currency = "USD", BillingWeight = 0.60 }
+            }
+        };
+
+        var orchestrator = new ShipmentOrchestratorService(manager, fakeLogisticsApi, shiptomoreApi: fakeShiptomoreApi);
+
+        var response = await orchestrator.GetCarrierQuotesAsync(new CarrierQuotesQuery
+        {
+            CountryCode = "US",
+            PostalCode = "10001",
+            WeightKg = 0.4,
+            WidthCm = 15,
+            LengthCm = 20,
+            HeightCm = 10,
+            HsCode = "3926400000",
+            Quantity = 2,
+            DeclaredValueUsd = new decimalUsdValueOrDefault(10.00m),
+            UsdTryRate = 50.00m
+        });
+
+        var stmWidect = Assert.Single(response.Quotes, q => q.CarrierKey == "shiptomore" && q.ServiceCode == "widect:widect_standard");
+        Assert.False(stmWidect.HasDetailedBreakdown);
+        Assert.True(stmWidect.HasCustomsBreakdown);
+        Assert.Equal("Shiptomore HS API + DDP Tarife", stmWidect.CustomsSourceBadge);
+        Assert.Equal(20.00m, stmWidect.DeclaredValueUsd);
+        Assert.Equal(5.3m, stmWidect.GeneralDutyRatePercent);
+        Assert.Equal(1.06m, stmWidect.GeneralDutyUsd);
+        Assert.Equal(2.50m, stmWidect.AdditionalDutyUsd);
+        Assert.Equal(0.45m, stmWidect.CarrierProcessingFeeUsd);
+        Assert.Null(stmWidect.CarrierProcessingFeeListUsd);
+        Assert.Equal(4.01m, stmWidect.FastCustomsPaymentUsd);
+        Assert.Equal(18.55m, stmWidect.GrandTotalUsd);
+
+        var stmFedEx = Assert.Single(response.Quotes, q => q.CarrierKey == "shiptomore" && q.ServiceCode == "fedex:fedex_express_3day");
+        Assert.False(stmFedEx.HasDetailedBreakdown);
+        Assert.True(stmFedEx.HasCustomsBreakdown);
+        Assert.Equal(2.50m, stmFedEx.CarrierProcessingFeeUsd);
+        Assert.Equal(4.50m, stmFedEx.CarrierProcessingFeeListUsd);
+        Assert.Equal(6.06m, stmFedEx.FastCustomsPaymentUsd);
+        Assert.Equal(25.35m, stmFedEx.GrandTotalUsd);
+    }
+
+    [Theory]
+    [InlineData(true, "DDP")]
+    [InlineData(false, "DAP")]
+    public void ShiptomoreBuildRequest_SetsIncotermFromIsDdp(bool isDdp, string expectedIncoterm)
+    {
+        var context = new ShipmentCreationContext
+        {
+            Order = new EtsyOrderFulfillmentItem
+            {
+                ReceiptId = 12345,
+                BuyerName = "Jane Doe",
+                StreetAddress = "123 Main St",
+                City = "Austin",
+                State = "TX",
+                PostalCode = "78701",
+                CountryCode = "US",
+                Phone = "+15551234567"
+            },
+            SelectedServiceCode = "widect:widect_standard",
+            SelectedSubCarrier = "widect",
+            HsCode = "3926400000",
+            CargoPrice = 14.54m,
+            IsDdp = isDdp
+        };
+
+        var request = ShiptomoreOfficialShipmentCreationProvider.BuildRequest(context);
+
+        Assert.Equal(expectedIncoterm, request.IncotermCode);
     }
 }

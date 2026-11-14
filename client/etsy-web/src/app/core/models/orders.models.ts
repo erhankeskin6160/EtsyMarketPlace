@@ -51,6 +51,10 @@ export interface CarrierQuote {
   insuranceNote?: string;
 
   // ── Hızlı Gümrük Ödemesi (DDP Customs Breakdown) ──
+  hasCustomsBreakdown?: boolean;
+  customsSourceBadge?: string;
+  carrierProcessingFeeLabel?: string;
+  carrierProcessingFeeListUsd?: number;
   declaredValueUsd?: number;
   hsCode?: string;
   generalDutyUsd?: number;

@@ -442,13 +442,23 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.expandedQuoteKeys = {};
   }
 
+  get isDdpEnabled(): boolean {
+    return this.quoteDisplayMode === 'all_in_ddp';
+  }
+
+  toggleDdpMode(enabled?: boolean, event?: Event): void {
+    event?.stopPropagation();
+    const next = enabled !== undefined ? enabled : !this.isDdpEnabled;
+    this.setQuoteDisplayMode(next ? 'all_in_ddp' : 'freight_only');
+  }
+
   setQuoteDisplayMode(mode: 'freight_only' | 'all_in_ddp'): void {
     this.quoteDisplayMode = mode;
     this.syncSelectedQuoteCost();
   }
 
   hasCustomsBreakdown(quote: CarrierQuote): boolean {
-    return Boolean(quote.hasDetailedBreakdown && quote.fastCustomsPaymentUsd !== undefined);
+    return Boolean((quote.hasCustomsBreakdown || quote.hasDetailedBreakdown) && quote.fastCustomsPaymentUsd !== undefined);
   }
 
   getDisplayPriceUsd(quote: CarrierQuote): number {
@@ -464,8 +474,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   get selectedTaxRateSummary(): string {
-    const ref = (this.selectedCarrierQuote?.hasDetailedBreakdown ? this.selectedCarrierQuote : undefined)
-      || this.carrierQuotes.find(q => q.hasDetailedBreakdown)
+    const selected = this.selectedCarrierQuote;
+    const ref = (selected && this.hasCustomsBreakdown(selected) ? selected : undefined)
+      || this.carrierQuotes.find(q => this.hasCustomsBreakdown(q))
       || this.carrierQuotes[0];
     if (!ref) return 'Genel Vergi %5.3 + ABD Ek Tarife 99030579 %12.5 = Toplam %17.8';
     const gen = ref.generalDutyRatePercent ?? 0;
@@ -564,6 +575,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(res => {
       if (res && res.quotes && res.quotes.length > 0) {
         this.carrierQuotes = res.quotes;
+        this.syncSelectedQuoteCost();
       }
     });
   }
@@ -702,6 +714,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       hsCode: this.selectedOrder.gtipCode,
       cargoPrice: quote?.priceUsd || this.selectedOrder.shippingCost,
       notifyEtsy: this.notifyEtsyOnShipment,
+      isDdp: this.isDdpEnabled,
       recipientAddress: {
         buyerName: this.selectedOrder.buyerName,
         name: this.selectedOrder.buyerName,

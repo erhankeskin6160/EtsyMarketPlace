@@ -18,6 +18,10 @@ public sealed class ShiptomoreQuoteRequest
     public double HeightCm { get; set; } = 10;
     public int Quantity { get; set; } = 1;
     public string PackageType { get; set; } = "custom";
+    /// <summary>Gümrük dahil (DDP) teklif hesaplamasının aktif olup olmadığı.</summary>
+    public bool IsDdp { get; set; } = true;
+    /// <summary>Toplam gümrük beyan değeri (USD).</summary>
+    public decimal DeclaredValueUsd { get; set; }
 
     public double VolumetricDesi => (LengthCm * WidthCm * HeightCm) / 5000.0;
     public double BillableWeightKg => Math.Max(WeightKg, VolumetricDesi);
@@ -40,6 +44,18 @@ public sealed class ShiptomoreQuoteOffer
     public string? ProviderLogoUrl { get; set; }
     public bool IsMemberRate { get; set; }
     public string Note { get; set; } = string.Empty;
+    /// <summary>Varsa DDP dahil toplam fiyat (USD).</summary>
+    public decimal? TotalPrice { get; set; }
+    /// <summary>DDP taşıyıcı işlem ücreti (USD).</summary>
+    public decimal DdpFeeUsd { get; set; }
+    /// <summary>İndirimsiz liste DDP taşıyıcı işlem ücreti (USD).</summary>
+    public decimal? DdpFeeUnDiscountedUsd { get; set; }
+    /// <summary>DDP işlem ücreti açıklaması (ör. "DDP Ücreti", "DDP Taşıyıcı İşlem Bedeli - FedEx").</summary>
+    public string? DdpFeeName { get; set; }
+    /// <summary>Varsa yoğun sezon ek ücreti (USD).</summary>
+    public decimal PeakSeasonFeeUsd { get; set; }
+    /// <summary>Yoğun sezon ek ücreti açıklaması.</summary>
+    public string? PeakSeasonFeeName { get; set; }
 }
 
 /// <summary>

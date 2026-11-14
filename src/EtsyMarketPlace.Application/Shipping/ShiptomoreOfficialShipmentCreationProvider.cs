@@ -275,6 +275,7 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             // Widect'te fatura belgesi henüz iliştirilmemişse 422 hatası vermemesi için 'retail' atanır.
             ShipmentType = (provider == "widect") ? "retail" : "sale",
             PackageType = "custom",
+            IncotermCode = context.IsDdp ? "DDP" : "DAP",
             CustomerReference = order.OrderNumber,
 
             IncludeLabels = true,

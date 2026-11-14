@@ -24,6 +24,8 @@ public sealed class CreateCarrierShipmentCommand
     public string HsCode { get; set; } = string.Empty;
     public decimal CargoPrice { get; set; } = 0m;
     public bool NotifyEtsy { get; set; } = true;
+    /// <summary>DDP (Gümrük Dahil) teslim şartı aktif ise true, DAP (sadece navlun) ise false.</summary>
+    public bool IsDdp { get; set; } = true;
     public EtsyOrderFulfillmentItem? RecipientAddress { get; set; }
 }
 
@@ -171,6 +173,14 @@ public sealed class UnifiedCarrierQuoteDto
     public string InsuranceNote { get; set; } = string.Empty;
 
     // --- HIZLI GÜMRÜK ÖDEMESİ (DDP / TARİFE KIRILIMI) ---
+    /// <summary>Teklifin ayrıntılı DDP (gümrük + taşıyıcı işlem ücreti) kartına sahip olup olmadığı.</summary>
+    public bool HasCustomsBreakdown { get; set; }
+    /// <summary>DDP tarife/ücret verisinin kaynağı (ör. "Canlı ShipEntegra DDP API", "Shiptomore Tarife + DDP API").</summary>
+    public string CustomsSourceBadge { get; set; } = string.Empty;
+    /// <summary>Taşıyıcı DDP işlem bedeli satır etiketi.</summary>
+    public string CarrierProcessingFeeLabel { get; set; } = "Taşıyıcı İşlem Bedeli";
+    /// <summary>Varsa taşıyıcı DDP işlem bedelinin indirimsiz liste fiyatı (USD).</summary>
+    public decimal? CarrierProcessingFeeListUsd { get; set; }
     public decimal DeclaredValueUsd { get; set; } = 1.00m;
     public string HsCode { get; set; } = "3926400000";
     public decimal GeneralDutyUsd { get; set; }

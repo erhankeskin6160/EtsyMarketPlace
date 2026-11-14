@@ -2635,6 +2635,10 @@
     .customs-decl-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-size: 0.72rem; color: #cbd5e1; user-select: none; padding: 2px 0; }
     .customs-decl-header:hover { color: #f8fafc; }
     .customs-decl-summary { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .customs-decl-header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ddp-switch-pill { border-radius: 5px; padding: 2px 8px; font-size: 0.65rem; font-weight: 800; cursor: pointer; border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(2, 132, 199, 0.25); color: #bae6fd; transition: all 0.15s ease; }
+    .ddp-switch-pill.active:hover { background: rgba(2, 132, 199, 0.42); color: #fff; }
+    .ddp-switch-pill.off { border-color: rgba(148, 163, 184, 0.35); background: rgba(51, 65, 85, 0.75); color: #cbd5e1; }
     .customs-toggle-btn { flex-shrink: 0; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc; border-radius: 5px; padding: 2px 7px; font-size: 0.66rem; font-weight: 700; cursor: pointer; }
     .customs-inputs-grid { display: grid; grid-template-columns: 118px 62px 1fr; gap: 8px; align-items: end; }
     .customs-presets-col { display: flex; flex-direction: column; gap: 3px; }
@@ -2660,6 +2664,8 @@
     .mini-pill { font-size: 0.64rem; font-weight: 600; color: #cbd5e1; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 4px; padding: 1px 5px; }
     .mini-pill.warn { color: #fcd34d; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.3); }
     .mini-pill.ddp { color: #7dd3fc; background: rgba(14, 165, 233, 0.16); border-color: rgba(56, 189, 248, 0.35); }
+    .mini-pill.total { color: #fde68a; background: rgba(245, 158, 11, 0.14); border-color: rgba(251, 191, 36, 0.38); font-weight: 700; }
+    .mini-pill.off { color: #94a3b8; background: rgba(30, 41, 59, 0.65); border-color: rgba(148, 163, 184, 0.22); }
     .mini-pill.info { color: #86efac; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.28); }
     .mini-pill.toggle-btn { margin-left: auto; color: #e2e8f0; background: rgba(51, 65, 85, 0.85); cursor: pointer; }
 
@@ -2672,6 +2678,17 @@
     .receipt-section { display: flex; flex-direction: column; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
     .receipt-section.grand { border-bottom: none; padding-bottom: 0; }
     .receipt-sec-title { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.03em; color: #94a3b8; margin-bottom: 1px; }
+    .receipt-sec-title.ddp { color: #7dd3fc; margin-bottom: 0; }
+    .ddp-detail-subcard { display: flex; flex-direction: column; gap: 4px; padding: 7px 8px; background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; }
+    .ddp-detail-subcard.disabled-ddp { background: rgba(30, 41, 59, 0.45); border-color: rgba(148, 163, 184, 0.25); opacity: 0.78; }
+    .ddp-subcard-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-bottom: 4px; border-bottom: 1px dashed rgba(56, 189, 248, 0.25); flex-wrap: wrap; }
+    .ddp-subcard-title-wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ddp-source-chip { font-size: 0.59rem; font-weight: 700; color: #bae6fd; background: rgba(2, 132, 199, 0.28); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 4px; padding: 1px 5px; }
+    .ddp-inline-toggle { font-size: 0.62rem; font-weight: 800; padding: 2px 7px; border-radius: 4px; border: 1px solid #38bdf8; background: rgba(2, 132, 199, 0.35); color: #e0f2fe; cursor: pointer; }
+    .ddp-inline-toggle:hover { background: #0284c7; color: #fff; }
+    .ddp-inline-toggle.off { border-color: rgba(148, 163, 184, 0.4); background: rgba(51, 65, 85, 0.8); color: #cbd5e1; }
+    .ddp-disabled-banner { font-size: 0.64rem; color: #fca5a5; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(248, 113, 113, 0.25); border-radius: 5px; padding: 4px 6px; }
+    .fee-strike { color: #64748b; margin-right: 4px; font-size: 0.64rem; }
     .receipt-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 0.7rem; color: #cbd5e1; }
     .receipt-row.muted { color: #94a3b8; font-size: 0.67rem; }
     .receipt-row small { color: #94a3b8; font-size: 0.64rem; }
@@ -2680,11 +2697,12 @@
     .receipt-row.prepay { color: #4ade80; font-weight: 700; font-size: 0.69rem; }
     .receipt-row.grand-total { font-weight: 800; font-size: 0.75rem; color: #fbbf24; }
     .receipt-info-note { font-size: 0.66rem; line-height: 1.35; color: #94a3b8; background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 6px; padding: 6px 8px; }
+    .receipt-info-note.compact { padding: 4px 7px; font-size: 0.63rem; margin-top: 2px; }
     .receipt-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .receipt-actions-row.single { grid-template-columns: 1fr; }
     .btn-receipt-apply { border-radius: 6px; padding: 5px 6px; font-size: 0.68rem; font-weight: 700; cursor: pointer; border: 1px solid; }
     .btn-receipt-apply.freight { background: rgba(51, 65, 85, 0.7); border-color: rgba(148, 163, 184, 0.35); color: #e2e8f0; }
-    .btn-receipt-apply.freight:hover { background: #334155; }
+    .btn-receipt-apply.freight:hover, .btn-receipt-apply.freight.selected-mode { background: #334155; border-color: #cbd5e1; color: #fff; }
     .btn-receipt-apply.ddp { background: rgba(2, 132, 199, 0.25); border-color: #38bdf8; color: #e0f2fe; }
-    .btn-receipt-apply.ddp:hover { background: #0284c7; color: #fff; }
+    .btn-receipt-apply.ddp:hover, .btn-receipt-apply.ddp.selected-mode { background: #0284c7; color: #fff; }
     @media (max-width: 720px) { .customs-inputs-grid { grid-template-columns: 1fr 1fr; } .customs-presets-col { grid-column: 1 / -1; } }

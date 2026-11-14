@@ -123,7 +123,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             SelectedSubCarrier = !string.IsNullOrWhiteSpace(command.SubCarrier) ? command.SubCarrier : "widect",
             ServiceType = !string.IsNullOrWhiteSpace(command.ServiceType) ? command.ServiceType : "Eco Express",
             CargoPrice = command.CargoPrice,
-            NotifyEtsy = command.NotifyEtsy
+            NotifyEtsy = command.NotifyEtsy,
+            IsDdp = command.IsDdp
         };
 
         // Kargo platformunda gönderiyi oluştur
@@ -659,11 +660,17 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 WidthCm = width,
                 LengthCm = length,
                 HeightCm = height,
-                Quantity = 1
+                Quantity = 1,
+                IsDdp = true,
+                DeclaredValueUsd = Math.Round(declaredValue * quantity, 2)
             }, cancellationToken)
             : Task.FromResult(new List<ShiptomoreQuoteOffer>());
 
-        await Task.WhenAll(seTask, arasTask, stmTask);
+        Task<IReadOnlyList<ShiptomoreHsCode>> stmHsTask = (_shiptomoreApi != null && country == "US" && hsCode.Length >= 6)
+            ? SafeSearchShiptomoreHsAsync(_shiptomoreApi, hsCode[..Math.Min(8, hsCode.Length)], cancellationToken)
+            : Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(Array.Empty<ShiptomoreHsCode>());
+
+        await Task.WhenAll(seTask, arasTask, stmTask, stmHsTask);
 
         var seResult = await seTask;
         var arasResult = await arasTask;
@@ -677,13 +684,28 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             stmOffers = new List<ShiptomoreQuoteOffer>();
         }
 
+        IReadOnlyList<ShiptomoreHsCode> stmHsCodes = await stmHsTask;
+        var (defaultGenRate, defaultAddRate, defaultAddHts) = ShipEntegraTariffCalculator.GetDefaultDutyRates(hsCode, country);
+        var matchedStmHs = stmHsCodes.FirstOrDefault(h => h.UsTariffRate.HasValue && h.UsTariffRate.Value > 0.0);
+        decimal? stmLiveUsRate = matchedStmHs?.UsTariffRate != null
+            ? Math.Round((decimal)matchedStmHs.UsTariffRate.Value, 2)
+            : null;
+        var seRefOffer = seResult.Offers.FirstOrDefault(o => o.GeneralDutyRatePercent > 0m || o.AdditionalDutyRatePercent > 0m);
+        decimal baseGenRate = seRefOffer != null && seRefOffer.GeneralDutyRatePercent > 0m ? seRefOffer.GeneralDutyRatePercent : defaultGenRate;
+        decimal baseAddRate = seRefOffer != null && seRefOffer.AdditionalDutyRatePercent > 0m ? seRefOffer.AdditionalDutyRatePercent : defaultAddRate;
+        string baseAddHts = seRefOffer != null && !string.IsNullOrWhiteSpace(seRefOffer.AdditionalDutyHtsCode)
+            ? seRefOffer.AdditionalDutyHtsCode
+            : defaultAddHts;
+        decimal declaredTotalUsd = Math.Round(declaredValue * quantity, 2);
+
         var quotes = new List<UnifiedCarrierQuoteDto>();
 
-        // 1. Aras Global Teklifleri (Yalnızca Aras Global API gerçek alanları)
+        // 1. Aras Global Teklifleri (Navlun tek kalem, Gümrük/DDP ayrıntı kartı)
         foreach (var offer in arasResult.Offers)
         {
             decimal priceUsd = Math.Round(offer.Price, 2);
-            quotes.Add(new UnifiedCarrierQuoteDto
+            var (ddpFee, ddpListFee, ddpLabel) = ResolveCarrierDdpProcessingFee("aras", offer.Cargo, offer.ProviderServiceType);
+            var quote = new UnifiedCarrierQuoteDto
             {
                 CarrierKey = "aras",
                 CarrierName = "Aras Global",
@@ -698,10 +720,14 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 HasDetailedBreakdown = false,
                 BillableWeightKg = billable,
                 UnDiscountedPriceUsd = offer.UnDiscountedPrice > priceUsd ? Math.Round(offer.UnDiscountedPrice, 2) : null,
-                DiscountRatePercent = offer.DiscountRate > 0 ? Math.Round(offer.DiscountRate, 1) : null,
-                GrandTotalUsd = priceUsd,
-                GrandTotalTry = Math.Round(priceUsd * usdTry, 2)
-            });
+                DiscountRatePercent = offer.DiscountRate > 0 ? Math.Round(offer.DiscountRate, 1) : null
+            };
+            ApplyCustomsBreakdownToQuote(
+                quote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
+                ddpFee, ddpListFee, ddpLabel,
+                country == "US" ? "ABD Tarife + Taşıyıcı DDP Ücreti" : "Tahmini Gümrük Tarifesi",
+                usdTry);
+            quotes.Add(quote);
         }
 
         // 2. ShipEntegra Teklifleri (Resmî API'den tam navlun kırılımı ve Hızlı Gümrük / DDP)
@@ -730,6 +756,9 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 IsLive = seResult.IsLive && offer.IsLivePrice,
                 QuoteSourceBadge = (seResult.IsLive && offer.IsLivePrice) ? "Canlı teklif" : "Tahmini tarife",
                 HasDetailedBreakdown = true,
+                HasCustomsBreakdown = true,
+                CustomsSourceBadge = (seResult.IsLive && offer.IsLivePrice) ? "Canlı ShipEntegra DDP API" : "Tahmini Gümrük Tarifesi",
+                CarrierProcessingFeeLabel = "Taşıyıcı İşlem Bedeli",
                 BillableWeightKg = billable,
                 BaseCargoPriceUsd = Math.Round(offer.CargoPrice, 2),
                 FuelCostUsd = Math.Round(offer.FuelCost, 2),
@@ -740,7 +769,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 PricingTemplate = offer.PricingTemplate,
                 ReturnPolicyNote = offer.ReturnPolicyNote,
                 InsuranceNote = offer.InsuranceNote,
-                DeclaredValueUsd = offer.DeclaredValueUsd > 0 ? offer.DeclaredValueUsd : Math.Round(declaredValue * quantity, 2),
+                DeclaredValueUsd = offer.DeclaredValueUsd > 0 ? offer.DeclaredValueUsd : declaredTotalUsd,
                 HsCode = !string.IsNullOrWhiteSpace(offer.HsCode) ? offer.HsCode : hsCode,
                 GeneralDutyUsd = offer.GeneralDutyUsd,
                 GeneralDutyRatePercent = offer.GeneralDutyRatePercent,
@@ -757,13 +786,19 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             });
         }
 
-        // 3. Shiptomore Teklifleri (Yalnızca Shiptomore API gerçek alanları — tek kalem fiyat + billing_weight)
+        // 3. Shiptomore Teklifleri (Navlun: gerçek tek kalem API fiyatı; DDP: /v1/hs-codes tarife + taşıyıcı DDP işlem bedeli)
+        decimal stmGenRate = stmLiveUsRate ?? baseGenRate;
+        string stmCustomsBadge = stmLiveUsRate.HasValue
+            ? "Shiptomore HS API + DDP Tarife"
+            : "Shiptomore DDP Tarife";
+
         if (stmOffers.Count > 0)
         {
             foreach (var offer in stmOffers)
             {
                 decimal priceUsd = Math.Round(offer.Price, 2);
-                quotes.Add(new UnifiedCarrierQuoteDto
+                var (ddpFee, ddpListFee, ddpLabel) = ResolveCarrierDdpProcessingFee("shiptomore", offer.Carrier, offer.ServiceName, offer);
+                var quote = new UnifiedCarrierQuoteDto
                 {
                     CarrierKey = "shiptomore",
                     CarrierName = "Shiptomore",
@@ -776,10 +811,12 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                     IsLive = true,
                     QuoteSourceBadge = "Canlı teklif",
                     HasDetailedBreakdown = false,
-                    BillableWeightKg = offer.BillableWeight > 0 ? Math.Round(offer.BillableWeight, 2) : billable,
-                    GrandTotalUsd = priceUsd,
-                    GrandTotalTry = Math.Round(priceUsd * usdTry, 2)
-                });
+                    BillableWeightKg = offer.BillableWeight > 0 ? Math.Round(offer.BillableWeight, 2) : billable
+                };
+                ApplyCustomsBreakdownToQuote(
+                    quote, declaredTotalUsd, hsCode, stmGenRate, baseAddRate, baseAddHts,
+                    ddpFee, ddpListFee, ddpLabel, stmCustomsBadge, usdTry);
+                quotes.Add(quote);
             }
         }
         else
@@ -790,7 +827,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             decimal stmExp = Math.Round((decimal)((13.45 + extraUnits * 2.55) * mult), 2);
             bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
 
-            quotes.Add(new UnifiedCarrierQuoteDto
+            var (ecoFee, ecoListFee, ecoLabel) = ResolveCarrierDdpProcessingFee("shiptomore", "FedEx", "economy");
+            var stmEcoQuote = new UnifiedCarrierQuoteDto
             {
                 CarrierKey = "shiptomore",
                 CarrierName = "Shiptomore",
@@ -803,12 +841,15 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 IsLive = stmConnected,
                 QuoteSourceBadge = stmConnected ? "Canlı teklif" : "Tahmini tarife",
                 HasDetailedBreakdown = false,
-                BillableWeightKg = billable,
-                GrandTotalUsd = stmEco,
-                GrandTotalTry = Math.Round(stmEco * usdTry, 2)
-            });
+                BillableWeightKg = billable
+            };
+            ApplyCustomsBreakdownToQuote(
+                stmEcoQuote, declaredTotalUsd, hsCode, stmGenRate, baseAddRate, baseAddHts,
+                ecoFee, ecoListFee, ecoLabel, stmCustomsBadge, usdTry);
+            quotes.Add(stmEcoQuote);
 
-            quotes.Add(new UnifiedCarrierQuoteDto
+            var (expFee, expListFee, expLabel) = ResolveCarrierDdpProcessingFee("shiptomore", "UPS", "express-saver");
+            var stmExpQuote = new UnifiedCarrierQuoteDto
             {
                 CarrierKey = "shiptomore",
                 CarrierName = "Shiptomore",
@@ -821,13 +862,15 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 IsLive = stmConnected,
                 QuoteSourceBadge = stmConnected ? "Canlı teklif" : "Tahmini tarife",
                 HasDetailedBreakdown = false,
-                BillableWeightKg = billable,
-                GrandTotalUsd = stmExp,
-                GrandTotalTry = Math.Round(stmExp * usdTry, 2)
-            });
+                BillableWeightKg = billable
+            };
+            ApplyCustomsBreakdownToQuote(
+                stmExpQuote, declaredTotalUsd, hsCode, stmGenRate, baseAddRate, baseAddHts,
+                expFee, expListFee, expLabel, stmCustomsBadge, usdTry);
+            quotes.Add(stmExpQuote);
         }
 
-        // 4. Navlungo Teklifleri (Tek kalem fiyat, sahte ShipEntegra yakıt/gümrük ayrımı yok)
+        // 4. Navlungo Teklifleri (Navlun tek kalem, sahte yakıt/bölme yok; DDP tarife + işlem ücreti kırılımı)
         {
             var navSettings = NavlungoSettingsStore.Load();
             bool navLive = !string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie);
@@ -836,7 +879,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             decimal navEco = Math.Round((decimal)((11.80 + extraUnits * 2.25) * mult), 2);
             decimal navExp = Math.Round((decimal)((14.60 + extraUnits * 2.70) * mult), 2);
 
-            quotes.Add(new UnifiedCarrierQuoteDto
+            var (navEcoFee, navEcoList, navEcoLabel) = ResolveCarrierDdpProcessingFee("navlungo", "Widect", "navlungo-eco");
+            var navEcoQuote = new UnifiedCarrierQuoteDto
             {
                 CarrierKey = "navlungo",
                 CarrierName = "Navlungo",
@@ -849,12 +893,17 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 IsLive = navLive,
                 QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife",
                 HasDetailedBreakdown = false,
-                BillableWeightKg = billable,
-                GrandTotalUsd = navEco,
-                GrandTotalTry = Math.Round(navEco * usdTry, 2)
-            });
+                BillableWeightKg = billable
+            };
+            ApplyCustomsBreakdownToQuote(
+                navEcoQuote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
+                navEcoFee, navEcoList, navEcoLabel,
+                country == "US" ? "ABD Tarife + Taşıyıcı DDP Ücreti" : "Tahmini Gümrük Tarifesi",
+                usdTry);
+            quotes.Add(navEcoQuote);
 
-            quotes.Add(new UnifiedCarrierQuoteDto
+            var (navExpFee, navExpList, navExpLabel) = ResolveCarrierDdpProcessingFee("navlungo", "UPS", "navlungo-ups-express");
+            var navExpQuote = new UnifiedCarrierQuoteDto
             {
                 CarrierKey = "navlungo",
                 CarrierName = "Navlungo",
@@ -867,10 +916,14 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 IsLive = navLive,
                 QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife",
                 HasDetailedBreakdown = false,
-                BillableWeightKg = billable,
-                GrandTotalUsd = navExp,
-                GrandTotalTry = Math.Round(navExp * usdTry, 2)
-            });
+                BillableWeightKg = billable
+            };
+            ApplyCustomsBreakdownToQuote(
+                navExpQuote, declaredTotalUsd, hsCode, baseGenRate, baseAddRate, baseAddHts,
+                navExpFee, navExpList, navExpLabel,
+                country == "US" ? "ABD Tarife + Taşıyıcı DDP Ücreti" : "Tahmini Gümrük Tarifesi",
+                usdTry);
+            quotes.Add(navExpQuote);
         }
 
         quotes = quotes.OrderBy(q => q.PriceUsd).ToList();
@@ -996,5 +1049,91 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         if (carrierKey.Contains("shipentegra")) return "ShipEntegra";
         if (carrierKey.Contains("shiptomore")) return "Ship to More";
         return !string.IsNullOrWhiteSpace(subCarrier) ? subCarrier : "Other";
+    }
+
+    private static async Task<IReadOnlyList<ShiptomoreHsCode>> SafeSearchShiptomoreHsAsync(
+        IShiptomoreOfficialApi api,
+        string hsPrefix,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await api.SearchHsCodesAsync(hsPrefix, 10, ct);
+        }
+        catch
+        {
+            return Array.Empty<ShiptomoreHsCode>();
+        }
+    }
+
+    private static (decimal FeeUsd, decimal? ListFeeUsd, string Label) ResolveCarrierDdpProcessingFee(
+        string carrierKey,
+        string? subCarrier,
+        string? serviceCode,
+        ShiptomoreQuoteOffer? stmOffer = null)
+    {
+        if (stmOffer != null && stmOffer.DdpFeeUsd > 0m)
+        {
+            decimal? listFee = stmOffer.DdpFeeUnDiscountedUsd.HasValue && stmOffer.DdpFeeUnDiscountedUsd.Value > stmOffer.DdpFeeUsd
+                ? Math.Round(stmOffer.DdpFeeUnDiscountedUsd.Value, 2)
+                : null;
+            string label = !string.IsNullOrWhiteSpace(stmOffer.DdpFeeName)
+                ? stmOffer.DdpFeeName!
+                : "DDP Taşıyıcı İşlem Bedeli";
+            return (Math.Round(stmOffer.DdpFeeUsd, 2), listFee, label);
+        }
+
+        string sub = $"{subCarrier} {serviceCode}".ToLowerInvariant();
+        if (sub.Contains("fedex"))
+        {
+            decimal? fedexList = carrierKey == "shiptomore" ? 4.50m : null;
+            return (2.50m, fedexList, "DDP Taşıyıcı İşlem Bedeli (FedEx)");
+        }
+
+        if (sub.Contains("widect") || sub.Contains("eco"))
+            return (0.45m, null, "DDP Ücreti (Widect)");
+
+        if (sub.Contains("ups") || sub.Contains("dhl") || sub.Contains("express"))
+            return (1.45m, null, "DDP Taşıyıcı İşlem Bedeli (Express)");
+
+        return (1.45m, null, "DDP Taşıyıcı İşlem Bedeli");
+    }
+
+    private static void ApplyCustomsBreakdownToQuote(
+        UnifiedCarrierQuoteDto quote,
+        decimal declaredTotalUsd,
+        string hsCode,
+        decimal generalRatePercent,
+        decimal additionalRatePercent,
+        string additionalHtsCode,
+        decimal processingFeeUsd,
+        decimal? processingFeeListUsd,
+        string processingFeeLabel,
+        string customsSourceBadge,
+        decimal usdTry)
+    {
+        decimal generalDutyUsd = Math.Round(declaredTotalUsd * (generalRatePercent / 100m), 2);
+        decimal additionalDutyUsd = Math.Round(declaredTotalUsd * (additionalRatePercent / 100m), 2);
+        decimal taxSubtotal = Math.Round(generalDutyUsd + additionalDutyUsd, 2);
+        decimal fastCustomsUsd = Math.Round(taxSubtotal + processingFeeUsd, 2);
+        decimal grandTotalUsd = Math.Round(quote.PriceUsd + fastCustomsUsd, 2);
+
+        quote.HasCustomsBreakdown = true;
+        quote.CustomsSourceBadge = customsSourceBadge;
+        quote.DeclaredValueUsd = declaredTotalUsd;
+        quote.HsCode = hsCode;
+        quote.GeneralDutyRatePercent = Math.Round(generalRatePercent, 2);
+        quote.GeneralDutyUsd = generalDutyUsd;
+        quote.AdditionalDutyRatePercent = Math.Round(additionalRatePercent, 2);
+        quote.AdditionalDutyUsd = additionalDutyUsd;
+        quote.AdditionalDutyHtsCode = additionalHtsCode;
+        quote.TaxAndDutySubtotalUsd = taxSubtotal;
+        quote.CarrierProcessingFeeUsd = Math.Round(processingFeeUsd, 2);
+        quote.CarrierProcessingFeeLabel = processingFeeLabel;
+        quote.CarrierProcessingFeeListUsd = processingFeeListUsd;
+        quote.FastCustomsPaymentUsd = fastCustomsUsd;
+        quote.FastCustomsPaymentTry = Math.Round(fastCustomsUsd * usdTry, 2);
+        quote.GrandTotalUsd = grandTotalUsd;
+        quote.GrandTotalTry = Math.Round(grandTotalUsd * usdTry, 2);
     }
 }
