@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -1288,99 +1289,194 @@ public sealed class MarketResearchService : IMarketResearchService
         var result = new CompetitorListingInventoryDto { ListingId = listingId };
         if (listingId <= 0) return result;
 
-        string rawJson;
+        string rawJson = string.Empty;
+        string? apiError = null;
         try
         {
             rawJson = await _apiClient.GetListingInventoryRawJsonAsync(authShopId, listingId, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
+            rawJson = string.Empty;
+            apiError = ex.Message;
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawJson))
+        {
+            TryParseInventoryApiJson(rawJson, result);
+        }
+
+        if (result.HasVariations)
+        {
+            result.Source = "etsy_api_v3";
             return result;
         }
 
-        if (string.IsNullOrWhiteSpace(rawJson)) return result;
+        // Etsy API v3 rakip ilanın envanterine izin vermediyse (403/401) veya boş döndüyse public listing sayfasından çekmeyi dene
+        try
+        {
+            var publicHtml = await _apiClient.GetPublicListingPageHtmlAsync(listingId, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(publicHtml))
+            {
+                var parsedFromHtml = EtsyPublicListingVariationParser.Parse(listingId, publicHtml);
+                if (parsedFromHtml.HasVariations)
+                {
+                    return parsedFromHtml;
+                }
+            }
+        }
+        catch
+        {
+            // Public sayfa erişilemezse (ör. DataDome/ağ hatası) sessizce mevcut sonucu dön
+        }
 
+        result.Source = "unavailable";
+        result.WarningMessage = !string.IsNullOrWhiteSpace(apiError)
+            ? $"Varyasyonlar çekilemedi ({apiError})."
+            : "Varyasyon verisi Etsy API veya public sayfadan alınamadı (bot koruması/yetki kısıtı olabilir).";
+
+        return result;
+    }
+
+    private static void TryParseInventoryApiJson(string rawJson, CompetitorListingInventoryDto result)
+    {
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
             var root = doc.RootElement;
             if (!root.TryGetProperty("products", out var products) || products.ValueKind != JsonValueKind.Array)
             {
-                return result;
+                return;
             }
 
+            var groupOrder = new List<string>();
             var groupMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-            var offeringsList = new List<CompetitorVariationOfferingDto>();
+            var rawProducts = new List<(Dictionary<string, string> PropValues, string? Sku, long? ImageId, JsonElement Offerings)>();
 
             foreach (var prod in products.EnumerateArray())
             {
-                if (prod.TryGetProperty("is_deleted", out var del) && del.GetBoolean()) continue;
+                if (prod.TryGetProperty("is_deleted", out var del) && del.ValueKind == JsonValueKind.True) continue;
 
-                var propParts = new List<string>();
+                var prodPropMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 if (prod.TryGetProperty("property_values", out var pvs) && pvs.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var pv in pvs.EnumerateArray())
                     {
-                        var propName = pv.TryGetProperty("property_name", out var pn) ? (pn.GetString() ?? "").Trim() : "";
+                        var rawPropName = pv.TryGetProperty("property_name", out var pn) ? (pn.GetString() ?? "") : "";
+                        var propName = WebUtility.HtmlDecode(rawPropName).Trim();
                         if (string.IsNullOrWhiteSpace(propName)) continue;
 
                         if (!groupMap.TryGetValue(propName, out var valSet))
                         {
                             valSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                             groupMap[propName] = valSet;
+                            groupOrder.Add(propName);
                         }
+
+                        var scaleName = pv.TryGetProperty("scale_name", out var sn) && sn.ValueKind == JsonValueKind.String
+                            ? WebUtility.HtmlDecode(sn.GetString() ?? "").Trim()
+                            : string.Empty;
 
                         if (pv.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
                         {
                             foreach (var valItem in vals.EnumerateArray())
                             {
-                                var strVal = valItem.GetString()?.Trim();
-                                if (!string.IsNullOrWhiteSpace(strVal))
+                                var decodedVal = WebUtility.HtmlDecode(valItem.GetString() ?? "").Trim();
+                                if (string.IsNullOrWhiteSpace(decodedVal)) continue;
+
+                                var fullVal = !string.IsNullOrWhiteSpace(scaleName) &&
+                                              !decodedVal.Contains(scaleName, StringComparison.OrdinalIgnoreCase)
+                                    ? $"{decodedVal} {scaleName}"
+                                    : decodedVal;
+
+                                valSet.Add(fullVal);
+                                if (!prodPropMap.ContainsKey(propName))
                                 {
-                                    valSet.Add(strVal);
-                                    propParts.Add(strVal);
+                                    prodPropMap[propName] = fullVal;
                                 }
                             }
                         }
                     }
                 }
 
+                string? sku = prod.TryGetProperty("sku", out var skuProp) && skuProp.ValueKind == JsonValueKind.String
+                    ? skuProp.GetString()?.Trim()
+                    : null;
+
+                long? imageId = null;
+                if (prod.TryGetProperty("image_ids", out var imgIds) && imgIds.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var idEl in imgIds.EnumerateArray())
+                    {
+                        if (idEl.TryGetInt64(out var parsedImgId) && parsedImgId > 0)
+                        {
+                            imageId = parsedImgId;
+                            break;
+                        }
+                    }
+                }
+
                 if (prod.TryGetProperty("offerings", out var offs) && offs.ValueKind == JsonValueKind.Array)
                 {
-                    foreach (var off in offs.EnumerateArray())
-                    {
-                        decimal priceUsd = 0m;
-                        if (off.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
-                        {
-                            decimal rawAmount = 0m;
-                            if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
-                            {
-                                int divisor = divProp.GetInt32();
-                                if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
-                            }
-                            string curr = pObj.TryGetProperty("currency_code", out var cProp) ? (cProp.GetString() ?? "USD") : "USD";
-                            priceUsd = MarketCurrencyConverter.TryConvertToUsd(rawAmount, curr) ?? rawAmount;
-                        }
-
-                        int qty = off.TryGetProperty("quantity", out var q) && q.TryGetInt32(out var qVal) ? qVal : 1;
-                        bool enabled = !off.TryGetProperty("is_enabled", out var en) || en.GetBoolean();
-
-                        var key = propParts.Count > 0 ? string.Join(" / ", propParts) : "Standart";
-                        offeringsList.Add(new CompetitorVariationOfferingDto
-                        {
-                            Key = key,
-                            Price = Math.Round(priceUsd, 2),
-                            Quantity = qty,
-                            Active = enabled
-                        });
-                    }
+                    rawProducts.Add((prodPropMap, sku, imageId, offs.Clone()));
                 }
             }
 
-            var groups = groupMap.Select(kv => new CompetitorVariationGroupDto
+            if (groupOrder.Count == 0) return;
+
+            var offeringsList = new List<CompetitorVariationOfferingDto>();
+            foreach (var (prodPropMap, sku, imageId, offs) in rawProducts)
             {
-                Name = kv.Key,
-                Values = kv.Value.ToList()
+                var orderedParts = new List<string>();
+                foreach (var gName in groupOrder.Take(2))
+                {
+                    if (prodPropMap.TryGetValue(gName, out var val) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        orderedParts.Add(val);
+                    }
+                }
+
+                var key = orderedParts.Count > 0 ? string.Join(" / ", orderedParts) : "Standart";
+
+                foreach (var off in offs.EnumerateArray())
+                {
+                    if (off.TryGetProperty("is_deleted", out var offDel) && offDel.ValueKind == JsonValueKind.True)
+                    {
+                        continue;
+                    }
+
+                    decimal priceUsd = 0m;
+                    if (off.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
+                    {
+                        decimal rawAmount = 0m;
+                        if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
+                        {
+                            int divisor = divProp.GetInt32();
+                            if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
+                        }
+                        string curr = pObj.TryGetProperty("currency_code", out var cProp) ? (cProp.GetString() ?? "USD") : "USD";
+                        priceUsd = MarketCurrencyConverter.TryConvertToUsd(rawAmount, curr) ?? rawAmount;
+                    }
+
+                    int qty = off.TryGetProperty("quantity", out var q) && q.TryGetInt32(out var qVal) ? qVal : 1;
+                    bool enabled = !off.TryGetProperty("is_enabled", out var en) || en.GetBoolean();
+
+                    offeringsList.Add(new CompetitorVariationOfferingDto
+                    {
+                        Key = key,
+                        Price = Math.Round(priceUsd, 2),
+                        Quantity = qty,
+                        Active = enabled,
+                        Sku = string.IsNullOrWhiteSpace(sku) ? null : sku,
+                        ImageId = imageId
+                    });
+                }
+            }
+
+            var groups = groupOrder.Select(gName => new CompetitorVariationGroupDto
+            {
+                Name = gName,
+                Values = groupMap[gName].ToList()
             }).ToList();
 
             if (groups.Count > 0)
@@ -1402,8 +1498,6 @@ public sealed class MarketResearchService : IMarketResearchService
         {
             // fallback gracefully
         }
-
-        return result;
     }
 
     public async Task<AiLqsImprovementResultDto> ImproveListingLqsWithAiAsync(

@@ -8,7 +8,8 @@ import {
   CompetitorListingDto,
   SeasonalTrendItemDto,
   AiLqsImprovementCommandDto,
-  AiLqsImprovementResultDto
+  AiLqsImprovementResultDto,
+  CompetitorListingInventoryDto
 } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -374,9 +375,10 @@ export interface LqsAuditCheck {
                           <button
                             type="button"
                             class="btn-clone-mini"
-                            title="Bu ürünü tüm fotoğrafları, açıklaması ve 13 etiketiyle Hızlı İlan Oluşturucuya Klonla"
+                            [disabled]="cloningListingId === item.listingId"
+                            title="Bu ürünü tüm fotoğrafları, açıklaması, 13 etiketi ve varyasyonlarıyla Hızlı İlan Oluşturucuya Klonla"
                             (click)="cloneListingToFastCreator(item)">
-                            🚀 Klonla
+                            {{ cloningListingId === item.listingId ? '⏳ Çekiliyor...' : '🚀 Klonla' }}
                           </button>
                         </div>
                       </td>
@@ -2264,6 +2266,7 @@ export class CompetitorSpyComponent implements OnInit {
   activeProductDetailTab: 'description' | 'tags' | 'ai-doctor' = 'description';
 
   isImprovingLqs = false;
+  cloningListingId: number | null = null;
   lqsImprovementResult: AiLqsImprovementResultDto | null = null;
 
   get activeAiModelBadge(): string {
@@ -2610,6 +2613,9 @@ export class CompetitorSpyComponent implements OnInit {
   }
 
   cloneListingToFastCreator(item: CompetitorListingDto): void {
+    if (this.cloningListingId === item.listingId) return;
+    this.cloningListingId = item.listingId;
+
     const imgs = this.getItemImages(item);
     const cloned: ClonedMarketListing = {
       id: item.listingId,
@@ -2628,35 +2634,42 @@ export class CompetitorSpyComponent implements OnInit {
 
     this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (inv) => {
-        if (inv && inv.hasVariations) {
-          cloned.hasVariations = true;
-          cloned.varType1 = inv.varType1;
-          cloned.varValues1 = inv.varValues1;
-          cloned.enableVar2 = inv.enableVar2;
-          cloned.varType2 = inv.varType2;
-          cloned.varValues2 = inv.varValues2;
-          if (inv.offerings && inv.offerings.length > 0) {
-            cloned.variationRows = inv.offerings.map(o => ({
-              key: o.key,
-              price: o.price,
-              quantity: o.quantity,
-              active: o.active
-            }));
-          }
-        }
-        this.finishCloning(cloned, item, imgs.length);
+        this.cloningListingId = null;
+        this.applyInventoryToCloned(cloned, inv);
+        this.finishCloning(cloned, item, imgs.length, inv?.warningMessage);
       },
       error: () => {
-        this.finishCloning(cloned, item, imgs.length);
+        this.cloningListingId = null;
+        this.finishCloning(cloned, item, imgs.length, 'Varyasyon servisine ulaşılamadı, ilan varyasyonsuz aktarıldı.');
       }
     });
   }
 
-  private finishCloning(cloned: ClonedMarketListing, item: CompetitorListingDto, imgCount: number): void {
+  private applyInventoryToCloned(cloned: ClonedMarketListing, inv: CompetitorListingInventoryDto | null | undefined): void {
+    if (!inv || !inv.hasVariations) return;
+
+    cloned.hasVariations = true;
+    cloned.varType1 = inv.varType1;
+    cloned.varValues1 = inv.varValues1;
+    cloned.enableVar2 = inv.enableVar2;
+    cloned.varType2 = inv.varType2;
+    cloned.varValues2 = inv.varValues2;
+    if (inv.offerings && inv.offerings.length > 0) {
+      cloned.variationRows = inv.offerings.map(o => ({
+        key: o.key,
+        price: o.price,
+        quantity: o.quantity,
+        active: o.active
+      }));
+    }
+  }
+
+  private finishCloning(cloned: ClonedMarketListing, item: CompetitorListingDto, imgCount: number, warningMessage?: string): void {
     this.aiSettings.setClonedListing(cloned);
     this.closeLightbox();
     const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` + ${cloned.variationRows.length} varyasyon` : '';
-    this.showToast(`🚀 "${item.title.slice(0, 32)}..." (${imgCount} fotoğraf + ${cloned.tags.length} etiket${varText}) İlan Oluşturucuya aktarıldı!`);
+    const warnSuffix = warningMessage && !varText ? ` (${warningMessage})` : '';
+    this.showToast(`🚀 "${item.title.slice(0, 32)}..." (${imgCount} fotoğraf + ${cloned.tags.length} etiket${varText}) İlan Oluşturucuya aktarıldı!${warnSuffix}`);
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 250);
@@ -2675,7 +2688,8 @@ export class CompetitorSpyComponent implements OnInit {
       materials: [...(opt.suggestedMaterials && opt.suggestedMaterials.length > 0 ? opt.suggestedMaterials : (item.materials || []))],
       shopName: this.analysisResult?.shop?.shopName || '',
       seoScore: opt.targetLqsScore || 100,
-      marketScore: opt.targetLqsScore || 100
+      marketScore: opt.targetLqsScore || 100,
+      taxonomyId: item.taxonomyId
     };
 
     if (opt.suggestedVariations && opt.suggestedVariations.length > 0) {
@@ -2695,11 +2709,30 @@ export class CompetitorSpyComponent implements OnInit {
           active: o.active
         }));
       }
+      this.finalizeOptimizedClone(cloned, imgs.length);
+      return;
     }
 
+    // AI varyasyon önermediyse rakibin gerçek varyasyonlarını çek
+    this.cloningListingId = item.listingId;
+    this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (inv) => {
+        this.cloningListingId = null;
+        this.applyInventoryToCloned(cloned, inv);
+        this.finalizeOptimizedClone(cloned, imgs.length);
+      },
+      error: () => {
+        this.cloningListingId = null;
+        this.finalizeOptimizedClone(cloned, imgs.length);
+      }
+    });
+  }
+
+  private finalizeOptimizedClone(cloned: ClonedMarketListing, imgCount: number): void {
     this.aiSettings.setClonedListing(cloned);
     this.closeLightbox();
-    this.showToast(`✨ 100/100 Optimize "${cloned.title.slice(0, 30)}..." (${imgs.length} fotoğraf + 13 altın etiket + varyasyonlar) İlan Oluşturucuya aktarıldı!`);
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` + ${cloned.variationRows.length} varyasyon` : '';
+    this.showToast(`✨ 100/100 Optimize "${cloned.title.slice(0, 30)}..." (${imgCount} fotoğraf + 13 altın etiket${varText}) İlan Oluşturucuya aktarıldı!`);
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 250);

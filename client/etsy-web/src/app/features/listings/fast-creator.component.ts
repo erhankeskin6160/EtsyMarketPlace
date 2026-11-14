@@ -220,6 +220,21 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         if (cloned.variationRows && cloned.variationRows.length > 0) {
           this.variationRows = cloned.variationRows.map(r => ({ ...r }));
           this.customVariationPricing = true;
+
+          if (!this.varValues1) {
+            const g1 = new Set<string>();
+            const g2 = new Set<string>();
+            for (const row of this.variationRows) {
+              const parts = row.key.split('/').map(p => p.trim()).filter(Boolean);
+              if (parts[0]) g1.add(parts[0]);
+              if (parts[1]) g2.add(parts[1]);
+            }
+            if (g1.size > 0) this.varValues1 = Array.from(g1).join(', ');
+            if (g2.size > 0) {
+              this.enableVar2 = true;
+              this.varValues2 = Array.from(g2).join(', ');
+            }
+          }
         } else {
           this.rebuildVariationGrid();
         }
@@ -228,6 +243,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       const varCount = (this.variationRows && this.variationRows.length > 0) ? ` & ${this.variationRows.length} Varyasyon` : '';
       this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) — ${allUrls.length} Fotoğraf, ${this.tags.length} Etiket${varCount} Aktarıldı`;
       this.updatePriceTry();
+      this.saveDraftToStorage();
     }
 
     // QueryParams aktarımı (Dış Pazarlar, Viral 3D vb.)

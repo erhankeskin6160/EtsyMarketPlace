@@ -194,23 +194,145 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         CancellationToken cancellationToken = default)
     {
         var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
-        var url = $"https://api.etsy.com/v3/application/listings/{listingId}/inventory";
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("x-api-key", apiKeyHeader);
+        // 1. Tekil inventory endpoint (Bearer + x-api-key)
+        var singleUrl = $"https://api.etsy.com/v3/application/listings/{listingId}/inventory";
+        var singleJson = await TrySendInventoryRequestAsync(singleUrl, apiKeyHeader, bearerToken, cancellationToken);
+        if (HasProductsInJson(singleJson))
+        {
+            return singleJson!;
+        }
+
+        // 2. Toplu batch inventory endpoint (Etsy v3: /listings/batch/inventory?listing_ids=...)
+        var batchUrl = $"https://api.etsy.com/v3/application/listings/batch/inventory?listing_ids={listingId}";
+        var batchJson = await TrySendInventoryRequestAsync(batchUrl, apiKeyHeader, bearerToken, cancellationToken);
+        var normalizedBatch = ExtractFirstBatchInventoryJson(batchJson);
+        if (HasProductsInJson(normalizedBatch))
+        {
+            return normalizedBatch!;
+        }
+
+        // 3. Yalnızca x-api-key ile (Bearer'sız) public active listing inventory denemesi
         if (!string.IsNullOrWhiteSpace(bearerToken))
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            var apiKeyOnlyJson = await TrySendInventoryRequestAsync(singleUrl, apiKeyHeader, null, cancellationToken);
+            if (HasProductsInJson(apiKeyOnlyJson))
+            {
+                return apiKeyOnlyJson!;
+            }
         }
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        return "{\"products\":[]}";
+    }
+
+    public async Task<string> GetPublicListingPageHtmlAsync(
+        long listingId,
+        CancellationToken cancellationToken = default)
+    {
+        if (listingId <= 0) return string.Empty;
+
+        try
         {
-            return "{\"products\":[]}";
-        }
+            var url = $"https://www.etsy.com/listing/{listingId}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+            request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "document");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate");
 
-        return body;
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return string.Empty;
+            }
+
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private async Task<string?> TrySendInventoryRequestAsync(
+        string url,
+        string apiKeyHeader,
+        string? bearerToken,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("x-api-key", apiKeyHeader);
+            if (!string.IsNullOrWhiteSpace(bearerToken))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            }
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool HasProductsInJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return false;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("products", out var products)
+                   && products.ValueKind == System.Text.Json.JsonValueKind.Array
+                   && products.GetArrayLength() > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string? ExtractFirstBatchInventoryJson(string? batchJson)
+    {
+        if (string.IsNullOrWhiteSpace(batchJson)) return null;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(batchJson);
+            if (!doc.RootElement.TryGetProperty("results", out var results) ||
+                results.ValueKind != System.Text.Json.JsonValueKind.Array ||
+                results.GetArrayLength() == 0)
+            {
+                return null;
+            }
+
+            var first = results[0];
+            if (first.TryGetProperty("inventory", out var inv) &&
+                inv.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                return inv.GetRawText();
+            }
+
+            if (first.TryGetProperty("products", out _))
+            {
+                return first.GetRawText();
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
