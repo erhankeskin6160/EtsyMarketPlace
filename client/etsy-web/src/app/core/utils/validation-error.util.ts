@@ -26,11 +26,54 @@ const DEFAULT_FIELD_LABELS: Record<string, string> = {
   variationgroups: 'Varyasyonlar',
   variations: 'Varyasyonlar',
   state: 'İlan Durumu',
+  listingid: 'İlan Kimliği',
+  alttext: 'Görsel Alt-Text',
+  items: 'Görseller / Öğeler',
+  amount: 'Tutar',
+  entrydate: 'Belge Tarihi',
+  assetname: 'Varlık Adı',
+  acquisitiondate: 'Alış Tarihi',
+  acquisitioncosttry: 'Alış Bedeli',
+  usefullifeyears: 'Ekonomik Ömür',
+  salvagevaluetry: 'Hurda Değer',
+  eexportexemptionratepct: 'E-İhracat İstisna Oranı',
+  customorcorporatetaxratepct: 'Vergi Oranı',
+  year: 'Yıl',
+  month: 'Ay',
+  keyword: 'Anahtar Kelime',
+  limit: 'Limit',
+  shopnameorurl: 'Mağaza Adı / URL',
+  accesstoken: 'Access Token',
+  refreshtoken: 'Refresh Token',
+  accesstokenexpiresat: 'Token Bitiş Tarihi',
+  code: 'Yetki Kodu',
+  settingsjson: 'Ayar Verisi',
+  chatid: 'Telegram Chat ID',
+  carrierid: 'Kargo Taşıyıcı',
+  records: 'Sipariş Kayıtları',
+  orders: 'Sipariş Listesi',
+  receiptid: 'Sipariş No',
+  weightkg: 'Ağırlık (kg)',
+  reservepercent: 'Rezerv Oranı',
+  startdate: 'Başlangıç Tarihi',
+  enddate: 'Bitiş Tarihi',
+  overallscore: 'Kalite Puanı',
+  id: 'Kayıt Kimliği',
+  email: 'E-posta',
+  username: 'Kullanıcı Adı',
+  password: 'Şifre',
+  role: 'Rol',
+  monthlyaitokenquota: 'AI Token Kotası',
+  countrycode: 'Ülke Kodu',
+  postalcode: 'Posta Kodu',
+  carrier: 'Taşıyıcı',
   general: 'Genel'
 };
 
+const WRAPPER_PREFIX_REGEX = /^(command|request|dto|experiment|capture|query|snapshot|record)\./i;
+
 function normalizeFieldKey(rawKey: string): string {
-  const cleaned = rawKey.replace(/^command\./i, '').trim();
+  const cleaned = rawKey.replace(WRAPPER_PREFIX_REGEX, '').trim();
   const base = cleaned.split('[')[0].split('.')[0];
   return base || 'General';
 }
@@ -158,4 +201,32 @@ export function extractClientValidationErrors(
     fieldErrors: [],
     isValidationError: status === 400
   };
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * ngx-toastr (enableHtml: true) için güvenli, alan-bazlı HTML uyarı içeriği oluşturur.
+ */
+export function formatValidationToastHtml(parsed: ParsedClientError): string {
+  if (parsed.fieldErrors.length === 0) {
+    return escapeHtml(parsed.summary);
+  }
+  if (parsed.fieldErrors.length === 1 && parsed.fieldErrors[0].messages.length === 1) {
+    const item = parsed.fieldErrors[0];
+    return `<strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(item.messages[0])}`;
+  }
+
+  const rows = parsed.fieldErrors
+    .map(item => `<li><strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(item.messages.join(' '))}</li>`)
+    .join('');
+
+  return `${escapeHtml(parsed.summary)}<ul>${rows}</ul>`;
 }
