@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto, TrackedKeywordDto } from '../../core/services/etsy-api.service';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
+import { ExtensionBridgeService } from '../../core/services/extension-bridge.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -72,6 +73,7 @@ export class MarketResearchComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
+  extensionBridge = inject(ExtensionBridgeService);
   router = inject(Router);
 
   activeTab: 'listings' | 'tag_matrix' = 'listings';
@@ -687,32 +689,58 @@ export class MarketResearchComponent implements OnInit {
     };
 
     this.etsyApi.getCompetitorListingInventory(item.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (inv) => {
+      next: async (inv) => {
         if (inv && inv.hasVariations) {
-          cloned.hasVariations = true;
-          cloned.varType1 = inv.varType1;
-          cloned.varValues1 = inv.varValues1;
-          cloned.enableVar2 = inv.enableVar2;
-          cloned.varType2 = inv.varType2;
-          cloned.varValues2 = inv.varValues2;
-          if (inv.offerings && inv.offerings.length > 0) {
-            cloned.variationRows = inv.offerings.map(o => ({
-              key: o.key,
-              price: o.price,
-              quantity: o.quantity,
-              active: o.active
-            }));
-          }
-        } else {
-          cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Etsy sayfasından kopyalayıp yapıştırarak aktarabilirsiniz.';
+          this.applyInventory(cloned, inv);
+          this.finalizeMarketClone(cloned, item.id);
+          return;
         }
+
+        const extInv = await this.extensionBridge.fetchListingVariationsViaExtension(
+          item.id,
+          cloned.sourceListingUrl || `https://www.etsy.com/listing/${item.id}`
+        );
+        if (extInv && extInv.hasVariations) {
+          this.applyInventory(cloned, extInv);
+          this.finalizeMarketClone(cloned, item.id);
+          return;
+        }
+
+        cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Chrome eklentisini yenileyin veya aşağıdaki panelden 1 saniyede aktarın.';
         this.finalizeMarketClone(cloned, item.id);
       },
-      error: () => {
-        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Etsy sayfasından kopyalayıp yapıştırarak aktarabilirsiniz.';
+      error: async () => {
+        const extInv = await this.extensionBridge.fetchListingVariationsViaExtension(
+          item.id,
+          cloned.sourceListingUrl || `https://www.etsy.com/listing/${item.id}`
+        );
+        if (extInv && extInv.hasVariations) {
+          this.applyInventory(cloned, extInv);
+          this.finalizeMarketClone(cloned, item.id);
+          return;
+        }
+
+        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Chrome eklentisi veya aşağıdaki yapıştırma kutusu ile aktarabilirsiniz.';
         this.finalizeMarketClone(cloned, item.id);
       }
     });
+  }
+
+  private applyInventory(cloned: ClonedMarketListing, inv: any): void {
+    cloned.hasVariations = true;
+    cloned.varType1 = inv.varType1;
+    cloned.varValues1 = inv.varValues1;
+    cloned.enableVar2 = inv.enableVar2;
+    cloned.varType2 = inv.varType2;
+    cloned.varValues2 = inv.varValues2;
+    if (inv.offerings && inv.offerings.length > 0) {
+      cloned.variationRows = inv.offerings.map((o: any) => ({
+        key: o.key,
+        price: o.price,
+        quantity: o.quantity,
+        active: o.active
+      }));
+    }
   }
 
   private finalizeMarketClone(cloned: ClonedMarketListing, listingId: number): void {

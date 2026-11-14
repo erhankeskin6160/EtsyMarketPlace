@@ -19,6 +19,11 @@ import {
   parseAddressViaAi
 } from './vds-api-client.js';
 
+import {
+  buildInventoryFromExtractedGroups,
+  parseVariationsFromListingHtml
+} from '../shared/variation-parser.js';
+
 const EMPTY_STATE = Object.freeze({
   schemaVersion: STORAGE_SCHEMA_VERSION,
   extensionVersion: EXTENSION_VERSION,
@@ -479,6 +484,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
 
+        case ACTIONS.SW_FETCH_LISTING_VARIATIONS: {
+          const res = await fetchCompetitorListingVariations(message.listingId, message.listingUrl);
+          sendResponse(res);
+          return;
+        }
+
         default:
           sendResponse({ ok: false, error: `Bilinmeyen aksiyon: ${message.action}` });
       }
@@ -489,3 +500,115 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return true;
 });
+
+async function waitForTabComplete(tabId, timeoutMs = 9000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try { chrome.tabs.onUpdated.removeListener(onUpdated); } catch {}
+      clearTimeout(timer);
+      resolve();
+    };
+
+    const onUpdated = (updatedId, info) => {
+      if (updatedId === tabId && info.status === 'complete') {
+        finish();
+      }
+    };
+
+    const timer = setTimeout(finish, timeoutMs);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+  });
+}
+
+async function extractVariationsFromTabDom(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+      const groups = selects.map((sel, idx) => {
+        const lbl = document.querySelector(`label[for="${sel.id}"]`);
+        const name = lbl ? (lbl.innerText || lbl.textContent || '').trim() : `Variation ${idx + 1}`;
+        const options = Array.from(sel.options || []).map((o) => (o.text || '').trim()).filter(Boolean);
+        return { name, options };
+      }).filter((g) => g.options.length > 0);
+
+      let basePrice = 0;
+      const ldEl = document.querySelector('script[type="application/ld+json"]');
+      if (ldEl && ldEl.textContent) {
+        const m = ldEl.textContent.match(/"(?:lowPrice|price)"\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?/i);
+        if (m) basePrice = parseFloat(m[1].replace(',', '.')) || 0;
+      }
+      return { groups, basePrice };
+    }
+  });
+  return results?.[0]?.result || { groups: [], basePrice: 0 };
+}
+
+async function fetchCompetitorListingVariations(rawListingId, rawListingUrl) {
+  const listingId = Number(rawListingId) || 0;
+  const targetUrl = String(rawListingUrl || (listingId > 0 ? `https://www.etsy.com/listing/${listingId}` : '')).trim();
+  if (!listingId || !targetUrl) {
+    return { ok: false, error: 'Geçersiz Etsy listingId veya URL.' };
+  }
+
+  // 1. Açık Etsy sekmelerinde bu ilan zaten açıksa doğrudan DOM'dan oku
+  try {
+    const etsyTabs = await chrome.tabs.query({ url: '*://*.etsy.com/*' });
+    const matchingTab = etsyTabs.find((t) => t.url && t.url.includes(`/listing/${listingId}`));
+    if (matchingTab?.id) {
+      await ensureContentAgentInjected(matchingTab.id);
+      const domRes = await chrome.tabs.sendMessage(matchingTab.id, { action: ACTIONS.CA_EXTRACT_LISTING_VARIATIONS });
+      if (domRes?.ok && Array.isArray(domRes.groups) && domRes.groups.length > 0) {
+        const inv = buildInventoryFromExtractedGroups(listingId, domRes.groups, domRes.basePrice, 'chrome_extension_tab');
+        if (inv.hasVariations) return { ok: true, inventory: inv };
+      }
+    }
+  } catch {}
+
+  // 2. Kullanıcının aktif tarayıcı oturumu/çerezleriyle arka planda fetch dene
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const resp = await fetch(targetUrl, {
+      method: 'GET',
+      credentials: 'include',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (resp.ok) {
+      const html = await resp.text();
+      const inv = parseVariationsFromListingHtml(listingId, html);
+      if (inv.hasVariations) {
+        return { ok: true, inventory: inv };
+      }
+    }
+  } catch {}
+
+  // 3. Fallback: Arka planda geçici sessiz sekme aç, DOM'dan oku ve kapat
+  let tempTabId = null;
+  try {
+    const created = await chrome.tabs.create({ url: targetUrl, active: false });
+    tempTabId = created?.id || null;
+    if (tempTabId) {
+      await waitForTabComplete(tempTabId, 9000);
+      await new Promise((r) => setTimeout(r, 650));
+      const domData = await extractVariationsFromTabDom(tempTabId);
+      const inv = buildInventoryFromExtractedGroups(listingId, domData.groups, domData.basePrice, 'chrome_extension_bg_tab');
+      if (inv.hasVariations) {
+        return { ok: true, inventory: inv };
+      }
+    }
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Etsy sekmesinden varyasyon okunamadı.' };
+  } finally {
+    if (tempTabId) {
+      try { await chrome.tabs.remove(tempTabId); } catch {}
+    }
+  }
+
+  return { ok: true, inventory: buildInventoryFromExtractedGroups(listingId, [], 0, 'chrome_extension') };
+}

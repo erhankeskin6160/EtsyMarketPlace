@@ -1452,6 +1452,34 @@
         return true;
       }
 
+      if (message.action === 'CA_EXTRACT_LISTING_VARIATIONS') {
+        (async () => {
+          const selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+          const groups = selects.map((sel, idx) => {
+            const lbl = document.querySelector(`label[for="${sel.id}"]`);
+            const name = lbl ? (lbl.innerText || lbl.textContent || '').trim() : `Variation ${idx + 1}`;
+            const options = Array.from(sel.options || []).map((o) => (o.text || '').trim()).filter(Boolean);
+            return { name, options };
+          }).filter((g) => g.options.length > 0);
+
+          let basePrice = 0;
+          const ldEl = document.querySelector('script[type="application/ld+json"]');
+          if (ldEl && ldEl.textContent) {
+            const m = ldEl.textContent.match(/"(?:lowPrice|price)"\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?/i);
+            if (m) basePrice = parseFloat(m[1].replace(',', '.')) || 0;
+          }
+
+          sendResponse({
+            ok: true,
+            version: AGENT_VERSION,
+            url: location.href,
+            groups,
+            basePrice
+          });
+        })();
+        return true;
+      }
+
       return false;
     };
 
