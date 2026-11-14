@@ -228,7 +228,7 @@ Chart.register(...registerables);
                   <th>Tutar ($)</th>
                   <th>Net Kâr ($ / ₺)</th>
                 </tr>
-                <tr *ngIf="liveOrders.length === 0"><td colspan="6">{{ recentOrdersError ? 'Siparişler yüklenemedi.' : 'Henüz sipariş yok.' }}</td></tr>
+                <tr *ngIf="liveOrders.length === 0"><td colspan="6">{{ recentOrdersError ? 'Siparişler yüklenemedi.' : (recentOrdersWarning || 'Henüz sipariş yok.') }}</td></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let o of liveOrders">
@@ -854,6 +854,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   trendError = false;
   topProductTitle: string | null = null;
   topProductRevenueUsd = 0;
+  recentOrdersWarning: string | null = null;
+  seriesWarning: string | null = null;
   private trendLabels: string[] = [];
   private trendGross: number[] = [];
   private trendNet: number[] = [];
@@ -890,10 +892,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.liveOrders = res?.orders ?? [];
         this.recentOrdersError = false;
+        this.recentOrdersWarning = (res?.ledgerOk === false && res?.ledgerWarning) ? res.ledgerWarning : null;
       },
       error: () => {
         this.liveOrders = [];
         this.recentOrdersError = true;
+        this.recentOrdersWarning = null;
       }
     });
   }
@@ -908,18 +912,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.topProductRevenueUsd = res?.topProductRevenueUsd ?? 0;
         this.hasTrendSeries = this.trendLabels.length > 0;
         this.trendError = false;
+        this.seriesWarning = (res?.ledgerOk === false && res?.ledgerWarning) ? res.ledgerWarning : null;
         this.tryInitChart();
       },
       error: () => {
         this.hasTrendSeries = false;
         this.trendError = true;
+        this.seriesWarning = null;
       }
     });
   }
 
   get topProductText(): string {
     if (!this.topProductTitle) {
-      return 'Bu ay henüz satış yok.';
+      return this.seriesWarning ? `Etsy API uyarısı: ${this.seriesWarning}` : 'Bu ay henüz satış yok.';
     }
     return `«${this.topProductTitle}» bu ay $${this.topProductRevenueUsd.toFixed(2)} ciro sağlayarak mağazanızın yıldızı oldu.`;
   }

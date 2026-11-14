@@ -1292,6 +1292,8 @@ export interface RecentOrderRow {
 export interface RecentOrdersResponse {
   orders: RecentOrderRow[];
   count: number;
+  ledgerOk?: boolean;
+  ledgerWarning?: string | null;
 }
 
 /** Canlı Etsy API: kontrol paneli günlük seri yanıtı. */
@@ -1303,6 +1305,8 @@ export interface DailySeriesResponse {
   topProductTitle: string | null;
   topProductRevenueUsd: number;
   orderCount: number;
+  ledgerOk?: boolean;
+  ledgerWarning?: string | null;
 }
 
 export interface CompetitorShopProfileDto {

@@ -170,6 +170,53 @@ public sealed class EtsyRateLimitAndFallbackTests
         Assert.Contains("önbellek", staleRecent.LedgerWarning);
     }
 
+    [Fact]
+    public void EtsyLedgerFinancialEngine_UnclassifiedPositiveEntry_ProducesWarning()
+    {
+        var entries = new[]
+        {
+            new EtsyLedgerEntryDetail(
+                Type: "unknown_credit",
+                RawType: "unknown_credit",
+                RawReferenceType: "credit",
+                Description: "unexpected positive credit",
+                Amount: 42.50m,
+                NetAmount: 42.50m,
+                AmountTry: 2100m,
+                Currency: "USD",
+                CreatedAt: DateTimeOffset.UtcNow,
+                ExchangeRate: 49.4m,
+                ReferenceId: 12345L,
+                EntryId: 999L)
+        };
+
+        var report = EtsyLedgerFinancialEngine.BuildReport(entries, new Dictionary<DateTime, decimal>());
+
+        Assert.Equal(0m, report.GrossSales);
+        Assert.NotNull(report.UnclassifiedPositiveWarning);
+        Assert.Contains("unknown_credit", report.UnclassifiedPositiveWarning);
+        Assert.Contains("42.50", report.UnclassifiedPositiveWarning);
+    }
+
+    [Fact]
+    public async Task EtsyLedgerReportService_WhenLedgerHasNoSalesButPaidReceiptsExist_FallsBackToReceiptGrossSales()
+    {
+        var dataClient = new FailingOrSeededEtsyDataClient { ShouldThrow429 = false };
+        var repo = new StubIntegrationRepository();
+        var service = new EtsyLedgerReportService(dataClient, repo);
+
+        var start = DateTimeOffset.UtcNow.AddDays(-5);
+        var end = DateTimeOffset.UtcNow;
+        var result = await service.GetLiveReportAsync("shop-fallback-gross", start, end);
+
+        Assert.True(result.LedgerOk);
+        Assert.Equal(45m, result.Performance.GrossSales);
+        Assert.Equal(45m, result.Performance.OrderGrossSalesUSD);
+        Assert.Equal(1, result.ReceiptCount);
+        Assert.NotNull(result.Warning);
+        Assert.Contains("ödenmiş sipariş fişlerinden", result.Warning);
+    }
+
     private sealed class InMemoryTokenStore(EtsyOAuthToken initial) : IEtsyTokenStore
     {
         private EtsyOAuthToken _token = initial;

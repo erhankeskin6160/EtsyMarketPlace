@@ -126,6 +126,8 @@ public static class EtsyLedgerFinancialEngine
     {
         decimal totalGross = 0, totalRefunds = 0, totalFees = 0, totalInnerAds = 0,
                 totalOffsiteAds = 0, totalDeposits = 0, totalShipping = 0;
+        var unclassifiedPositiveUsd = 0m;
+        var unclassifiedPositiveTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var e in entries)
         {
@@ -160,6 +162,11 @@ public static class EtsyLedgerFinancialEngine
                     if (e.Amount < 0 || e.NetAmount < 0)
                     {
                         totalFees += e.Amount;
+                    }
+                    else if (e.Amount > 0)
+                    {
+                        unclassifiedPositiveUsd += e.Amount;
+                        unclassifiedPositiveTypes.Add(string.IsNullOrWhiteSpace(e.RawType) ? e.Type : e.RawType);
                     }
                     break;
             }
@@ -224,11 +231,15 @@ public static class EtsyLedgerFinancialEngine
 
         var monthly = BuildMonthlySummaries(daily, entries);
 
+        var unclassifiedWarning = unclassifiedPositiveUsd > 0m
+            ? $"Defterde sınıflandırılamayan pozitif kayıtlar tespit edildi ({string.Join(", ", unclassifiedPositiveTypes.Take(5))}: ${unclassifiedPositiveUsd.ToString("0.00", CultureInfo.InvariantCulture)})."
+            : null;
+
         return new EtsyLedgerFinancialReport(
             totalGross, totalFees, totalInnerAds, totalOffsiteAds, totalRefunds, totalDeposits,
             totalShipping, totalProductCosts, totalNet, totalNet - totalProductCosts,
             totalGrossTry, totalFeesTry, totalInnerTry, totalOffsiteTry, totalRefundsTry,
-            totalProductCostsTry, totalNetProfitTry, overallRate, daily, monthly);
+            totalProductCostsTry, totalNetProfitTry, overallRate, daily, monthly, unclassifiedWarning);
     }
 
     /// <summary>
@@ -496,7 +507,8 @@ public sealed record EtsyLedgerFinancialReport(
     decimal NetProfitTry,
     decimal AverageExchangeRate,
     IReadOnlyList<EtsyLedgerDailySummary> Daily,
-    IReadOnlyList<EtsyLedgerMonthlySummary>? Monthly = null);
+    IReadOnlyList<EtsyLedgerMonthlySummary>? Monthly = null,
+    string? UnclassifiedPositiveWarning = null);
 
 /// <summary>Aylik finansal ozet (masaustu donemsel muhasebe portu, USD/TRY).</summary>
 public sealed record EtsyLedgerMonthlySummary(

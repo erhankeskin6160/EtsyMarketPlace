@@ -11,6 +11,7 @@ using System.Text.Json;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.Orders;
 using EtsyMarketPlace.Application.Shipping;
+using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using Microsoft.Extensions.Configuration;
 
 public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
@@ -37,14 +38,7 @@ public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
 
     private async Task<(string AccessToken, string ApiKeyHeader)> PrepareAuthAsync(string shopId, CancellationToken ct)
     {
-        var token = await _tokenStore.GetAsync(shopId, ct)
-            ?? throw new InvalidOperationException($"Mağaza #{shopId} için aktif OAuth token bulunamadı.");
-
-        if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
-        {
-            token = await _oauthService.RefreshTokenAsync(shopId, token.RefreshToken, ct);
-            await _tokenStore.SaveAsync(shopId, token, ct);
-        }
+        var token = await EtsyOutboundGate.GetValidTokenAsync(shopId, _tokenStore, _oauthService, ct);
 
         var raw = await _settingsRepo.GetRawEtsyAppCredentialsAsync(shopId, ct);
         var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (_config["Etsy:ApiKey"] ?? string.Empty);
@@ -62,11 +56,14 @@ public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
         var url = $"https://api.etsy.com/v3/application/shops/{shopId}/shipping-profiles";
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Add("x-api-key", apiKeyHeader);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var res = await EtsyOutboundGate.SendAsync(shopId, tokenCt =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("x-api-key", apiKeyHeader);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            return _httpClient.SendAsync(req, tokenCt);
+        }, ct);
 
-        using var res = await _httpClient.SendAsync(req, ct);
         var body = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
         {

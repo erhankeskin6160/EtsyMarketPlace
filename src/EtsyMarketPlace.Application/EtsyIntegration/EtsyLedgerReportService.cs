@@ -105,9 +105,33 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
 
         var resolution = await ResolveCostsAsync(shopId, startDate, endDate, entries, cancellationToken);
         var report = EtsyLedgerFinancialEngine.BuildReport(entries, resolution.CostsByDay);
-        var performance = MapToPerformance(startDate, endDate, report);
 
-        return new EtsyLedgerLiveResult(true, null, "etsy-ledger-live", DateTimeOffset.UtcNow, performance, report.Daily, resolution.ReceiptCount, report.Monthly);
+        var paidReceipts = resolution.Receipts.Where(r => r.IsPaid && !r.IsCanceled).ToList();
+        var orderGrossUsd = Math.Round(paidReceipts.Sum(r => r.GrandTotal), 2);
+        var orderGrossTry = Math.Round(paidReceipts.Sum(r =>
+            r.GrandTotal * HistoricalExchangeRateProvider.GetRateForDate(r.CreatedAt.UtcDateTime, report.AverageExchangeRate)), 2);
+
+        var warnings = new List<string>();
+        if (!string.IsNullOrWhiteSpace(resolution.CostWarning))
+            warnings.Add(resolution.CostWarning);
+        if (!string.IsNullOrWhiteSpace(report.UnclassifiedPositiveWarning))
+            warnings.Add(report.UnclassifiedPositiveWarning);
+
+        var performance = MapToPerformance(startDate, endDate, report, orderGrossUsd > 0 ? orderGrossUsd : null, orderGrossTry > 0 ? orderGrossTry : null);
+        if (performance.GrossSales == 0m && orderGrossUsd > 0m)
+        {
+            var fallbackMargin = Math.Round(performance.NetProfit / orderGrossUsd * 100m, 2);
+            performance = performance with
+            {
+                GrossSales = orderGrossUsd,
+                GrossSalesTRY = orderGrossTry,
+                NetProfitMargin = fallbackMargin
+            };
+            warnings.Add("Defterde satış kaydı bulunamadı; brüt ciro ödenmiş sipariş fişlerinden hesaplandı.");
+        }
+
+        var combinedWarning = warnings.Count > 0 ? string.Join(" | ", warnings) : null;
+        return new EtsyLedgerLiveResult(true, combinedWarning, "etsy-ledger-live", DateTimeOffset.UtcNow, performance, report.Daily, resolution.ReceiptCount, report.Monthly);
     }
 
     public async Task<EtsyAccountingLedgerData?> GetAccountingLedgerDataAsync(
@@ -512,7 +536,12 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             outLines);
     }
 
-    private static FinancialPerformance MapToPerformance(DateTimeOffset startDate, DateTimeOffset endDate, EtsyLedgerFinancialReport report)
+    private static FinancialPerformance MapToPerformance(
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        EtsyLedgerFinancialReport report,
+        decimal? orderGrossUsd = null,
+        decimal? orderGrossTry = null)
     {
         var margin = report.GrossSales == 0 ? 0m : report.RealNetProfitUsd / report.GrossSales * 100m;
         return new FinancialPerformance(
@@ -528,7 +557,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             margin,
             report.GrossSalesTry,
             report.NetProfitTry,
-            null, null, null,
+            orderGrossUsd, orderGrossTry, null,
             report.AverageExchangeRate,
             report.ProductCostsTry,
             Math.Abs(report.EtsyFeesTry),

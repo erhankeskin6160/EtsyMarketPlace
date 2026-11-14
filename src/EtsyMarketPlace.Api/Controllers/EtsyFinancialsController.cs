@@ -89,6 +89,7 @@ public class EtsyFinancialsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"fin-ledger:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
+        object? uncachedDegradedData = null;
 
         var response = await DashboardResponseCache.GetOrAddAsync(
             cacheKey,
@@ -103,12 +104,24 @@ public class EtsyFinancialsController : BaseApiController
                     EndDate = endDate
                 };
                 var res = await _mediator.Send(query, cancellationToken);
-                return (res.Success && res.Data is not null ? res : null)!;
+                if (!res.Success || res.Data is null)
+                    return null!;
+
+                if (res.Data is LiveFinancialPerformanceResult livePerf && !string.IsNullOrWhiteSpace(livePerf.LedgerWarning))
+                {
+                    uncachedDegradedData = livePerf;
+                    return null!;
+                }
+
+                return res;
             },
             forceRefresh: refresh);
 
         if (response != null && response.Success)
             return Ok(response.Data);
+
+        if (uncachedDegradedData is not null)
+            return Ok(uncachedDegradedData);
 
         var fallbackQuery = new GetFinancialPerformanceRequest
         {
