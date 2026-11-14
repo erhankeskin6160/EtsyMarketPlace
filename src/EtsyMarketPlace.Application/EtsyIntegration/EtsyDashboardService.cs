@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,6 +18,10 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
     private readonly IEtsyIntegrationRepository _repository;
     private readonly IBankDepositService _bankService;
     private readonly EtsyMarketPlace.Domain.Orders.IOrderAddressRepository? _addressRepository;
+
+    private static readonly ConcurrentDictionary<string, RecentOrdersDashboardResult> _recentOrdersStaleCache = new();
+    private static readonly ConcurrentDictionary<string, OrderFinancialsDashboardResult> _orderFinancialsStaleCache = new();
+    private static readonly ConcurrentDictionary<string, DailySeriesDashboardResult> _dailySeriesStaleCache = new();
 
     public EtsyDashboardService(
         IEtsyReportingService reporting,
@@ -60,6 +65,28 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         }
 
         return (Array.Empty<EtsyDashboardLedgerFee>(), "bilinmeyen hata");
+    }
+
+    private static async Task<(IReadOnlyList<EtsyDashboardReceipt> Receipts, string? Error)> SafeGetReceiptsAsync(
+        IEtsyDataClient client,
+        string shopId,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        CancellationToken ct)
+    {
+        try
+        {
+            var receipts = await client.GetShopReceiptsAsync(shopId, start, end, ct);
+            return (receipts, null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return (Array.Empty<EtsyDashboardReceipt>(), ex.Message);
+        }
     }
 
     public static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriod(string? period, DateTimeOffset? startDate, DateTimeOffset? endDate)
@@ -331,10 +358,29 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
     {
         var clampedDays = Math.Clamp(days, 1, 90);
         var clampedLimit = Math.Clamp(limit, 1, 50);
+        var staleKey = $"{shopId}:{clampedDays}:{clampedLimit}";
 
         var end = DateTimeOffset.UtcNow;
         var start = end.AddDays(-clampedDays);
-        var receipts = await _etsyClient.GetShopReceiptsAsync(shopId, start, end, cancellationToken);
+        var (receipts, receiptsError) = await SafeGetReceiptsAsync(_etsyClient, shopId, start, end, cancellationToken);
+        if (receiptsError is not null)
+        {
+            if (_recentOrdersStaleCache.TryGetValue(staleKey, out var cached))
+            {
+                return cached with
+                {
+                    LedgerOk = false,
+                    LedgerWarning = $"Canlı Etsy API geçici olarak yanıt veremedi ({receiptsError}); son önbellek verisi gösteriliyor."
+                };
+            }
+
+            return new RecentOrdersDashboardResult(
+                Orders: Array.Empty<RecentOrderRowDto>(),
+                Count: 0,
+                LedgerOk: false,
+                LedgerWarning: receiptsError);
+        }
+
         var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(_etsyClient, shopId, start, end, cancellationToken);
         var costs = await _repository.GetOrderCostsAsync(shopId, cancellationToken);
         var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledgerEntries, costs);
@@ -348,11 +394,14 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             NetProfitUsd: r.NetProfitUsd,
             HasCost: r.HasCostData)).ToList();
 
-        return new RecentOrdersDashboardResult(
+        var result = new RecentOrdersDashboardResult(
             Orders: dtos,
             Count: rows.Count,
             LedgerOk: ledgerError is null,
             LedgerWarning: ledgerError);
+
+        _recentOrdersStaleCache[staleKey] = result;
+        return result;
     }
 
     public async Task<OrderFinancialsDashboardResult> GetOrderFinancialsAsync(
@@ -364,8 +413,30 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
     {
         var (start, end) = ResolvePeriod(period, startDate, endDate);
         var now = DateTimeOffset.UtcNow;
+        var staleKey = $"{shopId}:{period}:{startDate?.ToUnixTimeSeconds()}:{endDate?.ToUnixTimeSeconds()}";
 
-        var receipts = await _etsyClient.GetShopReceiptsAsync(shopId, start, end, cancellationToken);
+        var (receipts, receiptsError) = await SafeGetReceiptsAsync(_etsyClient, shopId, start, end, cancellationToken);
+        if (receiptsError is not null)
+        {
+            if (_orderFinancialsStaleCache.TryGetValue(staleKey, out var cached))
+            {
+                return cached with
+                {
+                    LedgerOk = false,
+                    LedgerWarning = $"Canlı Etsy API geçici olarak yanıt veremedi ({receiptsError}); son önbellek verisi gösteriliyor."
+                };
+            }
+
+            return new OrderFinancialsDashboardResult(
+                Orders: Array.Empty<EtsyOrderFinancialDetail>(),
+                Count: 0,
+                TotalOrderProfitUsd: 0m,
+                TotalOrderProfitTry: 0m,
+                ExchangeRateUsed: 49.16m,
+                LedgerOk: false,
+                LedgerWarning: receiptsError);
+        }
+
         var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(_etsyClient, shopId, start, end, cancellationToken);
         var costs = await _repository.GetOrderCostsAsync(shopId, cancellationToken);
 
@@ -585,7 +656,7 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             fallbackReceipts);
 
         var activeOrderRows = rows.Where(r => !string.Equals(r.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase)).ToList();
-        return new OrderFinancialsDashboardResult(
+        var result = new OrderFinancialsDashboardResult(
             Orders: rows,
             Count: rows.Count,
             TotalOrderProfitUsd: activeOrderRows.Sum(r => r.NetProfitUsd),
@@ -593,6 +664,9 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             ExchangeRateUsed: rate,
             LedgerOk: ledgerError is null,
             LedgerWarning: ledgerError);
+
+        _orderFinancialsStaleCache[staleKey] = result;
+        return result;
     }
 
     public async Task<DailySeriesDashboardResult> GetDailySeriesAsync(
@@ -639,8 +713,11 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 Source: "empty");
         }
 
-        var receipts = await _etsyClient.GetShopReceiptsAsync(shopId, monthStart, fetchEnd, cancellationToken);
-        var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(_etsyClient, shopId, monthStart, fetchEnd, cancellationToken);
+        var staleKey = $"{shopId}:{monthKey}";
+        var (receipts, receiptsError) = await SafeGetReceiptsAsync(_etsyClient, shopId, monthStart, fetchEnd, cancellationToken);
+        var (ledgerEntries, ledgerError) = receiptsError is null
+            ? await SafeGetLedgerAsync(_etsyClient, shopId, monthStart, fetchEnd, cancellationToken)
+            : (Array.Empty<EtsyDashboardLedgerFee>(), receiptsError);
         var costs = await _repository.GetOrderCostsAsync(shopId, cancellationToken);
         var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledgerEntries, costs);
         var series = EtsyLiveDashboardCalculator.BuildDailySeries(rows, targetYear, targetMonth, nowUtc);
@@ -648,7 +725,7 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
 
         var grossSeries = series.GrossSales;
         var netSeries = series.NetProfit;
-        var seriesSource = "orders-fallback";
+        var seriesSource = receiptsError is null ? "orders-fallback" : "etsy-unavailable";
 
         var utcMonthStart = new DateTimeOffset(targetYear, targetMonth, 1, 0, 0, 0, TimeSpan.Zero);
         var utcMonthEnd = utcMonthStart.AddMonths(1);
@@ -669,8 +746,16 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             }
             seriesSource = live.Source;
         }
+        else if (receiptsError is not null && _dailySeriesStaleCache.TryGetValue(staleKey, out var cachedDaily))
+        {
+            return cachedDaily with
+            {
+                LedgerOk = false,
+                LedgerWarning = $"Canlı Etsy API geçici olarak yanıt veremedi ({receiptsError}); son önbellek verisi gösteriliyor."
+            };
+        }
 
-        return new DailySeriesDashboardResult(
+        var result = new DailySeriesDashboardResult(
             Month: monthKey,
             Labels: series.Labels,
             GrossSales: grossSeries,
@@ -681,6 +766,13 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             LedgerOk: live.LedgerOk,
             LedgerWarning: live.LedgerOk ? null : (live.Warning ?? ledgerError),
             Source: seriesSource);
+
+        if (live.LedgerOk && receiptsError is null)
+        {
+            _dailySeriesStaleCache[staleKey] = result;
+        }
+
+        return result;
     }
 
     public async Task<FinancialSummaryDashboardResult> GetRealFinancialSummaryAsync(

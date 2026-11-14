@@ -69,7 +69,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
         var apiKey = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
 
-        using var throttle = new SemaphoreSlim(4, 4);
+        using var throttle = new SemaphoreSlim(2, 2);
         var pairs = await Task.WhenAll(ids.Select(async entryId =>
         {
             await throttle.WaitAsync(cancellationToken);
@@ -210,6 +210,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     }
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _ledgerWindowCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _singleRangeWindowCache = new();
 
     private async Task<IReadOnlyList<T>> GetPagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
         where T : class
@@ -275,7 +276,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         }
 
         var windowResults = new IReadOnlyList<JsonElement>[windows.Count];
-        using var semaphore = new SemaphoreSlim(4, 4);
+        using var semaphore = new SemaphoreSlim(2, 2);
         var tasks = windows.Select(async (window, index) =>
         {
             await semaphore.WaitAsync(cancellationToken);
@@ -318,17 +319,18 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         DateTimeOffset windowEnd,
         CancellationToken cancellationToken)
     {
-        var minUnix = windowStart.ToUnixTimeSeconds();
-        var maxUnix = windowEnd.ToUnixTimeSeconds();
-        var cacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
         var now = DateTimeOffset.UtcNow;
+        var minUnix = windowStart.ToUnixTimeSeconds();
+        var rawMaxUnix = windowEnd.ToUnixTimeSeconds();
+        var maxUnix = windowEnd >= now.AddMinutes(-5) ? ((rawMaxUnix + 59) / 60) * 60 : rawMaxUnix;
+        var cacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
 
         if (_ledgerWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
         {
             return await cached.Task;
         }
 
-        var ttl = windowEnd < now.AddDays(-2) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(15);
+        var ttl = windowEnd < now.AddDays(-2) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(60);
         var task = FetchRawWindowElementsAsync(routeTemplate, shopId, apiKeyHeader, minUnix, maxUnix, cancellationToken);
         _ledgerWindowCache[cacheKey] = (now.Add(ttl), task);
 
@@ -386,16 +388,71 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     private async Task<IReadOnlyList<T>> GetSingleRangePagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken, string minParamName = "min_created", string maxParamName = "max_created")
         where T : class
     {
-        var results = new List<T>();
+        var rawItems = await GetCachedSingleRangeElementsAsync(routeTemplate, shopId, startDate, endDate, minParamName, maxParamName, cancellationToken);
+        var results = new List<T>(rawItems.Count);
+        foreach (var item in rawItems)
+        {
+            var parsed = parser(item, shopId);
+            if (parsed is not null) results.Add(parsed);
+        }
+        return results;
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> GetCachedSingleRangeElementsAsync(
+        string routeTemplate,
+        string shopId,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        string minParamName,
+        string maxParamName,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var minUnix = startDate.ToUnixTimeSeconds();
+        var rawMaxUnix = endDate.ToUnixTimeSeconds();
+        var maxUnix = endDate >= now.AddMinutes(-5) ? ((rawMaxUnix + 59) / 60) * 60 : rawMaxUnix;
+        var cacheKey = $"{_options.ApiBaseUrl}:{routeTemplate}:{shopId}:{minParamName}:{maxParamName}:{minUnix}:{maxUnix}";
+
+        if (_singleRangeWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
+        {
+            return await cached.Task;
+        }
+
+        var task = FetchSingleRangeElementsAsync(routeTemplate, shopId, minUnix, maxUnix, minParamName, maxParamName, cancellationToken);
+        _singleRangeWindowCache[cacheKey] = (now.AddSeconds(60), task);
+
+        try
+        {
+            return await task;
+        }
+        catch
+        {
+            _singleRangeWindowCache.TryRemove(cacheKey, out _);
+            throw;
+        }
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> FetchSingleRangeElementsAsync(
+        string routeTemplate,
+        string shopId,
+        long minUnix,
+        long maxUnix,
+        string minParamName,
+        string maxParamName,
+        CancellationToken cancellationToken)
+    {
+        var elements = new List<JsonElement>();
         const int limit = 100;
+        var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
+        var apiKeyHeader = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
+
         for (var offset = 0; ; offset += limit)
         {
-            var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
             var separator = route.Contains('?') ? "&" : "?";
-            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&{minParamName}={startDate.ToUnixTimeSeconds()}&{maxParamName}={endDate.ToUnixTimeSeconds()}";
+            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&{minParamName}={minUnix}&{maxParamName}={maxUnix}";
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add("X-Etsy-Shop-Id", shopId);
-            request.Headers.Add("x-api-key", await ResolveApiKeyHeaderAsync(shopId, cancellationToken));
+            request.Headers.Add("x-api-key", apiKeyHeader);
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await CreateApiExceptionAsync(response, cancellationToken);
@@ -409,12 +466,11 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             foreach (var item in items.EnumerateArray())
             {
                 count++;
-                var parsed = parser(item, shopId);
-                if (parsed is not null) results.Add(parsed);
+                elements.Add(item.Clone());
             }
             if (count < limit) break;
         }
-        return results;
+        return elements;
     }
 
     private static EtsyBankPayout? ParsePayout(JsonElement item, string shopId)
