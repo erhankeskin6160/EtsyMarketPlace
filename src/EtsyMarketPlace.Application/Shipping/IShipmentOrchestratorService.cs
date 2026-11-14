@@ -1,9 +1,13 @@
 namespace EtsyMarketPlace.Application.Shipping;
 
+using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Orders;
+using EtsyMarketPlace.Domain.Shipping;
 
 public sealed class CreateCarrierShipmentCommand
 {
@@ -85,11 +89,54 @@ public sealed class CarrierQuotesQuery
     public double WidthCm { get; set; } = 15.0;
     public double LengthCm { get; set; } = 20.0;
     public double HeightCm { get; set; } = 10.0;
+    public string HsCode { get; set; } = "3926400000";
+    public int Quantity { get; set; } = 1;
     public decimalUsdValueOrDefault? DeclaredValueUsd { get; set; }
     public decimal UsdTryRate { get; set; } = 36.25m;
 }
 
-public readonly record struct decimalUsdValueOrDefault(decimal Value);
+[JsonConverter(typeof(DecimalUsdValueOrDefaultJsonConverter))]
+public readonly record struct decimalUsdValueOrDefault(decimal Value)
+{
+    public static implicit operator decimalUsdValueOrDefault(decimal value) => new(value);
+}
+
+public sealed class DecimalUsdValueOrDefaultJsonConverter : JsonConverter<decimalUsdValueOrDefault>
+{
+    public override decimalUsdValueOrDefault Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number && reader.TryGetDecimal(out decimal num))
+            return new decimalUsdValueOrDefault(num);
+
+        if (reader.TokenType == JsonTokenType.String && decimal.TryParse(reader.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal strNum))
+            return new decimalUsdValueOrDefault(strNum);
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            decimal val = 1.00m;
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            {
+                if (reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    string? prop = reader.GetString();
+                    reader.Read();
+                    if (string.Equals(prop, "value", StringComparison.OrdinalIgnoreCase) && reader.TokenType == JsonTokenType.Number)
+                    {
+                        val = reader.GetDecimal();
+                    }
+                }
+            }
+            return new decimalUsdValueOrDefault(val);
+        }
+
+        return new decimalUsdValueOrDefault(1.00m);
+    }
+
+    public override void Write(Utf8JsonWriter writer, decimalUsdValueOrDefault value, JsonSerializerOptions options)
+    {
+        writer.WriteNumberValue(value.Value);
+    }
+}
 
 public sealed class UnifiedCarrierQuoteDto
 {
@@ -105,6 +152,33 @@ public sealed class UnifiedCarrierQuoteDto
     public bool IsRecommended { get; set; }
     public bool IsLowestPrice { get; set; }
     public string QuoteSourceBadge { get; set; } = string.Empty;
+
+    // --- NAVLUN KIRILIMI ---
+    public decimal BaseCargoPriceUsd { get; set; }
+    public decimal FuelCostUsd { get; set; }
+    public decimal FuelMultiplierPercent { get; set; }
+    public decimal AdditionalFeeUsd { get; set; }
+    public string AdditionalFeeDescription { get; set; } = string.Empty;
+    public decimal DiscountedFreightUsd { get; set; }
+    public string PricingTemplate { get; set; } = string.Empty;
+    public string ReturnPolicyNote { get; set; } = string.Empty;
+    public string InsuranceNote { get; set; } = string.Empty;
+
+    // --- HIZLI GÜMRÜK ÖDEMESİ (DDP / TARİFE KIRILIMI) ---
+    public decimal DeclaredValueUsd { get; set; } = 1.00m;
+    public string HsCode { get; set; } = "3926400000";
+    public decimal GeneralDutyUsd { get; set; }
+    public decimal GeneralDutyRatePercent { get; set; }
+    public decimal AdditionalDutyUsd { get; set; }
+    public decimal AdditionalDutyRatePercent { get; set; }
+    public string AdditionalDutyHtsCode { get; set; } = string.Empty;
+    public decimal TaxAndDutySubtotalUsd { get; set; }
+    public decimal CarrierProcessingFeeUsd { get; set; }
+    public decimal FastCustomsPaymentUsd { get; set; }
+    public decimal FastCustomsPaymentTry { get; set; }
+    public decimal GrandTotalUsd { get; set; }
+    public decimal GrandTotalTry { get; set; }
+    public decimal DiscountedGrandTotalUsd { get; set; }
 }
 
 public sealed class CarrierQuotesResponseDto

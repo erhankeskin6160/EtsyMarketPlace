@@ -32,6 +32,35 @@ export interface CarrierQuote {
   isLive?: boolean;
   quoteSourceBadge?: 'Tahmini tarife' | 'Canlı teklif' | '🟢 Canlı API Teklifi' | string;
   notes?: string;
+
+  // ── Navlun Kırılımı (Freight Breakdown) ──
+  baseCargoPriceUsd?: number;
+  fuelCostUsd?: number;
+  fuelMultiplierPercent?: number;
+  additionalFeeUsd?: number;
+  additionalFeeDescription?: string;
+  discountedFreightUsd?: number;
+  pricingTemplate?: string;
+  returnPolicyNote?: string;
+  insuranceNote?: string;
+
+  // ── Hızlı Gümrük Ödemesi (DDP Customs Breakdown) ──
+  declaredValueUsd?: number;
+  hsCode?: string;
+  generalDutyUsd?: number;
+  generalDutyRatePercent?: number;
+  additionalDutyUsd?: number;
+  additionalDutyRatePercent?: number;
+  additionalDutyHtsCode?: string;
+  taxAndDutySubtotalUsd?: number;
+  carrierProcessingFeeUsd?: number;
+  fastCustomsPaymentUsd?: number;
+  fastCustomsPaymentTry?: number;
+
+  // ── Genel Toplamlar (Freight + Fast Customs DDP) ──
+  grandTotalUsd?: number;
+  grandTotalTry?: number;
+  discountedGrandTotalUsd?: number;
 }
 
 export interface CarrierAccountSession {

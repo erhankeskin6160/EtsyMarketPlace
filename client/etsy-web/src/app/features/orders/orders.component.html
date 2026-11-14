@@ -424,6 +424,47 @@
                 </button>
               </div>
 
+              <!-- GÜMRÜK BEYAN DEĞERİ & ADET (HIZLI GÜMRÜK ÖDEMESİ DDP) -->
+              <div class="customs-decl-bar">
+                <div class="customs-inputs-grid">
+                  <div class="dim-input-col">
+                    <label>Gümrük Beyan Değeri (&#36; USD)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.01"
+                      [(ngModel)]="customsDeclaredValueUsd"
+                      (change)="onCustomsParamChange()"
+                      class="customs-num-input" />
+                  </div>
+                  <div class="dim-input-col">
+                    <label>Adet</label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      [(ngModel)]="customsQuantity"
+                      (change)="onCustomsParamChange()"
+                      class="customs-num-input" />
+                  </div>
+                  <div class="customs-presets-col">
+                    <label>Hızlı Beyan Seçimi</label>
+                    <div class="customs-preset-chips">
+                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 1" (click)="setCustomsDeclaredValue(1)">&#36;1 Min</button>
+                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 5" (click)="setCustomsDeclaredValue(5)">&#36;5</button>
+                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 10" (click)="setCustomsDeclaredValue(10)">&#36;10</button>
+                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === selectedOrder.totalAmount" (click)="setCustomsDeclaredValue(selectedOrder.totalAmount)">
+                        Sipariş (&#36;{{ selectedOrder.totalAmount | number:'1.2-2' }})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="tax-rate-info-band">
+                  <span>🛡️</span>
+                  <span>GTİP <code>{{ getActiveHsCode() }}</code> ({{ selectedOrder.countryCode || 'US' }}) → {{ selectedTaxRateSummary }}</span>
+                </div>
+              </div>
+
               <!-- DESİ & FATURALANDIRILACAK AĞIRLIK STATS -->
               <div class="desi-calculation-row">
                 <div class="desi-stat-box">
@@ -536,6 +577,29 @@
               <span class="quotes-live-split-pill">{{ liveQuotesCount }} canlı • {{ estimatedQuotesCount }} tahmini</span>
             </div>
 
+            <!-- Görüntüleme Modu: Sadece Navlun vs Gümrük Dahil (DDP) -->
+            <div class="quotes-mode-bar">
+              <div class="mode-pill-group">
+                <button
+                  type="button"
+                  class="mode-switch-btn"
+                  [class.active]="quoteDisplayMode === 'freight_only'"
+                  (click)="setQuoteDisplayMode('freight_only')">
+                  Sadece Navlun
+                </button>
+                <button
+                  type="button"
+                  class="mode-switch-btn ddp"
+                  [class.active]="quoteDisplayMode === 'all_in_ddp'"
+                  (click)="setQuoteDisplayMode('all_in_ddp')">
+                  🛡️ Gümrük Dahil (DDP)
+                </button>
+              </div>
+              <button type="button" class="btn-toggle-all-details" (click)="toggleAllQuoteDetails()">
+                {{ showAllQuoteDetails ? '▲ Detay Gizle' : '▼ Detay Aç' }}
+              </button>
+            </div>
+
             <!-- Aras Global / Carrier token expired warning banner matching desktop screenshot -->
             <div *ngIf="carrierWarningMessage" class="carrier-session-warning-banner" (click)="openSessionModal(carrierSessions[0])" title="Tokenı Yenilemek İçin Tıklayın">
               {{ carrierWarningMessage }}
@@ -583,11 +647,108 @@
 
                 <div class="tile-right-price">
                   <div class="tile-price-stack">
-                    <span class="tile-usd">&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
-                    <span class="tile-try">₺{{ quote.priceTry | number:'1.2-2' }}</span>
+                    <span class="tile-usd">&#36;{{ getDisplayPriceUsd(quote) | number:'1.2-2' }}</span>
+                    <span class="tile-mode-tag" [class.ddp]="quoteDisplayMode === 'all_in_ddp'">
+                      {{ quoteDisplayMode === 'all_in_ddp' ? 'DDP Dahil' : 'Sadece Navlun' }}
+                    </span>
+                    <span class="tile-try">₺{{ getDisplayPriceTry(quote) | number:'1.2-2' }}</span>
                   </div>
                   <button type="button" class="btn-tile-select" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
                     {{ (selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType) ? '✓ Seçildi' : 'Seç' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Kompakt Navlun & Gümrük Özet Çipleri -->
+              <div class="quote-mini-pills">
+                <span class="mini-pill">Baz: &#36;{{ (quote.baseCargoPriceUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
+                <span class="mini-pill" *ngIf="(quote.fuelCostUsd ?? 0) > 0">
+                  Yakıt: &#36;{{ quote.fuelCostUsd | number:'1.2-2' }}<ng-container *ngIf="quote.fuelMultiplierPercent"> (%{{ quote.fuelMultiplierPercent | number:'1.0-1' }})</ng-container>
+                </span>
+                <span class="mini-pill warn" *ngIf="(quote.additionalFeeUsd ?? 0) > 0">
+                  Ek: &#36;{{ quote.additionalFeeUsd | number:'1.2-2' }}
+                </span>
+                <span class="mini-pill ddp" *ngIf="quote.fastCustomsPaymentUsd !== undefined">
+                  Gümrük: +&#36;{{ quote.fastCustomsPaymentUsd | number:'1.2-2' }}
+                </span>
+                <span class="mini-pill info" *ngIf="quote.returnPolicyNote">↩️ {{ quote.returnPolicyNote }}</span>
+                <span class="mini-pill info" *ngIf="quote.insuranceNote">🛡️ {{ quote.insuranceNote }}</span>
+                <button type="button" class="mini-pill toggle-btn" (click)="toggleQuoteDetails(quote, $event)">
+                  {{ isQuoteExpanded(quote) ? '▲ Kırılım' : '▼ Detay' }}
+                </button>
+              </div>
+
+              <!-- Genişletilmiş Fatura / Makbuz Tipi Navlun + Hızlı Gümrük Kırılımı -->
+              <div class="quote-receipt-panel" *ngIf="isQuoteExpanded(quote)" (click)="$event.stopPropagation()">
+                <div class="receipt-section">
+                  <div class="receipt-sec-title">1. NAVLUN (KARGO ÜCRETİ) KIRILIMI</div>
+                  <div class="receipt-row">
+                    <span>Baz Kargo Ücreti</span>
+                    <span>&#36;{{ (quote.baseCargoPriceUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row" *ngIf="(quote.fuelCostUsd ?? 0) > 0">
+                    <span>Yakıt Ek Ücreti <small *ngIf="quote.fuelMultiplierPercent">(%{{ quote.fuelMultiplierPercent | number:'1.0-2' }})</small></span>
+                    <span>&#36;{{ quote.fuelCostUsd | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row" *ngIf="(quote.additionalFeeUsd ?? 0) > 0">
+                    <span>{{ quote.additionalFeeDescription || 'Yoğun Sezon Ek Ücreti' }}</span>
+                    <span>&#36;{{ quote.additionalFeeUsd | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row subtotal">
+                    <span>Navlun Toplamı</span>
+                    <span>&#36;{{ quote.priceUsd | number:'1.2-2' }} <small>(₺{{ quote.priceTry | number:'1.2-2' }})</small></span>
+                  </div>
+                  <div class="receipt-row prepay" *ngIf="quote.discountedFreightUsd && quote.discountedFreightUsd < quote.priceUsd">
+                    <span>⚡ Avantajlı Hemen Öde</span>
+                    <span>&#36;{{ quote.discountedFreightUsd | number:'1.2-2' }}</span>
+                  </div>
+                </div>
+
+                <div class="receipt-section" *ngIf="quote.fastCustomsPaymentUsd !== undefined">
+                  <div class="receipt-sec-title">2. HIZLI GÜMRÜK ÖDEMESİ (DDP — VERGİ &amp; MASRAFLAR)</div>
+                  <div class="receipt-row muted">
+                    <span>Beyan ({{ customsQuantity }} × &#36;{{ customsDeclaredValueUsd | number:'1.2-2' }} • {{ quote.hsCode || getActiveHsCode() }})</span>
+                    <span>&#36;{{ (quote.declaredValueUsd ?? (customsDeclaredValueUsd * customsQuantity)) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row">
+                    <span>Genel Gümrük Vergisi <small *ngIf="quote.generalDutyRatePercent !== undefined">(%{{ quote.generalDutyRatePercent | number:'1.1-2' }})</small></span>
+                    <span>&#36;{{ (quote.generalDutyUsd ?? 0) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row" *ngIf="(quote.additionalDutyRatePercent ?? 0) > 0 || (quote.additionalDutyUsd ?? 0) > 0">
+                    <span>ABD Ek Tarife <small *ngIf="quote.additionalDutyHtsCode">({{ quote.additionalDutyHtsCode }})</small> <small *ngIf="quote.additionalDutyRatePercent">(%{{ quote.additionalDutyRatePercent | number:'1.1-2' }})</small></span>
+                    <span>&#36;{{ (quote.additionalDutyUsd ?? 0) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row">
+                    <span>Vergi ve Masraflar Ara Toplamı</span>
+                    <span>&#36;{{ (quote.taxAndDutySubtotalUsd ?? ((quote.generalDutyUsd ?? 0) + (quote.additionalDutyUsd ?? 0))) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row">
+                    <span>+ Taşıyıcı İşlem Bedeli</span>
+                    <span>&#36;{{ (quote.carrierProcessingFeeUsd ?? 0) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="receipt-row subtotal ddp">
+                    <span>Toplam Hızlı Gümrük Ödemesi</span>
+                    <span>&#36;{{ quote.fastCustomsPaymentUsd | number:'1.2-2' }} <small *ngIf="quote.fastCustomsPaymentTry">(₺{{ quote.fastCustomsPaymentTry | number:'1.2-2' }})</small></span>
+                  </div>
+                </div>
+
+                <div class="receipt-section grand">
+                  <div class="receipt-row grand-total">
+                    <span>3. HER ŞEY DAHİL TOPLAM (NAVLUN + GÜMRÜK)</span>
+                    <span>&#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }} <small>(₺{{ (quote.grandTotalTry ?? quote.priceTry) | number:'1.2-2' }})</small></span>
+                  </div>
+                  <div class="receipt-row prepay" *ngIf="quote.discountedGrandTotalUsd">
+                    <span>⚡ Avantajlı Hemen Öde + Gümrük</span>
+                    <span>&#36;{{ quote.discountedGrandTotalUsd | number:'1.2-2' }}</span>
+                  </div>
+                </div>
+
+                <div class="receipt-actions-row">
+                  <button type="button" class="btn-receipt-apply freight" (click)="applyCarrierQuote(quote, false); $event.stopPropagation()">
+                    Sadece Navlun Seç (&#36;{{ quote.priceUsd | number:'1.2-2' }})
+                  </button>
+                  <button type="button" class="btn-receipt-apply ddp" (click)="applyCarrierQuote(quote, true); $event.stopPropagation()">
+                    🛡️ Gümrük Dahil Seç (&#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }})
                   </button>
                 </div>
               </div>

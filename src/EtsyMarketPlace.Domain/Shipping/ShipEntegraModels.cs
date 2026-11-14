@@ -23,6 +23,21 @@ public sealed class ShipEntegraQuoteRequest
     public string Currency { get; set; } = "USD";
 
     /// <summary>
+    /// Gümrük tarife hesaplaması için 10 haneli GTİP / HS kodu (örn. 3926400000).
+    /// </summary>
+    public string HsCode { get; set; } = "3926400000";
+
+    /// <summary>
+    /// Gümrük beyan değeri ($ USD).
+    /// </summary>
+    public decimal DeclaredValueUsd { get; set; } = 1.00m;
+
+    /// <summary>
+    /// Beyan edilen ürün adedi.
+    /// </summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>
     /// Hacimsel Desi hesabı: (En x Boy x Yükseklik) / 5000
     /// </summary>
     public double CalculatedDesi => ComputeDesi(WidthCm, LengthCm, HeightCm);
@@ -55,6 +70,29 @@ public sealed class ShipEntegraQuoteOffer
     public string Tooltip { get; set; } = string.Empty;
     public bool IsBestCarrier { get; set; }
     public bool IsLivePrice { get; set; } = true;
+
+    // --- NAVLUN KIRILIMI ---
+    public decimal FuelMultiplierPercent { get; set; }
+    public decimal AdditionalFeeUsd { get; set; }
+    public string AdditionalFeeDescription { get; set; } = string.Empty;
+    public decimal DiscountedTotalPriceUsd { get; set; }
+    public string PricingTemplate { get; set; } = string.Empty;
+    public string ReturnPolicyNote { get; set; } = string.Empty;
+    public string InsuranceNote { get; set; } = string.Empty;
+
+    // --- HIZLI GÜMRÜK ÖDEMESİ (DDP / TARİFE KIRILIMI) ---
+    public decimal DeclaredValueUsd { get; set; } = 1.00m;
+    public string HsCode { get; set; } = "3926400000";
+    public decimal GeneralDutyUsd { get; set; }
+    public decimal GeneralDutyRatePercent { get; set; }
+    public decimal AdditionalDutyUsd { get; set; }
+    public decimal AdditionalDutyRatePercent { get; set; }
+    public string AdditionalDutyHtsCode { get; set; } = string.Empty;
+    public decimal TaxAndDutySubtotalUsd { get; set; }
+    public decimal CarrierProcessingFeeUsd { get; set; }
+    public decimal FastCustomsPaymentUsd { get; set; }
+    public decimal GrandTotalUsd { get; set; }
+    public decimal DiscountedGrandTotalUsd { get; set; }
 
     /// <summary>
     /// AdditionalDescription içerisinden "3-6 iş günü" veya benzeri teslimat süresini çıkarır.
@@ -275,4 +313,261 @@ public sealed class ShipEntegraAuthTokens
 {
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// ShipEntegra taşıyıcı bazlı tarife ve gümrük vergisi hesaplama isteği (POST /v1/tools/tariff-calculator/by-carrier).
+/// </summary>
+public sealed class ShipEntegraTariffRequest
+{
+    public string Carrier { get; set; } = "shipentegra-amerika-eko-plus";
+    public string Currency { get; set; } = "USD";
+    public string HtsCode { get; set; } = "3926400000";
+    public string Origin { get; set; } = "TR";
+    public string Destination { get; set; } = "US";
+    public decimal UnitPrice { get; set; } = 1.00m;
+    public int Quantity { get; set; } = 1;
+    public double Weight { get; set; } = 0.4;
+}
+
+/// <summary>
+/// Tarife API yanıtındaki tek gümrük vergisi veya taşıyıcı işlem bedeli kalemi.
+/// </summary>
+public sealed class ShipEntegraDutyItem
+{
+    public string Type { get; set; } = string.Empty;
+    public string HtsCode { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public decimal AdValRate { get; set; }
+}
+
+/// <summary>
+/// Taşıyıcı bazlı Hızlı Gümrük Ödemesi (DDP) hesaplama yanıtı.
+/// </summary>
+public sealed class ShipEntegraTariffResponse
+{
+    public bool Success { get; set; }
+    public decimal GeneralDutyUsd { get; set; }
+    public decimal GeneralDutyRatePercent { get; set; }
+    public decimal AdditionalDutyUsd { get; set; }
+    public decimal AdditionalDutyRatePercent { get; set; }
+    public string AdditionalDutyHtsCode { get; set; } = string.Empty;
+    public decimal CarrierProcessingFeeUsd { get; set; }
+    public decimal TaxAndDutySubtotalUsd { get; set; }
+    public decimal FastCustomsPaymentUsd { get; set; }
+    public List<ShipEntegraDutyItem> Duties { get; set; } = [];
+    public string DiagnosticMessage { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// ShipEntegra navlun açıklaması ve Hızlı Gümrük Ödemesi hesaplamaları için saf domain yardımcısı.
+/// </summary>
+public static class ShipEntegraTariffCalculator
+{
+    public const decimal PrepayDiscountRatio = 23.26m / 23.96m;
+
+    /// <summary>
+    /// calculate/all uç noktasından gelen serviceName değerini tariff-calculator/by-carrier slug biçimine normalize eder.
+    /// </summary>
+    public static string NormalizeTariffCarrierSlug(string? serviceName)
+    {
+        string raw = (serviceName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(raw)) return "shipentegra-amerika-eko-plus";
+
+        string lower = raw.ToLowerInvariant();
+        return lower switch
+        {
+            "shipentegra" => "shipentegra-express",
+            "shipentegra-ups-express" => "shipentegra-ups",
+            "shipentegra-eko" or "shipentegra-eko-plus" => "shipentegra-amerika-eko-plus",
+            _ => lower
+        };
+    }
+
+    /// <summary>
+    /// Taşıyıcı ve hedef ülkeye göre Hızlı Gümrük Ödemesi taşıyıcı işlem bedelini döndürür.
+    /// </summary>
+    public static decimal GetDefaultCarrierProcessingFeeUsd(string? serviceName, string? destinationCountry)
+    {
+        string country = (destinationCountry ?? "US").Trim().ToUpperInvariant();
+        if (country != "US")
+        {
+            // ABD dışı ülkelere DDP hızlı gümrük taşıyıcı bedeli servis tipine göre minimum düzeydedir
+            string nonUs = (serviceName ?? string.Empty).Trim().ToLowerInvariant();
+            if (nonUs.Contains("fedex")) return 3.00m;
+            if (nonUs.Contains("express") || nonUs.Contains("expedited") || nonUs.Contains("ups")) return 4.50m;
+            return 0.45m;
+        }
+
+        string lower = NormalizeTariffCarrierSlug(serviceName);
+        if (lower.Contains("smart-express")) return 0.00m;
+        if (lower.Contains("fedex")) return 3.00m;
+        if (lower is "shipentegra-express" or "shipentegra-expedited" or "shipentegra-ups" or "shipentegra-ups-ekspress" or "shipentegra-karayolu")
+        {
+            return 4.50m;
+        }
+        return 0.45m;
+    }
+
+    /// <summary>
+    /// Destinasyon ve HS koduna göre varsayılan gümrük vergi oranlarını döndürür (çevrimdışı/yedek).
+    /// </summary>
+    public static (decimal GeneralRate, decimal AdditionalRate, string AdditionalHtsCode) GetDefaultDutyRates(string? hsCode, string? destinationCountry)
+    {
+        string country = (destinationCountry ?? "US").Trim().ToUpperInvariant();
+        string digits = new string((hsCode ?? string.Empty).Where(char.IsDigit).ToArray());
+
+        if (country == "US")
+        {
+            // Canlı ShipEntegra US tariff-calculator ile doğrulanan oranlar (HS 3926: %5.3 + %12.5 99030579 = %17.8)
+            decimal gen = digits.StartsWith("3926", StringComparison.Ordinal) ? 5.3m
+                : digits.StartsWith("9503", StringComparison.Ordinal) ? 0.0m
+                : digits.StartsWith("7117", StringComparison.Ordinal) ? 11.0m
+                : digits.StartsWith("6109", StringComparison.Ordinal) ? 16.5m
+                : digits.StartsWith("6912", StringComparison.Ordinal) ? 9.8m
+                : digits.StartsWith("4420", StringComparison.Ordinal) ? 3.2m
+                : 5.3m;
+
+            return (gen, 12.5m, "99030579");
+        }
+
+        return (0.0m, 0.0m, string.Empty);
+    }
+
+    /// <summary>
+    /// Avantajlı Hemen Öde indirimli navlun tutarını hesaplar (canlı indirim yoksa ~%2.92 / %4 baz navlun indirimi).
+    /// </summary>
+    public static decimal ComputeDiscountedFreightUsd(decimal cargoPrice, decimal fuelCost, decimal additionalFee, decimal totalPrice, decimal discountedCargoPrice = 0m)
+    {
+        if (discountedCargoPrice > 0m && discountedCargoPrice < cargoPrice)
+        {
+            return Math.Round(discountedCargoPrice + fuelCost + additionalFee, 2, MidpointRounding.AwayFromZero);
+        }
+
+        if (totalPrice <= 0m) return 0m;
+        if (cargoPrice > 0m && totalPrice >= cargoPrice)
+        {
+            // Express panelindeki $23.96 -> $23.26 = 17.54 baz navlun üzerinden %4 indirim ($0.70)
+            decimal baseDiscount = Math.Round(cargoPrice * 0.04m, 2, MidpointRounding.AwayFromZero);
+            return Math.Round(Math.Max(0m, totalPrice - baseDiscount), 2, MidpointRounding.AwayFromZero);
+        }
+
+        return Math.Round(totalPrice * PrepayDiscountRatio, 2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// ShipEntegra additionalDescription HTML alanından iade ve sigorta notlarını ayrıştırır.
+    /// </summary>
+    public static (string ReturnPolicyNote, string InsuranceNote) ParseAdditionalDescription(string? additionalDescription)
+    {
+        if (string.IsNullOrWhiteSpace(additionalDescription))
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        string[] parts = Regex.Split(additionalDescription, @"<br\s*/?>", RegexOptions.IgnoreCase);
+        var returnNotes = new List<string>();
+        var insuranceNotes = new List<string>();
+
+        foreach (string rawPart in parts)
+        {
+            string clean = Regex.Replace(rawPart, @"<[^>]+>", string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(clean)) continue;
+
+            if (clean.Contains("iade", StringComparison.OrdinalIgnoreCase))
+            {
+                returnNotes.Add(clean);
+            }
+            else if (clean.Contains("sigorta", StringComparison.OrdinalIgnoreCase))
+            {
+                insuranceNotes.Add(clean);
+            }
+        }
+
+        return (string.Join(" · ", returnNotes), string.Join(" · ", insuranceNotes));
+    }
+
+    /// <summary>
+    /// Tek bir ShipEntegra teklifine navlun detayları ve Hızlı Gümrük Ödemesi kırılımını uygular.
+    /// </summary>
+    public static void PopulateCustomsBreakdown(
+        ShipEntegraQuoteOffer offer,
+        decimal declaredValueUsd,
+        int quantity,
+        string? hsCode,
+        string? destinationCountry,
+        decimal generalDutyRatePercent,
+        decimal additionalDutyRatePercent,
+        string? additionalDutyHtsCode,
+        decimal? overrideGeneralDutyUsd = null,
+        decimal? overrideAdditionalDutyUsd = null,
+        decimal? overrideCarrierFeeUsd = null)
+    {
+        decimal unitVal = declaredValueUsd > 0m ? declaredValueUsd : 1.00m;
+        int qty = quantity > 0 ? quantity : 1;
+        decimal totalDeclared = Math.Round(unitVal * qty, 2, MidpointRounding.AwayFromZero);
+        string cleanHs = string.IsNullOrWhiteSpace(hsCode) ? "3926400000" : new string(hsCode.Where(char.IsDigit).ToArray());
+        if (string.IsNullOrEmpty(cleanHs)) cleanHs = "3926400000";
+
+        decimal genDuty = overrideGeneralDutyUsd ?? Math.Round(totalDeclared * (generalDutyRatePercent / 100m), 2, MidpointRounding.AwayFromZero);
+        decimal addDuty = overrideAdditionalDutyUsd ?? Math.Round(totalDeclared * (additionalDutyRatePercent / 100m), 2, MidpointRounding.AwayFromZero);
+        decimal taxSubtotal = Math.Round(genDuty + addDuty, 2, MidpointRounding.AwayFromZero);
+        decimal carrierFee = overrideCarrierFeeUsd ?? GetDefaultCarrierProcessingFeeUsd(offer.ServiceName, destinationCountry);
+        decimal fastCustoms = Math.Round(taxSubtotal + carrierFee, 2, MidpointRounding.AwayFromZero);
+
+        if (offer.DiscountedTotalPriceUsd <= 0m)
+        {
+            offer.DiscountedTotalPriceUsd = ComputeDiscountedFreightUsd(offer.CargoPrice, offer.FuelCost, offer.AdditionalFeeUsd, offer.TotalPrice);
+        }
+
+        offer.DeclaredValueUsd = totalDeclared;
+        offer.HsCode = cleanHs;
+        offer.GeneralDutyUsd = genDuty;
+        offer.GeneralDutyRatePercent = generalDutyRatePercent;
+        offer.AdditionalDutyUsd = addDuty;
+        offer.AdditionalDutyRatePercent = additionalDutyRatePercent;
+        offer.AdditionalDutyHtsCode = additionalDutyHtsCode ?? string.Empty;
+        offer.TaxAndDutySubtotalUsd = taxSubtotal;
+        offer.CarrierProcessingFeeUsd = carrierFee;
+        offer.FastCustomsPaymentUsd = fastCustoms;
+        offer.GrandTotalUsd = Math.Round(offer.TotalPrice + fastCustoms, 2, MidpointRounding.AwayFromZero);
+        offer.DiscountedGrandTotalUsd = Math.Round(offer.DiscountedTotalPriceUsd + fastCustoms, 2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// Çevrimdışı veya token eksikliği durumunda deterministic yedek tarife hesaplaması döndürür.
+    /// </summary>
+    public static ShipEntegraTariffResponse ComputeFallbackTariff(ShipEntegraTariffRequest request)
+    {
+        decimal unitVal = request.UnitPrice > 0m ? request.UnitPrice : 1.00m;
+        int qty = request.Quantity > 0 ? request.Quantity : 1;
+        decimal totalDeclared = Math.Round(unitVal * qty, 2, MidpointRounding.AwayFromZero);
+
+        var (genRate, addRate, addHts) = GetDefaultDutyRates(request.HtsCode, request.Destination);
+        decimal genDuty = Math.Round(totalDeclared * (genRate / 100m), 2, MidpointRounding.AwayFromZero);
+        decimal addDuty = Math.Round(totalDeclared * (addRate / 100m), 2, MidpointRounding.AwayFromZero);
+        decimal carrierFee = GetDefaultCarrierProcessingFeeUsd(request.Carrier, request.Destination);
+        decimal taxSub = Math.Round(genDuty + addDuty, 2, MidpointRounding.AwayFromZero);
+        decimal fastCustoms = Math.Round(taxSub + carrierFee, 2, MidpointRounding.AwayFromZero);
+
+        return new ShipEntegraTariffResponse
+        {
+            Success = true,
+            GeneralDutyUsd = genDuty,
+            GeneralDutyRatePercent = genRate,
+            AdditionalDutyUsd = addDuty,
+            AdditionalDutyRatePercent = addRate,
+            AdditionalDutyHtsCode = addHts,
+            TaxAndDutySubtotalUsd = taxSub,
+            CarrierProcessingFeeUsd = carrierFee,
+            FastCustomsPaymentUsd = fastCustoms,
+            Duties =
+            [
+                new ShipEntegraDutyItem { Type = "general_duty", HtsCode = request.HtsCode, AdValRate = genRate, Price = genDuty },
+                new ShipEntegraDutyItem { Type = "additional_duty", HtsCode = addHts, AdValRate = addRate, Price = addDuty },
+                new ShipEntegraDutyItem { Type = "carrier_fee", Price = carrierFee }
+            ],
+            DiagnosticMessage = "Yerel tarife oranlarıyla hesaplandı."
+        };
+    }
 }

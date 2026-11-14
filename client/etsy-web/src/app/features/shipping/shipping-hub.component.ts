@@ -12,7 +12,14 @@ export interface CarrierRate {
   eta: string;
   costUsd: number | null;
   fuelSurchargeUsd: number | null;
+  additionalFeeUsd?: number | null;
   totalUsd: number | null;
+  fastCustomsPaymentUsd?: number | null;
+  generalDutyUsd?: number | null;
+  additionalDutyUsd?: number | null;
+  carrierProcessingFeeUsd?: number | null;
+  grandTotalUsd?: number | null;
+  grandTotalTry?: number | null;
   isBestValue: boolean;
   trackingType: string;
 }
@@ -36,7 +43,7 @@ export interface CarrierRate {
           </div>
           <div>
             <h1 class="page-title">Kargo Entegrasyonları Hub'ı & Navlun Karşılaştırma</h1>
-            <p class="page-subtitle">4 taşıyıcı (Aras Global, ShipEntegra, Shiptomore, Navlungo) üzerinden anlık navlun ve desi simülasyonu</p>
+            <p class="page-subtitle">4 taşıyıcı (Aras Global, ShipEntegra, Shiptomore, Navlungo) üzerinden anlık navlun ve Hızlı Gümrük Ödemesi (DDP) simülasyonu</p>
           </div>
         </div>
 
@@ -90,6 +97,16 @@ export interface CarrierRate {
             </div>
           </div>
 
+          <div class="field-col">
+            <label class="field-label">GTİP / HS Kodu:</label>
+            <input type="text" [(ngModel)]="hsCode" class="field-input" (change)="calculateRates()" placeholder="3926909990" />
+          </div>
+
+          <div class="field-col" style="max-width: 145px;">
+            <label class="field-label">Gümrük Beyan ($):</label>
+            <input type="number" step="0.5" min="0.01" [(ngModel)]="declaredValueUsd" class="field-input" (change)="calculateRates()" />
+          </div>
+
           <div class="field-col desi-col">
             <label class="field-label">Faturalandırılacak ({{ desi | number:'1.2-2' }} Desi):</label>
             <span class="desi-value">{{ billableKg | number:'1.2-2' }} kg</span>
@@ -116,15 +133,26 @@ export interface CarrierRate {
           <div class="price-box">
             <div class="price-usd">{{ c.totalUsd === null ? '—' : ('$' + (c.totalUsd | number:'1.2-2')) }}</div>
             <div class="price-try">{{ c.totalTry ? ('₺' + (c.totalTry | number:'1.2-2')) : 'Hesaplanıyor...' }}</div>
-            <span class="tax-info">{{ c.badgeText || 'Mikro İhracat / Express Kurye' }}</span>
+            <span class="tax-info">{{ c.badgeText || 'Sadece Navlun' }}</span>
+          </div>
+
+          <div class="hub-breakdown-box" *ngIf="c.totalUsd !== null">
+            <div class="hb-row"><span>Baz Navlun</span><span>{{ c.costUsd !== null ? ('$' + (c.costUsd | number:'1.2-2')) : '—' }}</span></div>
+            <div class="hb-row"><span>Yakıt + Ek Ücret</span><span>{{ '$' + (((c.fuelSurchargeUsd || 0) + (c.additionalFeeUsd || 0)) | number:'1.2-2') }}</span></div>
+            <div class="hb-row ddp"><span>🛡️ Hızlı Gümrük (DDP)</span><span>{{ c.fastCustomsPaymentUsd != null ? ('+$' + (c.fastCustomsPaymentUsd | number:'1.2-2')) : '—' }}</span></div>
+            <div class="hb-row grand">
+              <span>Her Şey Dahil Toplam</span>
+              <span>{{ c.grandTotalUsd != null ? ('$' + (c.grandTotalUsd | number:'1.2-2')) : ('$' + (c.totalUsd | number:'1.2-2')) }}</span>
+            </div>
+            <div class="hb-try" *ngIf="c.grandTotalTry">₺{{ c.grandTotalTry | number:'1.2-2' }} (Gümrük Dahil)</div>
           </div>
 
           <div class="carrier-btn-row">
-            <button class="btn-create-label" (click)="sendToOrders(c)">
-              🚀 Stüdyoda Aç
+            <button class="btn-create-label" (click)="sendToOrders(c, false)">
+              🚀 Navlun İle Aç
             </button>
-            <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c)">
-              📦 Siparişe Uygula
+            <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c, true)">
+              🛡️ DDP Uygula
             </button>
           </div>
         </div>
@@ -219,7 +247,8 @@ export interface CarrierRate {
     }
     .calc-row {
       display: flex;
-      gap: 20px;
+      flex-wrap: wrap;
+      gap: 16px;
       align-items: flex-end;
     }
     .field-col {
@@ -377,6 +406,40 @@ export interface CarrierRate {
       background: #2563eb;
       border-color: #2563eb;
     }
+    .hub-breakdown-box {
+      background: #090e1a;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 0.76rem;
+      color: #cbd5e1;
+    }
+    .hb-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .hb-row.ddp {
+      color: #7dd3fc;
+      font-weight: 600;
+    }
+    .hb-row.grand {
+      padding-top: 5px;
+      margin-top: 2px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.22);
+      color: #fbbf24;
+      font-weight: 800;
+      font-size: 0.84rem;
+    }
+    .hb-try {
+      text-align: right;
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
     .btn-send-to-order {
       background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.3));
       border: 1px solid rgba(249, 115, 22, 0.5);
@@ -401,6 +464,8 @@ export class ShippingHubComponent implements OnInit {
   dimWidth = 15;
   dimLength = 20;
   dimHeight = 10;
+  hsCode = '3926909990';
+  declaredValueUsd = 1.00;
   desi = 0.6;
   billableKg = 0.6;
   isLoading = false;
@@ -468,6 +533,8 @@ export class ShippingHubComponent implements OnInit {
     const weightKg = Math.max(0.05, (this.weightGrams || 250) / 1000);
     this.billableKg = Number(Math.max(this.desi, weightKg).toFixed(2));
     const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
+    const cleanHs = (this.hsCode || '3926909990').replace(/\D/g, '') || '3926909990';
+    const declared = Number(this.declaredValueUsd) > 0 ? Number(Number(this.declaredValueUsd).toFixed(2)) : 1.00;
 
     this.isLoading = true;
     this.etsyApi.getCarrierQuotes({
@@ -476,7 +543,10 @@ export class ShippingHubComponent implements OnInit {
       widthCm: this.dimWidth,
       lengthCm: this.dimLength,
       heightCm: this.dimHeight,
-      usdTryRate: rate
+      usdTryRate: rate,
+      hsCode: cleanHs,
+      declaredValueUsd: declared,
+      quantity: 1
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (resp) => {
         this.isLoading = false;
@@ -492,6 +562,15 @@ export class ShippingHubComponent implements OnInit {
           if (card && bestForCarrier) {
             card.totalUsd = Number(bestForCarrier.priceUsd);
             card.totalTry = Number(bestForCarrier.priceTry);
+            card.costUsd = bestForCarrier.baseCargoPriceUsd != null ? Number(bestForCarrier.baseCargoPriceUsd) : card.totalUsd;
+            card.fuelSurchargeUsd = bestForCarrier.fuelCostUsd != null ? Number(bestForCarrier.fuelCostUsd) : 0;
+            card.additionalFeeUsd = bestForCarrier.additionalFeeUsd != null ? Number(bestForCarrier.additionalFeeUsd) : 0;
+            card.generalDutyUsd = bestForCarrier.generalDutyUsd != null ? Number(bestForCarrier.generalDutyUsd) : 0;
+            card.additionalDutyUsd = bestForCarrier.additionalDutyUsd != null ? Number(bestForCarrier.additionalDutyUsd) : 0;
+            card.carrierProcessingFeeUsd = bestForCarrier.carrierProcessingFeeUsd != null ? Number(bestForCarrier.carrierProcessingFeeUsd) : 0;
+            card.fastCustomsPaymentUsd = bestForCarrier.fastCustomsPaymentUsd != null ? Number(bestForCarrier.fastCustomsPaymentUsd) : 0;
+            card.grandTotalUsd = bestForCarrier.grandTotalUsd != null ? Number(bestForCarrier.grandTotalUsd) : card.totalUsd;
+            card.grandTotalTry = bestForCarrier.grandTotalTry != null ? Number(bestForCarrier.grandTotalTry) : card.totalTry;
             card.eta = bestForCarrier.estimatedDays || card.eta;
             card.trackingType = bestForCarrier.serviceType || card.trackingType;
             card.badgeText = bestForCarrier.quoteSourceBadge || (bestForCarrier.isLive ? 'Canlı API Teklifi' : 'Sözleşme Tarifesi');
@@ -511,13 +590,14 @@ export class ShippingHubComponent implements OnInit {
     });
   }
 
-  sendToOrders(c: CarrierRate): void {
+  sendToOrders(c: CarrierRate, includeCustoms: boolean = false): void {
     if (c.totalUsd === null) return;
+    const appliedCost = includeCustoms ? (c.grandTotalUsd ?? c.totalUsd) : c.totalUsd;
     this.router.navigate(['/orders'], {
       queryParams: {
         carrierKey: c.id,
         carrierName: c.trackingType || c.name,
-        carrierCost: c.totalUsd ?? ''
+        carrierCost: appliedCost ?? ''
       }
     });
   }

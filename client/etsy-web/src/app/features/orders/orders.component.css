@@ -941,9 +941,9 @@
 
     /* REGION 3: QUOTES & BARCODE (SAĞ) */
     .quotes-region {
-      width: 380px;
-      min-width: 310px;
-      max-width: 420px;
+      width: 430px;
+      min-width: 390px;
+      max-width: 470px;
       flex-shrink: 0;
       background: #0f172a;
       display: flex;
@@ -2629,3 +2629,51 @@
         justify-content: flex-end;
       }
     }
+
+    /* GÜMRÜK BEYAN & DETAYLI KIRILIM PANELİ */
+    .customs-decl-bar { margin-top: 8px; padding: 8px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .customs-inputs-grid { display: grid; grid-template-columns: 118px 62px 1fr; gap: 8px; align-items: end; }
+    .customs-presets-col { display: flex; flex-direction: column; gap: 3px; }
+    .customs-presets-col label { font-size: 0.68rem; color: #94a3b8; font-weight: 600; }
+    .customs-num-input { width: 100%; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.3); color: #f8fafc; border-radius: 6px; padding: 4px 6px; font-size: 0.78rem; font-weight: 700; box-sizing: border-box; }
+    .customs-preset-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .customs-chip { background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(148, 163, 184, 0.28); color: #cbd5e1; border-radius: 5px; padding: 3px 7px; font-size: 0.68rem; font-weight: 600; cursor: pointer; }
+    .customs-chip.active, .customs-chip:hover { background: rgba(14, 165, 233, 0.22); border-color: #38bdf8; color: #e0f2fe; }
+    .tax-rate-info-band { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; color: #7dd3fc; background: rgba(14, 165, 233, 0.1); border-radius: 6px; padding: 4px 8px; }
+    .tax-rate-info-band code { color: #fde68a; font-weight: 700; }
+
+    .quotes-mode-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .mode-pill-group { display: flex; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 7px; padding: 2px; gap: 2px; }
+    .mode-switch-btn { border: none; background: transparent; color: #94a3b8; font-size: 0.69rem; font-weight: 700; padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+    .mode-switch-btn.active { background: #334155; color: #fff; }
+    .mode-switch-btn.ddp.active { background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; }
+    .btn-toggle-all-details { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.25); color: #cbd5e1; font-size: 0.68rem; font-weight: 600; border-radius: 6px; padding: 4px 7px; cursor: pointer; }
+
+    .tile-mode-tag { font-size: 0.62rem; font-weight: 700; color: #94a3b8; background: rgba(148, 163, 184, 0.15); border-radius: 4px; padding: 1px 5px; text-align: center; }
+    .tile-mode-tag.ddp { color: #7dd3fc; background: rgba(14, 165, 233, 0.2); }
+
+    .quote-mini-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.14); }
+    .mini-pill { font-size: 0.64rem; font-weight: 600; color: #cbd5e1; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 4px; padding: 1px 5px; }
+    .mini-pill.warn { color: #fcd34d; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.3); }
+    .mini-pill.ddp { color: #7dd3fc; background: rgba(14, 165, 233, 0.16); border-color: rgba(56, 189, 248, 0.35); }
+    .mini-pill.info { color: #86efac; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.28); }
+    .mini-pill.toggle-btn { margin-left: auto; color: #e2e8f0; background: rgba(51, 65, 85, 0.85); cursor: pointer; }
+
+    .quote-receipt-panel { margin-top: 7px; padding: 8px; background: #090e1a; border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 7px; display: flex; flex-direction: column; gap: 7px; cursor: default; }
+    .receipt-section { display: flex; flex-direction: column; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+    .receipt-section.grand { border-bottom: none; padding-bottom: 0; }
+    .receipt-sec-title { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.03em; color: #94a3b8; margin-bottom: 1px; }
+    .receipt-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 0.7rem; color: #cbd5e1; }
+    .receipt-row.muted { color: #94a3b8; font-size: 0.67rem; }
+    .receipt-row small { color: #94a3b8; font-size: 0.64rem; }
+    .receipt-row.subtotal { font-weight: 700; color: #f8fafc; padding-top: 2px; border-top: 1px dashed rgba(148, 163, 184, 0.18); }
+    .receipt-row.subtotal.ddp { color: #38bdf8; }
+    .receipt-row.prepay { color: #4ade80; font-weight: 700; font-size: 0.69rem; }
+    .receipt-row.grand-total { font-weight: 800; font-size: 0.75rem; color: #fbbf24; }
+    .receipt-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .btn-receipt-apply { border-radius: 6px; padding: 5px 6px; font-size: 0.68rem; font-weight: 700; cursor: pointer; border: 1px solid; }
+    .btn-receipt-apply.freight { background: rgba(51, 65, 85, 0.7); border-color: rgba(148, 163, 184, 0.35); color: #e2e8f0; }
+    .btn-receipt-apply.freight:hover { background: #334155; }
+    .btn-receipt-apply.ddp { background: rgba(2, 132, 199, 0.25); border-color: #38bdf8; color: #e0f2fe; }
+    .btn-receipt-apply.ddp:hover { background: #0284c7; color: #fff; }
+    @media (max-width: 720px) { .customs-inputs-grid { grid-template-columns: 1fr 1fr; } .customs-presets-col { grid-column: 1 / -1; } }

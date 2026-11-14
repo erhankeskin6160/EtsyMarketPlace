@@ -43,6 +43,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
   showGtipSuggestions: boolean = false;
   gtipResults: GtipCodeItem[] = [];
 
+  // CUSTOMS & BREAKDOWN DISPLAY
+  customsDeclaredValueUsd: number = 1.00;
+  customsQuantity: number = 1;
+  quoteDisplayMode: 'freight_only' | 'all_in_ddp' = 'all_in_ddp';
+  showAllQuoteDetails: boolean = true;
+  expandedQuoteKeys: Record<string, boolean> = {};
+  private customsDebounceTimer: any = null;
+
   // PACKAGE PRESETS (FAZ 4)
   readonly packagePresets = [
     { id: 'envelope', label: '✉️ Zarf (22×15×4 • 0.15kg)', widthCm: 15, lengthCm: 22, heightCm: 4, weightKg: 0.15 },
@@ -157,6 +165,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.gtipSearchTerm = order.gtipCode ? `${order.gtipCode} - ${order.gtipDescription || ''}` : '';
         this.calculateLiveProfit();
         if (orderChanged || this.carrierQuotes.length === 0) {
+          if (orderChanged) {
+            this.customsDeclaredValueUsd = 1.00;
+            this.customsQuantity = 1;
+            this.expandedQuoteKeys = {};
+          }
           this.loadQuotesForSelected();
         }
       }
@@ -195,6 +208,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
     if (this.autoSaveTimeout) clearTimeout(this.autoSaveTimeout);
+    if (this.customsDebounceTimer) clearTimeout(this.customsDebounceTimer);
   }
 
   // --- GETTERS & METRICS ---
@@ -388,13 +402,138 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.loadQuotesForSelected();
   }
 
-  loadQuotesForSelected(): void {
+  getActiveHsCode(): string {
+    const raw = (this.selectedOrder?.gtipCode || this.gtipSearchTerm || '').split('-')[0].trim();
+    const digits = raw.replace(/\D/g, '');
+    return digits.length >= 6 ? digits : '3926909990';
+  }
+
+  getQuoteKey(quote: CarrierQuote): string {
+    return quote.quoteId || quote.serviceCode || `${quote.carrierKey}-${quote.serviceType}`;
+  }
+
+  isQuoteExpanded(quote: CarrierQuote): boolean {
+    const key = this.getQuoteKey(quote);
+    if (key in this.expandedQuoteKeys) {
+      return this.expandedQuoteKeys[key];
+    }
+    return this.showAllQuoteDetails;
+  }
+
+  toggleQuoteDetails(quote: CarrierQuote, event?: Event): void {
+    event?.stopPropagation();
+    const key = this.getQuoteKey(quote);
+    this.expandedQuoteKeys[key] = !this.isQuoteExpanded(quote);
+  }
+
+  toggleAllQuoteDetails(): void {
+    this.showAllQuoteDetails = !this.showAllQuoteDetails;
+    this.expandedQuoteKeys = {};
+  }
+
+  setQuoteDisplayMode(mode: 'freight_only' | 'all_in_ddp'): void {
+    this.quoteDisplayMode = mode;
+    this.syncSelectedQuoteCost();
+  }
+
+  getDisplayPriceUsd(quote: CarrierQuote): number {
+    return this.quoteDisplayMode === 'all_in_ddp'
+      ? (quote.grandTotalUsd ?? quote.priceUsd)
+      : quote.priceUsd;
+  }
+
+  getDisplayPriceTry(quote: CarrierQuote): number {
+    return this.quoteDisplayMode === 'all_in_ddp'
+      ? (quote.grandTotalTry ?? quote.priceTry)
+      : quote.priceTry;
+  }
+
+  get selectedTaxRateSummary(): string {
+    const ref = this.selectedCarrierQuote || this.carrierQuotes[0];
+    if (!ref) return 'Genel Vergi %5.3 + ABD Ek Tarife 99030579 %12.5 = Toplam %17.8';
+    const gen = ref.generalDutyRatePercent ?? 0;
+    const add = ref.additionalDutyRatePercent ?? 0;
+    const total = Number((gen + add).toFixed(2));
+    const hts = ref.additionalDutyHtsCode ? ` ${ref.additionalDutyHtsCode}` : '';
+    if (gen === 0 && add === 0) {
+      return 'Bu hedef ülke ve GTİP için ek gümrük vergisi %0 görünmektedir';
+    }
+    return add > 0
+      ? `Genel Vergi %${gen} + ABD Ek Tarife${hts} %${add} = Toplam %${total}`
+      : `Tahmini Gümrük Vergisi / KDV %${gen}`;
+  }
+
+  setCustomsDeclaredValue(val: number): void {
+    const parsed = Number(val);
+    this.customsDeclaredValueUsd = parsed > 0 ? Number(parsed.toFixed(2)) : 1.00;
+    this.onCustomsParamChange();
+  }
+
+  private syncSelectedQuoteCost(): void {
+    if (!this.selectedOrder?.selectedCarrier) return;
+    const matched = this.selectedCarrierQuote;
+    if (matched) {
+      this.editableShippingCost = this.getDisplayPriceUsd(matched);
+      this.calculateLiveProfit();
+    }
+  }
+
+  onCustomsParamChange(): void {
     if (!this.selectedOrder) return;
+    this.customsDeclaredValueUsd = Math.max(0.01, Number(this.customsDeclaredValueUsd) || 1.00);
+    this.customsQuantity = Math.max(1, Math.round(Number(this.customsQuantity) || 1));
+
     const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
+    const customsOpts = {
+      hsCode: this.getActiveHsCode(),
+      declaredValueUsd: this.customsDeclaredValueUsd,
+      quantity: this.customsQuantity
+    };
+
     this.carrierQuotes = this.ordersService.calculateCarrierQuotes(
       this.selectedOrder.packageSpecs,
       this.selectedOrder.countryCode,
-      rate
+      rate,
+      customsOpts
+    );
+    this.syncSelectedQuoteCost();
+
+    if (this.customsDebounceTimer) {
+      clearTimeout(this.customsDebounceTimer);
+    }
+    this.customsDebounceTimer = setTimeout(() => {
+      if (!this.selectedOrder) return;
+      this.ordersService.fetchLiveCarrierQuotes(
+        this.selectedOrder.packageSpecs,
+        this.selectedOrder.countryCode,
+        rate,
+        this.selectedOrder.postalCode,
+        this.selectedOrder.city,
+        this.selectedOrder.state,
+        customsOpts
+      ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(res => {
+        if (res && res.quotes && res.quotes.length > 0) {
+          this.carrierQuotes = res.quotes;
+          this.syncSelectedQuoteCost();
+        }
+      });
+    }, 350);
+  }
+
+  loadQuotesForSelected(): void {
+    if (!this.selectedOrder) return;
+    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
+    const customsOpts = {
+      hsCode: this.getActiveHsCode(),
+      declaredValueUsd: this.customsDeclaredValueUsd > 0 ? this.customsDeclaredValueUsd : 1.00,
+      quantity: this.customsQuantity > 0 ? this.customsQuantity : 1
+    };
+
+    this.carrierQuotes = this.ordersService.calculateCarrierQuotes(
+      this.selectedOrder.packageSpecs,
+      this.selectedOrder.countryCode,
+      rate,
+      customsOpts
     );
 
     this.ordersService.fetchLiveCarrierQuotes(
@@ -403,7 +542,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
       rate,
       this.selectedOrder.postalCode,
       this.selectedOrder.city,
-      this.selectedOrder.state
+      this.selectedOrder.state,
+      customsOpts
     ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(res => {
       if (res && res.quotes && res.quotes.length > 0) {
         this.carrierQuotes = res.quotes;
@@ -411,11 +551,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
-  applyCarrierQuote(quote: CarrierQuote): void {
+  applyCarrierQuote(quote: CarrierQuote, includeCustoms?: boolean): void {
     if (!this.selectedOrder) return;
+    const useAllIn = includeCustoms ?? (this.quoteDisplayMode === 'all_in_ddp');
+    this.quoteDisplayMode = useAllIn ? 'all_in_ddp' : 'freight_only';
     this.selectedOrder.selectedCarrier = quote.carrierKey;
     this.selectedOrder.carrierServiceName = quote.serviceType || quote.carrierName;
-    this.editableShippingCost = quote.priceUsd;
+    this.editableShippingCost = useAllIn ? (quote.grandTotalUsd ?? quote.priceUsd) : quote.priceUsd;
     this.calculateLiveProfit();
   }
 
@@ -424,6 +566,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const instant = this.ordersService.searchGtip(this.gtipSearchTerm);
     this.gtipResults = instant;
     this.showGtipSuggestions = true;
+
+    const enteredDigits = (this.gtipSearchTerm || '').split('-')[0].replace(/\D/g, '');
+    const currentDigits = (this.selectedOrder?.gtipCode || '').replace(/\D/g, '');
+    if (this.selectedOrder && enteredDigits.length >= 6 && enteredDigits !== currentDigits) {
+      const dash = this.gtipSearchTerm.indexOf('-');
+      const desc = dash > 0 ? this.gtipSearchTerm.substring(dash + 1).trim() : (this.selectedOrder.gtipDescription || '');
+      this.ordersService.updateOrderGtip(this.selectedOrder.orderId, enteredDigits, desc);
+      this.onCustomsParamChange();
+    }
 
     this.ordersService.searchGtipRemote(this.gtipSearchTerm).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(results => {
       this.gtipResults = results;
@@ -444,6 +595,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.showGtipSuggestions = false;
     if (this.selectedOrder) {
       this.ordersService.updateOrderGtip(this.selectedOrder.orderId, item.code, item.description);
+      this.onCustomsParamChange();
     }
   }
 

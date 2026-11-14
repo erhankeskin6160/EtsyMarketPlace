@@ -53,7 +53,7 @@ public sealed class ShipEntegraPricingService
         string token = settings.CleanToken;
         if (string.IsNullOrWhiteSpace(token))
         {
-            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
             return new ShipEntegraPricingResult
             {
                 Success = true,
@@ -68,7 +68,7 @@ public sealed class ShipEntegraPricingService
 
         if (_apiClient == null)
         {
-            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
             return new ShipEntegraPricingResult
             {
                 Success = true,
@@ -99,7 +99,7 @@ public sealed class ShipEntegraPricingService
             }
 
             // Canlı teklif boş döndüyse fallback
-            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
             return new ShipEntegraPricingResult
             {
                 Success = true,
@@ -113,7 +113,7 @@ public sealed class ShipEntegraPricingService
         }
         catch (ShipEntegraTokenExpiredException ex)
         {
-            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
             return new ShipEntegraPricingResult
             {
                 Success = true,
@@ -127,7 +127,7 @@ public sealed class ShipEntegraPricingService
         }
         catch (Exception ex)
         {
-            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+            var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
             return new ShipEntegraPricingResult
             {
                 Success = true,
@@ -147,15 +147,20 @@ public sealed class ShipEntegraPricingService
     public Task<List<ShipEntegraQuoteOffer>> GetFallbackOffersAsync(ShipEntegraQuoteRequest request)
     {
         double billable = request.BillableWeightKg;
-        var offers = GenerateFallbackOffers(billable, request.ReceiverCountry);
+        var offers = GenerateFallbackOffers(billable, request.ReceiverCountry, request.HsCode, request.DeclaredValueUsd, request.Quantity);
         return Task.FromResult(offers);
     }
 
     /// <summary>
     /// Çevrimdışı veya token süresi dolduğunda çalışan yedek tarife tablosu teklif üreticisi.
-    /// ShipEntegra canlı veri modelini birebir yansıtır.
+    /// ShipEntegra canlı veri modelini ve Hızlı Gümrük Ödemesi kırılımını birebir yansıtır.
     /// </summary>
-    public static List<ShipEntegraQuoteOffer> GenerateFallbackOffers(double billableWeightKg, string countryCode)
+    public static List<ShipEntegraQuoteOffer> GenerateFallbackOffers(
+        double billableWeightKg,
+        string countryCode,
+        string hsCode = "3926400000",
+        decimal declaredValueUsd = 1.00m,
+        int quantity = 1)
     {
         // 1.0 kg/desiye kadar baz kademe; üzerindeki her 0.5 kg için ek kademe
         double weightStep = Math.Max(1.0, Math.Ceiling(billableWeightKg * 2.0) / 2.0);
@@ -175,87 +180,54 @@ public sealed class ShipEntegraPricingService
             smartExpressBase = Math.Round(smartExpressBase * 0.90m, 2);
         }
 
-        return
-        [
-            new ShipEntegraQuoteOffer
+        var (genRate, addRate, addHts) = ShipEntegraTariffCalculator.GetDefaultDutyRates(hsCode, countryCode);
+
+        var specs = new (string Code, string Name, string Type, decimal Total, decimal AddFee, decimal FuelPct, string Desc, bool Best)[]
+        {
+            ("shipentegra-amerika-eko-plus", "ShipEntegra Amerika Eko Plus", "ECO", ekoPlusBase, 1.00m, 19.04m, "Tahmini Teslim Süresi 3-6 iş günü<br>Amerika içi geri iade ücretsiz", true),
+            ("shipentegra-smart-express", "ShipEntegra Smart Express", "EXPRESS", smartExpressBase, 1.00m, 18.99m, "Tahmini Teslim Süresi 2-5 iş günü<br>100 $'a kadar sigortalı<br>Amerika içi geri iade ücretsiz", false),
+            ("shipentegra-widect", "ShipEntegra Widect", "ECO", widectBase, 1.00m, 18.97m, "Tahmini Teslim Süresi 4-9 iş günü<br>Amerika içi geri iade ücretsiz", false),
+            ("shipentegra-expedited", "ShipEntegra Expedited", "EXPRESS", expeditedBase, 0.90m, 29.53m, $"Tahmini Teslim Süresi 3-5 iş günü<br>Geri iade navlun ücreti: {Math.Round(expeditedBase * 2m, 2):0.00} $", false),
+            ("shipentegra-express", "ShipEntegra Express", "EXPRESS", expressBase, 1.25m, 29.48m, $"Tahmini Teslim Süresi 2-4 iş günü<br>Geri iade navlun ücreti: {Math.Round(expressBase * 2m, 2):0.00} $", false),
+            ("shipentegra-ups-express", "ShipEntegra Ups Express", "EXPRESS", upsExpressBase, 0.90m, 54.26m, $"Tahmini Teslim Süresi 1-4 iş günü<br>Geri iade navlun ücreti: {Math.Round(upsExpressBase * 2m, 2):0.00} $", false)
+        };
+
+        var offers = new List<ShipEntegraQuoteOffer>(specs.Length);
+        foreach (var s in specs)
+        {
+            decimal afterAddFee = Math.Max(0m, s.Total - s.AddFee);
+            decimal cargo = Math.Round(afterAddFee / (1m + (s.FuelPct / 100m)), 2, MidpointRounding.AwayFromZero);
+            decimal fuel = Math.Round(afterAddFee - cargo, 2, MidpointRounding.AwayFromZero);
+            var (retNote, insNote) = ShipEntegraTariffCalculator.ParseAdditionalDescription(s.Desc);
+
+            var offer = new ShipEntegraQuoteOffer
             {
-                ServiceName = "shipentegra-amerika-eko-plus",
-                ClearServiceName = "ShipEntegra Amerika Eko Plus",
-                ServiceType = "ECO",
-                CargoPrice = Math.Round(ekoPlusBase * 0.85m, 2),
-                FuelCost = Math.Round(ekoPlusBase * 0.15m, 2),
-                TotalPrice = ekoPlusBase,
+                ServiceName = s.Code,
+                ClearServiceName = s.Name,
+                ServiceType = s.Type,
+                CargoPrice = cargo,
+                FuelCost = fuel,
+                FuelMultiplierPercent = s.FuelPct,
+                AdditionalFeeUsd = s.AddFee,
+                AdditionalFeeDescription = s.AddFee > 0m ? "Yoğun Sezon Ek Ücreti" : string.Empty,
+                TotalPrice = s.Total,
+                DiscountedTotalPriceUsd = ShipEntegraTariffCalculator.ComputeDiscountedFreightUsd(cargo, fuel, s.AddFee, s.Total),
                 Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 3-6 iş günü<br>Amerika içi geri iade ücretsiz",
-                IsBestCarrier = true,
+                AdditionalDescription = s.Desc,
+                Tooltip = $"%{s.FuelPct:0.##} yakıt çarpanı uygulanmıştır",
+                ReturnPolicyNote = retNote,
+                InsuranceNote = insNote,
+                IsBestCarrier = s.Best,
                 IsLivePrice = false
-            },
-            new ShipEntegraQuoteOffer
-            {
-                ServiceName = "shipentegra-smart-express",
-                ClearServiceName = "ShipEntegra Smart Express",
-                ServiceType = "EXPRESS",
-                CargoPrice = Math.Round(smartExpressBase * 0.85m, 2),
-                FuelCost = Math.Round(smartExpressBase * 0.15m, 2),
-                TotalPrice = smartExpressBase,
-                Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 2-5 iş günü<br>100 $'a kadar sigortalı",
-                IsBestCarrier = false,
-                IsLivePrice = false
-            },
-            new ShipEntegraQuoteOffer
-            {
-                ServiceName = "shipentegra-widect",
-                ClearServiceName = "ShipEntegra Widect",
-                ServiceType = "ECO",
-                CargoPrice = Math.Round(widectBase * 0.85m, 2),
-                FuelCost = Math.Round(widectBase * 0.15m, 2),
-                TotalPrice = widectBase,
-                Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 4-9 iş günü",
-                IsBestCarrier = false,
-                IsLivePrice = false
-            },
-            new ShipEntegraQuoteOffer
-            {
-                ServiceName = "shipentegra-expedited",
-                ClearServiceName = "ShipEntegra Expedited",
-                ServiceType = "EXPRESS",
-                CargoPrice = Math.Round(expeditedBase * 0.78m, 2),
-                FuelCost = Math.Round(expeditedBase * 0.22m, 2),
-                TotalPrice = expeditedBase,
-                Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 3-5 iş günü",
-                IsBestCarrier = false,
-                IsLivePrice = false
-            },
-            new ShipEntegraQuoteOffer
-            {
-                ServiceName = "shipentegra-express",
-                ClearServiceName = "ShipEntegra Express",
-                ServiceType = "EXPRESS",
-                CargoPrice = Math.Round(expressBase * 0.78m, 2),
-                FuelCost = Math.Round(expressBase * 0.22m, 2),
-                TotalPrice = expressBase,
-                Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 2-4 iş günü",
-                IsBestCarrier = false,
-                IsLivePrice = false
-            },
-            new ShipEntegraQuoteOffer
-            {
-                ServiceName = "shipentegra-ups-express",
-                ClearServiceName = "ShipEntegra Ups Express",
-                ServiceType = "EXPRESS",
-                CargoPrice = Math.Round(upsExpressBase * 0.66m, 2),
-                FuelCost = Math.Round(upsExpressBase * 0.34m, 2),
-                TotalPrice = upsExpressBase,
-                Currency = "USD",
-                AdditionalDescription = "Tahmini Teslim Süresi 1-4 iş günü",
-                IsBestCarrier = false,
-                IsLivePrice = false
-            }
-        ];
+            };
+
+            ShipEntegraTariffCalculator.PopulateCustomsBreakdown(
+                offer, declaredValueUsd, quantity, hsCode, countryCode, genRate, addRate, addHts);
+
+            offers.Add(offer);
+        }
+
+        return offers;
     }
 
     private static bool IsEuropeanCountry(string code)

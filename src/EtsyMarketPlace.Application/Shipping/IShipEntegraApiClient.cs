@@ -35,6 +35,14 @@ public interface IShipEntegraApiClient
         string rawBearerToken,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Belirli taşıyıcı, GTİP (HTS) kodu ve beyan değeri için Hızlı Gümrük Ödemesi (DDP) kalemlerini hesaplar.
+    /// </summary>
+    Task<ShipEntegraTariffResponse> CalculateTariffByCarrierAsync(
+        ShipEntegraTariffRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
     Task<ShipEntegraOrderResult> CreateOrderAsync(
         ShipEntegraCreateOrderRequest request,
         string rawBearerToken,

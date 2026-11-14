@@ -646,6 +646,9 @@ export class EtsyApiService {
     lengthCm: number;
     heightCm: number;
     usdTryRate?: number;
+    hsCode?: string;
+    declaredValueUsd?: number;
+    quantity?: number;
   }): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/quotes`, payload);
   }
