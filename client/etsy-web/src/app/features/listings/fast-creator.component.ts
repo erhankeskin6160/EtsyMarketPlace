@@ -1506,11 +1506,16 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   applyPastedVariations(rawInput?: string, silentOnMiss = false): void {
-    const input = rawInput ?? this.variationPasteInput;
+    const input = (rawInput ?? this.variationPasteInput).trim();
+    if (/^https?:\/\/(?:www\.)?etsy\.com\/listing\//i.test(input)) {
+      this.showToast('ℹ️ URL yerine Etsy sayfasında yer imini (🔖) tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C ile sayfa kaynağını yapıştırın.');
+      return;
+    }
+
     const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0);
     if (!parsed.hasVariations) {
       if (!silentOnMiss) {
-        this.showToast('⚠️ Yapıştırılan metinde Etsy varyasyon grubu tespit edilemedi. Etsy sayfasında Ctrl+A -> Ctrl+C yapıp yapıştırın.');
+        this.showToast('⚠️ Varyasyon grubu tespit edilemedi. Etsy sayfasında 🔖 Yer İmini tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C yapıp yapıştırın.');
       }
       return;
     }
