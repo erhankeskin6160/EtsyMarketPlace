@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace EtsyMarketPlace.Application.Common.Models;
 
@@ -9,7 +10,8 @@ public class ValidationErrorResponse : ServiceResponse
     public ValidationErrorResponse(IDictionary<string, string[]> errors)
     {
         Success = false;
-        Message = ResponseMessage.ValidationError;
+        Message = errors.Values.SelectMany(x => x).FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+            ?? ResponseMessage.ValidationError;
         StatusCode = 400;
         Errors = errors;
     }

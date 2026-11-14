@@ -188,3 +188,47 @@ body:has(.cockpit-footer) .floating-btn-wrap {
   bottom: 60px !important;
   right: 20px !important;
 }
+
+/* ngx-toastr Dark Cyberpunk Theme Overrides */
+.toast-container .ngx-toastr {
+  background-color: #151e2e;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  width: 380px !important;
+  font-family: inherit;
+}
+
+.toast-container .toast-warning {
+  background-color: rgba(30, 27, 20, 0.96);
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.toast-container .toast-error {
+  background-color: rgba(35, 17, 23, 0.96);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+.toast-container .toast-success {
+  background-color: rgba(12, 30, 24, 0.96);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.toast-container .toast-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+}
+
+.toast-container .toast-message {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+}
+
+.toast-container .toast-message ul {
+  margin: 4px 0 0 16px;
+  padding: 0;
+}

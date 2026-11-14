@@ -42,14 +42,32 @@ public class ValidationBehaviour<TRequest, TResponse>(IEnumerable<IValidator<TRe
         return await next();
     }
 
+    private static readonly string[] WrapperPrefixes =
+    {
+        "Command.",
+        "Request.",
+        "Dto.",
+        "Experiment.",
+        "Capture.",
+        "Query.",
+        "Snapshot.",
+        "Record."
+    };
+
     private static string NormalizePropertyName(string? propertyName)
     {
         if (string.IsNullOrWhiteSpace(propertyName))
             return "General";
 
-        const string commandPrefix = "Command.";
-        return propertyName.StartsWith(commandPrefix, System.StringComparison.OrdinalIgnoreCase)
-            ? propertyName[commandPrefix.Length..]
-            : propertyName;
+        var trimmed = propertyName.Trim();
+        foreach (var prefix in WrapperPrefixes)
+        {
+            if (trimmed.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed[prefix.Length..];
+            }
+        }
+
+        return trimmed;
     }
 }
