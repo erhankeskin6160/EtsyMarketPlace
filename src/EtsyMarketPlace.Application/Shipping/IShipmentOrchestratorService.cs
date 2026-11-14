@@ -153,6 +153,12 @@ public sealed class UnifiedCarrierQuoteDto
     public bool IsLowestPrice { get; set; }
     public string QuoteSourceBadge { get; set; } = string.Empty;
 
+    // --- TAŞIYICIYA ÖZGÜ GERÇEK API ALANLARI ---
+    public bool HasDetailedBreakdown { get; set; }
+    public double? BillableWeightKg { get; set; }
+    public decimal? UnDiscountedPriceUsd { get; set; }
+    public double? DiscountRatePercent { get; set; }
+
     // --- NAVLUN KIRILIMI ---
     public decimal BaseCargoPriceUsd { get; set; }
     public decimal FuelCostUsd { get; set; }

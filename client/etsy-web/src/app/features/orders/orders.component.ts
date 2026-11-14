@@ -447,20 +447,26 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.syncSelectedQuoteCost();
   }
 
+  hasCustomsBreakdown(quote: CarrierQuote): boolean {
+    return Boolean(quote.hasDetailedBreakdown && quote.fastCustomsPaymentUsd !== undefined);
+  }
+
   getDisplayPriceUsd(quote: CarrierQuote): number {
-    return this.quoteDisplayMode === 'all_in_ddp'
+    return this.quoteDisplayMode === 'all_in_ddp' && this.hasCustomsBreakdown(quote)
       ? (quote.grandTotalUsd ?? quote.priceUsd)
       : quote.priceUsd;
   }
 
   getDisplayPriceTry(quote: CarrierQuote): number {
-    return this.quoteDisplayMode === 'all_in_ddp'
+    return this.quoteDisplayMode === 'all_in_ddp' && this.hasCustomsBreakdown(quote)
       ? (quote.grandTotalTry ?? quote.priceTry)
       : quote.priceTry;
   }
 
   get selectedTaxRateSummary(): string {
-    const ref = this.selectedCarrierQuote || this.carrierQuotes[0];
+    const ref = (this.selectedCarrierQuote?.hasDetailedBreakdown ? this.selectedCarrierQuote : undefined)
+      || this.carrierQuotes.find(q => q.hasDetailedBreakdown)
+      || this.carrierQuotes[0];
     if (!ref) return 'Genel Vergi %5.3 + ABD Ek Tarife 99030579 %12.5 = Toplam %17.8';
     const gen = ref.generalDutyRatePercent ?? 0;
     const add = ref.additionalDutyRatePercent ?? 0;
@@ -564,11 +570,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   applyCarrierQuote(quote: CarrierQuote, includeCustoms?: boolean): void {
     if (!this.selectedOrder) return;
-    const useAllIn = includeCustoms ?? (this.quoteDisplayMode === 'all_in_ddp');
-    this.quoteDisplayMode = useAllIn ? 'all_in_ddp' : 'freight_only';
+    const requestedAllIn = includeCustoms ?? (this.quoteDisplayMode === 'all_in_ddp');
+    const canApplyAllIn = requestedAllIn && this.hasCustomsBreakdown(quote);
+    if (includeCustoms !== undefined) {
+      this.quoteDisplayMode = canApplyAllIn ? 'all_in_ddp' : 'freight_only';
+    }
     this.selectedOrder.selectedCarrier = quote.carrierKey;
     this.selectedOrder.carrierServiceName = quote.serviceType || quote.carrierName;
-    this.editableShippingCost = useAllIn ? (quote.grandTotalUsd ?? quote.priceUsd) : quote.priceUsd;
+    this.editableShippingCost = canApplyAllIn ? (quote.grandTotalUsd ?? quote.priceUsd) : quote.priceUsd;
     this.calculateLiveProfit();
   }
 

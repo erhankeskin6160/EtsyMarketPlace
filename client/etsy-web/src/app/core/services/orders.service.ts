@@ -975,46 +975,61 @@ export class OrdersService {
             return;
           }
 
-          const mapped: CarrierQuote[] = rawQuotes.map((q: any, idx: number) => ({
-            quoteId: q.serviceCode || `${q.carrierKey}-${idx}`,
-            carrierKey: q.carrierKey,
-            carrierName: q.carrierName,
-            serviceType: q.serviceType,
-            serviceCode: q.serviceCode,
-            subCarrier: q.subCarrier || q.carrierName,
-            logoUrl: logoMap[q.carrierKey] || 'assets/shipping/shipentegra.jpg',
-            estimatedDays: q.estimatedDays || '3-6 İş Günü',
-            priceUsd: Number(q.priceUsd || 0),
-            priceTry: Number(q.priceTry || 0),
-            isRecommended: Boolean(q.isRecommended),
-            isLowestPrice: Boolean(q.isLowestPrice),
-            isLive: Boolean(q.isLive),
-            quoteSourceBadge: q.quoteSourceBadge || (q.isLive ? 'Canlı teklif' : 'Tahmini tarife'),
-            notes: q.notes,
-            baseCargoPriceUsd: q.baseCargoPriceUsd != null ? Number(q.baseCargoPriceUsd) : undefined,
-            fuelCostUsd: q.fuelCostUsd != null ? Number(q.fuelCostUsd) : undefined,
-            fuelMultiplierPercent: q.fuelMultiplierPercent != null ? Number(q.fuelMultiplierPercent) : undefined,
-            additionalFeeUsd: q.additionalFeeUsd != null ? Number(q.additionalFeeUsd) : undefined,
-            additionalFeeDescription: q.additionalFeeDescription || undefined,
-            discountedFreightUsd: q.discountedFreightUsd != null ? Number(q.discountedFreightUsd) : undefined,
-            pricingTemplate: q.pricingTemplate || undefined,
-            returnPolicyNote: q.returnPolicyNote || undefined,
-            insuranceNote: q.insuranceNote || undefined,
-            declaredValueUsd: q.declaredValueUsd != null ? Number(q.declaredValueUsd) : declaredValueUsd,
-            hsCode: q.hsCode || cleanHsCode,
-            generalDutyUsd: q.generalDutyUsd != null ? Number(q.generalDutyUsd) : undefined,
-            generalDutyRatePercent: q.generalDutyRatePercent != null ? Number(q.generalDutyRatePercent) : undefined,
-            additionalDutyUsd: q.additionalDutyUsd != null ? Number(q.additionalDutyUsd) : undefined,
-            additionalDutyRatePercent: q.additionalDutyRatePercent != null ? Number(q.additionalDutyRatePercent) : undefined,
-            additionalDutyHtsCode: q.additionalDutyHtsCode || undefined,
-            taxAndDutySubtotalUsd: q.taxAndDutySubtotalUsd != null ? Number(q.taxAndDutySubtotalUsd) : undefined,
-            carrierProcessingFeeUsd: q.carrierProcessingFeeUsd != null ? Number(q.carrierProcessingFeeUsd) : undefined,
-            fastCustomsPaymentUsd: q.fastCustomsPaymentUsd != null ? Number(q.fastCustomsPaymentUsd) : undefined,
-            fastCustomsPaymentTry: q.fastCustomsPaymentTry != null ? Number(q.fastCustomsPaymentTry) : undefined,
-            grandTotalUsd: q.grandTotalUsd != null ? Number(q.grandTotalUsd) : undefined,
-            grandTotalTry: q.grandTotalTry != null ? Number(q.grandTotalTry) : undefined,
-            discountedGrandTotalUsd: q.discountedGrandTotalUsd != null ? Number(q.discountedGrandTotalUsd) : undefined
-          }));
+          const mapped: CarrierQuote[] = rawQuotes.map((q: any, idx: number) => {
+            const hasBreakdown = Boolean(q.hasDetailedBreakdown) || q.carrierKey === 'shipentegra';
+            const priceUsd = Number(q.priceUsd || 0);
+            const priceTry = Number(q.priceTry || 0);
+
+            const quote: CarrierQuote = {
+              quoteId: q.serviceCode || `${q.carrierKey}-${idx}`,
+              carrierKey: q.carrierKey,
+              carrierName: q.carrierName,
+              serviceType: q.serviceType,
+              serviceCode: q.serviceCode,
+              subCarrier: q.subCarrier || q.carrierName,
+              logoUrl: logoMap[q.carrierKey] || 'assets/shipping/shipentegra.jpg',
+              estimatedDays: q.estimatedDays || '3-6 İş Günü',
+              priceUsd,
+              priceTry,
+              isRecommended: Boolean(q.isRecommended),
+              isLowestPrice: Boolean(q.isLowestPrice),
+              isLive: Boolean(q.isLive),
+              quoteSourceBadge: q.quoteSourceBadge || (q.isLive ? 'Canlı teklif' : 'Tahmini tarife'),
+              notes: q.notes,
+              hasDetailedBreakdown: hasBreakdown,
+              billableWeightKg: q.billableWeightKg != null ? Number(q.billableWeightKg) : undefined,
+              unDiscountedPriceUsd: q.unDiscountedPriceUsd != null ? Number(q.unDiscountedPriceUsd) : undefined,
+              discountRatePercent: q.discountRatePercent != null ? Number(q.discountRatePercent) : undefined,
+              grandTotalUsd: hasBreakdown && q.grandTotalUsd != null ? Number(q.grandTotalUsd) : priceUsd,
+              grandTotalTry: hasBreakdown && q.grandTotalTry != null ? Number(q.grandTotalTry) : priceTry
+            };
+
+            if (hasBreakdown) {
+              quote.baseCargoPriceUsd = q.baseCargoPriceUsd != null ? Number(q.baseCargoPriceUsd) : undefined;
+              quote.fuelCostUsd = q.fuelCostUsd != null ? Number(q.fuelCostUsd) : undefined;
+              quote.fuelMultiplierPercent = q.fuelMultiplierPercent != null ? Number(q.fuelMultiplierPercent) : undefined;
+              quote.additionalFeeUsd = q.additionalFeeUsd != null ? Number(q.additionalFeeUsd) : undefined;
+              quote.additionalFeeDescription = q.additionalFeeDescription || undefined;
+              quote.discountedFreightUsd = q.discountedFreightUsd != null ? Number(q.discountedFreightUsd) : undefined;
+              quote.pricingTemplate = q.pricingTemplate || undefined;
+              quote.returnPolicyNote = q.returnPolicyNote || undefined;
+              quote.insuranceNote = q.insuranceNote || undefined;
+              quote.declaredValueUsd = q.declaredValueUsd != null ? Number(q.declaredValueUsd) : declaredValueUsd;
+              quote.hsCode = q.hsCode || cleanHsCode;
+              quote.generalDutyUsd = q.generalDutyUsd != null ? Number(q.generalDutyUsd) : undefined;
+              quote.generalDutyRatePercent = q.generalDutyRatePercent != null ? Number(q.generalDutyRatePercent) : undefined;
+              quote.additionalDutyUsd = q.additionalDutyUsd != null ? Number(q.additionalDutyUsd) : undefined;
+              quote.additionalDutyRatePercent = q.additionalDutyRatePercent != null ? Number(q.additionalDutyRatePercent) : undefined;
+              quote.additionalDutyHtsCode = q.additionalDutyHtsCode || undefined;
+              quote.taxAndDutySubtotalUsd = q.taxAndDutySubtotalUsd != null ? Number(q.taxAndDutySubtotalUsd) : undefined;
+              quote.carrierProcessingFeeUsd = q.carrierProcessingFeeUsd != null ? Number(q.carrierProcessingFeeUsd) : undefined;
+              quote.fastCustomsPaymentUsd = q.fastCustomsPaymentUsd != null ? Number(q.fastCustomsPaymentUsd) : undefined;
+              quote.fastCustomsPaymentTry = q.fastCustomsPaymentTry != null ? Number(q.fastCustomsPaymentTry) : undefined;
+              quote.discountedGrandTotalUsd = q.discountedGrandTotalUsd != null ? Number(q.discountedGrandTotalUsd) : undefined;
+            }
+
+            return quote;
+          });
 
           observer.next({
             quotes: mapped,
@@ -1093,6 +1108,7 @@ export class OrdersService {
 
     return {
       ...quote,
+      hasDetailedBreakdown: true,
       baseCargoPriceUsd: baseCargo,
       fuelCostUsd: fuelCost,
       fuelMultiplierPercent: round2(fuelRate * 100),
@@ -1147,7 +1163,7 @@ export class OrdersService {
       arasUpsUsd = Number((arasUpsUsd * 0.90).toFixed(2));
     }
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'aras-widect-eco',
       carrierKey: 'aras',
       carrierName: 'Aras Global',
@@ -1160,10 +1176,14 @@ export class OrdersService {
       isRecommended: false,
       isLive: isArasLive,
       quoteSourceBadge: isArasLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (Widect Eco Express)' : 'Tahmini tarife (Sözleşmeli Aras Hub)'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.20, 0, 1.45));
+      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (Widect Eco Express)' : 'Tahmini tarife (Sözleşmeli Aras Hub)',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: arasWidectUsd,
+      grandTotalTry: Number((arasWidectUsd * rate).toFixed(2))
+    });
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'aras-ups-express',
       carrierKey: 'aras',
       carrierName: 'Aras Global',
@@ -1176,8 +1196,12 @@ export class OrdersService {
       isRecommended: false,
       isLive: isArasLive,
       quoteSourceBadge: isArasLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (UPS Express)' : 'Hızlı UPS Hattı & Doğrudan Teslimat'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.28, 0, 0.50));
+      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (UPS Express)' : 'Hızlı UPS Hattı & Doğrudan Teslimat',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: arasUpsUsd,
+      grandTotalTry: Number((arasUpsUsd * rate).toFixed(2))
+    });
 
     // ==========================================
     // 2. SHIPENTEGRA (6 TEKLİF)
@@ -1304,7 +1328,7 @@ export class OrdersService {
     const navUpsExpress = Number((24.00 + (b * 16.67)).toFixed(2));
     const navUpsSaver = Number((27.50 + (b * 18.92)).toFixed(2));
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'nav-widect',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
@@ -1316,10 +1340,14 @@ export class OrdersService {
       priceTry: Number((navWidect * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.22, 0, 1.45));
+      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: navWidect,
+      grandTotalTry: Number((navWidect * rate).toFixed(2))
+    });
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'nav-fedex',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
@@ -1331,10 +1359,14 @@ export class OrdersService {
       priceTry: Number((navFedEx * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.28, 0, 0.50));
+      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: navFedEx,
+      grandTotalTry: Number((navFedEx * rate).toFixed(2))
+    });
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'nav-ups-express',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
@@ -1346,10 +1378,14 @@ export class OrdersService {
       priceTry: Number((navUpsExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 0, 0.50));
+      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: navUpsExpress,
+      grandTotalTry: Number((navUpsExpress * rate).toFixed(2))
+    });
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'nav-ups-saver',
       carrierKey: 'navlungo',
       carrierName: 'Navlungo',
@@ -1361,8 +1397,12 @@ export class OrdersService {
       priceTry: Number((navUpsSaver * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 0, 0.50));
+      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: navUpsSaver,
+      grandTotalTry: Number((navUpsSaver * rate).toFixed(2))
+    });
 
     // ==========================================
     // 4. SHIPTOMORE (2 TEKLİF: 1 CANLI, 1 TAHMİNİ)
@@ -1371,11 +1411,12 @@ export class OrdersService {
     const stmDdp = Number((11.81 + (extraUnits * 1.50)).toFixed(2));
     const stmFedEx = Number((18.55 + (extraUnits * 2.20)).toFixed(2));
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'stm-air-priority',
       carrierKey: 'shiptomore',
       carrierName: 'Shiptomore',
-      serviceType: 'Air Priority (DDP)',
+      serviceCode: 'widect:widect_standard',
+      serviceType: 'Air Priority',
       subCarrier: 'Shiptomore',
       logoUrl: 'assets/shipping/shiptomore.png',
       estimatedDays: '2-4 Gün',
@@ -1384,13 +1425,18 @@ export class OrdersService {
       isRecommended: true,
       isLive: isShiptomoreLive,
       quoteSourceBadge: isShiptomoreLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: 'Hızlı Kapıdan Teslimat (DDP Gümrük Dahil)'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.22, 0, 0.95));
+      notes: 'Hızlı Kapıdan Teslimat',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: stmDdp,
+      grandTotalTry: Number((stmDdp * rate).toFixed(2))
+    });
 
-    quotes.push(this.withEstimatedBreakdowns({
+    quotes.push({
       quoteId: 'stm-fedex-priority',
       carrierKey: 'shiptomore',
       carrierName: 'Shiptomore',
+      serviceCode: 'fedex:fedex_express_3day',
       serviceType: 'FedEx Priority Express',
       subCarrier: 'FedEx',
       logoUrl: 'assets/shipping/shiptomore.png',
@@ -1400,8 +1446,12 @@ export class OrdersService {
       isRecommended: false,
       isLive: isShiptomoreLive,
       quoteSourceBadge: isShiptomoreLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: 'Doğrudan FedEx Entegrasyonu'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.28, 0, 0.50));
+      notes: 'Doğrudan FedEx Entegrasyonu',
+      hasDetailedBreakdown: false,
+      billableWeightKg: billable,
+      grandTotalUsd: stmFedEx,
+      grandTotalTry: Number((stmFedEx * rate).toFixed(2))
+    });
 
     // Identify lowest price
     const minPrice = Math.min(...quotes.map(q => q.priceUsd));

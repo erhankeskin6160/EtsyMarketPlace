@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Application.Tests;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Shipping;
@@ -225,12 +226,13 @@ public sealed class ShipmentOrchestratorServiceTests
     {
         public string BaseUrl { get; set; } = "https://dev.shiptomore.com";
         public bool HasCredentials => true;
+        public List<ShiptomorePriceOption> PriceOptionsToReturn { get; set; } = new();
         public Task<IReadOnlyList<string>> GetProvidersAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<string>>(new List<string> { "ups", "fedex", "dhl" });
         public Task<IReadOnlyList<ShiptomoreHsCode>> SearchHsCodesAsync(string query, int limit = 50, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(new List<ShiptomoreHsCode>());
         public Task<IReadOnlyList<ShiptomorePriceOption>> CalculatePricesAsync(ShiptomorePriceRequest request, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(new List<ShiptomorePriceOption>());
+            Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(PriceOptionsToReturn);
         public Task<ShiptomoreShipmentResponse> CreateShipmentAsync(ShiptomoreShipmentRequest request, CancellationToken ct = default) =>
             Task.FromResult(new ShiptomoreShipmentResponse { Id = "STM-123", TrackingNumbers = new List<string> { "STM-TRACK-999" } });
         public Task<ShiptomoreShipmentDetail> GetShipmentAsync(string slug, bool includeLabels = false, CancellationToken ct = default) =>
@@ -284,5 +286,79 @@ public sealed class ShipmentOrchestratorServiceTests
         {
             ShippingSecretProtector.Current = prevProtector;
         }
+    }
+
+    [Fact]
+    public async Task GetCarrierQuotesAsync_OnlyPopulatesDetailedBreakdownForShipEntegra()
+    {
+        var manager = new ShipmentCreationManager();
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+        var fakeShiptomoreApi = new FakeShiptomoreOfficialApi
+        {
+            PriceOptionsToReturn = new List<ShiptomorePriceOption>
+            {
+                new()
+                {
+                    ProviderSlug = "widect",
+                    ServiceSlug = "widect_standard",
+                    Price = 14.54m,
+                    Currency = "USD",
+                    BillingWeight = 0.40
+                }
+            }
+        };
+
+        var orchestrator = new ShipmentOrchestratorService(
+            manager,
+            fakeLogisticsApi,
+            shiptomoreApi: fakeShiptomoreApi);
+
+        var response = await orchestrator.GetCarrierQuotesAsync(new CarrierQuotesQuery
+        {
+            CountryCode = "US",
+            PostalCode = "10001",
+            WeightKg = 0.4,
+            WidthCm = 15,
+            LengthCm = 20,
+            HeightCm = 10,
+            HsCode = "3926909990",
+            Quantity = 1,
+            DeclaredValueUsd = new decimalUsdValueOrDefault(1.00m),
+            UsdTryRate = 50.37m
+        });
+
+        Assert.NotEmpty(response.Quotes);
+
+        var seQuotes = response.Quotes.Where(q => q.CarrierKey == "shipentegra").ToList();
+        Assert.NotEmpty(seQuotes);
+        Assert.All(seQuotes, q =>
+        {
+            Assert.True(q.HasDetailedBreakdown);
+            Assert.True(q.BaseCargoPriceUsd > 0m);
+            Assert.True(q.FuelCostUsd > 0m);
+            Assert.True(q.FastCustomsPaymentUsd > 0m);
+        });
+
+        var stmQuote = Assert.Single(response.Quotes, q => q.CarrierKey == "shiptomore");
+        Assert.False(stmQuote.HasDetailedBreakdown);
+        Assert.Equal("widect:widect_standard", stmQuote.ServiceCode);
+        Assert.Equal(14.54m, stmQuote.PriceUsd);
+        Assert.Equal(0.40, stmQuote.BillableWeightKg);
+        Assert.Equal(0m, stmQuote.BaseCargoPriceUsd);
+        Assert.Equal(0m, stmQuote.FuelCostUsd);
+        Assert.Equal(0m, stmQuote.FastCustomsPaymentUsd);
+        Assert.Equal(0m, stmQuote.CarrierProcessingFeeUsd);
+
+        var otherCarriers = response.Quotes.Where(q => q.CarrierKey != "shipentegra").ToList();
+        Assert.NotEmpty(otherCarriers);
+        Assert.All(otherCarriers, q =>
+        {
+            Assert.False(q.HasDetailedBreakdown);
+            Assert.Equal(0m, q.BaseCargoPriceUsd);
+            Assert.Equal(0m, q.FuelCostUsd);
+            Assert.Equal(0m, q.FastCustomsPaymentUsd);
+            Assert.Equal(0m, q.CarrierProcessingFeeUsd);
+            Assert.Equal(q.PriceUsd, q.GrandTotalUsd);
+        });
     }
 }

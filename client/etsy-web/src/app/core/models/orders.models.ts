@@ -33,7 +33,13 @@ export interface CarrierQuote {
   quoteSourceBadge?: 'Tahmini tarife' | 'Canlı teklif' | '🟢 Canlı API Teklifi' | string;
   notes?: string;
 
-  // ── Navlun Kırılımı (Freight Breakdown) ──
+  // ── Taşıyıcıya Özgü Gerçek API Alanları ──
+  hasDetailedBreakdown?: boolean;
+  billableWeightKg?: number;
+  unDiscountedPriceUsd?: number;
+  discountRatePercent?: number;
+
+  // ── Navlun Kırılımı (Freight Breakdown — ShipEntegra) ──
   baseCargoPriceUsd?: number;
   fuelCostUsd?: number;
   fuelMultiplierPercent?: number;

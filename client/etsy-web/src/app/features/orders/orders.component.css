@@ -2679,7 +2679,9 @@
     .receipt-row.subtotal.ddp { color: #38bdf8; }
     .receipt-row.prepay { color: #4ade80; font-weight: 700; font-size: 0.69rem; }
     .receipt-row.grand-total { font-weight: 800; font-size: 0.75rem; color: #fbbf24; }
+    .receipt-info-note { font-size: 0.66rem; line-height: 1.35; color: #94a3b8; background: rgba(30, 41, 59, 0.55); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 6px; padding: 6px 8px; }
     .receipt-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .receipt-actions-row.single { grid-template-columns: 1fr; }
     .btn-receipt-apply { border-radius: 6px; padding: 5px 6px; font-size: 0.68rem; font-weight: 700; cursor: pointer; border: 1px solid; }
     .btn-receipt-apply.freight { background: rgba(51, 65, 85, 0.7); border-color: rgba(148, 163, 184, 0.35); color: #e2e8f0; }
     .btn-receipt-apply.freight:hover { background: #334155; }
