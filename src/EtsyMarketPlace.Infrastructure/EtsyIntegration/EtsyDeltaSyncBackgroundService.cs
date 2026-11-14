@@ -68,6 +68,7 @@ public sealed class EtsyDeltaSyncBackgroundService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var tokenStore = scope.ServiceProvider.GetService<IEtsyTokenStore>();
         var dataClient = scope.ServiceProvider.GetService<IEtsyDataClient>();
+        var rawCacheStore = scope.ServiceProvider.GetService<IEtsyRawDataCacheStore>();
         if (tokenStore is null || dataClient is null)
             return;
 
@@ -82,7 +83,14 @@ public sealed class EtsyDeltaSyncBackgroundService(
             return;
         }
 
+        var now = DateTimeOffset.UtcNow;
         var (monthStart, monthEnd) = EtsyDashboardService.ResolvePeriod("this_month", null, null);
+        var rollingStart = new DateTimeOffset(now.UtcDateTime.Date.AddDays(-35), TimeSpan.Zero);
+        var syncStart = monthStart < rollingStart ? monthStart : rollingStart;
+        var intervalSeconds = Math.Clamp(apiOptions.Value.DeltaSyncIntervalMinutes, 5, 180) * 60L;
+        var minElapsedSeconds = Math.Max(60L, intervalSeconds - 60L);
+        var nowUnix = now.ToUnixTimeSeconds();
+
         foreach (var shop in shops)
         {
             if (string.IsNullOrWhiteSpace(shop.ShopId) || !shop.IsActive)
@@ -101,10 +109,38 @@ public sealed class EtsyDeltaSyncBackgroundService(
                 continue;
             }
 
+            var ledgerFresh = false;
+            var receiptsFresh = false;
+            if (rawCacheStore is not null)
+            {
+                var ledgerWatermark = await rawCacheStore.GetWatermarkAsync(shop.ShopId, "ledger_active:latest", cancellationToken);
+                var receiptsWatermark = await rawCacheStore.GetWatermarkAsync(shop.ShopId, "receipts_active:latest", cancellationToken);
+                ledgerFresh = ledgerWatermark is not null && (nowUnix - ledgerWatermark.LastDeltaSyncUnix) < minElapsedSeconds;
+                receiptsFresh = receiptsWatermark is not null && (nowUnix - receiptsWatermark.LastDeltaSyncUnix) < minElapsedSeconds;
+                if (ledgerFresh && receiptsFresh)
+                {
+                    continue;
+                }
+            }
+
             try
             {
-                await dataClient.GetLedgerEntriesDetailedAsync(shop.ShopId, monthStart, monthEnd, cancellationToken);
-                await dataClient.GetShopReceiptsAsync(shop.ShopId, monthStart, monthEnd, cancellationToken);
+                if (!ledgerFresh)
+                {
+                    using (EtsySyncContext.BeginForceRefresh())
+                    {
+                        await dataClient.GetLedgerEntriesDetailedAsync(shop.ShopId, syncStart, monthEnd, cancellationToken);
+                    }
+                }
+
+                if (!receiptsFresh)
+                {
+                    using (EtsySyncContext.BeginForceRefresh())
+                    {
+                        await dataClient.GetShopReceiptsAsync(shop.ShopId, syncStart, monthEnd, cancellationToken);
+                    }
+                }
+
                 logger.LogInformation("Etsy arka plan delta senkronizasyonu tamamlandı (ShopId: {ShopId}).", shop.ShopId);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

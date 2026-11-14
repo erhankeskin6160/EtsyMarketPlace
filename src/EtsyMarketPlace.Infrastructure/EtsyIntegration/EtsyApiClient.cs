@@ -34,7 +34,9 @@ public sealed class EtsyApiClient(
 
     public async Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken cancellationToken = default)
     {
-        var receipts = await GetPagedAsync("application/shops/{0}/receipts", shopId, DateTimeOffset.UtcNow.AddDays(-90), DateTimeOffset.UtcNow, ParseOrder, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var startDay = new DateTimeOffset(now.UtcDateTime.Date.AddDays(-90), TimeSpan.Zero);
+        var receipts = await GetPagedAsync("application/shops/{0}/receipts?includes=Transactions", shopId, startDay, now, ParseOrder, cancellationToken);
         return receipts;
     }
 
@@ -266,6 +268,7 @@ public sealed class EtsyApiClient(
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _ledgerWindowCache = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _singleRangeWindowCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _activeSyncLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private async Task<IReadOnlyList<T>> GetPagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
         where T : class
@@ -513,9 +516,12 @@ public sealed class EtsyApiClient(
         var isHistorical = endDate < now.AddDays(-2);
         var forceRefresh = EtsySyncContext.ForceDeltaRefresh;
         var cacheKey = $"{_options.ApiBaseUrl}:{routeTemplate}:{shopId}:{minParamName}:{maxParamName}:{minUnix}:{maxUnix}";
+        var isReceiptsWithTransactions =
+            routeTemplate.Contains("receipts", StringComparison.OrdinalIgnoreCase) &&
+            routeTemplate.Contains("includes=Transactions", StringComparison.OrdinalIgnoreCase);
 
         if (rawCacheStore is not null &&
-            routeTemplate.Contains("receipts", StringComparison.OrdinalIgnoreCase) &&
+            isReceiptsWithTransactions &&
             string.Equals(minParamName, "min_created", StringComparison.OrdinalIgnoreCase))
         {
             var datasetKey = isHistorical ? $"receipts_hist:{minUnix}:{maxUnix}" : $"receipts_active:{minUnix}";
@@ -576,7 +582,8 @@ public sealed class EtsyApiClient(
             return await cached.Task;
         }
 
-        var task = FetchSingleRangeElementsAsync(routeTemplate, shopId, minUnix, maxUnix, minParamName, maxParamName, cancellationToken);
+        var task = FetchAndCacheSingleRangeAsync(
+            routeTemplate, shopId, minUnix, maxUnix, minParamName, maxParamName, isReceiptsWithTransactions, cancellationToken);
         _singleRangeWindowCache[cacheKey] = (now.AddSeconds(60), task);
 
         try
@@ -590,6 +597,28 @@ public sealed class EtsyApiClient(
         }
     }
 
+    private async Task<IReadOnlyList<JsonElement>> FetchAndCacheSingleRangeAsync(
+        string routeTemplate,
+        string shopId,
+        long minUnix,
+        long maxUnix,
+        string minParamName,
+        string maxParamName,
+        bool isReceiptsWithTransactions,
+        CancellationToken cancellationToken)
+    {
+        var items = await FetchSingleRangeElementsAsync(routeTemplate, shopId, minUnix, maxUnix, minParamName, maxParamName, cancellationToken);
+        if (rawCacheStore is not null &&
+            isReceiptsWithTransactions &&
+            string.Equals(minParamName, "min_last_modified", StringComparison.OrdinalIgnoreCase) &&
+            items.Count > 0)
+        {
+            await rawCacheStore.UpsertRawReceiptsAsync(shopId, ToCachedReceiptItems(items, minUnix), cancellationToken);
+        }
+
+        return items;
+    }
+
     private async Task<IReadOnlyList<JsonElement>> ExecuteDbFirstSyncAsync(
         string shopId,
         string datasetKey,
@@ -601,61 +630,218 @@ public sealed class EtsyApiClient(
         Func<long, long, Task<IReadOnlyList<JsonElement>>> readFromDbAsync,
         CancellationToken cancellationToken)
     {
-        var watermark = await rawCacheStore!.GetWatermarkAsync(shopId, datasetKey, cancellationToken);
-        if (!isHistorical && watermark is null)
+        var lockScope = isHistorical ? datasetKey : rollingKey;
+        var lockKey = $"{_options.ApiBaseUrl}:{shopId}:{lockScope}";
+        var syncLock = _activeSyncLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
+
+        await syncLock.WaitAsync(cancellationToken);
+        try
         {
-            var rolling = await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken);
-            if (rolling is not null && rolling.MinSyncedUnix <= minUnix && minUnix <= rolling.MaxSyncedUnix)
+            var exactWatermark = await rawCacheStore!.GetWatermarkAsync(shopId, datasetKey, cancellationToken);
+            var rollingWatermark = !isHistorical
+                ? await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken)
+                : null;
+
+            var baseline = ResolveEffectiveWatermark(exactWatermark, rollingWatermark, isHistorical, minUnix);
+            if (baseline is null)
             {
-                watermark = rolling;
+                try
+                {
+                    await fetchAndUpsertAsync(minUnix, maxUnix, false);
+                    var postSyncNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var syncedTo = Math.Max(minUnix, Math.Min(maxUnix, postSyncNow));
+                    await PersistWatermarksAsync(shopId, datasetKey, rollingKey, isHistorical, minUnix, syncedTo, postSyncNow, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    var existing = await readFromDbAsync(minUnix, maxUnix);
+                    if (existing.Count > 0)
+                    {
+                        return existing;
+                    }
+                    throw;
+                }
+
+                return await readFromDbAsync(minUnix, maxUnix);
             }
-        }
 
-        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var cooldownSeconds = EtsySyncContext.ForceDeltaRefresh
-            ? Math.Max(0, _options.ForceRefreshCooldownSeconds)
-            : Math.Max(60, _options.DeltaSyncIntervalMinutes * 60);
-
-        if (watermark is not null)
-        {
-            if (isHistorical || (nowUnix - watermark.LastDeltaSyncUnix) < cooldownSeconds)
+            if (isHistorical)
             {
                 return await readFromDbAsync(minUnix, maxUnix);
             }
-        }
 
-        var hasPriorSync = watermark is not null;
-        var fetchStartUnix = hasPriorSync
-            ? Math.Max(minUnix, Math.Min(maxUnix, watermark!.MaxSyncedUnix - 300))
-            : minUnix;
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var cooldownSeconds = EtsySyncContext.ForceDeltaRefresh
+                ? Math.Max(0, _options.ForceRefreshCooldownSeconds)
+                : Math.Max(60, _options.DeltaSyncIntervalMinutes * 60);
 
-        try
-        {
-            await fetchAndUpsertAsync(fetchStartUnix, maxUnix, hasPriorSync);
-            var postSyncNowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var syncedToUnix = Math.Max(minUnix, Math.Min(maxUnix, postSyncNowUnix));
+            var needsLeftFill = minUnix < baseline.MinSyncedUnix;
+            var hasUnsyncedRightGap = maxUnix > baseline.MaxSyncedUnix + 300
+                && baseline.MaxSyncedUnix < (baseline.LastDeltaSyncUnix - 300);
+            var needsRightDelta = (nowUnix - baseline.LastDeltaSyncUnix) >= cooldownSeconds || hasUnsyncedRightGap;
 
-            await rawCacheStore.SaveWatermarkAsync(
-                new EtsySyncWatermark(shopId, datasetKey, minUnix, syncedToUnix, postSyncNowUnix),
-                cancellationToken);
-
-            if (!isHistorical)
+            if (!needsLeftFill && !needsRightDelta)
             {
-                var currentRolling = await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken);
-                if (currentRolling is null || (minUnix <= currentRolling.MaxSyncedUnix && syncedToUnix >= currentRolling.MinSyncedUnix))
+                return await readFromDbAsync(minUnix, maxUnix);
+            }
+
+            var currentMin = baseline.MinSyncedUnix;
+            var currentMax = baseline.MaxSyncedUnix;
+            var currentLastSync = baseline.LastDeltaSyncUnix;
+
+            if (needsLeftFill)
+            {
+                var leftFillEnd = Math.Min(maxUnix, currentMin);
+                if (minUnix < leftFillEnd)
                 {
-                    await rawCacheStore.SaveWatermarkAsync(
-                        new EtsySyncWatermark(shopId, rollingKey, minUnix, syncedToUnix, postSyncNowUnix),
-                        cancellationToken);
+                    try
+                    {
+                        await fetchAndUpsertAsync(minUnix, leftFillEnd, false);
+                        currentMin = Math.Min(currentMin, minUnix);
+                        currentMax = Math.Max(currentMax, leftFillEnd);
+                        await PersistWatermarksAsync(shopId, datasetKey, rollingKey, isHistorical, currentMin, currentMax, currentLastSync, cancellationToken);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // DB'de mevcut esitlenmis veri bulundugundan 429/ag hatalarinda mevcut veri kesintisiz donulur.
+                        return await readFromDbAsync(minUnix, maxUnix);
+                    }
+                }
+                else
+                {
+                    currentMin = Math.Min(currentMin, minUnix);
                 }
             }
+
+            if (needsRightDelta)
+            {
+                var rightStart = Math.Max(minUnix, Math.Min(maxUnix, currentMax - 300));
+                try
+                {
+                    await fetchAndUpsertAsync(rightStart, maxUnix, !hasUnsyncedRightGap);
+                    var postSyncNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    var syncedTo = Math.Max(minUnix, Math.Min(maxUnix, postSyncNow));
+                    currentMax = Math.Max(currentMax, syncedTo);
+                    currentLastSync = postSyncNow;
+                    await PersistWatermarksAsync(shopId, datasetKey, rollingKey, isHistorical, minUnix, currentMax, currentLastSync, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // DB'de mevcut esitlenmis veri bulundugundan 429/ag hatalarinda son tam veri kesintisiz donulur.
+                }
+            }
+
+            return await readFromDbAsync(minUnix, maxUnix);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException && hasPriorSync)
+        finally
         {
-            // DB'de mevcut esitlenmis veri bulundugundan 429/ag hatalarinda son tam veri kesintisiz donulur
+            syncLock.Release();
+        }
+    }
+
+    private static EtsySyncWatermark? ResolveEffectiveWatermark(
+        EtsySyncWatermark? exactWatermark,
+        EtsySyncWatermark? rollingWatermark,
+        bool isHistorical,
+        long minUnix)
+    {
+        if (isHistorical)
+        {
+            return exactWatermark;
         }
 
-        return await readFromDbAsync(minUnix, maxUnix);
+        var usableRolling = rollingWatermark is not null && rollingWatermark.MaxSyncedUnix >= minUnix
+            ? rollingWatermark
+            : null;
+
+        if (exactWatermark is null)
+        {
+            return usableRolling;
+        }
+
+        if (usableRolling is null)
+        {
+            return exactWatermark;
+        }
+
+        var overlapsOrAdjacent = usableRolling.MinSyncedUnix <= exactWatermark.MaxSyncedUnix + 300
+            && usableRolling.MaxSyncedUnix >= exactWatermark.MinSyncedUnix;
+        if (!overlapsOrAdjacent)
+        {
+            return usableRolling.LastDeltaSyncUnix >= exactWatermark.LastDeltaSyncUnix
+                ? usableRolling
+                : exactWatermark;
+        }
+
+        var mergedMin = Math.Min(exactWatermark.MinSyncedUnix, usableRolling.MinSyncedUnix);
+        var mergedMax = Math.Max(exactWatermark.MaxSyncedUnix, usableRolling.MaxSyncedUnix);
+        long mergedLastSync;
+        if (usableRolling.MaxSyncedUnix > exactWatermark.MaxSyncedUnix)
+        {
+            mergedLastSync = usableRolling.LastDeltaSyncUnix;
+        }
+        else if (exactWatermark.MaxSyncedUnix > usableRolling.MaxSyncedUnix)
+        {
+            mergedLastSync = exactWatermark.LastDeltaSyncUnix;
+        }
+        else
+        {
+            mergedLastSync = Math.Max(exactWatermark.LastDeltaSyncUnix, usableRolling.LastDeltaSyncUnix);
+        }
+
+        return new EtsySyncWatermark(
+            exactWatermark.ShopId,
+            exactWatermark.DatasetKey,
+            mergedMin,
+            mergedMax,
+            mergedLastSync);
+    }
+
+    private async Task PersistWatermarksAsync(
+        string shopId,
+        string datasetKey,
+        string rollingKey,
+        bool isHistorical,
+        long exactMinUnix,
+        long syncedToUnix,
+        long lastDeltaSyncUnix,
+        CancellationToken cancellationToken)
+    {
+        await rawCacheStore!.SaveWatermarkAsync(
+            new EtsySyncWatermark(shopId, datasetKey, exactMinUnix, syncedToUnix, lastDeltaSyncUnix),
+            cancellationToken);
+
+        if (isHistorical)
+        {
+            return;
+        }
+
+        var currentRolling = await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken);
+        if (currentRolling is null)
+        {
+            await rawCacheStore.SaveWatermarkAsync(
+                new EtsySyncWatermark(shopId, rollingKey, exactMinUnix, syncedToUnix, lastDeltaSyncUnix),
+                cancellationToken);
+            return;
+        }
+
+        if (exactMinUnix <= currentRolling.MaxSyncedUnix + 300 && syncedToUnix >= currentRolling.MinSyncedUnix)
+        {
+            var mergedMin = Math.Min(currentRolling.MinSyncedUnix, exactMinUnix);
+            var mergedMax = Math.Max(currentRolling.MaxSyncedUnix, syncedToUnix);
+            var mergedLastSync = Math.Max(currentRolling.LastDeltaSyncUnix, lastDeltaSyncUnix);
+            await rawCacheStore.SaveWatermarkAsync(
+                new EtsySyncWatermark(shopId, rollingKey, mergedMin, mergedMax, mergedLastSync),
+                cancellationToken);
+            return;
+        }
+
+        if (syncedToUnix > currentRolling.MaxSyncedUnix)
+        {
+            await rawCacheStore.SaveWatermarkAsync(
+                new EtsySyncWatermark(shopId, rollingKey, exactMinUnix, syncedToUnix, lastDeltaSyncUnix),
+                cancellationToken);
+        }
     }
 
     private static IReadOnlyList<EtsyCachedRawItem> ToCachedLedgerItems(IReadOnlyList<JsonElement> elements, long fallbackUnix)
