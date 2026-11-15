@@ -340,17 +340,17 @@ export interface LqsAuditCheck {
                           <div class="prod-title" [title]="item.title">
                             {{ item.title }}
                           </div>
-                          <div class="prod-meta">
+                          <div class="prod-meta" translate="no">
                             <span>🏷️ {{ item.tagCount }}/13 etiket</span>
                             <span>📷 {{ getItemImages(item).length }} görsel</span>
                             <span>📝 {{ (item.description || '').length }} krk.</span>
                           </div>
                         </div>
                       </td>
-                      <td class="price-cell">&#36;{{ item.priceUsd | number:'1.2-2' }}</td>
-                      <td class="num-cell">{{ item.estimatedMonthlySales | number }} ad.</td>
-                      <td class="rev-cell">&#36;{{ item.estimatedMonthlyRevenueUsd | number:'1.0-0' }}</td>
-                      <td class="num-cell">
+                      <td class="price-cell" translate="no">&#36;{{ item.priceUsd | number:'1.2-2' }}</td>
+                      <td class="num-cell" translate="no">{{ item.estimatedMonthlySales | number }} ad.</td>
+                      <td class="rev-cell" translate="no">&#36;{{ item.estimatedMonthlyRevenueUsd | number:'1.0-0' }}</td>
+                      <td class="num-cell" translate="no">
                         <span class="fav-num">❤️ {{ item.favorites | number }}</span>
                         <span class="view-num">👁️ {{ item.views | number }}</span>
                       </td>
@@ -392,7 +392,8 @@ export interface LqsAuditCheck {
             <!-- RIGHT: SELECTED PRODUCT SHOWCASE (GALLERY + DESCRIPTION + TAGS) + 3 INTELLIGENCE TABS -->
             <div class="intelligence-panel">
               <!-- SELECTED LISTING SHOWCASE CARD -->
-              <div class="glass-card selected-product-card" *ngIf="selectedListing as sel">
+              @for (sel of (selectedListing ? [selectedListing] : []); track sel.listingId) {
+              <div class="glass-card selected-product-card">
                 <div class="showcase-top-grid">
                   <!-- LEFT: INTERACTIVE MULTI-IMAGE GALLERY -->
                   <div class="showcase-gallery">
@@ -417,7 +418,7 @@ export interface LqsAuditCheck {
                         *ngIf="getItemImages(sel).length > 1"
                         (click)="nextImage(sel, $event)">›</button>
 
-                      <span class="stage-counter" *ngIf="getItemImages(sel).length > 0">
+                      <span class="stage-counter" translate="no" *ngIf="getItemImages(sel).length > 0">
                         🔍 {{ activeImageIndex + 1 }} / {{ getItemImages(sel).length }} (Büyüt)
                       </span>
                     </div>
@@ -444,14 +445,14 @@ export interface LqsAuditCheck {
                       <span class="lqs-badge" [ngClass]="getLqsClass(sel.lqsGrade)">
                         eRank LQS: {{ sel.lqsGrade }} ({{ sel.lqsScore }}/100)
                       </span>
-                      <span class="id-pill">ID: #{{ sel.listingId }}</span>
+                      <span class="id-pill" translate="no">ID: #{{ sel.listingId }}</span>
                     </div>
 
                     <h3 class="sel-title" (click)="openListingOnEtsy(sel)" title="Etsy'de açmak için tıklayın">
                       {{ sel.title }} <span class="ext-arrow">↗</span>
                     </h3>
 
-                    <div class="sel-price-row">
+                    <div class="sel-price-row" translate="no">
                       <span class="sel-price">&#36;{{ sel.priceUsd | number:'1.2-2' }}</span>
                       <span class="sel-try">(≈ ₺{{ (sel.priceUsd * usdTryRate) | number:'1.0-0' }})</span>
                       <span class="sel-est-rev">• Tah. Satış: <strong>{{ sel.estimatedMonthlySales }} ad/ay</strong></span>
@@ -654,6 +655,7 @@ export interface LqsAuditCheck {
                   </div>
                 </div>
               </div>
+              }
 
               <!-- 3 INTELLIGENCE SUB-TABS -->
               <div class="glass-card subtabs-card">
@@ -755,7 +757,7 @@ export interface LqsAuditCheck {
 
                 <!-- SUBTAB 3: ERANK LQS AUDIT FOR SELECTED LISTING -->
                 <div class="subtab-body" *ngIf="activeIntelTab === 'lqs'">
-                  <ng-container *ngIf="selectedListing as sel">
+                  @for (sel of (selectedListing ? [selectedListing] : []); track sel.listingId) {
                     <div class="lqs-audit-header">
                       <span>Seçili Ürün LQS Kalite Denetimi: <strong>{{ sel.lqsGrade }} ({{ sel.lqsScore }}/100)</strong></span>
                     </div>
@@ -768,7 +770,7 @@ export interface LqsAuditCheck {
                         </div>
                       </div>
                     </div>
-                  </ng-container>
+                  }
                 </div>
               </div>
             </div>
