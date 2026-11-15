@@ -527,7 +527,10 @@ async function extractVariationsFromTabDom(tabId) {
   const results = await chrome.scripting.executeScript({
     target: { tabId },
     func: () => {
-      const selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+      let selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+      if (selects.length === 0) {
+        selects = Array.from(document.querySelectorAll('select[data-variation-number], [data-buy-box-region="variations"] select'));
+      }
       const groups = selects.map((sel, idx) => {
         const lbl = document.querySelector(`label[for="${sel.id}"]`);
         const name = lbl ? (lbl.innerText || lbl.textContent || '').trim() : `Variation ${idx + 1}`;
@@ -554,15 +557,14 @@ async function fetchCompetitorListingVariations(rawListingId, rawListingUrl) {
     return { ok: false, error: 'Geçersiz Etsy listingId veya URL.' };
   }
 
-  // 1. Açık Etsy sekmelerinde bu ilan zaten açıksa doğrudan DOM'dan oku
+  // 1. Açık Etsy sekmelerinde bu ilan zaten açıksa doğrudan DOM'dan oku (scripting.executeScript ile eski content script'ten bağımsız)
   try {
     const etsyTabs = await chrome.tabs.query({ url: '*://*.etsy.com/*' });
     const matchingTab = etsyTabs.find((t) => t.url && t.url.includes(`/listing/${listingId}`));
     if (matchingTab?.id) {
-      await ensureContentAgentInjected(matchingTab.id);
-      const domRes = await chrome.tabs.sendMessage(matchingTab.id, { action: ACTIONS.CA_EXTRACT_LISTING_VARIATIONS });
-      if (domRes?.ok && Array.isArray(domRes.groups) && domRes.groups.length > 0) {
-        const inv = buildInventoryFromExtractedGroups(listingId, domRes.groups, domRes.basePrice, 'chrome_extension_tab');
+      const domData = await extractVariationsFromTabDom(matchingTab.id);
+      if (Array.isArray(domData.groups) && domData.groups.length > 0) {
+        const inv = buildInventoryFromExtractedGroups(listingId, domData.groups, domData.basePrice, 'chrome_extension_tab');
         if (inv.hasVariations) return { ok: true, inventory: inv };
       }
     }
@@ -571,7 +573,7 @@ async function fetchCompetitorListingVariations(rawListingId, rawListingUrl) {
   // 2. Kullanıcının aktif tarayıcı oturumu/çerezleriyle arka planda fetch dene
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    const timer = setTimeout(() => controller.abort(), 3500);
     const resp = await fetch(targetUrl, {
       method: 'GET',
       credentials: 'include',

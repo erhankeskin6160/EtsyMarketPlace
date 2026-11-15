@@ -2637,43 +2637,47 @@ export class CompetitorSpyComponent implements OnInit {
 
     this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: async (inv) => {
-        if (inv && inv.hasVariations) {
-          this.cloningListingId = null;
-          this.applyInventoryToCloned(cloned, inv);
-          this.finishCloning(cloned, item, imgs.length, inv?.warningMessage);
-          return;
-        }
-
-        const extInv = await this.extensionBridge.fetchListingVariationsViaExtension(
-          item.listingId,
-          cloned.sourceListingUrl || `https://www.etsy.com/listing/${item.listingId}`
-        );
+        const warning = await this.resolveVariationsWithExtensionFallback(item, cloned, inv);
         this.cloningListingId = null;
-        if (extInv && extInv.hasVariations) {
-          this.applyInventoryToCloned(cloned, extInv);
-          this.finishCloning(cloned, item, imgs.length);
-          return;
-        }
-
-        cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Chrome eklentisini yenileyin veya aşağıdaki panelden 1 saniyede aktarın.';
-        this.finishCloning(cloned, item, imgs.length, inv?.warningMessage);
+        this.finishCloning(cloned, item, imgs.length, warning);
       },
       error: async () => {
-        const extInv = await this.extensionBridge.fetchListingVariationsViaExtension(
-          item.listingId,
-          cloned.sourceListingUrl || `https://www.etsy.com/listing/${item.listingId}`
-        );
+        const warning = await this.resolveVariationsWithExtensionFallback(item, cloned, null, true);
         this.cloningListingId = null;
-        if (extInv && extInv.hasVariations) {
-          this.applyInventoryToCloned(cloned, extInv);
-          this.finishCloning(cloned, item, imgs.length);
-          return;
-        }
-
-        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Chrome eklentisi veya aşağıdaki yapıştırma kutusu ile aktarabilirsiniz.';
-        this.finishCloning(cloned, item, imgs.length, 'Varyasyon servisine ulaşılamadı, ilan varyasyonsuz aktarıldı.');
+        this.finishCloning(cloned, item, imgs.length, warning);
       }
     });
+  }
+
+  private async resolveVariationsWithExtensionFallback(
+    item: CompetitorListingDto,
+    cloned: ClonedMarketListing,
+    inv: CompetitorListingInventoryDto | null | undefined,
+    isApiError: boolean = false
+  ): Promise<string | undefined> {
+    if (inv && inv.hasVariations) {
+      this.applyInventoryToCloned(cloned, inv);
+      return inv.warningMessage;
+    }
+
+    const targetUrl = cloned.sourceListingUrl || item.listingUrl || `https://www.etsy.com/listing/${item.listingId}`;
+    const extInv = await this.extensionBridge.fetchListingVariationsViaExtension(item.listingId, targetUrl);
+    if (extInv && extInv.hasVariations) {
+      this.applyInventoryToCloned(cloned, extInv);
+      return undefined;
+    }
+
+    const bridgeHint = this.extensionBridge.isBridgeDetected()
+      ? 'Eklenti köprüsü bağlı ancak Etsy sayfasından varyasyon seçicisi okunamadı.'
+      : 'Eklenti köprüsü algılanamadı (Etsy Copilot 2.7.0 eklentisini yükleyip/yenileyip bu sayfayı F5 ile yenileyin).';
+
+    if (isApiError) {
+      cloned.variationWarning = `Varyasyon servisine ulaşılamadı. ${bridgeHint}`;
+      return 'Varyasyon servisine ulaşılamadı, ilan varyasyonsuz aktarıldı.';
+    }
+
+    cloned.variationWarning = `${inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor.'} — ${bridgeHint}`;
+    return inv?.warningMessage;
   }
 
   private applyInventoryToCloned(cloned: ClonedMarketListing, inv: CompetitorListingInventoryDto | null | undefined): void {
@@ -2720,7 +2724,8 @@ export class CompetitorSpyComponent implements OnInit {
       shopName: this.analysisResult?.shop?.shopName || '',
       seoScore: opt.targetLqsScore || 100,
       marketScore: opt.targetLqsScore || 100,
-      taxonomyId: item.taxonomyId
+      taxonomyId: item.taxonomyId,
+      sourceListingUrl: item.listingUrl || `https://www.etsy.com/listing/${item.listingId}`
     };
 
     if (opt.suggestedVariations && opt.suggestedVariations.length > 0) {
@@ -2747,12 +2752,13 @@ export class CompetitorSpyComponent implements OnInit {
     // AI varyasyon önermediyse rakibin gerçek varyasyonlarını çek
     this.cloningListingId = item.listingId;
     this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (inv) => {
+      next: async (inv) => {
+        await this.resolveVariationsWithExtensionFallback(item, cloned, inv);
         this.cloningListingId = null;
-        this.applyInventoryToCloned(cloned, inv);
         this.finalizeOptimizedClone(cloned, imgs.length);
       },
-      error: () => {
+      error: async () => {
+        await this.resolveVariationsWithExtensionFallback(item, cloned, null, true);
         this.cloningListingId = null;
         this.finalizeOptimizedClone(cloned, imgs.length);
       }
