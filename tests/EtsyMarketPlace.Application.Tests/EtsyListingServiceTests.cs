@@ -2,9 +2,11 @@ namespace EtsyMarketPlace.Application.Tests;
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.EtsyIntegration;
+using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
 using EtsyMarketPlace.Application.ListingOptimization;
 using Xunit;
 
@@ -196,5 +198,65 @@ public class EtsyListingServiceTests
 
         Assert.True(res.Success);
         Assert.Equal("active", res.State);
+    }
+
+    [Fact]
+    public async Task UpdateListingAsync_SanitizesAndDeduplicatesTagsAndMaterials()
+    {
+        var fakeClient = new FakeEtsyListingApiClient { UpdateSuccess = true };
+        var fakeRepo = new FakeShopSettingsRepository();
+        var service = new EtsyListingService(fakeClient, fakeRepo);
+        var req = new UpdateListingRequestDto(
+            "53236321",
+            "3D Printed Dumpling Toy",
+            "Description",
+            new[] { "Fidget Toy!", "fidget toy", "Kawaii® Gift" },
+            new[] { "PLA Plastic", "pla plastic", "Filament" });
+
+        var res = await service.UpdateListingAsync("53236321", "456", req);
+
+        Assert.True(res.Success);
+        var sentTags = fakeClient.LastFormFields!.Where(kv => kv.Key == "tags[]").Select(kv => kv.Value).ToList();
+        var sentMaterials = fakeClient.LastFormFields!.Where(kv => kv.Key == "materials[]").Select(kv => kv.Value).ToList();
+        Assert.Equal(2, sentTags.Count);
+        Assert.Equal("Fidget Toy", sentTags[0]);
+        Assert.Equal("Kawaii Gift", sentTags[1]);
+        Assert.Equal(new[] { "PLA Plastic", "Filament" }, sentMaterials);
+    }
+
+    [Fact]
+    public async Task UpdateListingAsync_WhenEtsyReturnsError_ReturnsFailureResultInsteadOfThrowing()
+    {
+        var fakeClient = new FakeEtsyListingApiClient { UpdateSuccess = false };
+        var fakeRepo = new FakeShopSettingsRepository();
+        var service = new EtsyListingService(fakeClient, fakeRepo);
+        var req = new UpdateListingRequestDto("53236321", "Valid Title", "Description", new[] { "tag1" }, Array.Empty<string>());
+
+        var res = await service.UpdateListingAsync("53236321", "456", req);
+
+        Assert.False(res.Success);
+        Assert.Equal("Etsy error", res.Message);
+        Assert.Empty(fakeRepo.SavedAudits);
+    }
+
+    [Fact]
+    public async Task UpdateListingCommandHandler_WhenUpdateFails_ReturnsBadRequestServiceResponse()
+    {
+        var fakeClient = new FakeEtsyListingApiClient { UpdateSuccess = false };
+        var fakeRepo = new FakeShopSettingsRepository();
+        var service = new EtsyListingService(fakeClient, fakeRepo);
+        var handler = new UpdateListingCommandHandler(service);
+        var cmd = new UpdateListingCommandRequest
+        {
+            ListingId = "456",
+            ShopId = "53236321",
+            Dto = new UpdateListingRequestDto("53236321", "Valid Title", "Description", new[] { "tag1" }, Array.Empty<string>())
+        };
+
+        var res = await handler.Handle(cmd, CancellationToken.None);
+
+        Assert.False(res.Success);
+        Assert.Equal((int)HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Equal("Etsy error", res.Message);
     }
 }

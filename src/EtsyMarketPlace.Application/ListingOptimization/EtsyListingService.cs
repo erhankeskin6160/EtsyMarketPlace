@@ -313,11 +313,7 @@ public sealed class EtsyListingService : IEtsyListingService
             new("description", (request.Description ?? string.Empty).Trim())
         };
 
-        var validTags = (request.Tags ?? Array.Empty<string>())
-            .Select(t => t.Trim())
-            .Where(t => t.Length > 0 && t.Length <= 20)
-            .Take(13)
-            .ToList();
+        var validTags = FastListingDraftHelper.SanitizeTags(request.Tags);
 
         foreach (var tag in validTags)
         {
@@ -327,6 +323,7 @@ public sealed class EtsyListingService : IEtsyListingService
         var validMaterials = (request.Materials ?? Array.Empty<string>())
             .Select(m => m.Trim())
             .Where(m => m.Length > 0 && m.Length <= 45)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(13)
             .ToList();
 
@@ -338,7 +335,7 @@ public sealed class EtsyListingService : IEtsyListingService
         var (success, body, error) = await _listingClient.UpdateListingRawAsync(shopId, listingId, formFields, cancellationToken);
         if (!success)
         {
-            throw new InvalidOperationException(error ?? "Etsy güncelleme başarısız.");
+            return new ListingUpdateResultDto(false, listingId, error ?? "Etsy güncelleme başarısız.");
         }
 
         await _settingsRepo.SaveListingAuditAsync(new SaveListingAuditRecordRequest(

@@ -17,6 +17,11 @@ public class UpdateListingCommandHandler(
             return ServiceResponse.CreateError(ResponseMessage.OperationCancelled, HttpStatusCode.RequestTimeout);
 
         var result = await listingService.UpdateListingAsync(request.ShopId, request.ListingId, request.Dto, cancellationToken);
+        if (!result.Success)
+        {
+            return ServiceResponse.CreateError(result.Message, HttpStatusCode.BadRequest);
+        }
+
         return ServiceResponse.CreateSuccess("İlan başarıyla güncellendi.", new
         {
             success = true,
