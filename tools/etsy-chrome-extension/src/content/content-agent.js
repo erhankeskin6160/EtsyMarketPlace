@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.6.0';
+  const AGENT_VERSION = '2.7.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -1454,7 +1454,10 @@
 
       if (message.action === 'CA_EXTRACT_LISTING_VARIATIONS') {
         (async () => {
-          const selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+          let selects = Array.from(document.querySelectorAll('select[id^="variation-selector-"]'));
+          if (selects.length === 0) {
+            selects = Array.from(document.querySelectorAll('select[data-variation-number], [data-buy-box-region="variations"] select'));
+          }
           const groups = selects.map((sel, idx) => {
             const lbl = document.querySelector(`label[for="${sel.id}"]`);
             const name = lbl ? (lbl.innerText || lbl.textContent || '').trim() : `Variation ${idx + 1}`;

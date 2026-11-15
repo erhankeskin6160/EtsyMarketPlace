@@ -18,7 +18,11 @@ export class ExtensionBridgeService {
     }
   }
 
-  async checkBridgeAvailable(waitMs = 300): Promise<boolean> {
+  isBridgeDetected(): boolean {
+    return this.bridgeDetected;
+  }
+
+  async checkBridgeAvailable(waitMs = 500): Promise<boolean> {
     if (typeof window === 'undefined') return false;
     if (this.bridgeDetected) return true;
 
@@ -48,11 +52,11 @@ export class ExtensionBridgeService {
   async fetchListingVariationsViaExtension(
     listingId: number,
     listingUrl: string,
-    timeoutMs = 11000
+    timeoutMs = 20000
   ): Promise<CompetitorListingInventoryDto | null> {
     if (typeof window === 'undefined' || !listingId) return null;
 
-    const available = await this.checkBridgeAvailable(300);
+    const available = await this.checkBridgeAvailable(500);
     if (!available) return null;
 
     const requestId = `var_${listingId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
