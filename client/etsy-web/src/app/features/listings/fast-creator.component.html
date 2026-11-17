@@ -563,6 +563,62 @@
             </p>
           </div>
 
+          <!-- Bottom: Etsy Kesintileri + Kargo & Net Kalan Hesaplayıcı -->
+          <div class="net-profit-subbox" *ngIf="netProfitBreakdown as np">
+            <div class="np-header-flex">
+              <div class="np-title">
+                <span>💰</span>
+                <span>Etsy Kesinti &amp; Net Kalan</span>
+              </div>
+              <label class="np-offsite-toggle" title="Offsite Ads (%15) dış reklam kesintisini dahil et">
+                <input type="checkbox" [(ngModel)]="includeOffsiteAdsFee" (ngModelChange)="saveDraftToStorage()" />
+                <span>Offsite Ads (%15)</span>
+              </label>
+            </div>
+
+            <div class="np-shipping-row">
+              <label class="np-shipping-label" for="fastCreatorShippingInput">📦 Kargo Maliyeti ($ USD)</label>
+              <div class="np-shipping-input-wrap">
+                <input
+                  id="fastCreatorShippingInput"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  class="np-shipping-input"
+                  [(ngModel)]="estimatedShippingCostUsd"
+                  (ngModelChange)="saveDraftToStorage()"
+                  placeholder="0.00" />
+                <span class="np-shipping-try">≈ ₺{{ ((estimatedShippingCostUsd || 0) * usdTryRate).toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <div class="np-breakdown-list">
+              <div class="np-row">
+                <span>Satış Fiyatı{{ isVariationPricingActive ? ' (Taban)' : '' }}</span>
+                <span class="np-val">${{ np.salePriceUsd.toFixed(2) }}</span>
+              </div>
+              <div class="np-row np-deduct">
+                <span>Etsy Kesintileri (İşlem %6.5 + Ödeme %6.5+₺3 + Düz. %1.1 + $0.20 + KDV %20{{ includeOffsiteAdsFee ? ' + Offsite %15' : '' }})</span>
+                <span class="np-val">-${{ np.totalEtsyFeesUsd.toFixed(2) }}</span>
+              </div>
+              <div class="np-row np-deduct">
+                <span>Kargo Maliyeti</span>
+                <span class="np-val">-${{ np.shippingCostUsd.toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <div class="np-result-banner" [class.positive]="np.netRemainingUsd >= 0" [class.negative]="np.netRemainingUsd < 0">
+              <div class="np-result-left">
+                <span class="np-result-label">Bize Kalan Net</span>
+                <span class="np-result-margin" *ngIf="np.salePriceUsd > 0">Net Marj: %{{ np.netMarginPercent.toFixed(1) }}</span>
+              </div>
+              <div class="np-result-right">
+                <strong class="np-result-usd">${{ np.netRemainingUsd.toFixed(2) }}</strong>
+                <span class="np-result-try">≈ ₺{{ np.netRemainingTry.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
