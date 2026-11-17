@@ -10,6 +10,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
 import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard } from '../../core/utils/etsy-variation-parser';
+import { calculateEtsyNetProfit, EtsyNetProfitBreakdown } from '../../core/utils/etsy-fee-calculator';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -63,6 +64,8 @@ export interface FastCreatorDraft {
   isLivePublish: boolean;
   savedAt: string;
   originalNotesBackup?: string;
+  estimatedShippingCostUsd?: number | null;
+  includeOffsiteAdsFee?: boolean;
 }
 
 export interface VariationRow {
@@ -99,6 +102,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   listingType: 'physical' | 'digital' = 'physical';
   priceUsd: number | null = null;
   priceTry = 0;
+  estimatedShippingCostUsd: number | null = null;
+  includeOffsiteAdsFee = false;
   quantity: number | null = 15;
   title = '';
   selectedCategory = '';
@@ -380,6 +385,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         isLivePublish: this.isLivePublish,
         savedAt: timeStr,
         originalNotesBackup: this.originalNotesBackup,
+        estimatedShippingCostUsd: this.estimatedShippingCostUsd,
+        includeOffsiteAdsFee: this.includeOffsiteAdsFee,
       };
 
       try {
@@ -448,6 +455,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.variationRows = Array.isArray(draft.variationRows) ? [...draft.variationRows] : [];
       this.selectedTemplateId = draft.selectedTemplateId || '';
       this.isLivePublish = !!draft.isLivePublish;
+      this.estimatedShippingCostUsd = draft.estimatedShippingCostUsd ?? null;
+      this.includeOffsiteAdsFee = !!draft.includeOffsiteAdsFee;
       this.draftSavedAt = draft.savedAt || '';
       if (draft.originalNotesBackup) {
         this.originalNotesBackup = draft.originalNotesBackup;
@@ -855,6 +864,16 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   get usdTryRate(): number {
     return this.etsyApi.exchangeRate();
+  }
+
+  get netProfitBreakdown(): EtsyNetProfitBreakdown {
+    const activeSalePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 0);
+    return calculateEtsyNetProfit({
+      salePriceUsd: activeSalePrice,
+      shippingCostUsd: this.estimatedShippingCostUsd ?? 0,
+      usdTryRate: this.usdTryRate,
+      includeOffsiteAds: this.includeOffsiteAdsFee
+    });
   }
 
   // --- TEMPLATE ACTIONS ---
