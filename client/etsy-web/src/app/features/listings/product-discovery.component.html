@@ -434,8 +434,8 @@
             <label class="form-label">Kargo Profili:</label>
             <select class="form-control select-control" [(ngModel)]="draftShippingProfileId">
               <option [ngValue]="null">Varsayılan Mağaza Kargo Profili</option>
-              <option *ngFor="let p of shippingProfiles" [ngValue]="p.shipping_profile_id">
-                {{ p.title }} (ID: {{ p.shipping_profile_id }})
+              <option *ngFor="let p of shippingProfiles" [ngValue]="p.shippingProfileId ?? p.shipping_profile_id">
+                {{ p.title }} (ID: {{ p.shippingProfileId ?? p.shipping_profile_id }}){{ p.deliveryDaysDisplay ? ' — ' + p.deliveryDaysDisplay : '' }}
               </option>
             </select>
           </div>

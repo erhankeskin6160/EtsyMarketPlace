@@ -7,7 +7,14 @@ public sealed record EtsyShippingProfileDto(
     string Title,
     int? MinProcessingDays,
     int? MaxProcessingDays,
-    string? ProcessingDaysDisplay
+    string? ProcessingDaysDisplay,
+    int? MinDeliveryDays = null,
+    int? MaxDeliveryDays = null,
+    string? DeliveryDaysDisplay = null,
+    bool HasFreeShipping = false,
+    string? OriginCountryIso = null,
+    string? MailClass = null,
+    string? DestinationsSummary = null
 );
 
 public sealed record EtsyReadinessStateDto(

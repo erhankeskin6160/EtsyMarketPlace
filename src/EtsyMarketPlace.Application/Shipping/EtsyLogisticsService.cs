@@ -60,15 +60,34 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
         {
             foreach (var item in rArray.EnumerateArray())
             {
-                if (item.TryGetProperty("shipping_profile_id", out var idProp))
+                if (item.TryGetProperty("shipping_profile_id", out var idProp) &&
+                    idProp.ValueKind == JsonValueKind.Number &&
+                    idProp.TryGetInt64(out var id))
                 {
-                    var id = idProp.GetInt64();
-                    var title = item.TryGetProperty("title", out var tProp) ? tProp.GetString() ?? $"Profil #{id}" : $"Profil #{id}";
-                    int? minDays = item.TryGetProperty("min_processing_days", out var minProp) && minProp.TryGetInt32(out var minVal) ? minVal : null;
-                    int? maxDays = item.TryGetProperty("max_processing_days", out var maxProp) && maxProp.TryGetInt32(out var maxVal) ? maxVal : null;
+                    var title = TryReadString(item, "title") ?? $"Profil #{id}";
+                    int? minDays = TryReadNullableInt32(item, "min_processing_days");
+                    int? maxDays = TryReadNullableInt32(item, "max_processing_days");
+                    var rawDisplayLabel = TryReadString(item, "processing_days_display_label");
+                    string? display = (minDays.HasValue && maxDays.HasValue)
+                        ? $"{minDays}-{maxDays} iş günü"
+                        : rawDisplayLabel;
 
-                    string? display = (minDays.HasValue && maxDays.HasValue) ? $"{minDays}-{maxDays} iş günü" : null;
-                    list.Add(new EtsyShippingProfileDto(id, title, minDays, maxDays, display));
+                    var originCountryIso = TryReadString(item, "origin_country_iso");
+                    var destInfo = ParseShippingDestinations(item);
+
+                    list.Add(new EtsyShippingProfileDto(
+                        id,
+                        title,
+                        minDays,
+                        maxDays,
+                        display,
+                        destInfo.MinDeliveryDays,
+                        destInfo.MaxDeliveryDays,
+                        destInfo.DeliveryDaysDisplay,
+                        destInfo.HasFreeShipping,
+                        originCountryIso,
+                        destInfo.MailClass,
+                        destInfo.DestinationsSummary));
                 }
             }
         }
@@ -96,25 +115,27 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
                 {
                     foreach (var item in rArray.EnumerateArray())
                     {
-                        if (item.TryGetProperty("readiness_state_id", out var idProp))
+                        if (item.TryGetProperty("readiness_state_id", out var idProp) &&
+                            idProp.ValueKind == JsonValueKind.Number &&
+                            idProp.TryGetInt64(out var id))
                         {
-                            var id = idProp.GetInt64();
-                            string? title = item.TryGetProperty("title", out var tProp) ? tProp.GetString() : null;
-                            string? state = item.TryGetProperty("readiness_state", out var sProp) ? sProp.GetString() : null;
-                            int minTime = item.TryGetProperty("min_processing_time", out var minP) && minP.TryGetInt32(out var minV) ? minV : 0;
-                            int maxTime = item.TryGetProperty("max_processing_time", out var maxP) && maxP.TryGetInt32(out var maxV) ? maxV : 0;
-                            string unit = item.TryGetProperty("processing_time_unit", out var uP) ? uP.GetString() ?? "iş günü" : "iş günü";
+                            string? title = TryReadString(item, "title");
+                            string? state = TryReadString(item, "readiness_state");
+                            int minTime = TryReadNullableInt32(item, "min_processing_time") ?? 0;
+                            int maxTime = TryReadNullableInt32(item, "max_processing_time") ?? 0;
+                            string unit = TryReadString(item, "processing_time_unit") ?? "business_days";
+                            string unitTr = unit.Equals("weeks", StringComparison.OrdinalIgnoreCase) ? "hafta" : "iş günü";
 
                             if (!string.IsNullOrWhiteSpace(state))
                             {
                                 var stateTr = state.Equals("made_to_order", StringComparison.OrdinalIgnoreCase)
                                     ? "Siparişe Özel (Made to order)"
                                     : "Hazır Ürün (Ready to ship)";
-                                title = (minTime > 0 || maxTime > 0) ? $"{stateTr} ({minTime}-{maxTime} {unit})" : stateTr;
+                                title = (minTime > 0 || maxTime > 0) ? $"{stateTr} ({minTime}-{maxTime} {unitTr})" : stateTr;
                             }
                             else
                             {
-                                title = $"Hazırlık Durumu #{id}";
+                                title ??= $"Hazırlık Durumu #{id}";
                             }
 
                             list.Add(new EtsyReadinessStateDto(id, title, state, minTime, maxTime, unit));
@@ -512,5 +533,125 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
                 FlattenTaxonomyTree(child, currentPath, id, level + 1, collector, domainCollector);
             }
         }
+    }
+
+    private static string? TryReadString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.String)
+            return null;
+        var value = prop.GetString()?.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static int? TryReadNullableInt32(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var prop))
+            return null;
+        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var val))
+            return val;
+        if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var parsed))
+            return parsed;
+        return null;
+    }
+
+    private static (
+        int? MinDeliveryDays,
+        int? MaxDeliveryDays,
+        string? DeliveryDaysDisplay,
+        bool HasFreeShipping,
+        string? MailClass,
+        string? DestinationsSummary) ParseShippingDestinations(JsonElement profileElement)
+    {
+        if (!profileElement.TryGetProperty("shipping_profile_destinations", out var destArray) ||
+            destArray.ValueKind != JsonValueKind.Array)
+        {
+            return (null, null, null, false, null, null);
+        }
+
+        int? minDelivery = null;
+        int? maxDelivery = null;
+        bool hasFreeShipping = false;
+        var mailClasses = new List<string>();
+        var summaryEntries = new List<string>();
+        var seenEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var dest in destArray.EnumerateArray())
+        {
+            var destMin = TryReadNullableInt32(dest, "min_delivery_days");
+            var destMax = TryReadNullableInt32(dest, "max_delivery_days");
+            if (destMin.HasValue && (!minDelivery.HasValue || destMin.Value < minDelivery.Value))
+            {
+                minDelivery = destMin.Value;
+            }
+            if (destMax.HasValue && (!maxDelivery.HasValue || destMax.Value > maxDelivery.Value))
+            {
+                maxDelivery = destMax.Value;
+            }
+
+            var mailClass = TryReadString(dest, "mail_class");
+            if (!string.IsNullOrWhiteSpace(mailClass) &&
+                !mailClasses.Contains(mailClass, StringComparer.OrdinalIgnoreCase))
+            {
+                mailClasses.Add(mailClass);
+            }
+
+            bool isDestFree = false;
+            if (dest.TryGetProperty("primary_cost", out var primaryCost) &&
+                primaryCost.ValueKind == JsonValueKind.Object)
+            {
+                var amount = TryReadNullableInt32(primaryCost, "amount");
+                if (amount.HasValue && amount.Value == 0)
+                {
+                    isDestFree = true;
+                    hasFreeShipping = true;
+                }
+            }
+
+            var countryIso = TryReadString(dest, "destination_country_iso");
+            var region = TryReadString(dest, "destination_region");
+            var destLabel = !string.IsNullOrWhiteSpace(countryIso)
+                ? countryIso.ToUpperInvariant()
+                : region?.ToLowerInvariant() switch
+                {
+                    "eu" => "EU",
+                    "non_eu" => "Non-EU",
+                    _ => "Everywhere Else"
+                };
+
+            var daysText = (destMin.HasValue && destMax.HasValue)
+                ? (destMin.Value == destMax.Value
+                    ? $"{destMin.Value} business days"
+                    : $"{destMin.Value}-{destMax.Value} business days")
+                : null;
+            var freeText = isDestFree ? "Free Shipping" : null;
+            var summaryBody = (daysText, freeText) switch
+            {
+                (not null, not null) => $"{daysText} ({freeText})",
+                (not null, null) => daysText,
+                (null, not null) => freeText,
+                _ => null
+            };
+            if (summaryBody != null)
+            {
+                var entry = $"{destLabel}: {summaryBody}";
+                if (seenEntries.Add(entry) && summaryEntries.Count < 6)
+                {
+                    summaryEntries.Add(entry);
+                }
+            }
+        }
+
+        string? deliveryDisplay = null;
+        if (minDelivery.HasValue && maxDelivery.HasValue)
+        {
+            deliveryDisplay = minDelivery.Value == maxDelivery.Value
+                ? $"{minDelivery.Value} iş günü teslimat"
+                : $"{minDelivery.Value}-{maxDelivery.Value} iş günü teslimat";
+        }
+
+        string? combinedMailClass = mailClasses.Count > 0 ? string.Join(", ", mailClasses) : null;
+        string? destinationsSummary = summaryEntries.Count > 0 ? string.Join("; ", summaryEntries) : null;
+
+        return (minDelivery, maxDelivery, deliveryDisplay, hasFreeShipping, combinedMailClass, destinationsSummary);
     }
 }
