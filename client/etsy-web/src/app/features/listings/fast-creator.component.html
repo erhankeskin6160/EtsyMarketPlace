@@ -579,14 +579,22 @@
             <div class="np-shipping-row">
               <div class="np-shipping-head-row">
                 <label class="np-shipping-label" for="fastCreatorShippingInput">Kargo Maliyeti ($ USD)</label>
-                <button type="button"
-                        class="btn-agent-mini"
-                        [disabled]="isRunningPricingAgent"
-                        (click)="runAiPricingAgent()"
-                        title="4 taşıyıcılı kargo modülü + Etsy rakipleri + LLM ile kargo ve varyasyon fiyatlarını hesapla">
-                  <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
-                  <span>{{ isRunningPricingAgent ? 'Hesaplanıyor...' : 'Kargo + Fiyat Öner' }}</span>
-                </button>
+                <div class="np-shipping-head-actions">
+                  <button type="button"
+                          class="btn-open-shipping-drawer"
+                          (click)="openShippingDrawer()"
+                          title="4 taşıyıcılı kargo karşılaştırması ve paket ölçü panelini aç">
+                    <span>🚚 Kargo Paneli</span>
+                  </button>
+                  <button type="button"
+                          class="btn-agent-mini"
+                          [disabled]="isRunningPricingAgent"
+                          (click)="runAiPricingAgent()"
+                          title="4 taşıyıcılı kargo modülü + Etsy rakipleri + LLM ile kargo ve varyasyon fiyatlarını hesapla">
+                    <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
+                    <span>{{ isRunningPricingAgent ? 'Hesaplanıyor...' : 'Kargo + Fiyat Öner' }}</span>
+                  </button>
+                </div>
               </div>
               <div class="np-shipping-input-wrap">
                 <input
@@ -719,91 +727,23 @@
               </div>
             </div>
 
-            <!-- AI PRICING, COMPETITOR & SHIPPING AGENT PANEL -->
-            <div class="ai-pricing-agent-card" id="aiPricingAgentCard">
-              <div class="agent-bar-top">
-                <button type="button"
-                        id="runAiPricingAgentBtn"
-                        class="btn-agent-run"
-                        [disabled]="isRunningPricingAgent"
-                        (click)="runAiPricingAgent()">
-                  <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
-                  <span>{{ isRunningPricingAgent ? 'Rakip + Kargo + LLM Çalışıyor...' : 'AI Fiyat & Kargo Ajanını Çalıştır' }}</span>
-                </button>
-                <button type="button"
-                        class="btn-agent-gear"
-                        (click)="showAgentSettings = !showAgentSettings"
-                        [attr.aria-expanded]="showAgentSettings">
-                  <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-                  <span>Kargo / Marj</span>
-                </button>
+            <!-- COMPACT SHIPPING & AI PRICING TRIGGER STRIP -->
+            <div class="agent-compact-strip notranslate" translate="no">
+              <div class="agent-compact-info">
+                <span class="agent-compact-title">🚚 Kargo &amp; AI Fiyatlandırma</span>
+                <span class="agent-compact-sub" *ngIf="pricingAgentResult as agent">
+                  {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} · Ort. Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}
+                </span>
+                <span class="agent-compact-sub" *ngIf="!pricingAgentResult && estimatedShippingCostUsd">
+                  {{ selectedCarrierName || 'Kargo' }}: ${{ (estimatedShippingCostUsd || 0).toFixed(2) }} · {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g
+                </span>
+                <span class="agent-compact-sub" *ngIf="!pricingAgentResult && !estimatedShippingCostUsd">
+                  {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g · {{ agentLengthCm }}×{{ agentWidthCm }}×{{ agentHeightCm }} cm ({{ computedDesi }} desi)
+                </span>
               </div>
-
-              <div *ngIf="showAgentSettings" class="agent-params-grid">
-                <div class="agent-param-field">
-                  <label for="agentCountrySelect">Hedef Ülke</label>
-                  <select id="agentCountrySelect" class="agent-param-input" [(ngModel)]="agentTargetCountry">
-                    <option value="US">ABD (US)</option>
-                    <option value="DE">Almanya (DE)</option>
-                    <option value="GB">İngiltere (GB)</option>
-                    <option value="CA">Kanada (CA)</option>
-                    <option value="AU">Avustralya (AU)</option>
-                  </select>
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentWeightInput">Ağırlık (g)</label>
-                  <input id="agentWeightInput" type="number" min="50" step="50" class="agent-param-input" [(ngModel)]="agentBaseWeightGrams" />
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentLengthInput">Uzunluk (cm)</label>
-                  <input id="agentLengthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentLengthCm" />
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentWidthInput">Genişlik (cm)</label>
-                  <input id="agentWidthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentWidthCm" />
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentHeightInput">Yükseklik (cm)</label>
-                  <input id="agentHeightInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentHeightCm" />
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentCostInput">Maliyet ($)</label>
-                  <input id="agentCostInput" type="number" min="0" step="0.5" class="agent-param-input" [(ngModel)]="agentProductionCostUsd" />
-                </div>
-                <div class="agent-param-field">
-                  <label for="agentMarginInput">Hedef Marj (%)</label>
-                  <input id="agentMarginInput" type="number" min="5" max="65" step="5" class="agent-param-input" [(ngModel)]="agentTargetMarginPct" />
-                </div>
-              </div>
-
-              <div *ngIf="pricingAgentError" class="agent-error-alert" role="alert">
-                {{ pricingAgentError }}
-              </div>
-
-              <div *ngIf="pricingAgentResult as agent" class="agent-result-panel">
-                <div class="agent-metrics-strip">
-                  <span class="agent-metric-chip">
-                    {{ agent.marketBenchmark.competitorCount > 0 ? ('Rakip: ' + agent.marketBenchmark.competitorCount + ' ilan · Ort $' + agent.marketBenchmark.averagePriceUsd.toFixed(2)) : 'Rakip: Maliyet + Marj Modu' }}
-                  </span>
-                  <span class="agent-metric-chip accent">
-                    {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} ({{ agent.shippingBenchmark.estimatedDays }})
-                  </span>
-                  <span class="agent-metric-chip profit">
-                    Ort. Net Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}
-                  </span>
-                </div>
-
-                <ul class="agent-steps-list">
-                  <li *ngFor="let st of agent.agentSteps">
-                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                    <span><strong>{{ st.title }}:</strong> {{ st.summary }}</span>
-                  </li>
-                </ul>
-
-                <p class="agent-strategy-summary" *ngIf="agent.strategySummary">
-                  <strong>{{ agent.providerUsed }}:</strong> {{ agent.strategySummary }}
-                </p>
-              </div>
+              <button type="button" class="btn-open-drawer-compact" (click)="openShippingDrawer()">
+                Paneli Aç →
+              </button>
             </div>
 
             <!-- Eklentisiz Etsy Sayfasından Varyasyon Aktarma Paneli -->
@@ -1276,3 +1216,185 @@
     </div>
   </div>
 </div>
+
+<!-- ========================================== -->
+<!-- SAĞ KENAR KARGO PANELİ TETİKLEYİCİ BUTONU  -->
+<!-- ========================================== -->
+<button
+  type="button"
+  id="shippingEdgeTriggerBtn"
+  class="shipping-edge-trigger notranslate"
+  [class.is-open]="isShippingDrawerOpen"
+  translate="no"
+  (click)="toggleShippingDrawer()"
+  [attr.aria-expanded]="isShippingDrawerOpen"
+  title="Kargo & AI Fiyatlandırma Panelini Aç / Kapat">
+  <span class="edge-icon">🚚</span>
+  <span class="edge-label">KARGO</span>
+  <span class="edge-price-badge" *ngIf="(estimatedShippingCostUsd || 0) > 0">
+    ${{ (estimatedShippingCostUsd || 0).toFixed(2) }}
+  </span>
+</button>
+
+<!-- ========================================== -->
+<!-- SAĞDAN KAYAR KARGO & AI FİYAT PANELİ       -->
+<!-- ========================================== -->
+<div
+  class="shipping-drawer-backdrop"
+  *ngIf="isShippingDrawerOpen"
+  (click)="closeShippingDrawer()">
+</div>
+
+<aside
+  class="shipping-drawer-panel notranslate"
+  [class.open]="isShippingDrawerOpen"
+  translate="no"
+  aria-label="Kargo ve AI Fiyatlandırma Paneli"
+  (click)="$event.stopPropagation()">
+  <div class="shipping-drawer-header">
+    <div class="drawer-head-title-wrap">
+      <span class="drawer-head-icon">🚚</span>
+      <div>
+        <h3>Kargo &amp; AI Fiyatlandırma Paneli</h3>
+        <p class="drawer-head-sub">
+          Hedef: {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g · {{ agentLengthCm }}×{{ agentWidthCm }}×{{ agentHeightCm }} cm ({{ computedDesi }} desi)
+        </p>
+      </div>
+    </div>
+    <button type="button" class="btn-close-dlg" (click)="closeShippingDrawer()" aria-label="Paneli kapat">✕</button>
+  </div>
+
+  <div class="shipping-drawer-body">
+    <!-- 1. PAKET & MARJ PARAMETRELERİ -->
+    <section class="drawer-section">
+      <div class="drawer-sec-title">📦 Paket &amp; Marj Parametreleri</div>
+      <div class="agent-params-grid">
+        <div class="agent-param-field">
+          <label for="drawerCountrySelect">Hedef Ülke</label>
+          <select id="drawerCountrySelect" class="agent-param-input" [(ngModel)]="agentTargetCountry">
+            <option value="US">ABD (US)</option>
+            <option value="DE">Almanya (DE)</option>
+            <option value="GB">İngiltere (GB)</option>
+            <option value="CA">Kanada (CA)</option>
+            <option value="AU">Avustralya (AU)</option>
+          </select>
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerWeightInput">Ağırlık (g)</label>
+          <input id="drawerWeightInput" type="number" min="50" step="50" class="agent-param-input" [(ngModel)]="agentBaseWeightGrams" />
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerLengthInput">Uzunluk (cm)</label>
+          <input id="drawerLengthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentLengthCm" />
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerWidthInput">Genişlik (cm)</label>
+          <input id="drawerWidthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentWidthCm" />
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerHeightInput">Yükseklik (cm)</label>
+          <input id="drawerHeightInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentHeightCm" />
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerCostInput">Maliyet ($)</label>
+          <input id="drawerCostInput" type="number" min="0" step="0.5" class="agent-param-input" [(ngModel)]="agentProductionCostUsd" />
+        </div>
+        <div class="agent-param-field">
+          <label for="drawerMarginInput">Hedef Marj (%)</label>
+          <input id="drawerMarginInput" type="number" min="5" max="65" step="5" class="agent-param-input" [(ngModel)]="agentTargetMarginPct" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 4 TAŞIYICI CANLI KARGO TEKLİFLERİ -->
+    <section class="drawer-section">
+      <div class="drawer-sec-head-row">
+        <span class="drawer-sec-title">🚚 4 Taşıyıcı Canlı Kargo Teklifleri</span>
+        <button
+          type="button"
+          class="btn-drawer-quotes"
+          [disabled]="isLoadingCarrierQuotes"
+          (click)="fetchDrawerCarrierQuotes()">
+          <i class="fa-solid" [ngClass]="isLoadingCarrierQuotes ? 'fa-spinner fa-spin' : 'fa-rotate'" aria-hidden="true"></i>
+          <span>{{ isLoadingCarrierQuotes ? 'Çekiliyor...' : 'Fiyatları Çek' }}</span>
+        </button>
+      </div>
+
+      <div *ngIf="carrierQuotesError" class="agent-error-alert" role="alert">
+        {{ carrierQuotesError }}
+      </div>
+
+      <div *ngIf="!isLoadingCarrierQuotes && drawerCarrierQuotes.length === 0 && !carrierQuotesError" class="drawer-empty-quotes">
+        Taşıyıcı tekliflerini görmek için <strong>Fiyatları Çek</strong> butonuna tıklayın.
+      </div>
+
+      <div *ngIf="drawerCarrierQuotes.length > 0" class="drawer-carrier-list">
+        <div
+          *ngFor="let q of drawerCarrierQuotes"
+          class="drawer-carrier-card"
+          [class.selected]="selectedCarrierKey === q.carrierKey"
+          (click)="applyCarrierQuoteToListing(q)">
+          <div class="carrier-card-left">
+            <img [src]="getCarrierLogo(q.carrierKey)" [alt]="q.carrierName" class="drawer-carrier-logo" />
+            <div class="carrier-card-meta">
+              <div class="carrier-name-row">
+                <strong>{{ q.carrierName }}</strong>
+                <span class="carrier-service-tag">{{ q.serviceType }}</span>
+              </div>
+              <span class="carrier-days">{{ q.estimatedDays }} · ≈ ₺{{ q.priceTry.toFixed(0) }}</span>
+            </div>
+          </div>
+          <div class="carrier-card-right">
+            <strong class="carrier-usd">${{ q.priceUsd.toFixed(2) }}</strong>
+            <span class="carrier-apply-pill">
+              {{ selectedCarrierKey === q.carrierKey ? '✓ Seçili' : 'Uygula' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. AI FİYAT & RAKİP AJANI -->
+    <section class="drawer-section">
+      <div class="drawer-sec-title">🤖 AI Fiyat, Rakip &amp; Varyasyon Ajanı</div>
+      <button
+        type="button"
+        id="runAiPricingAgentBtn"
+        class="btn-agent-run drawer-agent-cta"
+        [disabled]="isRunningPricingAgent"
+        (click)="runAiPricingAgent()">
+        <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
+        <span>{{ isRunningPricingAgent ? 'Rakip + Kargo + LLM Çalışıyor...' : 'AI Fiyat & Kargo Ajanını Çalıştır' }}</span>
+      </button>
+
+      <div *ngIf="pricingAgentError" class="agent-error-alert" role="alert">
+        {{ pricingAgentError }}
+      </div>
+
+      <div *ngIf="pricingAgentResult as agent" class="agent-result-panel">
+        <div class="agent-metrics-strip">
+          <span class="agent-metric-chip">
+            {{ agent.marketBenchmark.competitorCount > 0 ? ('Rakip: ' + agent.marketBenchmark.competitorCount + ' ilan · Ort $' + agent.marketBenchmark.averagePriceUsd.toFixed(2)) : 'Rakip: Maliyet + Marj Modu' }}
+          </span>
+          <span class="agent-metric-chip accent">
+            {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} ({{ agent.shippingBenchmark.estimatedDays }})
+          </span>
+          <span class="agent-metric-chip profit">
+            Ort. Net Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}
+          </span>
+        </div>
+
+        <ul class="agent-steps-list">
+          <li *ngFor="let st of agent.agentSteps">
+            <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+            <span><strong>{{ st.title }}:</strong> {{ st.summary }}</span>
+          </li>
+        </ul>
+
+        <p class="agent-strategy-summary" *ngIf="agent.strategySummary">
+          <strong>{{ agent.providerUsed }}:</strong> {{ agent.strategySummary }}
+        </p>
+      </div>
+    </section>
+  </div>
+</aside>

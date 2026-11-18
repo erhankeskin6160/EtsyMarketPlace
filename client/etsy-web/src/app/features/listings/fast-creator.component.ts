@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
-import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto, AgentCarrierQuoteSummaryDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, AiShippingContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -207,6 +207,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   pricingAgentResult: VariationPricingAgentResultDto | null = null;
   pricingAgentError = '';
 
+  // --- RIGHT-SIDE SHIPPING & PRICING DRAWER ---
+  isShippingDrawerOpen = false;
+  isLoadingCarrierQuotes = false;
+  carrierQuotesError = '';
+  drawerCarrierQuotes: AgentCarrierQuoteSummaryDto[] = [];
+  selectedCarrierKey = '';
+  selectedCarrierName = '';
+
   // Publish Status & Checklist
   isLivePublish = false;
   isPreviewModalOpen = false;
@@ -361,6 +369,13 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   onCopilotDraftUpdated(): void {
     this.loadDraftFromStorage();
     this.clonedNotice = '✨ Yapay Zeka Asistanı tarafından hazırlanan ürün taslağı forma aktarıldı!';
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.isShippingDrawerOpen) {
+      this.closeShippingDrawer();
+    }
   }
 
   @HostListener('window:beforeunload')
@@ -1089,6 +1104,10 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.selectedProfitVariationKey = '__base__';
     this.pricingAgentResult = null;
     this.pricingAgentError = '';
+    this.drawerCarrierQuotes = [];
+    this.carrierQuotesError = '';
+    this.selectedCarrierKey = '';
+    this.selectedCarrierName = '';
 
     // 4. Şablon & Klonlanan
     this.selectedTemplateId = '';
@@ -2014,6 +2033,109 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     });
   }
 
+  // --- RIGHT-SIDE SHIPPING & PRICING DRAWER ---
+  openShippingDrawer(): void {
+    this.isShippingDrawerOpen = true;
+    if (this.drawerCarrierQuotes.length === 0 && !this.isLoadingCarrierQuotes) {
+      this.fetchDrawerCarrierQuotes();
+    }
+  }
+
+  closeShippingDrawer(): void {
+    this.isShippingDrawerOpen = false;
+  }
+
+  toggleShippingDrawer(): void {
+    if (this.isShippingDrawerOpen) {
+      this.closeShippingDrawer();
+    } else {
+      this.openShippingDrawer();
+    }
+  }
+
+  get computedDesi(): number {
+    const l = Math.max(1, Number(this.agentLengthCm) || 18);
+    const w = Math.max(1, Number(this.agentWidthCm) || 14);
+    const h = Math.max(1, Number(this.agentHeightCm) || 8);
+    return Number(((l * w * h) / 5000).toFixed(2));
+  }
+
+  getCarrierLogo(carrierKey: string): string {
+    const k = (carrierKey || '').toLowerCase();
+    if (k.includes('aras')) return 'assets/shipping/aras_global.png';
+    if (k.includes('navlungo')) return 'assets/shipping/navlungo.png';
+    if (k.includes('shiptomore')) return 'assets/shipping/shiptomore.png';
+    return 'assets/shipping/shipentegra.jpg';
+  }
+
+  fetchDrawerCarrierQuotes(): void {
+    this.isLoadingCarrierQuotes = true;
+    this.carrierQuotesError = '';
+    const weightKg = Math.max(0.05, (Number(this.agentBaseWeightGrams) || 250) / 1000);
+
+    this.etsyApi.getCarrierQuotes({
+      countryCode: (this.agentTargetCountry || 'US').toUpperCase(),
+      weightKg,
+      lengthCm: Math.max(1, Number(this.agentLengthCm) || 18),
+      widthCm: Math.max(1, Number(this.agentWidthCm) || 14),
+      heightCm: Math.max(1, Number(this.agentHeightCm) || 8),
+      usdTryRate: this.usdTryRate,
+      declaredValueUsd: this.effectivePrice > 0 ? this.effectivePrice : 25,
+      quantity: 1
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (resp) => {
+        this.isLoadingCarrierQuotes = false;
+        const rawQuotes = Array.isArray(resp?.quotes) ? resp.quotes : [];
+        const bestByCarrier = new Map<string, AgentCarrierQuoteSummaryDto>();
+        for (const q of rawQuotes) {
+          const priceUsd = Number(q?.priceUsd || 0);
+          if (priceUsd <= 0) continue;
+          const key = String(q.carrierKey || q.carrierName || '').toLowerCase();
+          const item: AgentCarrierQuoteSummaryDto = {
+            carrierKey: q.carrierKey || key,
+            carrierName: q.carrierName || key,
+            serviceType: q.serviceType || q.serviceCode || 'Standard',
+            priceUsd: Number(priceUsd.toFixed(2)),
+            priceTry: Number((Number(q.priceTry) || priceUsd * this.usdTryRate).toFixed(2)),
+            estimatedDays: q.estimatedDays || '3-6 İş Günü',
+            isLive: Boolean(q.isLive)
+          };
+          const prev = bestByCarrier.get(key);
+          if (!prev || item.priceUsd < prev.priceUsd) {
+            bestByCarrier.set(key, item);
+          }
+        }
+
+        this.drawerCarrierQuotes = Array.from(bestByCarrier.values()).sort((a, b) => a.priceUsd - b.priceUsd);
+        if (this.drawerCarrierQuotes.length === 0) {
+          this.carrierQuotesError = resp?.warningMessage || 'Bu ölçü ve ülke için taşıyıcı teklifi alınamadı.';
+        } else if (!this.selectedCarrierKey) {
+          const cheapest = this.drawerCarrierQuotes[0];
+          this.selectedCarrierKey = cheapest.carrierKey;
+          this.selectedCarrierName = cheapest.carrierName;
+          if (!this.estimatedShippingCostUsd) {
+            this.estimatedShippingCostUsd = cheapest.priceUsd;
+            this.onVariationRowChange();
+            this.saveDraftToStorage();
+          }
+        }
+      },
+      error: (err) => {
+        this.isLoadingCarrierQuotes = false;
+        this.carrierQuotesError = err?.error?.message || err?.message || '4 taşıyıcıdan canlı fiyat çekilemedi.';
+      }
+    });
+  }
+
+  applyCarrierQuoteToListing(quote: AgentCarrierQuoteSummaryDto): void {
+    this.selectedCarrierKey = quote.carrierKey;
+    this.selectedCarrierName = quote.carrierName;
+    this.estimatedShippingCostUsd = Number(quote.priceUsd.toFixed(2));
+    this.onVariationRowChange();
+    this.saveDraftToStorage();
+    this.showToast(`🚚 ${quote.carrierName} ($${quote.priceUsd.toFixed(2)}) kargo maliyeti olarak uygulandı!`);
+  }
+
   runAiPricingAgent(): void {
     const cleanTitle = (this.title || '').trim() || (this.description || '').trim();
     if (!cleanTitle) {
@@ -2072,8 +2194,15 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isRunningPricingAgent = false;
         this.pricingAgentResult = res;
 
-        // 1. Kargo modülü maliyetini Column 2'ye uygula
+        // 1. Kargo modülü maliyetini ve taşıyıcı tekliflerini senkronize et
         this.estimatedShippingCostUsd = Number((res.recommendedBaseShippingCostUsd || 0).toFixed(2));
+        if (res.shippingBenchmark) {
+          this.selectedCarrierKey = res.shippingBenchmark.selectedCarrierKey || '';
+          this.selectedCarrierName = res.shippingBenchmark.selectedCarrierName || '';
+          if (Array.isArray(res.shippingBenchmark.carrierQuotes) && res.shippingBenchmark.carrierQuotes.length > 0) {
+            this.drawerCarrierQuotes = [...res.shippingBenchmark.carrierQuotes].sort((a, b) => a.priceUsd - b.priceUsd);
+          }
+        }
 
         // 2. Varyasyon grupları önerildiyse forma yansıt
         this.enableVariations = true;
