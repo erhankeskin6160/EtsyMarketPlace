@@ -10,21 +10,29 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Infrastructure.Database.Postgres;
+using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using DomainUser = EtsyMarketPlace.Domain.Entities.AppUser;
 using DomainAuditLog = EtsyMarketPlace.Domain.Entities.AuditLog;
 using AppUserRecord = EtsyMarketPlace.Application.Auth.AppUser;
 
+/// <summary>
+/// PostgreSQL 16 EF Core tabanlı kullanıcı ve audit günlüğü deposu.
+/// PostgreSQL erişilemez olduğunda yerel SQLite yedeğine (<see cref="SqliteEtsyIntegrationStore"/>) düşer.
+/// </summary>
 public sealed class EfPostgreSqlUserRepository : IUserRepository
 {
     private readonly EtsyMarketPlaceDbContext _context;
     private readonly ILogger<EfPostgreSqlUserRepository> _logger;
+    private readonly SqliteEtsyIntegrationStore? _fallbackStore;
 
     public EfPostgreSqlUserRepository(
         EtsyMarketPlaceDbContext context,
-        ILogger<EfPostgreSqlUserRepository> logger)
+        ILogger<EfPostgreSqlUserRepository> logger,
+        SqliteEtsyIntegrationStore? fallbackStore = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _fallbackStore = fallbackStore;
     }
 
     private static DateTimeOffset ToUtcOffset(DateTime dt)
@@ -33,130 +41,228 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 
-    public async Task<AppUserRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
+    public Task<AppUserRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        var entity = await _context.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
-
-        return entity is null ? null : ToRecord(entity);
+        return ExecuteWithFallbackAsync<AppUserRecord?>(
+            async () =>
+            {
+                var entity = await _context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+                return entity is null ? null : ToRecord(entity);
+            },
+            store => store.GetByIdAsync(id, cancellationToken),
+            $"GetById({id})");
     }
 
-    public async Task<AppUserRecord?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
+    public Task<AppUserRecord?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(identifier)) return null;
+        if (string.IsNullOrWhiteSpace(identifier))
+            return Task.FromResult<AppUserRecord?>(null);
 
         string normalized = identifier.Trim().ToLowerInvariant();
-        var entity = await _context.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Username.ToLower() == normalized || u.Email.ToLower() == normalized, cancellationToken);
-
-        return entity is null ? null : ToRecord(entity);
+        return ExecuteWithFallbackAsync<AppUserRecord?>(
+            async () =>
+            {
+                var entity = await _context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Username.ToLower() == normalized || u.Email.ToLower() == normalized, cancellationToken);
+                return entity is null ? null : ToRecord(entity);
+            },
+            store => store.GetByUsernameOrEmailAsync(identifier, cancellationToken),
+            "GetByUsernameOrEmail");
     }
 
-    public async Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AppUserRecord>> GetAllUsersAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _context.Users
-            .AsNoTracking()
-            .OrderByDescending(u => u.CreatedAt)
-            .ToListAsync(cancellationToken);
-
-        return entities.Select(ToRecord).ToList();
+        return ExecuteWithFallbackAsync<IReadOnlyList<AppUserRecord>>(
+            async () =>
+            {
+                var entities = await _context.Users
+                    .AsNoTracking()
+                    .OrderByDescending(u => u.CreatedAt)
+                    .ToListAsync(cancellationToken);
+                return entities.Select(ToRecord).ToList();
+            },
+            store => store.GetAllUsersAsync(cancellationToken),
+            "GetAllUsers");
     }
 
-    public async Task CreateUserAsync(AppUserRecord user, CancellationToken cancellationToken = default)
-    {
-        if (user == null) throw new ArgumentNullException(nameof(user));
-
-        var entity = new DomainUser
-        {
-            Id = string.IsNullOrWhiteSpace(user.Id) ? Guid.NewGuid().ToString("N") : user.Id,
-            Username = user.Username,
-            Email = user.Email,
-            PasswordHash = user.PasswordHash,
-            PasswordSalt = user.PasswordSalt,
-            Role = user.Role,
-            AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []),
-            MonthlyAiTokenQuota = user.MonthlyAiTokenQuota,
-            UsedAiTokens = user.UsedAiTokens,
-            IsActive = user.IsActive,
-            SubscriptionPlanId = user.SubscriptionPlanId,
-            SubscriptionStatus = user.SubscriptionStatus,
-            SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime,
-            CreatedAt = user.CreatedAt.UtcDateTime,
-            LastLoginAt = user.LastLoginAt?.UtcDateTime
-        };
-
-        _context.Users.Add(entity);
-        await _context.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task UpdateUserAsync(AppUserRecord user, CancellationToken cancellationToken = default)
+    public Task CreateUserAsync(AppUserRecord user, CancellationToken cancellationToken = default)
     {
         if (user == null) throw new ArgumentNullException(nameof(user));
 
-        var entity = await _context.Users
-            .FirstOrDefaultAsync(u => u.Id == user.Id, cancellationToken);
+        return ExecuteWithFallbackAsync(
+            async () =>
+            {
+                var entity = new DomainUser
+                {
+                    Id = string.IsNullOrWhiteSpace(user.Id) ? Guid.NewGuid().ToString("N") : user.Id,
+                    Username = user.Username,
+                    Email = user.Email,
+                    PasswordHash = user.PasswordHash,
+                    PasswordSalt = user.PasswordSalt,
+                    Role = user.Role,
+                    AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []),
+                    MonthlyAiTokenQuota = user.MonthlyAiTokenQuota,
+                    UsedAiTokens = user.UsedAiTokens,
+                    IsActive = user.IsActive,
+                    SubscriptionPlanId = user.SubscriptionPlanId,
+                    SubscriptionStatus = user.SubscriptionStatus,
+                    SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime,
+                    CreatedAt = user.CreatedAt.UtcDateTime,
+                    LastLoginAt = user.LastLoginAt?.UtcDateTime
+                };
 
-        if (entity is null) return;
-
-        entity.Email = user.Email;
-        entity.Role = user.Role;
-        entity.AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []);
-        entity.MonthlyAiTokenQuota = user.MonthlyAiTokenQuota;
-        entity.IsActive = user.IsActive;
-        entity.SubscriptionPlanId = user.SubscriptionPlanId;
-        entity.SubscriptionStatus = user.SubscriptionStatus;
-        entity.SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime;
-
-        await _context.SaveChangesAsync(cancellationToken);
+                _context.Users.Add(entity);
+                await _context.SaveChangesAsync(cancellationToken);
+                return true;
+            },
+            async store =>
+            {
+                await store.CreateUserAsync(user, cancellationToken);
+                return true;
+            },
+            $"CreateUser({user.Username})");
     }
 
-    public async Task UpdateLastLoginAsync(string id, DateTimeOffset lastLoginAt, CancellationToken cancellationToken = default)
+    public Task UpdateUserAsync(AppUserRecord user, CancellationToken cancellationToken = default)
     {
-        var entity = await _context.Users
-            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+        if (user == null) throw new ArgumentNullException(nameof(user));
 
-        if (entity is null) return;
+        return ExecuteWithFallbackAsync(
+            async () =>
+            {
+                var entity = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == user.Id, cancellationToken);
 
-        entity.LastLoginAt = lastLoginAt.UtcDateTime;
-        await _context.SaveChangesAsync(cancellationToken);
+                if (entity is null) return true;
+
+                entity.Email = user.Email;
+                entity.Role = user.Role;
+                entity.AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []);
+                entity.MonthlyAiTokenQuota = user.MonthlyAiTokenQuota;
+                entity.IsActive = user.IsActive;
+                entity.SubscriptionPlanId = user.SubscriptionPlanId;
+                entity.SubscriptionStatus = user.SubscriptionStatus;
+                entity.SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime;
+
+                await _context.SaveChangesAsync(cancellationToken);
+                return true;
+            },
+            async store =>
+            {
+                await store.UpdateUserAsync(user, cancellationToken);
+                return true;
+            },
+            $"UpdateUser({user.Id})");
     }
 
-    public async Task AddAuditLogAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
+    public Task UpdateLastLoginAsync(string id, DateTimeOffset lastLoginAt, CancellationToken cancellationToken = default)
     {
-        if (entry == null) return;
+        return ExecuteWithFallbackAsync(
+            async () =>
+            {
+                var entity = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
-        var entity = new DomainAuditLog
+                if (entity is null) return true;
+
+                entity.LastLoginAt = lastLoginAt.UtcDateTime;
+                await _context.SaveChangesAsync(cancellationToken);
+                return true;
+            },
+            async store =>
+            {
+                await store.UpdateLastLoginAsync(id, lastLoginAt, cancellationToken);
+                return true;
+            },
+            $"UpdateLastLogin({id})");
+    }
+
+    public Task AddAuditLogAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
+    {
+        if (entry == null) return Task.CompletedTask;
+
+        return ExecuteWithFallbackAsync(
+            async () =>
+            {
+                var entity = new DomainAuditLog
+                {
+                    UserId = entry.UserId ?? string.Empty,
+                    Username = entry.Username ?? string.Empty,
+                    Action = entry.Action ?? string.Empty,
+                    Details = entry.Details,
+                    IpAddress = entry.IpAddress,
+                    Timestamp = entry.Timestamp.UtcDateTime
+                };
+
+                _context.AuditLogs.Add(entity);
+                await _context.SaveChangesAsync(cancellationToken);
+                return true;
+            },
+            async store =>
+            {
+                await store.AddAuditLogAsync(entry, cancellationToken);
+                return true;
+            },
+            $"AddAuditLog({entry.Action})");
+    }
+
+    public Task<IReadOnlyList<AuditLogEntry>> GetAuditLogsAsync(int limit = 100, CancellationToken cancellationToken = default)
+    {
+        return ExecuteWithFallbackAsync<IReadOnlyList<AuditLogEntry>>(
+            async () =>
+            {
+                var entities = await _context.AuditLogs
+                    .AsNoTracking()
+                    .OrderByDescending(x => x.Timestamp)
+                    .Take(limit)
+                    .ToListAsync(cancellationToken);
+
+                return entities.Select(e => new AuditLogEntry(
+                    e.Id,
+                    e.UserId,
+                    e.Username,
+                    e.Action,
+                    e.Details,
+                    e.IpAddress,
+                    ToUtcOffset(e.Timestamp))).ToList();
+            },
+            store => store.GetAuditLogsAsync(limit, cancellationToken),
+            "GetAuditLogs");
+    }
+
+    private async Task<T> ExecuteWithFallbackAsync<T>(
+        Func<Task<T>> pgAction,
+        Func<SqliteEtsyIntegrationStore, Task<T>> sqliteAction,
+        string operationName)
+    {
+        try
         {
-            UserId = entry.UserId ?? string.Empty,
-            Username = entry.Username ?? string.Empty,
-            Action = entry.Action ?? string.Empty,
-            Details = entry.Details,
-            IpAddress = entry.IpAddress,
-            Timestamp = entry.Timestamp.UtcDateTime
-        };
-
-        _context.AuditLogs.Add(entity);
-        await _context.SaveChangesAsync(cancellationToken);
+            return await pgAction();
+        }
+        catch (Exception ex) when (_fallbackStore is not null && IsDatabaseUnavailableException(ex))
+        {
+            _context.ChangeTracker.Clear();
+            _logger.LogWarning(ex, "PostgreSQL {Operation} başarısız; SQLite kullanıcı yedeği kullanılıyor: {Message}", operationName, ex.Message);
+            return await sqliteAction(_fallbackStore);
+        }
     }
 
-    public async Task<IReadOnlyList<AuditLogEntry>> GetAuditLogsAsync(int limit = 100, CancellationToken cancellationToken = default)
+    private static bool IsDatabaseUnavailableException(Exception ex)
     {
-        var entities = await _context.AuditLogs
-            .AsNoTracking()
-            .OrderByDescending(x => x.Timestamp)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
-
-        return entities.Select(e => new AuditLogEntry(
-            e.Id,
-            e.UserId,
-            e.Username,
-            e.Action,
-            e.Details,
-            e.IpAddress,
-            ToUtcOffset(e.Timestamp))).ToList();
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (current is Npgsql.NpgsqlException ||
+                current is System.Net.Sockets.SocketException ||
+                current is TimeoutException ||
+                current.Message.Contains("transient failure", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static AppUserRecord ToRecord(DomainUser u)

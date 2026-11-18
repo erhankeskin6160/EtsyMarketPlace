@@ -321,7 +321,8 @@ public sealed class EfPostgreSqlSubscriptionRepository(
         {
             if (current is Npgsql.NpgsqlException ||
                 current is System.Net.Sockets.SocketException ||
-                current is TimeoutException)
+                current is TimeoutException ||
+                current.Message.Contains("transient failure", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
