@@ -84,3 +84,122 @@ export function calculateEtsyNetProfit(input: EtsyNetProfitInput): EtsyNetProfit
     netMarginPercent
   };
 }
+
+export interface VariationProfitItemInput {
+  key: string;
+  price: number;
+  quantity: number;
+  active?: boolean;
+  shippingCostUsd?: number | null;
+}
+
+export interface VariationNetProfitRow {
+  key: string;
+  priceUsd: number;
+  quantity: number;
+  active: boolean;
+  breakdown: EtsyNetProfitBreakdown;
+}
+
+export interface VariationNetProfitSummary {
+  rows: VariationNetProfitRow[];
+  activeRows: VariationNetProfitRow[];
+  minSalePriceUsd: number;
+  maxSalePriceUsd: number;
+  minTotalFeesUsd: number;
+  maxTotalFeesUsd: number;
+  minNetRemainingUsd: number;
+  maxNetRemainingUsd: number;
+  minNetRemainingTry: number;
+  maxNetRemainingTry: number;
+  minNetMarginPercent: number;
+  maxNetMarginPercent: number;
+  hasPriceSpread: boolean;
+}
+
+/**
+ * Tüm varyasyon seçenekleri için tek tek Etsy kesinti, kargo ve net kâr kırılımını
+ * hesaplar; aktif seçenekler arası taban-tavan aralığını özetler.
+ */
+export function calculateVariationNetProfits(
+  rows: VariationProfitItemInput[],
+  fallbackBasePriceUsd: number,
+  defaultShippingCostUsd: number,
+  usdTryRate: number,
+  includeOffsiteAds = false
+): VariationNetProfitSummary {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      rows: [],
+      activeRows: [],
+      minSalePriceUsd: 0,
+      maxSalePriceUsd: 0,
+      minTotalFeesUsd: 0,
+      maxTotalFeesUsd: 0,
+      minNetRemainingUsd: 0,
+      maxNetRemainingUsd: 0,
+      minNetRemainingTry: 0,
+      maxNetRemainingTry: 0,
+      minNetMarginPercent: 0,
+      maxNetMarginPercent: 0,
+      hasPriceSpread: false
+    };
+  }
+
+  const safeFallbackPrice = Math.max(0, Number(fallbackBasePriceUsd) || 0);
+  const safeDefaultShipping = Math.max(0, Number(defaultShippingCostUsd) || 0);
+
+  const computedRows: VariationNetProfitRow[] = rows.map(row => {
+    const rawPrice = Number(row.price);
+    const effectivePrice = Number.isFinite(rawPrice) && rawPrice > 0 ? round2(rawPrice) : round2(safeFallbackPrice);
+    const effectiveShipping =
+      row.shippingCostUsd !== undefined && row.shippingCostUsd !== null
+        ? Math.max(0, Number(row.shippingCostUsd) || 0)
+        : safeDefaultShipping;
+
+    const breakdown = calculateEtsyNetProfit({
+      salePriceUsd: effectivePrice,
+      shippingCostUsd: effectiveShipping,
+      usdTryRate,
+      includeOffsiteAds
+    });
+
+    return {
+      key: row.key,
+      priceUsd: effectivePrice,
+      quantity: Math.max(0, Number(row.quantity) || 0),
+      active: row.active !== false,
+      breakdown
+    };
+  });
+
+  const activeRows = computedRows.filter(r => r.active);
+  const targetRows = activeRows.length > 0 ? activeRows : computedRows;
+
+  const minSalePriceUsd = round2(Math.min(...targetRows.map(r => r.priceUsd)));
+  const maxSalePriceUsd = round2(Math.max(...targetRows.map(r => r.priceUsd)));
+  const minTotalFeesUsd = round2(Math.min(...targetRows.map(r => r.breakdown.totalEtsyFeesUsd)));
+  const maxTotalFeesUsd = round2(Math.max(...targetRows.map(r => r.breakdown.totalEtsyFeesUsd)));
+  const minNetRemainingUsd = round2(Math.min(...targetRows.map(r => r.breakdown.netRemainingUsd)));
+  const maxNetRemainingUsd = round2(Math.max(...targetRows.map(r => r.breakdown.netRemainingUsd)));
+  const minNetRemainingTry = round2(Math.min(...targetRows.map(r => r.breakdown.netRemainingTry)));
+  const maxNetRemainingTry = round2(Math.max(...targetRows.map(r => r.breakdown.netRemainingTry)));
+  const minNetMarginPercent = Math.min(...targetRows.map(r => r.breakdown.netMarginPercent));
+  const maxNetMarginPercent = Math.max(...targetRows.map(r => r.breakdown.netMarginPercent));
+
+  return {
+    rows: computedRows,
+    activeRows,
+    minSalePriceUsd,
+    maxSalePriceUsd,
+    minTotalFeesUsd,
+    maxTotalFeesUsd,
+    minNetRemainingUsd,
+    maxNetRemainingUsd,
+    minNetRemainingTry,
+    maxNetRemainingTry,
+    minNetMarginPercent,
+    maxNetMarginPercent,
+    hasPriceSpread: Math.abs(maxSalePriceUsd - minSalePriceUsd) >= 0.01
+  };
+}

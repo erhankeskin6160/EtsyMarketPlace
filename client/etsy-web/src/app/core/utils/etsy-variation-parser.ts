@@ -1,3 +1,10 @@
+export interface ParsedInlineOptionPrice {
+  cleanValue: string;
+  priceUsd?: number;
+  deltaUsd?: number;
+  active: boolean;
+}
+
 export interface ParsedVariationRow {
   key: string;
   price: number;
@@ -65,7 +72,11 @@ const STOP_LINES = new Set([
  * 3) Etsy ürün sayfasından Ctrl+A -> Ctrl+C ile kopyalanan düz metni
  * otomatik olarak varyasyon gruplarına ve fiyatlı kombinasyon tablosuna dönüştürür.
  */
-export function parseEtsyVariationsFromClipboard(rawInput: string, fallbackBasePrice = 0): ParsedVariationResult {
+export function parseEtsyVariationsFromClipboard(
+  rawInput: string,
+  fallbackBasePrice = 0,
+  usdTryRate = 50
+): ParsedVariationResult {
   const trimmed = (rawInput || '').trim();
   if (!trimmed) {
     return emptyResult();
@@ -73,18 +84,18 @@ export function parseEtsyVariationsFromClipboard(rawInput: string, fallbackBaseP
 
   // 1. JSON (Bookmarklet veya API formatı)
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    const jsonRes = tryParseBookmarkletJson(trimmed, fallbackBasePrice);
+    const jsonRes = tryParseBookmarkletJson(trimmed, fallbackBasePrice, usdTryRate);
     if (jsonRes.hasVariations) return jsonRes;
   }
 
   // 2. HTML (<select id="variation-selector-...">)
   if (/<select\b[^>]*variation-selector-/i.test(trimmed) || /<option\b/i.test(trimmed)) {
-    const htmlRes = tryParseEtsyHtml(trimmed, fallbackBasePrice);
+    const htmlRes = tryParseEtsyHtml(trimmed, fallbackBasePrice, usdTryRate);
     if (htmlRes.hasVariations) return htmlRes;
   }
 
   // 3. Etsy sayfasından Ctrl+A -> Ctrl+C ile kopyalanan düz metin
-  const textRes = tryParseCopiedEtsyText(trimmed, fallbackBasePrice);
+  const textRes = tryParseCopiedEtsyText(trimmed, fallbackBasePrice, usdTryRate);
   if (textRes.hasVariations) return textRes;
 
   return emptyResult();
@@ -102,8 +113,10 @@ export function buildEtsyVariationBookmarkletUrl(): string {
     }).filter(g => g.options.length > 0);
     const ld = document.querySelector('script[type="application/ld+json"]')?.textContent || '';
     const m = ld.match(/"(?:lowPrice|price)"\\s*:\\s*"?(\\d+(?:[.,]\\d{1,2})?)"?/i);
+    const cm = ld.match(/"priceCurrency"\\s*:\\s*"([A-Z]{3})"/i);
     const basePrice = m ? parseFloat(m[1].replace(',', '.')) : 0;
-    const payload = JSON.stringify({ etsyMarketPlaceVariations: true, basePrice, groups });
+    const currency = cm ? cm[1].toUpperCase() : 'USD';
+    const payload = JSON.stringify({ etsyMarketPlaceVariations: true, basePrice, currency, groups });
     navigator.clipboard?.writeText(payload).then(
       () => alert('✅ ' + groups.length + ' varyasyon grubu panoya kopyalandı! Şimdi Fast Creator kutusuna Ctrl+V ile yapıştırın.'),
       () => prompt('Aşağıdaki varyasyon verisini kopyalayın (Ctrl+C):', payload)
@@ -112,13 +125,110 @@ export function buildEtsyVariationBookmarkletUrl(): string {
   return 'javascript:' + encodeURIComponent(fn.replace(/\s+/g, ' ').trim());
 }
 
-function tryParseBookmarkletJson(raw: string, fallbackBasePrice: number): ParsedVariationResult {
+export function parseInlineVariationOptionPrice(rawItem: string, usdTryRate = 50): ParsedInlineOptionPrice {
+  let text = String(rawItem || '').replace(/\s+/g, ' ').trim();
+  if (!text) {
+    return { cleanValue: '', active: true };
+  }
+
+  let active = true;
+  const soldOutRegex = /\(\s*(?:sold\s*out|out\s*of\s*stock|tükendi|stokta\s*yok)\s*\)/gi;
+  if (soldOutRegex.test(text)) {
+    active = false;
+    text = text.replace(soldOutRegex, '').replace(/\s+/g, ' ').trim();
+  }
+
+  let priceUsd: number | undefined;
+  let deltaUsd: number | undefined;
+
+  const bracketRegex = /(?:\(\s*|\[\s*)(\+\s*)?(?:(US\s*\$|\$|USD|EUR|€|GBP|£|TRY|₺|TL)\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(USD|EUR|GBP|TRY|TL|₺|\$|€|£|ABD\s*doları)?\s*(?:\)|\])\s*$/i;
+  const sepRegex = /\s*[-–:]\s*(\+\s*)?(?:(US\s*\$|\$|USD|EUR|€|GBP|£|TRY|₺|TL)\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(USD|EUR|GBP|TRY|TL|₺|\$|€|£|ABD\s*doları)?\s*$/i;
+
+  const bracketMatch = text.match(bracketRegex);
+  const sepMatch = !bracketMatch ? text.match(sepRegex) : null;
+  const match = bracketMatch || sepMatch;
+
+  if (match && match.index !== undefined) {
+    const hasPlus = Boolean(match[1]);
+    const prefixUnit = (match[2] || '').trim();
+    const numStr = (match[3] || '').trim();
+    const suffixUnit = (match[4] || '').trim();
+    const hasCurrency = Boolean(prefixUnit || suffixUnit);
+
+    const canAccept = bracketMatch ? (hasCurrency || hasPlus) : hasCurrency;
+    if (canAccept) {
+      const parsedAmount = parseLocalizedNumber(numStr);
+      if (Number.isFinite(parsedAmount) && parsedAmount >= 0) {
+        const usdAmount = convertParsedAmountToUsd(parsedAmount, `${prefixUnit} ${suffixUnit}`, usdTryRate);
+        if (hasPlus) {
+          deltaUsd = usdAmount;
+        } else {
+          priceUsd = usdAmount;
+        }
+        text = text.slice(0, match.index).replace(/\s+/g, ' ').trim();
+      }
+    }
+  }
+
+  return {
+    cleanValue: text,
+    priceUsd,
+    deltaUsd,
+    active
+  };
+}
+
+function parseLocalizedNumber(rawNum: string): number {
+  const s = String(rawNum || '').trim();
+  if (!s) return Number.NaN;
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      return Number.parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    }
+    return Number.parseFloat(s.replace(/,/g, ''));
+  }
+
+  if (hasComma) {
+    if (/^\d{1,3}(?:,\d{3})+$/.test(s)) {
+      return Number.parseFloat(s.replace(/,/g, ''));
+    }
+    return Number.parseFloat(s.replace(',', '.'));
+  }
+
+  if (hasDot) {
+    if (/^\d{1,3}(?:\.\d{3})+$/.test(s)) {
+      return Number.parseFloat(s.replace(/\./g, ''));
+    }
+    return Number.parseFloat(s);
+  }
+
+  return Number.parseFloat(s);
+}
+
+function convertParsedAmountToUsd(amount: number, unitText: string, usdTryRate: number): number {
+  const isTryCurrency = /(?:^|\b)(?:tl|try)(?:\b|$)|₺/i.test(unitText || '');
+  if (isTryCurrency) {
+    const rate = Number(usdTryRate) > 0 ? Number(usdTryRate) : 50;
+    return Number((amount / rate).toFixed(2));
+  }
+  return Number(amount.toFixed(2));
+}
+
+function tryParseBookmarkletJson(raw: string, fallbackBasePrice: number, usdTryRate: number): ParsedVariationResult {
   try {
     const data = JSON.parse(raw);
     const groupsRaw = Array.isArray(data?.groups) ? data.groups : (Array.isArray(data) ? data : null);
     if (!groupsRaw || groupsRaw.length === 0) return emptyResult();
 
-    const basePrice = typeof data?.basePrice === 'number' && data.basePrice > 0 ? data.basePrice : fallbackBasePrice;
+    let basePrice = typeof data?.basePrice === 'number' && data.basePrice > 0 ? data.basePrice : fallbackBasePrice;
+    if (typeof data?.basePrice === 'number' && data.basePrice > 0 && String(data?.currency || '').toUpperCase() === 'TRY') {
+      basePrice = convertParsedAmountToUsd(data.basePrice, 'TRY', usdTryRate);
+    }
+
     const groups: InternalGroup[] = [];
 
     for (const g of groupsRaw) {
@@ -127,7 +237,7 @@ function tryParseBookmarkletJson(raw: string, fallbackBasePrice: number): Parsed
         ? g.options.map((x: any) => String(x))
         : (Array.isArray(g?.values) ? g.values.map((x: any) => String(x)) : []);
 
-      const options = parseOptionStringList(rawOpts);
+      const options = parseOptionStringList(rawOpts, usdTryRate);
       if (options.length > 0) {
         groups.push({ name, options });
       }
@@ -139,9 +249,13 @@ function tryParseBookmarkletJson(raw: string, fallbackBasePrice: number): Parsed
   }
 }
 
-function tryParseEtsyHtml(html: string, fallbackBasePrice: number): ParsedVariationResult {
-  const ldMatch = html.match(/"(?:lowPrice|price)"\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?/i);
-  const basePrice = ldMatch ? parseFloat(ldMatch[1].replace(',', '.')) : fallbackBasePrice;
+function tryParseEtsyHtml(html: string, fallbackBasePrice: number, usdTryRate: number): ParsedVariationResult {
+  const ldMatch = html.match(/"(?:lowPrice|price)"\s*:\s*"?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)"?/i);
+  const currencyMatch = html.match(/"priceCurrency"\s*:\s*"([A-Z]{3})"/i);
+  let basePrice = ldMatch ? parseLocalizedNumber(ldMatch[1]) : fallbackBasePrice;
+  if (ldMatch && currencyMatch && currencyMatch[1].toUpperCase() === 'TRY') {
+    basePrice = convertParsedAmountToUsd(basePrice, 'TRY', usdTryRate);
+  }
 
   const selectRegex = /<select\b[^>]*\bid=["']variation-selector-(\d+)["'][^>]*>([\s\S]*?)<\/select>/gi;
   const optionRegex = /<option\b[^>]*>([\s\S]*?)<\/option>/gi;
@@ -164,7 +278,7 @@ function tryParseEtsyHtml(html: string, fallbackBasePrice: number): ParsedVariat
       rawOpts.push(stripTags(decodeHtml(optMatch[1])));
     }
 
-    const options = parseOptionStringList(rawOpts);
+    const options = parseOptionStringList(rawOpts, usdTryRate);
     if (options.length > 0) {
       groups.push({ idx, group: { name, options } });
     }
@@ -175,7 +289,7 @@ function tryParseEtsyHtml(html: string, fallbackBasePrice: number): ParsedVariat
   return buildResultFromGroups(groups.map(g => g.group), basePrice, 'html');
 }
 
-function tryParseCopiedEtsyText(text: string, fallbackBasePrice: number): ParsedVariationResult {
+function tryParseCopiedEtsyText(text: string, fallbackBasePrice: number, usdTryRate: number): ParsedVariationResult {
   const lines = text
     .split(/\r?\n/)
     .map(l => l.replace(/\s+/g, ' ').trim())
@@ -183,13 +297,16 @@ function tryParseCopiedEtsyText(text: string, fallbackBasePrice: number): Parsed
 
   if (lines.length < 2) return emptyResult();
 
-  // Sayfa içi baz fiyat tespiti ("Now US$7.50+", "Şimdi 7,50 ABD doları+")
+  // Sayfa içi baz fiyat tespiti ("Now US$7.50+", "Şimdi 7,50 ABD doları+", "Şimdi 450,00 TL+")
   let detectedBasePrice = fallbackBasePrice;
   for (const line of lines) {
-    const bp = line.match(/(?:Now|Şimdi)\s*(?:US\s*\$|\$|USD)?\s*(\d+(?:[.,]\d{1,2})?)/i);
+    const bp = line.match(/(?:Now|Şimdi)\s*(?:(US\s*\$|\$|USD|TRY|₺|TL)\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(USD|TRY|TL|₺|\$|ABD\s*doları)?/i);
     if (bp) {
-      detectedBasePrice = parseFloat(bp[1].replace(',', '.'));
-      break;
+      const parsedBase = parseLocalizedNumber(bp[2]);
+      if (Number.isFinite(parsedBase) && parsedBase > 0) {
+        detectedBasePrice = convertParsedAmountToUsd(parsedBase, `${bp[1] || ''} ${bp[3] || ''}`, usdTryRate);
+        break;
+      }
     }
   }
 
@@ -226,7 +343,7 @@ function tryParseCopiedEtsyText(text: string, fallbackBasePrice: number): Parsed
         j++;
       }
 
-      const parsedOpts = parseOptionStringList(rawOpts);
+      const parsedOpts = parseOptionStringList(rawOpts, usdTryRate);
       if (parsedOpts.length > 0) {
         groups.push({ name: groupName, options: parsedOpts });
         i = j;
@@ -239,44 +356,55 @@ function tryParseCopiedEtsyText(text: string, fallbackBasePrice: number): Parsed
   return buildResultFromGroups(groups, detectedBasePrice, 'text');
 }
 
-function parseOptionStringList(rawOpts: string[]): InternalOption[] {
+function parseOptionStringList(rawOpts: string[], usdTryRate: number): InternalOption[] {
   const options: InternalOption[] = [];
   const seen = new Set<string>();
 
   for (const rawItem of rawOpts) {
-    let text = rawItem.replace(/\s+/g, ' ').trim();
-    if (!text || PLACEHOLDER_TEXTS.has(text.toLowerCase())) continue;
+    const rawTrimmed = String(rawItem || '').replace(/\s+/g, ' ').trim();
+    if (!rawTrimmed || PLACEHOLDER_TEXTS.has(rawTrimmed.toLowerCase())) continue;
 
-    let active = true;
-    const soldOutRegex = /\(\s*(?:sold\s*out|out\s*of\s*stock|tükendi|stokta\s*yok)\s*\)/i;
-    if (soldOutRegex.test(text)) {
-      active = false;
-      text = text.replace(soldOutRegex, '').trim();
-    }
+    const parsed = parseInlineVariationOptionPrice(rawTrimmed, usdTryRate);
+    const text = parsed.cleanValue;
 
-    let priceUsd: number | undefined;
-    let deltaUsd: number | undefined;
-
-    const priceRegex = /\(\s*(\+\s*)?(?:US\s*\$|\$|USD|EUR|€|GBP|£|TRY|₺)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:USD|EUR|GBP|TRY|ABD\s*doları)?\s*\)\s*$/i;
-    const priceMatch = text.match(priceRegex);
-    if (priceMatch) {
-      const val = parseFloat(priceMatch[2].replace(',', '.'));
-      if (!isNaN(val)) {
-        if (priceMatch[1]) {
-          deltaUsd = val;
-        } else {
-          priceUsd = val;
-        }
-      }
-      text = text.slice(0, priceMatch.index).trim();
-    }
-
-    if (!text || seen.has(text.toLowerCase())) continue;
+    if (!text || PLACEHOLDER_TEXTS.has(text.toLowerCase()) || seen.has(text.toLowerCase())) continue;
     seen.add(text.toLowerCase());
-    options.push({ value: text, priceUsd, deltaUsd, active });
+    options.push({
+      value: text,
+      priceUsd: parsed.priceUsd,
+      deltaUsd: parsed.deltaUsd,
+      active: parsed.active
+    });
   }
 
   return options;
+}
+
+export function resolveVariationOptionPairPrice(
+  basePrice: number,
+  o1: { priceUsd?: number; deltaUsd?: number },
+  o2?: { priceUsd?: number; deltaUsd?: number }
+): number | undefined {
+  const hasAny1 = o1.priceUsd !== undefined || o1.deltaUsd !== undefined;
+  const hasAny2 = Boolean(o2 && (o2.priceUsd !== undefined || o2.deltaUsd !== undefined));
+  if (!hasAny1 && !hasAny2) {
+    return undefined;
+  }
+
+  let price = basePrice;
+  if (!o2) {
+    price = o1.priceUsd ?? (o1.deltaUsd !== undefined ? basePrice + o1.deltaUsd : basePrice);
+  } else if (o2.priceUsd !== undefined && o1.priceUsd === undefined) {
+    price = o2.priceUsd + (o1.deltaUsd ?? 0);
+  } else if (o1.priceUsd !== undefined && o2.priceUsd === undefined) {
+    price = o1.priceUsd + (o2.deltaUsd ?? 0);
+  } else if (o1.priceUsd !== undefined && o2.priceUsd !== undefined) {
+    price = Math.max(o1.priceUsd, o2.priceUsd);
+  } else {
+    price = basePrice + (o1.deltaUsd ?? 0) + (o2.deltaUsd ?? 0);
+  }
+
+  return Number(price.toFixed(2));
 }
 
 function buildResultFromGroups(
@@ -292,10 +420,10 @@ function buildResultFromGroups(
 
   if (!g2) {
     for (const o1 of g1.options) {
-      const price = o1.priceUsd ?? (o1.deltaUsd !== undefined ? basePrice + o1.deltaUsd : basePrice);
+      const price = resolveVariationOptionPairPrice(basePrice, o1) ?? Number(basePrice.toFixed(2));
       rows.push({
         key: o1.value,
-        price: Number(price.toFixed(2)),
+        price,
         quantity: o1.active ? 10 : 0,
         active: o1.active
       });
@@ -303,21 +431,11 @@ function buildResultFromGroups(
   } else {
     for (const o1 of g1.options) {
       for (const o2 of g2.options) {
-        let price = basePrice;
-        if (o2.priceUsd !== undefined && o1.priceUsd === undefined) {
-          price = o2.priceUsd + (o1.deltaUsd ?? 0);
-        } else if (o1.priceUsd !== undefined && o2.priceUsd === undefined) {
-          price = o1.priceUsd + (o2.deltaUsd ?? 0);
-        } else if (o1.priceUsd !== undefined && o2.priceUsd !== undefined) {
-          price = Math.max(o1.priceUsd, o2.priceUsd);
-        } else {
-          price = basePrice + (o1.deltaUsd ?? 0) + (o2.deltaUsd ?? 0);
-        }
-
+        const price = resolveVariationOptionPairPrice(basePrice, o1, o2) ?? Number(basePrice.toFixed(2));
         const active = o1.active && o2.active;
         rows.push({
           key: `${o1.value} / ${o2.value}`,
-          price: Number(price.toFixed(2)),
+          price,
           quantity: active ? 10 : 0,
           active
         });

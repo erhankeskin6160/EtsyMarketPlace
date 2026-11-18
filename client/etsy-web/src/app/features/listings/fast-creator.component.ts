@@ -9,8 +9,8 @@ import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDe
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
-import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard } from '../../core/utils/etsy-variation-parser';
-import { calculateEtsyNetProfit, EtsyNetProfitBreakdown } from '../../core/utils/etsy-fee-calculator';
+import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard, parseInlineVariationOptionPrice, resolveVariationOptionPairPrice } from '../../core/utils/etsy-variation-parser';
+import { calculateEtsyNetProfit, calculateVariationNetProfits, EtsyNetProfitBreakdown, VariationNetProfitRow, VariationNetProfitSummary } from '../../core/utils/etsy-fee-calculator';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -174,6 +174,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   varValues2 = 'Siyah, Beyaz, Altın';
   customVariationPricing = false;
   variationRows: VariationRow[] = [];
+  selectedProfitVariationKey = '__base__';
   isGeneratingVariations = false;
 
   // Publish Status & Checklist
@@ -465,8 +466,18 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.hasRestoredDraft = true;
 
       this.updatePriceTry();
-      if (this.enableVariations && this.variationRows.length === 0) {
-        this.rebuildVariationGrid();
+      this.selectedProfitVariationKey = '__base__';
+      if (this.enableVariations) {
+        if (this.variationRows.length === 0) {
+          this.rebuildVariationGrid();
+        } else if (!this.customVariationPricing) {
+          const activePrices = this.variationRows
+            .filter(r => r.active !== false && Number(r.price) > 0)
+            .map(r => Number(r.price));
+          if (new Set(activePrices).size > 1) {
+            this.customVariationPricing = true;
+          }
+        }
       }
 
       return true;
@@ -866,14 +877,47 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.etsyApi.exchangeRate();
   }
 
+  get variationProfitSummary(): VariationNetProfitSummary {
+    return calculateVariationNetProfits(
+      this.variationRows || [],
+      Number(this.priceUsd) || 0,
+      Number(this.estimatedShippingCostUsd) || 0,
+      this.usdTryRate,
+      this.includeOffsiteAdsFee
+    );
+  }
+
+  get variationProfitRows(): VariationNetProfitRow[] {
+    return this.variationProfitSummary.rows;
+  }
+
   get netProfitBreakdown(): EtsyNetProfitBreakdown {
-    const activeSalePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 0);
+    if (this.hasActiveVariations && this.selectedProfitVariationKey !== '__base__') {
+      const selected = this.variationProfitRows.find(r => r.key === this.selectedProfitVariationKey);
+      if (selected) {
+        return selected.breakdown;
+      }
+    }
     return calculateEtsyNetProfit({
-      salePriceUsd: activeSalePrice,
+      salePriceUsd: this.effectivePrice,
       shippingCostUsd: this.estimatedShippingCostUsd ?? 0,
       usdTryRate: this.usdTryRate,
       includeOffsiteAds: this.includeOffsiteAdsFee
     });
+  }
+
+  getRowNetProfit(row: VariationRow): EtsyNetProfitBreakdown {
+    const rowPrice = Number(row.price) > 0 ? Number(row.price) : (Number(this.priceUsd) || 0);
+    return calculateEtsyNetProfit({
+      salePriceUsd: rowPrice,
+      shippingCostUsd: this.estimatedShippingCostUsd ?? 0,
+      usdTryRate: this.usdTryRate,
+      includeOffsiteAds: this.includeOffsiteAdsFee
+    });
+  }
+
+  selectProfitVariation(key: string): void {
+    this.selectedProfitVariationKey = key || '__base__';
   }
 
   // --- TEMPLATE ACTIONS ---
@@ -925,14 +969,26 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   // --- PRICING & LOGISTICS ---
   onPriceChange(): void {
     this.updatePriceTry();
-    this.rebuildVariationGrid();
+    this.propagateBasePriceToVariations();
   }
 
   onPriceTryChange(): void {
     if (this.usdTryRate > 0) {
       this.priceUsd = Number((this.priceTry / this.usdTryRate).toFixed(2));
-      this.rebuildVariationGrid();
+      this.propagateBasePriceToVariations();
     }
+  }
+
+  private propagateBasePriceToVariations(): void {
+    if (this.enableVariations && this.variationRows.length > 0) {
+      const base = Number(this.priceUsd) || 0;
+      if (!this.customVariationPricing || this.variationRows.every(r => (Number(r.price) || 0) <= 0)) {
+        this.variationRows.forEach(r => {
+          r.price = base;
+        });
+      }
+    }
+    this.rebuildVariationGrid();
   }
 
   updatePriceTry(): void {
@@ -979,6 +1035,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = '';
     this.customVariationPricing = false;
     this.variationRows = [];
+    this.selectedProfitVariationKey = '__base__';
 
     // 4. Şablon & Klonlanan
     this.selectedTemplateId = '';
@@ -1464,18 +1521,40 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   // --- VARIATIONS & PRICING LOCK LOGIC ---
+  get hasActiveVariations(): boolean {
+    return this.enableVariations && Array.isArray(this.variationRows) && this.variationRows.length > 0;
+  }
+
   get isVariationPricingActive(): boolean {
-    return this.enableVariations && this.customVariationPricing && this.variationRows && this.variationRows.length > 0;
+    return this.hasActiveVariations && this.customVariationPricing;
   }
 
   get minVariationPrice(): number {
-    if (!this.variationRows || this.variationRows.length === 0) return this.priceUsd || 0;
-    const active = this.variationRows.filter(r => (r.active !== false) && r.price > 0);
-    return active.length > 0 ? Math.min(...active.map(r => r.price)) : (this.priceUsd || 0);
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.priceUsd) || 0;
+    const active = this.variationRows.filter(r => r.active !== false && Number(r.price) > 0);
+    if (active.length > 0) return Math.min(...active.map(r => Number(r.price)));
+    const anyPositive = this.variationRows.filter(r => Number(r.price) > 0);
+    return anyPositive.length > 0 ? Math.min(...anyPositive.map(r => Number(r.price))) : (Number(this.priceUsd) || 0);
+  }
+
+  get maxVariationPrice(): number {
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.priceUsd) || 0;
+    const active = this.variationRows.filter(r => r.active !== false && Number(r.price) > 0);
+    if (active.length > 0) return Math.max(...active.map(r => Number(r.price)));
+    const anyPositive = this.variationRows.filter(r => Number(r.price) > 0);
+    return anyPositive.length > 0 ? Math.max(...anyPositive.map(r => Number(r.price))) : (Number(this.priceUsd) || 0);
+  }
+
+  get effectivePrice(): number {
+    return this.isVariationPricingActive ? this.minVariationPrice : (Number(this.priceUsd) || 0);
+  }
+
+  get effectiveQuantity(): number {
+    return this.isVariationPricingActive ? this.totalVariationStock : (Number(this.quantity) || 0);
   }
 
   get totalVariationStock(): number {
-    if (!this.variationRows || this.variationRows.length === 0) return this.quantity || 0;
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.quantity) || 0;
     return this.variationRows
       .filter(r => r.active !== false)
       .reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
@@ -1493,19 +1572,34 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.quantity = totalQ;
       }
     }
+    this.saveDraftToStorage();
   }
 
   onVariationPricingToggle(): void {
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
+    } else if (this.enableVariations && this.variationRows.length > 0) {
+      const base = Number(this.priceUsd) || 0;
+      if (base > 0) {
+        this.variationRows.forEach(r => {
+          r.price = base;
+        });
+      }
+      this.saveDraftToStorage();
     }
   }
 
   onVariationsToggled(): void {
+    if (this.enableVariations) {
+      this.customVariationPricing = true;
+    } else {
+      this.selectedProfitVariationKey = '__base__';
+    }
     this.rebuildVariationGrid();
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
     }
+    this.saveDraftToStorage();
   }
 
   setVarType(groupIndex: number, typeName: string): void {
@@ -1531,7 +1625,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0);
+    const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0, this.usdTryRate);
     if (!parsed.hasVariations) {
       if (!silentOnMiss) {
         this.showToast('⚠️ Varyasyon grubu tespit edilemedi. Etsy sayfasında 🔖 Yer İmini tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C yapıp yapıştırın.');
@@ -1547,6 +1641,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = parsed.varValues2;
     this.variationRows = parsed.variationRows.map(r => ({ ...r }));
     this.customVariationPricing = true;
+    this.selectedProfitVariationKey = '__base__';
     this.variationImportWarning = '';
     this.showVariationImportBox = false;
     this.variationPasteInput = '';
@@ -1556,59 +1651,127 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.showToast(`✅ ${parsed.variationRows.length} varyasyon kombinasyonu (${parsed.sourceFormat.toUpperCase()}) başarıyla aktarıldı!`);
   }
 
+  private parseVariationOptionGroup(raw: string) {
+    const parsed = (raw || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map(s => parseInlineVariationOptionPrice(s, this.usdTryRate))
+      .filter(o => o.cleanValue.length > 0);
+
+    const unique: typeof parsed = [];
+    const seen = new Set<string>();
+    for (const o of parsed) {
+      const k = o.cleanValue.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        unique.push(o);
+      }
+    }
+    return unique;
+  }
+
   rebuildVariationGrid(): void {
     if (!this.enableVariations) {
       this.variationRows = [];
+      this.selectedProfitVariationKey = '__base__';
       return;
     }
 
-    const v1 = this.varValues1.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (v1.length === 0) {
+    const basePrice = Number(this.priceUsd) || 0;
+    const opts1 = this.parseVariationOptionGroup(this.varValues1);
+    if (opts1.length === 0) {
       this.variationRows = [];
+      this.selectedProfitVariationKey = '__base__';
       return;
     }
 
-    const combinations: string[] = [];
-    if (this.enableVar2) {
-      const v2 = this.varValues2.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      if (v2.length > 0) {
-        for (const val1 of v1) {
-          for (const val2 of v2) {
-            combinations.push(`${val1} / ${val2}`);
-          }
+    const opts2 = this.enableVar2 ? this.parseVariationOptionGroup(this.varValues2) : [];
+    const hasAnyInlinePrice =
+      opts1.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined) ||
+      opts2.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined);
+    if (hasAnyInlinePrice) {
+      this.customVariationPricing = true;
+    }
+
+    const combinations: Array<{ key: string; inlinePrice?: number; active: boolean }> = [];
+    if (this.enableVar2 && opts2.length > 0) {
+      for (const o1 of opts1) {
+        for (const o2 of opts2) {
+          combinations.push({
+            key: `${o1.cleanValue} / ${o2.cleanValue}`,
+            inlinePrice: resolveVariationOptionPairPrice(basePrice, o1, o2),
+            active: o1.active && o2.active
+          });
         }
-      } else {
-        combinations.push(...v1);
       }
     } else {
-      combinations.push(...v1);
+      for (const o1 of opts1) {
+        combinations.push({
+          key: o1.cleanValue,
+          inlinePrice: resolveVariationOptionPairPrice(basePrice, o1),
+          active: o1.active
+        });
+      }
     }
 
-    // Preserve existing prices if any
     const existing = new Map(this.variationRows.map(r => [r.key, r]));
-    this.variationRows = combinations.map(key => {
-      if (existing.has(key)) {
-        return existing.get(key)!;
+    const defaultPerRowQty = Math.max(5, Math.floor((Number(this.quantity) || 15) / Math.max(1, combinations.length)));
+
+    this.variationRows = combinations.map(combo => {
+      const prev = existing.get(combo.key);
+      if (prev) {
+        let nextPrice = Number(prev.price) || 0;
+        if (combo.inlinePrice !== undefined) {
+          nextPrice = combo.inlinePrice;
+        } else if ((!this.customVariationPricing || nextPrice <= 0) && basePrice > 0) {
+          nextPrice = basePrice;
+        }
+        return {
+          ...prev,
+          price: nextPrice,
+          active: combo.active ? prev.active : false
+        };
       }
+
+      const initialPrice = combo.inlinePrice !== undefined ? combo.inlinePrice : basePrice;
       return {
-        key: key,
-        price: this.priceUsd || 0,
-        quantity: Math.max(1, Math.floor((this.quantity || 10) / (combinations.length || 1))),
-        active: true
+        key: combo.key,
+        price: initialPrice,
+        quantity: combo.active ? defaultPerRowQty : 0,
+        active: combo.active
       };
     });
+
+    if (
+      this.selectedProfitVariationKey !== '__base__' &&
+      !this.variationRows.some(r => r.key === this.selectedProfitVariationKey)
+    ) {
+      this.selectedProfitVariationKey = '__base__';
+    }
+
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
     }
   }
 
   syncBasePriceToVariations(): void {
-    const p = this.priceUsd || 0;
+    let p = Number(this.priceUsd) || 0;
+    if (p <= 0) {
+      const firstPositive = this.variationRows.find(r => (Number(r.price) || 0) > 0);
+      if (firstPositive) {
+        p = Number(firstPositive.price);
+      }
+    }
+    if (p <= 0) {
+      this.showToast('⚠️ Lütfen önce taban fiyat veya en az bir varyasyon fiyatı girin.');
+      return;
+    }
     this.variationRows.forEach(row => {
       row.price = p;
     });
     this.onVariationRowChange();
-    this.showToast(`⚡ Tüm varyasyon fiyatları ${p.toFixed(2)} olarak eşitlendi!`);
+    this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
   }
 
   getSelectedImageForRank(rank?: number): GalleryImage | undefined {
@@ -1667,14 +1830,30 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isGeneratingVariations = false;
         if (res.suggestedVariations && res.suggestedVariations.length > 0) {
           this.enableVariations = true;
+          this.customVariationPricing = true;
           this.varType1 = res.suggestedVariations[0].name;
           this.varValues1 = res.suggestedVariations[0].values.join(', ');
           if (res.suggestedVariations.length > 1) {
             this.enableVar2 = true;
             this.varType2 = res.suggestedVariations[1].name;
             this.varValues2 = res.suggestedVariations[1].values.join(', ');
+          } else {
+            this.enableVar2 = false;
+            this.varValues2 = '';
           }
-          this.rebuildVariationGrid();
+          if (res.suggestedOfferings && res.suggestedOfferings.length > 0) {
+            this.variationRows = res.suggestedOfferings.map(o => ({
+              key: o.key,
+              price: Number(o.price) > 0 ? Number(o.price) : (Number(this.priceUsd) || 0),
+              quantity: Math.max(0, Number(o.quantity) || 0),
+              active: o.active !== false
+            }));
+            this.selectedProfitVariationKey = '__base__';
+            this.onVariationRowChange();
+          } else {
+            this.rebuildVariationGrid();
+          }
+          this.saveDraftToStorage();
           this.showToast(`✨ ${res.provider} ile varyasyonlar oluşturuldu (${res.suggestedVariations.map(v => v.name).join(' & ')})`);
         } else {
           this.showToast('Varyasyon önerisi bulunamadı.');
@@ -1692,9 +1871,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.title.trim().length > 0 && this.title.length <= 140;
   }
   get isPriceReady(): boolean {
-    const currentPrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd ?? 0);
-    const currentQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity ?? 0);
-    return currentPrice > 0 && currentQuantity > 0;
+    return this.effectivePrice > 0 && this.effectiveQuantity > 0;
   }
   get isImagesReady(): boolean {
     return this.galleryImages.length > 0;
@@ -1827,17 +2004,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       ? [
           {
             name: this.varType1,
-            values: this.varValues1.split(',').map(s => s.trim()).filter(Boolean)
+            values: this.parseVariationOptionGroup(this.varValues1).map(o => o.cleanValue)
           },
           ...(this.enableVar2 ? [{
             name: this.varType2,
-            values: this.varValues2.split(',').map(s => s.trim()).filter(Boolean)
+            values: this.parseVariationOptionGroup(this.varValues2).map(o => o.cleanValue)
           }] : [])
         ]
       : undefined;
 
-    const effectivePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 39.90);
-    const effectiveQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity || 15);
+    const effectivePrice = this.effectivePrice > 0 ? this.effectivePrice : 39.90;
+    const effectiveQuantity = this.effectiveQuantity > 0 ? this.effectiveQuantity : 15;
 
     const payload = {
       title: this.title.trim(),
@@ -1866,8 +2043,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           this.createdListingResult = {
             ...res,
             title: this.title,
-            price: this.priceUsd || 0,
-            quantity: this.quantity || 15,
+            price: effectivePrice,
+            quantity: effectiveQuantity,
             uploadedImages: this.galleryImages.length
           };
           this.isPublishSuccessModalOpen = true;
