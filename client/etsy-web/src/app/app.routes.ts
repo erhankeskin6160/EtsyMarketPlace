@@ -17,6 +17,7 @@ import { ShopVaultComponent } from './features/tools/shop-vault.component';
 import { EtsyApiSettingsComponent } from './features/settings/etsy-api-settings.component';
 import { AiModelsSettingsComponent } from './features/settings/ai-models-settings.component';
 import { MarketResearchComponent } from './features/research/market-research.component';
+import { ShopResearchAgentComponent } from './features/research/shop-research-agent.component';
 import { AiAuditComponent } from './features/analytics/ai-audit.component';
 import { ShippingHubComponent } from './features/shipping/shipping-hub.component';
 import { SystemLogsComponent } from './features/system/system-logs.component';
@@ -63,6 +64,7 @@ export const routes: Routes = [
       { path: 'ai-studio', component: AiStudioComponent, canActivate: [subscriptionFeatureGuard('ai_image')] },
 
       // Research & Intelligence Modules
+      { path: 'research/agent', component: ShopResearchAgentComponent },
       { path: 'research/market', component: MarketResearchComponent },
       { path: 'research/viral-3d', component: Viral3DComponent, canActivate: [subscriptionFeatureGuard('viral_3d')] },
       { path: 'research/competitor', component: CompetitorSpyComponent, canActivate: [subscriptionFeatureGuard('competitor_spy')] },

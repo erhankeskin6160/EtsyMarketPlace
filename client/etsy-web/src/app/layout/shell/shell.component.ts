@@ -86,6 +86,7 @@ export class ShellComponent implements OnInit {
     {
       title: 'Araştırma & Analiz',
       items: [
+        { id: 'research_agent', title: 'Mağaza Araştırma Ajanı', icon: 'fa-robot', route: '/research/agent' },
         { id: 'research', title: 'Pazar Araştırması', icon: 'fa-magnifying-glass-chart', route: '/research/market' },
         { id: 'viral_3d', title: 'Viral 3D Model Avcısı', icon: 'fa-cube', route: '/research/viral-3d' },
         { id: 'competitor_spy', title: 'Rakip & Trend Casusu', icon: 'fa-user-secret', route: '/research/competitor' },

@@ -1,0 +1,444 @@
+.agent-page {
+  padding: 1.5rem;
+  color: #e2e8f0;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.agent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.agent-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.6rem;
+  color: #f8fafc;
+}
+
+.subtitle {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.alert-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.alert-banner.info {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #bae6fd;
+}
+
+.alert-banner.error {
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .agent-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 1.25rem;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f1f5f9;
+}
+
+.badge-version {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #ddd6fe;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.dna-summary {
+  background: rgba(30, 41, 59, 0.65);
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.dna-niche {
+  font-weight: 600;
+  color: #38bdf8;
+  margin-bottom: 0.5rem;
+}
+
+.dna-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tag-pill {
+  font-size: 0.74rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.field.full,
+.checkbox-field.full {
+  grid-column: 1 / -1;
+}
+
+.field input,
+.field select,
+.focus-input {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  color: #f8fafc;
+  font-size: 0.88rem;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-run {
+  border: none;
+  border-radius: 9px;
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: rgba(51, 65, 85, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.btn-run {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.last-run-note {
+  margin-top: 0.65rem;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.runner-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.focus-input {
+  flex: 1;
+}
+
+.runs-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.run-chip.active {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  color: #f8fafc;
+}
+
+.trigger-badge {
+  font-weight: 600;
+  color: #34d399;
+}
+
+.run-summary-box {
+  background: rgba(30, 41, 59, 0.55);
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+
+.queries-used {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  color: #94a3b8;
+}
+
+.query-pill {
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.candidate-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.candidate-card.accepted {
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.candidate-card.rejected {
+  opacity: 0.55;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.source-badge,
+.status-badge {
+  font-size: 0.75rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+  margin-right: 0.4rem;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+}
+
+.status-badge {
+  background: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+}
+
+.scores {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.score-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+}
+
+.score-pill.opp {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.score-pill.risk {
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+}
+
+.score-pill.risk.high {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+.candidate-card h3 {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 1.05rem;
+  color: #f8fafc;
+}
+
+.suggested-title,
+.rationale {
+  margin: 0.25rem 0;
+  font-size: 0.86rem;
+  color: #cbd5e1;
+}
+
+.cannibal-warn {
+  margin: 0.5rem 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  font-size: 0.82rem;
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+  padding: 0.6rem;
+  background: rgba(15, 23, 42, 0.65);
+  border-radius: 8px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric .label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.metric .value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.metric.profit .value {
+  color: #34d399;
+}
+
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.etsy-tag {
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.card-actions button,
+.btn-link {
+  padding: 0.4rem 0.7rem;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-draft {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+}
+
+.btn-accept {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.btn-reject {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+
+.btn-link {
+  background: transparent;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #94a3b8;
+  font-size: 0.92rem;
+}

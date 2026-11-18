@@ -245,6 +245,17 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketKey
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddHostedService<EtsyDeltaSyncBackgroundService>();
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchRepository>(sp =>
+{
+    var repo = new EtsyMarketPlace.Infrastructure.ShopResearchAgent.SqliteShopResearchRepository(dbPath);
+    repo.InitializeAsync().GetAwaiter().GetResult();
+    return repo;
+});
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopDnaBuilderService>();
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.CannibalizationGuardService>();
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ProductOpportunity.ProductOpportunityScorer>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopResearchAgentOrchestrator>();
+builder.Services.AddHostedService<EtsyMarketPlace.Infrastructure.ShopResearchAgent.ShopResearchSchedulerBackgroundService>();
 builder.Services.AddScoped<McpToolHandler>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Mcp.IEtsyOfficialMcpClient, EtsyMarketPlace.Infrastructure.Mcp.EtsyOfficialMcpClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Mcp.IMcpServerService, EtsyMarketPlace.Application.Mcp.McpServerService>();
