@@ -153,6 +153,55 @@ public sealed record AiQuotaCheckDto(
     int RemainingTokens,
     string Reason);
 
+public sealed record PaymentGatewaySettingsDto(
+    string ActiveProvider,
+    bool IsSandbox,
+    string IyzicoApiKey,
+    bool HasIyzicoSecretKey,
+    string IyzicoSecretKeyMask,
+    string IyzicoBaseUrl,
+    string PaytrMerchantId,
+    bool HasPaytrMerchantKey,
+    string PaytrMerchantKeyMask,
+    bool HasPaytrMerchantSalt,
+    string PaytrMerchantSaltMask,
+    bool HasStripeSecretKey,
+    string StripeSecretKeyMask,
+    string ConfigSource,
+    string UpdatedAtUtc);
+
+public sealed record UpdatePaymentGatewaySettingsRequest(
+    string ActiveProvider,
+    bool IsSandbox = true,
+    string? IyzicoApiKey = null,
+    string? IyzicoSecretKey = null,
+    string? IyzicoBaseUrl = null,
+    string? PaytrMerchantId = null,
+    string? PaytrMerchantKey = null,
+    string? PaytrMerchantSalt = null,
+    string? StripeSecretKey = null);
+
+public sealed record PaytrCallbackInput(
+    string MerchantOid,
+    string Status,
+    string TotalAmount,
+    string Hash,
+    string? FailedReasonMsg = null,
+    string? PaymentType = null,
+    string? Currency = null);
+
+public sealed record IyzicoCallbackInput(
+    string SessionId,
+    string Token);
+
+public sealed record PaymentCallbackProcessResultDto(
+    bool IsSignatureValid,
+    bool IsPaid,
+    string SessionId,
+    string Provider,
+    string Status,
+    string Message);
+
 public static class SubscriptionMappingExtensions
 {
     public static SubscriptionPlanDto ToDto(this SubscriptionPlan plan)

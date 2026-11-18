@@ -45,6 +45,7 @@ public class EtsyMarketPlaceDbContext : DbContext
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
     public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
     public DbSet<SubscriptionTransaction> SubscriptionTransactions => Set<SubscriptionTransaction>();
+    public DbSet<PaymentGatewayConfig> PaymentGatewayConfigs => Set<PaymentGatewayConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -683,6 +684,24 @@ public class EtsyMarketPlaceDbContext : DbContext
 
             entity.HasIndex(e => e.SessionId).IsUnique();
             entity.HasIndex(e => new { e.UserId, e.CreatedAtUtc });
+        });
+
+        // 30. PaymentGatewayConfigs (İyzico / PayTR / Stripe Ayarları)
+        modelBuilder.Entity<PaymentGatewayConfig>(entity =>
+        {
+            entity.ToTable("payment_gateway_configs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasMaxLength(50);
+            entity.Property(e => e.ActiveProvider).HasColumnName("active_provider").HasMaxLength(32).HasDefaultValue("Unconfigured");
+            entity.Property(e => e.IsSandbox).HasColumnName("is_sandbox").HasDefaultValue(true);
+            entity.Property(e => e.IyzicoApiKey).HasColumnName("iyzico_api_key").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(e => e.IyzicoSecretKey).HasColumnName("iyzico_secret_key").HasMaxLength(512).HasDefaultValue(string.Empty);
+            entity.Property(e => e.IyzicoBaseUrl).HasColumnName("iyzico_base_url").HasMaxLength(256).HasDefaultValue("https://sandbox-api.iyzipay.com");
+            entity.Property(e => e.PaytrMerchantId).HasColumnName("paytr_merchant_id").HasMaxLength(128).HasDefaultValue(string.Empty);
+            entity.Property(e => e.PaytrMerchantKey).HasColumnName("paytr_merchant_key").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(e => e.PaytrMerchantSalt).HasColumnName("paytr_merchant_salt").HasMaxLength(256).HasDefaultValue(string.Empty);
+            entity.Property(e => e.StripeSecretKey).HasColumnName("stripe_secret_key").HasMaxLength(512).HasDefaultValue(string.Empty);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc").HasColumnType("timestamp with time zone");
         });
     }
 }

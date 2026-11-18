@@ -247,6 +247,55 @@ public sealed class EfPostgreSqlSubscriptionRepository(
             cancellationToken);
     }
 
+    public Task<PaymentGatewayConfig?> GetPaymentGatewayConfigAsync(CancellationToken cancellationToken = default)
+    {
+        return ExecuteWithResilienceAsync<PaymentGatewayConfig?>(
+            () => context.PaymentGatewayConfigs.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == "default", cancellationToken),
+            store => store.GetPaymentGatewayConfigAsync(cancellationToken),
+            () => null,
+            "GetPaymentGatewayConfig",
+            cancellationToken);
+    }
+
+    public Task<PaymentGatewayConfig> UpsertPaymentGatewayConfigAsync(
+        PaymentGatewayConfig config,
+        CancellationToken cancellationToken = default)
+    {
+        config.Id = "default";
+        config.UpdatedAtUtc = DateTime.UtcNow;
+
+        return ExecuteWithResilienceAsync(
+            async () =>
+            {
+                var existing = await context.PaymentGatewayConfigs.FirstOrDefaultAsync(c => c.Id == "default", cancellationToken);
+                if (existing is null)
+                {
+                    context.PaymentGatewayConfigs.Add(config);
+                    await context.SaveChangesAsync(cancellationToken);
+                    return config;
+                }
+
+                existing.ActiveProvider = config.ActiveProvider;
+                existing.IsSandbox = config.IsSandbox;
+                existing.IyzicoApiKey = config.IyzicoApiKey;
+                existing.IyzicoSecretKey = config.IyzicoSecretKey;
+                existing.IyzicoBaseUrl = config.IyzicoBaseUrl;
+                existing.PaytrMerchantId = config.PaytrMerchantId;
+                existing.PaytrMerchantKey = config.PaytrMerchantKey;
+                existing.PaytrMerchantSalt = config.PaytrMerchantSalt;
+                existing.StripeSecretKey = config.StripeSecretKey;
+                existing.UpdatedAtUtc = config.UpdatedAtUtc;
+
+                await context.SaveChangesAsync(cancellationToken);
+                return existing;
+            },
+            store => store.UpsertPaymentGatewayConfigAsync(config, cancellationToken),
+            null,
+            "UpsertPaymentGatewayConfig",
+            cancellationToken);
+    }
+
     private async Task<T> ExecuteWithResilienceAsync<T>(
         Func<Task<T>> pgAction,
         Func<SqliteSubscriptionStore, Task<T>> sqliteAction,

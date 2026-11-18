@@ -102,4 +102,118 @@ internal static class SubscriptionLifecycleHelper
             ? startUtc.AddYears(1)
             : startUtc.AddMonths(1);
     }
+
+    internal static async Task<ConfirmPaymentResponseDto> ActivatePaidTransactionAsync(
+        ISubscriptionRepository subscriptionRepository,
+        IUserRepository userRepository,
+        ISubscriptionEntitlementService entitlementService,
+        JwtTokenService jwtTokenService,
+        SubscriptionTransaction tx,
+        string? cardMaskedNumber,
+        string? cardHolderName,
+        string? roleHint,
+        string? remoteIpAddress,
+        string auditDetails,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        tx.Status = "Paid";
+        tx.PaidAtUtc = now;
+        if (!string.IsNullOrWhiteSpace(cardMaskedNumber))
+            tx.CardMaskedNumber = cardMaskedNumber;
+        if (!string.IsNullOrWhiteSpace(cardHolderName))
+            tx.CardHolderName = cardHolderName.Trim();
+
+        tx = await subscriptionRepository.UpdateTransactionAsync(tx, cancellationToken);
+
+        var plan = await ResolvePlanAsync(subscriptionRepository, tx.PlanId, cancellationToken)
+                   ?? SubscriptionFeatureKeys.GetDefaultPlans().First(p => p.Id == SubscriptionPlanCode.Pro);
+
+        var periodEnd = CalculatePeriodEnd(now, tx.BillingCycle);
+        var existingSub = await subscriptionRepository.GetUserSubscriptionAsync(tx.UserId, cancellationToken);
+
+        var nextSub = existingSub is null
+            ? new UserSubscription
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                UserId = tx.UserId,
+                PlanId = plan.Id,
+                Status = SubscriptionStatus.Active.ToString(),
+                BillingCycle = tx.BillingCycle,
+                StartDateUtc = now,
+                CurrentPeriodStartUtc = now,
+                CurrentPeriodEndUtc = periodEnd,
+                AutoRenew = true,
+                PaymentProvider = tx.PaymentProvider,
+                LastSessionId = tx.SessionId,
+                UpdatedAtUtc = now
+            }
+            : new UserSubscription
+            {
+                Id = existingSub.Id,
+                UserId = existingSub.UserId,
+                PlanId = plan.Id,
+                Status = SubscriptionStatus.Active.ToString(),
+                BillingCycle = tx.BillingCycle,
+                StartDateUtc = existingSub.StartDateUtc,
+                CurrentPeriodStartUtc = now,
+                CurrentPeriodEndUtc = periodEnd,
+                AutoRenew = true,
+                CustomMaxShopsOverride = null,
+                CustomAiTokenQuotaOverride = null,
+                PaymentProvider = tx.PaymentProvider,
+                LastSessionId = tx.SessionId,
+                UpdatedAtUtc = now
+            };
+
+        await subscriptionRepository.UpsertUserSubscriptionAsync(nextSub, plan.MonthlyAiTokenQuota, cancellationToken);
+
+        var user = await TryFindUserAsync(userRepository, tx.UserId, cancellationToken);
+        await TryUpdateUserSnapshotAsync(
+            userRepository,
+            user,
+            plan.Id,
+            SubscriptionStatus.Active.ToString(),
+            periodEnd,
+            plan.MonthlyAiTokenQuota,
+            cancellationToken);
+
+        await TryAddAuditLogAsync(
+            userRepository,
+            tx.UserId,
+            tx.Username,
+            "SubscriptionUpgraded",
+            auditDetails,
+            remoteIpAddress,
+            cancellationToken);
+
+        UserDto? updatedUserDto = null;
+        string? refreshedToken = null;
+        if (user is not null)
+        {
+            var updatedUser = user with
+            {
+                SubscriptionPlanId = plan.Id,
+                SubscriptionStatus = SubscriptionStatus.Active.ToString(),
+                SubscriptionExpiresAt = new DateTimeOffset(periodEnd, TimeSpan.Zero),
+                MonthlyAiTokenQuota = plan.MonthlyAiTokenQuota
+            };
+            updatedUserDto = updatedUser.ToDto();
+            refreshedToken = jwtTokenService.GenerateToken(updatedUser);
+        }
+
+        var summary = await entitlementService.GetEntitlementSummaryAsync(
+            tx.UserId,
+            user?.Role ?? roleHint,
+            tx.Username,
+            cancellationToken);
+
+        return new ConfirmPaymentResponseDto(
+            true,
+            $"{plan.Name} paketi başarıyla aktifleştirildi!",
+            tx.ToDto(),
+            summary,
+            updatedUserDto,
+            refreshedToken);
+    }
 }

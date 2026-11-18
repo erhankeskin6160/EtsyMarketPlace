@@ -14,7 +14,9 @@ using EtsyMarketPlace.Application.Features.Admin.Queries.GetAllUsers;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetAuditLogs;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetSystemStats;
 using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminAssignSubscription;
+using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminUpdatePaymentGatewaySettings;
 using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminUpdateSubscriptionPlan;
+using EtsyMarketPlace.Application.Features.Subscriptions.Queries.GetPaymentGatewaySettings;
 using EtsyMarketPlace.Application.Subscriptions;
 
 [Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.Admin)]
@@ -152,6 +154,36 @@ public class AdminController : ControllerBase
 
         var cmd = new AdminUpdateSubscriptionPlanCommand(
             planId,
+            adminId,
+            adminName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request);
+
+        var response = await _mediator.Send(cmd, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("subscriptions/payment-settings")]
+    [EndpointSummary("Ödeme Altyapısı (İyzico / PayTR / Stripe) Ayarlarını Getir")]
+    public async Task<IActionResult> GetPaymentGatewaySettings(CancellationToken cancellationToken)
+    {
+        var (isAdmin, _, _) = ValidateAdmin();
+        if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
+
+        var response = await _mediator.Send(new GetPaymentGatewaySettingsQuery(), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPut("subscriptions/payment-settings")]
+    [EndpointSummary("Ödeme Altyapısı (İyzico / PayTR / Stripe) Ayarlarını Güncelle")]
+    public async Task<IActionResult> UpdatePaymentGatewaySettings(
+        [FromBody] UpdatePaymentGatewaySettingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (isAdmin, adminId, adminName) = ValidateAdmin();
+        if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
+
+        var cmd = new AdminUpdatePaymentGatewaySettingsCommand(
             adminId,
             adminName,
             HttpContext.Connection.RemoteIpAddress?.ToString(),

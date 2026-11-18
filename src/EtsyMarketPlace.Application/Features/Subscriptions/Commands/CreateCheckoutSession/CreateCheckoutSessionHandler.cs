@@ -58,7 +58,8 @@ public sealed class CreateCheckoutSessionHandler(
                 amountTry,
                 currency,
                 invoiceNumber,
-                request.Request.ReturnBaseUrl),
+                request.Request.ReturnBaseUrl,
+                request.ClientIp),
             cancellationToken);
 
         if (!gatewayResult.Success)

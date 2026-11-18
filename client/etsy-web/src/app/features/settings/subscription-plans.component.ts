@@ -1,9 +1,10 @@
 import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SubscriptionService } from '../../core/services/subscription.service';
+import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import {
   BillingCycle,
@@ -13,10 +14,19 @@ import {
   UserSubscriptionSummary
 } from '../../core/models/subscription.models';
 
+const ALLOWED_PAYMENT_IFRAME_ORIGINS = [
+  'https://www.paytr.com',
+  'https://sandbox-odeme.paytr.com',
+  'https://sandbox-cpp.iyzipay.com',
+  'https://cpp.iyzipay.com',
+  'https://sandbox-api.iyzipay.com',
+  'https://api.iyzipay.com'
+];
+
 @Component({
   selector: 'app-subscription-plans',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   templateUrl: './subscription-plans.component.html',
   styleUrls: ['./subscription-plans.component.css']
 })
@@ -24,7 +34,10 @@ export class SubscriptionPlansComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
+  private sanitizer = inject(DomSanitizer);
+
   subscriptionService = inject(SubscriptionService);
+  authService = inject(AuthService);
   apiService = inject(EtsyApiService);
 
   billingCycle: BillingCycle = 'Monthly';
@@ -35,20 +48,13 @@ export class SubscriptionPlansComponent implements OnInit {
   requiredPlanForUpgrade = 'pro';
 
   activeCheckoutSession: CheckoutSessionResponse | null = null;
+  trustedCheckoutIframeUrl: SafeResourceUrl | null = null;
   startingCheckoutPlanId: string | null = null;
   isPaying = false;
   paymentError: string | null = null;
 
   statusMessage: string | null = null;
   statusType: 'success' | 'error' = 'success';
-
-  cardForm = {
-    cardHolderName: '',
-    cardNumber: '',
-    expiry: '',
-    cvc: ''
-  };
-  termsAccepted = true;
 
   readonly featureRows = [
     { key: 'fast_creator', label: 'AI Hızlı Ürün Ekle (13 Etiket + SEO)' },
@@ -77,6 +83,30 @@ export class SubscriptionPlansComponent implements OnInit {
         this.upgradeFeatureKey = null;
       }
 
+      const paymentStatus = params.get('payment_status');
+      const providerParam = params.get('provider');
+      if (paymentStatus === 'success') {
+        this.activeCheckoutSession = null;
+        this.trustedCheckoutIframeUrl = null;
+        this.paymentError = null;
+        this.statusType = 'success';
+        this.statusMessage = providerParam
+          ? `${providerParam} 3D Secure ödemeniz tamamlandı. Paketiniz ve AI kotanız güncelleniyor.`
+          : 'Ödemeniz başarıyla tamamlandı. Paketiniz ve AI kotanız güncelleniyor.';
+        this.refreshAll();
+        this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { payment_status: null, provider: null, sessionId: null, checkoutSessionId: null, upgrade: null },
+          queryParamsHandling: 'merge'
+        });
+        return;
+      }
+
+      if (paymentStatus === 'failed') {
+        this.paymentError = 'Ödeme işlemi tamamlanamadı veya banka tarafından onaylanmadı. Farklı bir kart ile tekrar deneyebilirsiniz.';
+        this.refreshAll();
+      }
+
       const sessionId = params.get('checkoutSessionId');
       if (sessionId && (!this.activeCheckoutSession || this.activeCheckoutSession.sessionId !== sessionId)) {
         this.tryRestoreSessionFromTransactions(sessionId);
@@ -95,6 +125,7 @@ export class SubscriptionPlansComponent implements OnInit {
         const match = txs.find(t => t.sessionId === sessionId && t.status === 'Pending');
         if (match) {
           this.activeCheckoutSession = this.toCheckoutResponse(match);
+          this.trustedCheckoutIframeUrl = null;
         }
       }
     });
@@ -146,10 +177,20 @@ export class SubscriptionPlansComponent implements OnInit {
     return `$${session.amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
+  getProviderDisplayLabel(provider: string): string {
+    switch ((provider || '').toLowerCase()) {
+      case 'paytr': return 'PayTR 3D Secure iFrame';
+      case 'iyzico': return 'iyzico 3D Secure Ödeme Formu';
+      case 'stripe': return 'Stripe Checkout';
+      default: return 'Sanal POS (Kurulum Bekliyor)';
+    }
+  }
+
   startCheckout(plan: SubscriptionPlan): void {
     this.startingCheckoutPlanId = plan.id;
     this.paymentError = null;
     this.statusMessage = null;
+    this.trustedCheckoutIframeUrl = null;
 
     this.subscriptionService.createCheckoutSession({
       planId: plan.id,
@@ -159,11 +200,31 @@ export class SubscriptionPlansComponent implements OnInit {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.startingCheckoutPlanId = null;
-        if (res.mode === 'StripeLive' && res.checkoutUrl.startsWith('http')) {
-          window.location.href = res.checkoutUrl;
+
+        if (res.mode === 'StripeLive') {
+          if (this.isAllowedExternalPaymentUrl(res.checkoutUrl, ['https://checkout.stripe.com'])) {
+            window.location.href = res.checkoutUrl;
+            return;
+          }
+          this.statusType = 'error';
+          this.statusMessage = 'Güvenlik doğrulaması nedeniyle harici ödeme bağlantısı açılamadı.';
           return;
         }
-        this.activeCheckoutSession = res;
+
+        if (res.mode === 'Iframe') {
+          const trusted = this.resolveTrustedIframeUrl(res.checkoutUrl);
+          if (!trusted) {
+            this.statusType = 'error';
+            this.statusMessage = `${res.provider} ödeme adresi güvenilir origin listesiyle eşleşmedi.`;
+            return;
+          }
+          this.activeCheckoutSession = res;
+          this.trustedCheckoutIframeUrl = trusted;
+        } else {
+          this.activeCheckoutSession = res;
+          this.trustedCheckoutIframeUrl = null;
+        }
+
         this.router.navigate([], {
           relativeTo: this.route,
           queryParams: { checkoutSessionId: res.sessionId },
@@ -177,13 +238,48 @@ export class SubscriptionPlansComponent implements OnInit {
       error: err => {
         this.startingCheckoutPlanId = null;
         this.statusType = 'error';
-        this.statusMessage = err?.error?.message || 'Stripe Sanal POS oturumu başlatılamadı.';
+        this.statusMessage = err?.error?.message || 'Ödeme oturumu başlatılamadı.';
       }
     });
   }
 
+  confirmAdminTestActivation(): void {
+    if (!this.activeCheckoutSession || this.isPaying || !this.authService.isAdmin()) return;
+
+    this.isPaying = true;
+    this.paymentError = null;
+
+    this.subscriptionService.confirmAdminTest(this.activeCheckoutSession.sessionId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: res => {
+          this.isPaying = false;
+          this.activeCheckoutSession = null;
+          this.trustedCheckoutIframeUrl = null;
+          this.upgradeFeatureKey = null;
+          this.statusType = 'success';
+          this.statusMessage = `${res.message} (Fatura: ${res.transaction.invoiceNumber})`;
+          this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: { checkoutSessionId: null, upgrade: null },
+            queryParamsHandling: 'merge'
+          });
+          this.subscriptionService.loadTransactions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+        },
+        error: err => {
+          this.isPaying = false;
+          this.paymentError = err?.error?.message || err?.message || 'Yönetici test onayı gerçekleştirilemedi.';
+        }
+      });
+  }
+
+  goToAdminPaymentSettings(): void {
+    this.router.navigate(['/admin']);
+  }
+
   resumePendingTransaction(tx: SubscriptionTransaction): void {
     this.activeCheckoutSession = this.toCheckoutResponse(tx);
+    this.trustedCheckoutIframeUrl = null;
     this.paymentError = null;
     this.router.navigate([], {
       relativeTo: this.route,
@@ -195,91 +291,9 @@ export class SubscriptionPlansComponent implements OnInit {
     }, 50);
   }
 
-  detectedCardBrand(): 'visa' | 'mastercard' | 'troy' | 'amex' | 'unknown' {
-    const digits = (this.cardForm.cardNumber || '').replace(/\D/g, '');
-    if (!digits) return 'unknown';
-    if (digits.startsWith('9792') || digits.startsWith('650')) return 'troy';
-    if (digits.startsWith('34') || digits.startsWith('37')) return 'amex';
-    if (digits.startsWith('4')) return 'visa';
-    if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[01]|2720)/.test(digits)) return 'mastercard';
-    return 'unknown';
-  }
-
-  fillTestCard(kind: 'success' | 'troy' | 'decline'): void {
-    this.paymentError = null;
-    if (kind === 'success') {
-      this.cardForm = {
-        cardHolderName: this.subscriptionService.mySubscription()?.username || 'Etsy Satıcı',
-        cardNumber: '4242 4242 4242 4242',
-        expiry: '12/28',
-        cvc: '424'
-      };
-    } else if (kind === 'troy') {
-      this.cardForm = {
-        cardHolderName: this.subscriptionService.mySubscription()?.username || 'TROY Test Kullanıcı',
-        cardNumber: '9792 0000 0000 0003',
-        expiry: '12/28',
-        cvc: '792'
-      };
-    } else {
-      this.cardForm = {
-        cardHolderName: this.subscriptionService.mySubscription()?.username || 'Test Kullanıcı',
-        cardNumber: '4000 0000 0000 0002',
-        expiry: '12/28',
-        cvc: '123'
-      };
-    }
-  }
-
-  submitVirtualPosPayment(): void {
-    if (!this.activeCheckoutSession || this.isPaying) return;
-
-    if (!this.termsAccepted) {
-      this.paymentError = 'Lütfen Mesafeli Satış Sözleşmesi, Ön Bilgilendirme ve Abonelik İptal/İade Koşullarını onaylayınız.';
-      return;
-    }
-
-    const { month, year } = this.parseExpiry(this.cardForm.expiry);
-    if (!this.cardForm.cardHolderName.trim() || !this.cardForm.cardNumber.trim() || !month || !year || !this.cardForm.cvc.trim()) {
-      this.paymentError = 'Lütfen tüm kart alanlarını eksiksiz ve AA/YY formatında doldurunuz.';
-      return;
-    }
-
-    this.isPaying = true;
-    this.paymentError = null;
-
-    this.subscriptionService.confirmPayment({
-      sessionId: this.activeCheckoutSession.sessionId,
-      cardHolderName: this.cardForm.cardHolderName.trim(),
-      cardNumber: this.cardForm.cardNumber.trim(),
-      expiryMonth: month,
-      expiryYear: year,
-      cvc: this.cardForm.cvc.trim()
-    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: res => {
-        this.isPaying = false;
-        this.activeCheckoutSession = null;
-        this.upgradeFeatureKey = null;
-        this.statusType = 'success';
-        this.statusMessage = `✓ ${res.message} (Fatura: ${res.transaction.invoiceNumber}, Kart: ${res.transaction.cardMaskedNumber || 'Onaylı'})`;
-        this.cardForm = { cardHolderName: '', cardNumber: '', expiry: '', cvc: '' };
-        this.router.navigate([], {
-          relativeTo: this.route,
-          queryParams: { checkoutSessionId: null, upgrade: null },
-          queryParamsHandling: 'merge'
-        });
-        this.subscriptionService.loadTransactions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
-      },
-      error: err => {
-        this.isPaying = false;
-        this.paymentError = err?.error?.message || err?.message || 'Kart provizyonu onaylanamadı.';
-        this.subscriptionService.loadTransactions().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
-      }
-    });
-  }
-
   cancelCheckout(): void {
     this.activeCheckoutSession = null;
+    this.trustedCheckoutIframeUrl = null;
     this.paymentError = null;
     this.router.navigate([], {
       relativeTo: this.route,
@@ -297,14 +311,37 @@ export class SubscriptionPlansComponent implements OnInit {
     });
   }
 
-  clearPaymentError(): void {
-    this.paymentError = null;
+  private resolveTrustedIframeUrl(rawUrl: string): SafeResourceUrl | null {
+    if (!this.isAllowedExternalPaymentUrl(rawUrl, ALLOWED_PAYMENT_IFRAME_ORIGINS)) {
+      return null;
+    }
+    return this.sanitizer.bypassSecurityTrustResourceUrl(rawUrl);
+  }
+
+  private isAllowedExternalPaymentUrl(rawUrl: string, allowlist: string[]): boolean {
+    try {
+      const candidateUrl = new URL(rawUrl);
+      if (candidateUrl.protocol !== 'https:' || candidateUrl.origin === 'null') {
+        return false;
+      }
+
+      const originCtor = (globalThis as unknown as { Origin?: { from(value: string): { isSameOrigin(other: unknown): boolean } } }).Origin;
+      if (originCtor) {
+        const candidateOrigin = originCtor.from(rawUrl);
+        return allowlist.some(allowed => candidateOrigin.isSameOrigin(originCtor.from(allowed)));
+      }
+
+      return allowlist.some(allowed => new URL(allowed).origin === candidateUrl.origin);
+    } catch {
+      return false;
+    }
   }
 
   private tryRestoreSessionFromTransactions(sessionId: string): void {
     const match = this.subscriptionService.transactions().find(t => t.sessionId === sessionId && t.status === 'Pending');
     if (match) {
       this.activeCheckoutSession = this.toCheckoutResponse(match);
+      this.trustedCheckoutIframeUrl = null;
     }
   }
 
@@ -323,21 +360,5 @@ export class SubscriptionPlansComponent implements OnInit {
       invoiceNumber: tx.invoiceNumber,
       expiresAtUtc: tx.createdAtUtc
     };
-  }
-
-  private parseExpiry(raw: string): { month: string; year: string } {
-    const cleaned = (raw || '').replace(/\s+/g, '');
-    const parts = cleaned.split('/');
-    if (parts.length === 2) {
-      return { month: parts[0], year: parts[1] };
-    }
-    const digits = cleaned.replace(/\D/g, '');
-    if (digits.length === 4) {
-      return { month: digits.slice(0, 2), year: digits.slice(2, 4) };
-    }
-    if (digits.length === 6) {
-      return { month: digits.slice(0, 2), year: digits.slice(2, 6) };
-    }
-    return { month: '', year: '' };
   }
 }

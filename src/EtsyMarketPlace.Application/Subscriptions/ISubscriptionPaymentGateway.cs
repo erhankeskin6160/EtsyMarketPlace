@@ -12,7 +12,8 @@ public sealed record PaymentGatewaySessionCreateInput(
     decimal AmountTry,
     string Currency,
     string InvoiceNumber,
-    string? ReturnBaseUrl);
+    string? ReturnBaseUrl,
+    string? ClientIp = null);
 
 public sealed record PaymentGatewaySessionCreateResult(
     bool Success,
@@ -29,8 +30,17 @@ public sealed record VirtualPosChargeResult(
     string ProviderReference,
     string? ErrorMessage = null);
 
+public sealed record PaymentCallbackVerifyResult(
+    bool IsSignatureValid,
+    bool IsPaid,
+    string SessionId,
+    string Provider,
+    string? CardMaskedNumber = null,
+    string? CardHolderName = null,
+    string? ErrorMessage = null);
+
 /// <summary>
-/// Stripe ve dahili Stripe Sanal POS ödeme geçidi portu.
+/// İyzico, PayTR, Stripe ve dahili Sanal POS ödeme geçidi portu.
 /// </summary>
 public interface ISubscriptionPaymentGateway
 {
@@ -41,5 +51,16 @@ public interface ISubscriptionPaymentGateway
     Task<VirtualPosChargeResult> ProcessVirtualPosPaymentAsync(
         SubscriptionTransaction transaction,
         ConfirmVirtualPosPaymentRequest cardRequest,
+        CancellationToken cancellationToken = default);
+
+    Task<PaymentCallbackVerifyResult> VerifyPaytrCallbackAsync(
+        PaytrCallbackInput input,
+        CancellationToken cancellationToken = default);
+
+    Task<PaymentCallbackVerifyResult> VerifyIyzicoCallbackAsync(
+        IyzicoCallbackInput input,
+        CancellationToken cancellationToken = default);
+
+    Task<PaymentGatewaySettingsDto> GetSettingsSummaryAsync(
         CancellationToken cancellationToken = default);
 }

@@ -9,4 +9,5 @@ public sealed record CreateCheckoutSessionCommand(
     string? RoleHint,
     string? UsernameHint,
     string? EmailHint,
-    CreateCheckoutSessionRequest Request) : IRequest<ServiceResponse>;
+    CreateCheckoutSessionRequest Request,
+    string? ClientIp = null) : IRequest<ServiceResponse>;
