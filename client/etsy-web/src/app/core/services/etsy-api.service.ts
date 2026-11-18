@@ -1078,6 +1078,14 @@ export class EtsyApiService {
     return this.http.post<AiLqsImprovementResultDto>(`${this.API_BASE}/api/etsy/market/listing/improve-lqs`, command);
   }
 
+  runVariationPricingAgent(request: VariationPricingAgentRequestDto): Observable<VariationPricingAgentResultDto> {
+    const sId = request.shopId || this.activeShopId();
+    return this.http.post<VariationPricingAgentResultDto>(
+      `${this.API_BASE}/api/etsy/listings/ai-pricing-agent?shopId=${encodeURIComponent(sId)}`,
+      { ...request, shopId: sId }
+    );
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
@@ -1499,5 +1507,127 @@ export interface AiLqsImprovementResultDto {
   usedAi: boolean;
   provider: string;
 }
+
+export interface VariationAgentInputRowDto {
+  key: string;
+  currentPrice: number;
+  quantity: number;
+  active: boolean;
+}
+
+export interface VariationPricingAgentRequestDto {
+  shopId?: string;
+  title: string;
+  description?: string;
+  category?: string;
+  materials?: string[];
+  tags?: string[];
+  variationType1?: string;
+  variationValues1?: string;
+  enableVariation2?: boolean;
+  variationType2?: string;
+  variationValues2?: string;
+  existingVariations?: VariationAgentInputRowDto[];
+  targetCountryCode: string;
+  baseWeightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+  productionCostUsd: number;
+  targetNetMarginPercent: number;
+  includeOffsiteAds: boolean;
+  usdTryRate: number;
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+export interface CompetitorPriceSampleDto {
+  listingId: number;
+  title: string;
+  priceUsd: number;
+  shopName: string;
+  shopSales: number;
+  hasFreeShipping: boolean;
+  estimatedMonthlySales: number;
+}
+
+export interface VariationMarketBenchmarkDto {
+  competitorCount: number;
+  minPriceUsd: number;
+  medianPriceUsd: number;
+  averagePriceUsd: number;
+  p75PriceUsd: number;
+  maxPriceUsd: number;
+  freeShippingRatioPct: number;
+  usedLiveMarketData: boolean;
+  topCompetitors: CompetitorPriceSampleDto[];
+}
+
+export interface AgentCarrierQuoteSummaryDto {
+  carrierKey: string;
+  carrierName: string;
+  serviceType: string;
+  priceUsd: number;
+  priceTry: number;
+  estimatedDays: string;
+  isLive: boolean;
+}
+
+export interface VariationShippingBenchmarkDto {
+  targetCountryCode: string;
+  selectedCarrierKey: string;
+  selectedCarrierName: string;
+  selectedServiceName: string;
+  baseShippingCostUsd: number;
+  baseShippingCostTry: number;
+  calculatedDesi: number;
+  billableWeightKg: number;
+  estimatedDays: string;
+  hsCodeUsed: string;
+  carrierQuotes: AgentCarrierQuoteSummaryDto[];
+}
+
+export interface VariationAgentStepDto {
+  stepNumber: number;
+  toolName: string;
+  title: string;
+  summary: string;
+  status: string;
+}
+
+export interface PricedVariationRowDto {
+  key: string;
+  recommendedPriceUsd: number;
+  estimatedWeightGrams: number;
+  estimatedShippingCostUsd: number;
+  etsyFeesUsd: number;
+  productionCostUsd: number;
+  netProfitUsd: number;
+  netMarginPercent: number;
+  breakEvenPriceUsd: number;
+  pricingTierLabel: string;
+  reasoning: string;
+}
+
+export interface VariationPricingAgentResultDto {
+  usedAi: boolean;
+  providerUsed: string;
+  searchKeywordUsed: string;
+  marketBenchmark: VariationMarketBenchmarkDto;
+  shippingBenchmark: VariationShippingBenchmarkDto;
+  recommendedBasePriceUsd: number;
+  recommendedBaseShippingCostUsd: number;
+  averageNetMarginPercent: number;
+  strategySummary: string;
+  suggestedVarType1: string;
+  suggestedVarValues1: string;
+  suggestedEnableVar2: boolean;
+  suggestedVarType2: string;
+  suggestedVarValues2: string;
+  agentSteps: VariationAgentStepDto[];
+  pricedVariations: PricedVariationRowDto[];
+}
+
 
 

@@ -12,6 +12,7 @@ using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
+using EtsyMarketPlace.Application.Features.Listings.Commands.RunVariationPricingAgent;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListingState;
 using EtsyMarketPlace.Application.Features.Listings.Images;
@@ -271,6 +272,43 @@ public class EtsyListingsController : BaseApiController
         };
 
         var response = await _mediator.Send(command, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("listings/ai-pricing-agent")]
+    [EndpointSummary("Etsy Rakip Analizi, Kargo Modülü ve LLM ile Varyasyon Fiyatlandırma Ajanı")]
+    public async Task<IActionResult> RunVariationPricingAgent(
+        [FromBody] VariationPricingAgentRequestDto request,
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Title))
+        {
+            return BadRequest(new { success = false, message = "Fiyatlandırma ajanı için ürün başlığı gereklidir." });
+        }
+
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
+
+        var isGeminiOrDefault = string.IsNullOrWhiteSpace(request.Provider)
+            || request.Provider.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+
+        var resolvedApiKey = !string.IsNullOrWhiteSpace(request.ApiKey)
+            ? request.ApiKey.Trim()
+            : isGeminiOrDefault && Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+                ? hKey.ToString().Trim()
+                : isGeminiOrDefault
+                    ? _config["Gemini:ApiKey"] ?? string.Empty
+                    : string.Empty;
+
+        var enrichedRequest = request with
+        {
+            ShopId = resolvedShopId,
+            ApiKey = resolvedApiKey
+        };
+
+        var response = await _mediator.Send(new RunVariationPricingAgentCommand(enrichedRequest), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }
