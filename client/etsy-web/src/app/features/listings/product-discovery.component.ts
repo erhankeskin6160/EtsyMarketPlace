@@ -118,10 +118,21 @@ export class ProductDiscoveryComponent implements OnInit {
   loadShippingProfiles(): void {
     this.etsyApi.getShippingProfiles().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
-        if (res && res.results && Array.isArray(res.results)) {
-          this.shippingProfiles = res.results;
+        const results = res?.results || (Array.isArray(res) ? res : []);
+        if (results.length > 0) {
+          this.shippingProfiles = results
+            .map((p: any) => {
+              const id = Number(p.shippingProfileId ?? p.shipping_profile_id ?? p.id ?? 0);
+              return {
+                ...p,
+                shippingProfileId: id,
+                shipping_profile_id: id,
+                title: p.title || `Profil #${id}`
+              };
+            })
+            .filter((p: any) => p.shippingProfileId > 0);
           if (this.shippingProfiles.length > 0 && !this.draftShippingProfileId) {
-            this.draftShippingProfileId = this.shippingProfiles[0].shipping_profile_id;
+            this.draftShippingProfileId = this.shippingProfiles[0].shippingProfileId;
           }
         }
       },

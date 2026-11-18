@@ -311,18 +311,18 @@
                     <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies">🔄</span> Yenile
                   </button>
                 </div>
-                <select class="std-select" [(ngModel)]="selectedShippingProfileId">
+                <select class="std-select" [(ngModel)]="selectedShippingProfileId" (ngModelChange)="saveDraftToStorage()">
                   <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">⏳ Etsy kargo profilleri yükleniyor...</option>
                   <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">⚠️ Mağazada kargo profili bulunamadı</option>
                   <option *ngFor="let prof of shippingProfilesList" [ngValue]="prof.id">
-                    📦 {{ prof.title }} (ID: {{ prof.id }})
+                    📦 {{ prof.title }} (ID: {{ prof.id }}){{ prof.deliveryDaysDisplay ? ' — ' + prof.deliveryDaysDisplay : (prof.processingDaysDisplay ? ' — ' + prof.processingDaysDisplay : '') }}
                   </option>
                 </select>
               </div>
 
               <div class="field-wrap half">
                 <label>⏱️ Hazırlık Durumu:</label>
-                <select class="std-select" [(ngModel)]="selectedReadinessStateId">
+                <select class="std-select" [(ngModel)]="selectedReadinessStateId" (ngModelChange)="saveDraftToStorage()">
                   <option *ngIf="isLoadingReadinessStates" [ngValue]="null">⏳ Etsy hazırlık durumları yükleniyor...</option>
                   <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">⚠️ Hazırlık durumu bulunamadı</option>
                   <option *ngFor="let rState of readinessStatesList" [ngValue]="rState.id">

@@ -243,4 +243,64 @@ public sealed class EtsyLogisticsServiceTests
         Assert.Equal(889900, validResult.Policy!.ReturnPolicyId);
         Assert.Equal("Yalnızca İade Kabul Edilir (14 Gün)", validResult.Policy.Title);
     }
+
+    [Fact]
+    public async Task GetShippingProfilesAsync_ParsesDestinationsDeliveryDaysAndFreeShipping()
+    {
+        var fakeClient = new FakeEtsyLogisticsApiClient
+        {
+            ShippingProfilesJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "shipping_profile_id": 1419822959155,
+                        "title": "Among Us",
+                        "origin_country_iso": "TR",
+                        "min_processing_days": null,
+                        "max_processing_days": null,
+                        "processing_days_display_label": "3-5 business days",
+                        "shipping_profile_destinations": [
+                            {
+                                "destination_country_iso": "US",
+                                "destination_region": "none",
+                                "primary_cost": { "amount": 0, "divisor": 100, "currency_code": "USD" },
+                                "mail_class": "express",
+                                "min_delivery_days": 3,
+                                "max_delivery_days": 6
+                            },
+                            {
+                                "destination_country_iso": null,
+                                "destination_region": "eu",
+                                "primary_cost": { "amount": 499, "divisor": 100, "currency_code": "USD" },
+                                "mail_class": "standard",
+                                "min_delivery_days": 4,
+                                "max_delivery_days": 8
+                            }
+                        ]
+                    }
+                ]
+            }
+            """
+        };
+        var service = new EtsyLogisticsService(fakeClient);
+
+        var result = await service.GetShippingProfilesAsync("53236321-destinations-test");
+
+        Assert.Single(result);
+        var profile = result[0];
+        Assert.Equal(1419822959155, profile.ShippingProfileId);
+        Assert.Equal("Among Us", profile.Title);
+        Assert.Null(profile.MinProcessingDays);
+        Assert.Null(profile.MaxProcessingDays);
+        Assert.Equal("3-5 business days", profile.ProcessingDaysDisplay);
+        Assert.Equal(3, profile.MinDeliveryDays);
+        Assert.Equal(8, profile.MaxDeliveryDays);
+        Assert.Equal("3-8 iş günü teslimat", profile.DeliveryDaysDisplay);
+        Assert.True(profile.HasFreeShipping);
+        Assert.Equal("TR", profile.OriginCountryIso);
+        Assert.Equal("express, standard", profile.MailClass);
+        Assert.Contains("US: 3-6 business days (Free Shipping)", profile.DestinationsSummary);
+        Assert.Contains("EU: 4-8 business days", profile.DestinationsSummary);
+    }
 }

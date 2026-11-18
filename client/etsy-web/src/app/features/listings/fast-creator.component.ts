@@ -5,7 +5,7 @@ import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
 import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
-import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
+import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, AiShippingContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
@@ -118,10 +118,23 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   departmentsList: Array<{ name: string; count: number; icon: string }> = [];
   isLoadingCategories = false;
   shippingProfile = '';
-  shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
+  shippingProfilesList: Array<{
+    id: number;
+    title: string;
+    minDays?: number;
+    maxDays?: number;
+    processingDaysDisplay?: string;
+    minDeliveryDays?: number;
+    maxDeliveryDays?: number;
+    deliveryDaysDisplay?: string;
+    hasFreeShipping?: boolean;
+    originCountryIso?: string;
+    mailClass?: string;
+    destinationsSummary?: string;
+  }> = [];
   selectedShippingProfileId: number | null = null;
   isLoadingShippingProfiles = false;
-  readinessStatesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number; state?: string }> = [];
+  readinessStatesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number; state?: string; unit?: string }> = [];
   selectedReadinessStateId: number | null = null;
   isLoadingReadinessStates = false;
   readinessState = '';
@@ -731,13 +744,27 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isLoadingShippingProfiles = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
         if (results.length > 0) {
-          this.shippingProfilesList = results.map((p: any) => ({
-            id: p.shipping_profile_id,
-            title: p.title || `Profil #${p.shipping_profile_id}`,
-            minDays: p.min_processing_days,
-            maxDays: p.max_processing_days
-          }));
-          if (!this.selectedShippingProfileId) {
+          this.shippingProfilesList = results
+            .map((p: any) => {
+              const id = Number(p.shippingProfileId ?? p.shipping_profile_id ?? p.id ?? 0);
+              return {
+                id,
+                title: p.title || `Profil #${id}`,
+                minDays: p.minProcessingDays ?? p.min_processing_days ?? undefined,
+                maxDays: p.maxProcessingDays ?? p.max_processing_days ?? undefined,
+                processingDaysDisplay: p.processingDaysDisplay ?? p.processing_days_display ?? p.processing_days_display_label ?? undefined,
+                minDeliveryDays: p.minDeliveryDays ?? p.min_delivery_days ?? undefined,
+                maxDeliveryDays: p.maxDeliveryDays ?? p.max_delivery_days ?? undefined,
+                deliveryDaysDisplay: p.deliveryDaysDisplay ?? p.delivery_days_display ?? undefined,
+                hasFreeShipping: !!(p.hasFreeShipping ?? p.has_free_shipping),
+                originCountryIso: p.originCountryIso ?? p.origin_country_iso ?? undefined,
+                mailClass: p.mailClass ?? p.mail_class ?? undefined,
+                destinationsSummary: p.destinationsSummary ?? p.destinations_summary ?? undefined
+              };
+            })
+            .filter((p: { id: number }) => p.id > 0);
+          if (this.shippingProfilesList.length > 0 &&
+              (!this.selectedShippingProfileId || !this.shippingProfilesList.some(p => p.id === Number(this.selectedShippingProfileId)))) {
             this.selectedShippingProfileId = this.shippingProfilesList[0].id;
           }
         }
@@ -755,14 +782,21 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isLoadingReadinessStates = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
         if (results.length > 0) {
-          this.readinessStatesList = results.map((r: any) => ({
-            id: r.readiness_state_id,
-            title: r.title || `Hazırlık Durumu #${r.readiness_state_id}`,
-            minDays: r.min_processing_time,
-            maxDays: r.max_processing_time,
-            state: r.readiness_state
-          }));
-          if (!this.selectedReadinessStateId) {
+          this.readinessStatesList = results
+            .map((r: any) => {
+              const id = Number(r.readinessStateId ?? r.readiness_state_id ?? r.id ?? 0);
+              return {
+                id,
+                title: r.title || `Hazırlık Durumu #${id}`,
+                minDays: r.minProcessingTime ?? r.min_processing_time ?? undefined,
+                maxDays: r.maxProcessingTime ?? r.max_processing_time ?? undefined,
+                state: r.readinessState ?? r.readiness_state ?? undefined,
+                unit: r.processingTimeUnit ?? r.processing_time_unit ?? undefined
+              };
+            })
+            .filter((r: { id: number }) => r.id > 0);
+          if (this.readinessStatesList.length > 0 &&
+              (!this.selectedReadinessStateId || !this.readinessStatesList.some(r => r.id === Number(this.selectedReadinessStateId)))) {
             this.selectedReadinessStateId = this.readinessStatesList[0].id;
           }
         }
@@ -1309,6 +1343,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
 
     const variationsSummary = this.getVariationsSummary();
+    const shippingInfo = this.buildShippingAiContext();
 
     const context: AiDescriptionContext = {
       productTitle: titleText || descText,
@@ -1316,7 +1351,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       materials: this.materials.trim(),
       category: this.selectedCategory,
       tags: this.tags,
-      variationsSummary
+      variationsSummary,
+      shippingInfo
     };
 
     this.isGeneratingDesc = true;
@@ -1331,6 +1367,81 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
       }
     });
+  }
+
+  private buildShippingAiContext(): AiShippingContext {
+    if (this.listingType === 'digital') {
+      return { isDigital: true };
+    }
+
+    const profile =
+      this.shippingProfilesList.find(p => p.id === Number(this.selectedShippingProfileId))
+      ?? this.shippingProfilesList[0];
+    const readiness =
+      this.readinessStatesList.find(r => r.id === Number(this.selectedReadinessStateId))
+      ?? this.readinessStatesList[0];
+    const returnPolicy =
+      this.returnPoliciesList.find(rp => rp.returnPolicyId === Number(this.selectedReturnPolicyId))
+      ?? this.returnPoliciesList[0];
+
+    let minProcessingDays: number | null = null;
+    let maxProcessingDays: number | null = null;
+    let processingTimeUnit: string = readiness?.unit || 'business_days';
+
+    if (readiness && ((readiness.minDays ?? 0) > 0 || (readiness.maxDays ?? 0) > 0)) {
+      minProcessingDays = readiness.minDays ?? null;
+      maxProcessingDays = readiness.maxDays ?? null;
+    } else if (profile && ((profile.minDays ?? 0) > 0 || (profile.maxDays ?? 0) > 0)) {
+      minProcessingDays = profile.minDays ?? null;
+      maxProcessingDays = profile.maxDays ?? null;
+    } else {
+      const readinessMatch = readiness?.title?.match(/(\d+)\s*[-–]\s*(\d+)/);
+      const displayMatch = profile?.processingDaysDisplay?.match(/(\d+)\s*[-–]\s*(\d+)/);
+      const titleMatch = profile?.title?.match(/(\d+)\s*[-–]\s*(\d+)\s*(?:iş günü|gün|business\s*days?|days?|hafta|weeks?)/i);
+      const matched = readinessMatch || displayMatch || titleMatch;
+      if (matched) {
+        minProcessingDays = Number(matched[1]);
+        maxProcessingDays = Number(matched[2]);
+        if (/hafta|week/i.test(matched[0]) || (readiness?.title && /hafta|week/i.test(readiness.title))) {
+          processingTimeUnit = 'weeks';
+        }
+      }
+    }
+
+    let returnPolicySummary: string | undefined;
+    if (returnPolicy) {
+      const deadlineText = returnPolicy.returnDeadline && returnPolicy.returnDeadline > 0
+        ? ` within ${returnPolicy.returnDeadline} days`
+        : '';
+      if (returnPolicy.acceptsReturns && returnPolicy.acceptsExchanges) {
+        returnPolicySummary = `Returns and exchanges accepted${deadlineText}`;
+      } else if (returnPolicy.acceptsReturns) {
+        returnPolicySummary = `Returns accepted${deadlineText}`;
+      } else if (returnPolicy.acceptsExchanges) {
+        returnPolicySummary = `Exchanges accepted${deadlineText}`;
+      } else {
+        returnPolicySummary = 'Returns and exchanges are not accepted';
+      }
+    }
+
+    return {
+      isDigital: false,
+      profileId: profile?.id ?? this.selectedShippingProfileId,
+      profileTitle: profile?.title,
+      minProcessingDays,
+      maxProcessingDays,
+      processingDaysDisplay: profile?.processingDaysDisplay,
+      readinessState: readiness?.state,
+      readinessTitle: readiness?.title,
+      minDeliveryDays: profile?.minDeliveryDays ?? null,
+      maxDeliveryDays: profile?.maxDeliveryDays ?? null,
+      processingTimeUnit,
+      hasFreeShipping: profile?.hasFreeShipping ?? false,
+      originCountryIso: profile?.originCountryIso,
+      mailClass: profile?.mailClass,
+      destinationsSummary: profile?.destinationsSummary,
+      returnPolicySummary
+    };
   }
 
   private getVariationsSummary(): string {
@@ -1363,12 +1474,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     const sellerNotes = descInput || this.originalNotesBackup || '';
     const variationsSummary = this.getVariationsSummary();
+    const shippingInfo = this.buildShippingAiContext();
 
     this.isGeneratingAll = true;
     this.listingAiService.generateCompleteListing(input, this.materials, {
       preliminaryNotes: sellerNotes,
       variationsSummary,
-      category: this.selectedCategory
+      category: this.selectedCategory,
+      shippingInfo
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingAll = false;

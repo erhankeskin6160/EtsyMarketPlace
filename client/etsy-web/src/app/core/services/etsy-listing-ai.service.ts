@@ -6,6 +6,25 @@ import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService } from './etsy-api.service';
 import { TaxonomyNodeLike } from '../utils/taxonomy-shortlist';
 
+export interface AiShippingContext {
+  isDigital?: boolean;
+  profileId?: number | null;
+  profileTitle?: string;
+  minProcessingDays?: number | null;
+  maxProcessingDays?: number | null;
+  processingDaysDisplay?: string;
+  readinessState?: string;
+  readinessTitle?: string;
+  minDeliveryDays?: number | null;
+  maxDeliveryDays?: number | null;
+  processingTimeUnit?: string;
+  hasFreeShipping?: boolean;
+  originCountryIso?: string;
+  mailClass?: string;
+  destinationsSummary?: string;
+  returnPolicySummary?: string;
+}
+
 export interface AiDescriptionContext {
   productTitle?: string;
   preliminaryNotes?: string;
@@ -15,6 +34,7 @@ export interface AiDescriptionContext {
   variationsSummary?: string;
   toneStyle?: 'artisan' | 'specs' | 'gift';
   emojiStyle?: 'vibrant' | 'minimal';
+  shippingInfo?: AiShippingContext;
 }
 
 export interface DescriptionVariantsResult {
@@ -29,6 +49,7 @@ export interface CompleteListingOptions {
   preliminaryNotes?: string;
   variationsSummary?: string;
   category?: string;
+  shippingInfo?: AiShippingContext;
 }
 
 export interface CompleteListingAiResult {
@@ -384,7 +405,7 @@ export class EtsyListingAiService {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
-          const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
+          const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
           const msg = isSilentFallback
             ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline açıklama oluşturuldu).`
             : `⚡ Akıllı Kural Motoru ile ön bilgileriniz korunarak zengin ürün açıklaması hazırlandı.`;
@@ -398,7 +419,7 @@ export class EtsyListingAiService {
       );
     }
 
-    const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
+    const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
     return of({
       value: desc,
       isLive: false,
@@ -675,10 +696,96 @@ CRITICAL ETSY RULES:
     );
   }
 
+  private formatProcessingDuration(shippingInfo?: AiShippingContext): string | null {
+    if (!shippingInfo) return null;
+    const isWeeks = (shippingInfo.processingTimeUnit || '').toLowerCase() === 'weeks';
+    const singular = isWeeks ? 'week' : 'business day';
+    const plural = isWeeks ? 'weeks' : 'business days';
+    const minP = shippingInfo.minProcessingDays;
+    const maxP = shippingInfo.maxProcessingDays;
+
+    if (minP != null && maxP != null && (minP > 0 || maxP > 0)) {
+      if (minP === maxP) return `${minP} ${minP === 1 ? singular : plural}`;
+      return `${minP}-${maxP} ${plural}`;
+    }
+    if (minP != null && minP > 0) return `${minP} ${minP === 1 ? singular : plural}`;
+    if (maxP != null && maxP > 0) return `up to ${maxP} ${maxP === 1 ? singular : plural}`;
+    if (shippingInfo.processingDaysDisplay?.trim()) {
+      return shippingInfo.processingDaysDisplay
+        .replace(/iş günü/gi, 'business days')
+        .replace(/hafta/gi, 'weeks')
+        .trim();
+    }
+    return null;
+  }
+
+  private formatDeliveryDuration(shippingInfo?: AiShippingContext): string | null {
+    if (!shippingInfo) return null;
+    const minD = shippingInfo.minDeliveryDays;
+    const maxD = shippingInfo.maxDeliveryDays;
+    if (minD != null && maxD != null && (minD > 0 || maxD > 0)) {
+      if (minD === maxD) return `${minD} ${minD === 1 ? 'business day' : 'business days'}`;
+      return `${minD}-${maxD} business days`;
+    }
+    if (minD != null && minD > 0) return `${minD} ${minD === 1 ? 'business day' : 'business days'}`;
+    if (maxD != null && maxD > 0) return `up to ${maxD} ${maxD === 1 ? 'business day' : 'business days'}`;
+    return null;
+  }
+
+  private buildShippingPromptBlock(shippingInfo?: AiShippingContext): { ruleInstruction: string; contextBlock: string } {
+    if (shippingInfo?.isDigital) {
+      return {
+        ruleInstruction: `5. DIGITAL DELIVERY (NO PHYSICAL SHIPPING):
+   - This is a DIGITAL DOWNLOAD listing. State clearly that it is an instant digital download available immediately after purchase — NEVER mention physical shipping, business days, packaging, or transit times.`,
+        contextBlock: `SHIPPING & FULFILLMENT PROFILE DATA:
+- Product Type: Digital Download (Instant Digital Delivery — No physical shipping)`
+      };
+    }
+
+    const processingText = this.formatProcessingDuration(shippingInfo);
+    const deliveryText = this.formatDeliveryDuration(shippingInfo);
+    const readinessRaw = (shippingInfo?.readinessState || '').toLowerCase();
+    const readinessMode = readinessRaw === 'made_to_order'
+      ? 'Made to Order (crafted individually upon order)'
+      : (readinessRaw === 'ready_to_ship' ? 'Ready to Ship (in stock)' : null);
+
+    const lines: string[] = [];
+    if (readinessMode) lines.push(`- Production / Readiness Status: ${readinessMode}`);
+    if (processingText) lines.push(`- Processing / Dispatch Time: ${processingText}`);
+    if (deliveryText) lines.push(`- Estimated Shipping Transit Time: ${deliveryText}`);
+    if (shippingInfo?.destinationsSummary) lines.push(`- Destination Transit Breakdown: ${shippingInfo.destinationsSummary}`);
+    if (shippingInfo?.hasFreeShipping) lines.push(`- Shipping Cost Benefit: Free Shipping available`);
+    if (shippingInfo?.mailClass) lines.push(`- Shipping Method / Mail Class: ${shippingInfo.mailClass}`);
+    if (shippingInfo?.originCountryIso) lines.push(`- Ships From (Origin Country): ${shippingInfo.originCountryIso}`);
+    if (shippingInfo?.returnPolicySummary) lines.push(`- Return & Exchange Policy: ${shippingInfo.returnPolicySummary}`);
+    if (shippingInfo?.profileTitle) {
+      lines.push(`- Internal Seller Profile Reference Label (DO NOT PRINT THIS NAME AS A CARRIER OR SHIPPING METHOD): "${shippingInfo.profileTitle}"`);
+    }
+
+    if (lines.length === 0) {
+      return {
+        ruleInstruction: `5. TRUST & SHIPPING GUARANTEE:
+   - Include secure tracked shipping and 100% satisfaction / safe delivery guarantee. Do NOT fabricate specific processing day counts (such as "1-3 business days") if none are provided in the shipping data.`,
+        contextBlock: ''
+      };
+    }
+
+    return {
+      ruleInstruction: `5. TRUST & EXACT SHIPPING PROFILE COMPLIANCE (MANDATORY):
+   - You MUST write the shipping/processing section using ONLY the EXACT processing/dispatch time, production mode (Made to Order vs Ready to Ship), estimated transit days, free shipping status, and return policy provided in "SHIPPING & FULFILLMENT PROFILE DATA" below.
+   - NEVER invent, guess, or default to "Ships within 1-3 business days" unless the provided shipping profile data explicitly specifies 1-3 business days!
+   - If the profile specifies a different timeframe (e.g. 3-5 business days, 1-2 weeks, or destination-specific delivery windows), state those EXACT timeframes naturally in English.
+   - CRITICAL PROFILE NAME RULE: NEVER output the seller's internal shipping profile reference label (e.g. an internal profile nickname) as a carrier, courier, or service name in the buyer-facing description.`,
+      contextBlock: `SHIPPING & FULFILLMENT PROFILE DATA (USE THESE EXACT NUMBERS & CONDITIONS):
+${lines.join('\n')}`
+    };
+  }
+
   private buildDescriptionPrompts(ctx: AiDescriptionContext): { systemInstruction: string; userPrompt: string } {
     const tone = ctx.toneStyle || 'artisan';
     const isMinimalEmoji = ctx.emojiStyle === 'minimal';
     const materials = ctx.materials || 'Handcrafted, Eco-Friendly, Premium Materials';
+    const shippingPrompt = this.buildShippingPromptBlock(ctx.shippingInfo);
 
     const systemInstruction = `You are an elite Etsy listing copywriter and SEO architect specializing in high-converting descriptions for the Etsy global marketplace.
 
@@ -696,8 +803,7 @@ STRICT SPECIFICATION & REFERENCE COMPLIANCE RULES:
    - The opening 1-2 sentences must immediately state the primary product concept and keywords naturally for Etsy and Google Search snippet indexing.
 4. ORDER & PERSONALIZATION GUIDANCE:
    - If variations or personalization details are mentioned, include a clear 3-step '✍️ How to Order / Personalize' section.
-5. TRUST & SHIPPING GUARANTEE:
-   - Include secure tracked express shipping and 100% satisfaction / safe delivery guarantee.
+${shippingPrompt.ruleInstruction}
 6. FORMAT & TONE:
    - Tone: ${tone === 'specs' ? 'Specs-First & Clear Bullet Points (focus on dimensions, technical features, package contents)' : (tone === 'gift' ? 'Gift & Emotional Occasions (focus on gift-giving, celebrations, keepsakes)' : 'Artisan Story & Premium Craftsmanship (focus on handmade uniqueness, aesthetics, and story)')}.
    - Emoji style: ${isMinimalEmoji ? 'Minimalist — use clean bullet points (•) and no emoji clutter' : 'Vibrant & Modern — use clean, tasteful emojis (🌟, 📏, ✨, 🎁, 🧵, 🚚)'}.`;
@@ -705,11 +811,50 @@ STRICT SPECIFICATION & REFERENCE COMPLIANCE RULES:
     const userPrompt = `PRODUCT TITLE: "${ctx.productTitle || 'Handcrafted Artisan Product'}"
 CATEGORY: "${ctx.category || 'Handmade Crafts'}"
 MATERIALS: "${materials}"
-${ctx.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${ctx.variationsSummary}"\n` : ''}${ctx.tags && ctx.tags.length > 0 ? `SEO KEYWORDS: "${ctx.tags.join(', ')}"\n` : ''}
+${ctx.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${ctx.variationsSummary}"\n` : ''}${ctx.tags && ctx.tags.length > 0 ? `SEO KEYWORDS: "${ctx.tags.join(', ')}"\n` : ''}${shippingPrompt.contextBlock ? `${shippingPrompt.contextBlock}\n` : ''}
 CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
 """
 ${ctx.preliminaryNotes || 'No specific preliminary notes provided. Generate a complete, compelling product description.'}
 """`;
+
+    return { systemInstruction, userPrompt };
+  }
+
+  private buildCompleteListingPrompts(
+    input: string,
+    materials?: string,
+    options?: CompleteListingOptions
+  ): { systemInstruction: string; userPrompt: string } {
+    const shippingPrompt = this.buildShippingPromptBlock(options?.shippingInfo);
+
+    const systemInstruction = `You are an elite Etsy listing architect and master copywriter. Return ONLY a valid JSON object.
+CRITICAL LANGUAGE RULE: The seller's input or preliminary notes may be in Turkish or rough notes. You must understand all details, but ALL output fields MUST BE 100% IN ELEGANT, HIGH-CONVERTING ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+
+CRITICAL SELLER NOTES & SPECIFICATIONS RULE:
+If preliminary seller notes, custom variations, dimensions, glow/color options, or special features are provided:
+1. You MUST extract, preserve, and prominently showcase them in the generated "description" (under key features, available options, or specifications).
+2. For metric measurements, provide approximate imperial equivalents in parentheses (e.g. 15 cm (~5.9 inches)).
+3. NEVER discard, contradict, or ignore the seller's specific product notes!
+4. SHIPPING & PROCESSING RULE: Follow the exact shipping/processing rules below — NEVER hardcode or guess "1-3 business days" unless explicitly specified in SHIPPING & FULFILLMENT PROFILE DATA, and NEVER output the seller's internal shipping profile reference label as a carrier name.
+${shippingPrompt.ruleInstruction}
+
+Fields schema:
+{
+  "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
+  "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
+  "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
+  "description": "Engaging formatted product description in English with emojis, bullet points, and all seller-specified features/notes and exact shipping profile timing included",
+  "materials": "Comma-separated list of materials used in English"
+}`;
+
+    const userPrompt = `PRODUCT TITLE / CONCEPT: "${input || 'Handmade Artisan Item'}"
+MATERIALS: "${materials || ''}"
+${options?.category ? `CATEGORY: "${options.category}"\n` : ''}${options?.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${options.variationsSummary}"\n` : ''}${shippingPrompt.contextBlock ? `${shippingPrompt.contextBlock}\n` : ''}CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
+"""
+${options?.preliminaryNotes || 'No specific preliminary notes provided.'}
+"""
+
+Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Materials). Make sure the description incorporates all preliminary notes, options, and exact shipping/processing times above!`;
 
     return { systemInstruction, userPrompt };
   }
@@ -741,7 +886,7 @@ ${ctx.preliminaryNotes || 'No specific preliminary notes provided. Generate a co
         if (res?.usage) {
           this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
-        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
+        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
       })
     );
   }
@@ -749,32 +894,7 @@ ${ctx.preliminaryNotes || 'No specific preliminary notes provided. Generate a co
   private callDeepSeekForComplete(input: string, apiKey: string, model: string, materials?: string, options?: CompleteListingOptions): Observable<any> {
     const normalizedModel = this.normalizeDeepSeekModelName(model);
     const url = 'https://api.deepseek.com/chat/completions';
-    const systemInstruction = `You are an elite Etsy listing architect and master copywriter. Return ONLY a valid JSON object.
-CRITICAL LANGUAGE RULE: The seller's input or preliminary notes may be in Turkish or rough notes. You must understand all details, but ALL output fields MUST BE 100% IN ELEGANT, HIGH-CONVERTING ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
-
-CRITICAL SELLER NOTES & SPECIFICATIONS RULE:
-If preliminary seller notes, custom variations, dimensions, glow/color options, or special features are provided:
-1. You MUST extract, preserve, and prominently showcase them in the generated "description" (under key features, available options, or specifications).
-2. For metric measurements, provide approximate imperial equivalents in parentheses (e.g. 15 cm (~5.9 inches)).
-3. NEVER discard, contradict, or ignore the seller's specific product notes!
-
-Fields schema:
-{
-  "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
-  "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
-  "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
-  "description": "Engaging formatted product description in English with emojis, bullet points, and all seller-specified features/notes included",
-  "materials": "Comma-separated list of materials used in English"
-}`;
-
-    const userPrompt = `PRODUCT TITLE / CONCEPT: "${input || 'Handmade Artisan Item'}"
-MATERIALS: "${materials || ''}"
-${options?.category ? `CATEGORY: "${options.category}"\n` : ''}${options?.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${options.variationsSummary}"\n` : ''}CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
-"""
-${options?.preliminaryNotes || 'No specific preliminary notes provided.'}
-"""
-
-Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Materials). Make sure the description incorporates all preliminary notes and options above!`;
+    const { systemInstruction, userPrompt } = this.buildCompleteListingPrompts(input, materials, options);
 
     const body: any = {
       model: normalizedModel,
@@ -899,7 +1019,7 @@ CRITICAL ETSY RULES:
         if (res?.usageMetadata) {
           this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
         }
-        return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
+        return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
       })
     );
   }
@@ -907,32 +1027,7 @@ CRITICAL ETSY RULES:
   private callGeminiForComplete(input: string, apiKey: string, model: string, materials?: string, options?: CompleteListingOptions): Observable<any> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are an elite Etsy listing architect and master copywriter. Return ONLY a valid JSON object.
-CRITICAL LANGUAGE RULE: The seller's input or preliminary notes may be in Turkish or rough notes. You must understand all details, but ALL output fields MUST BE 100% IN ELEGANT, HIGH-CONVERTING ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
-
-CRITICAL SELLER NOTES & SPECIFICATIONS RULE:
-If preliminary seller notes, custom variations, dimensions, glow/color options, or special features are provided:
-1. You MUST extract, preserve, and prominently showcase them in the generated "description" (under key features, available options, or specifications).
-2. For metric measurements, provide approximate imperial equivalents in parentheses (e.g. 15 cm (~5.9 inches)).
-3. NEVER discard, contradict, or ignore the seller's specific product notes!
-
-Fields schema:
-{
-  "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
-  "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
-  "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
-  "description": "Engaging formatted product description in English with emojis, bullet points, and all seller-specified features/notes included",
-  "materials": "Comma-separated list of materials used in English"
-}`;
-
-    const userPrompt = `PRODUCT TITLE / CONCEPT: "${input || 'Handmade Artisan Item'}"
-MATERIALS: "${materials || ''}"
-${options?.category ? `CATEGORY: "${options.category}"\n` : ''}${options?.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${options.variationsSummary}"\n` : ''}CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
-"""
-${options?.preliminaryNotes || 'No specific preliminary notes provided.'}
-"""
-
-Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Materials). Make sure the description incorporates all preliminary notes and options above!`;
+    const { systemInstruction, userPrompt } = this.buildCompleteListingPrompts(input, materials, options);
 
     const body = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -1693,55 +1788,89 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     ];
   }
 
-  private generateRuleBasedDescription(userInput: string, materials?: string, preliminaryNotes?: string): string {
-    const combined = `${userInput || ''} ${preliminaryNotes || ''}`.trim();
-    const lower = combined.toLowerCase();
-
-    // Extract seller dimension notes if present
-    let customSizeLine = '';
-    const sizeMatch = combined.match(/(?:boyut|ölçü|ebat|size|dimension|height|width|cm|mm|inch)[^.\n,]*/i);
-    if (sizeMatch && sizeMatch[0]) {
-      customSizeLine = `\n• 📏 Sizing & Custom Dimensions: ${sizeMatch[0].trim()}`;
-    }
-
-    // Extract seller color notes if present
-    let customColorLine = '';
-    const colorMatch = combined.match(/(?:renk|color|led|işık|shade)[^.\n,]*/i);
-    if (colorMatch && colorMatch[0]) {
-      customColorLine = `\n• 🎨 Color & Aesthetic Details: ${colorMatch[0].trim()}`;
-    }
-
-    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse') || lower.includes('tote')) {
-      return `✨ Artisan Handcrafted Women's Handbag — Timeless Elegance & Daily Practicality!\n\n` +
-        `Expertly designed for daily versatility and refined style, this handcrafted bag combines premium artisan stitching with lightweight durability. The spacious interior and comfortable shoulder strap make it the perfect everyday companion from office to weekend outings.\n\n` +
-        `🌿 Key Highlights & Features:` +
-        customSizeLine + customColorLine +
-        `\n• 100% Handcrafted with high-density durable reinforced stitching` +
-        `\n• Adjustable and detachable comfortable shoulder strap` +
-        `\n• Secure zippered inner compartments for phone, wallet, keys, and cosmetics` +
-        `\n• Materials: ${materials || 'Genuine Artisan Leather / Premium Cotton Canvas & Brass Hardware'}` +
-        `\n• Dimensions: Approx. 11.0" x 7.8" x 3.2" (28 x 20 x 8 cm) — Ideal compact daily size\n\n` +
-        `🎁 Gift-Ready & Sustainable Packaging:\n` +
-        `Shipped in an eco-friendly protective dust bag with optional premium gift wrapping. A wonderful keepsake gift for her, birthdays, bridesmaids, or Mother's Day!`;
-    }
-
-    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry') || lower.includes('yüzük')) {
-      return `💎 Dainty 925 Sterling Silver Pendant Necklace — Minimalist Everyday Sparkle!\n\n` +
-        `Handcrafted with exquisite precision and finished with anti-tarnish protective plating for everlasting shine and comfort on sensitive skin.\n\n` +
-        `✨ Specifications & Details:` +
-        customSizeLine + customColorLine +
-        `\n• Material: ${materials || '925 Solid Sterling Silver, Hypoallergenic & Nickel-Free'}` +
-        `\n• Chain Length: 18 inches + 2-inch extender (45 cm + 5 cm adjustable)` +
-        `\n• Includes complimentary signature velvet jewelry pouch and microfiber polishing cloth!`;
-    }
-
-    return `🌟 Unique Handcrafted Artisan Creation — Made with Passion & Precision!\n\n` +
-      `Add a touch of elegance to your home or delight someone special with this custom handcrafted masterpiece. Each piece is individually crafted for long-lasting beauty and aesthetic charm.\n\n` +
-      `✨ Details & Specifications:` +
-      customSizeLine + customColorLine +
-      `\n• Materials: ${materials || 'Premium Eco-Friendly, Handpicked High-Quality Materials'}` +
-      `\n• Fast, secure tracked shipping in protective gift-ready packaging` +
-      `\n• Feel free to message our workshop for custom personalization requests!`;
+  private buildRuleBasedShippingLine(shippingInfo?: AiShippingContext): string {
+    if (shippingInfo?.isDigital) {
+      return 'Instant digital download available immediately after purchase (no physical shipping)';
+    }
+
+    const parts: string[] = [];
+    const processing = this.formatProcessingDuration(shippingInfo);
+    const delivery = this.formatDeliveryDuration(shippingInfo);
+    const readiness = (shippingInfo?.readinessState || '').toLowerCase() === 'made_to_order'
+      ? 'Made to order; '
+      : '';
+
+    if (processing) {
+      parts.push(`${readiness}Dispatched within ${processing}`);
+    } else if (readiness) {
+      parts.push('Made to order with tracked shipping');
+    }
+
+    if (delivery) {
+      parts.push(`Estimated delivery: ${delivery}`);
+    }
+    if (shippingInfo?.hasFreeShipping) {
+      parts.push('Free Shipping included');
+    }
+
+    if (parts.length > 0) {
+      return `${parts.join(' • ')} in protective packaging`;
+    }
+    return 'Secure tracked shipping in protective gift-ready packaging';
+  }
+
+  private generateRuleBasedDescription(userInput: string, materials?: string, preliminaryNotes?: string, shippingInfo?: AiShippingContext): string {
+    const combined = `${userInput || ''} ${preliminaryNotes || ''}`.trim();
+    const lower = combined.toLowerCase();
+    const shippingLine = this.buildRuleBasedShippingLine(shippingInfo);
+
+    // Extract seller dimension notes if present
+    let customSizeLine = '';
+    const sizeMatch = combined.match(/(?:boyut|ölçü|ebat|size|dimension|height|width|cm|mm|inch)[^.\n,]*/i);
+    if (sizeMatch && sizeMatch[0]) {
+      customSizeLine = `\n• 📏 Sizing & Custom Dimensions: ${sizeMatch[0].trim()}`;
+    }
+
+    // Extract seller color notes if present
+    let customColorLine = '';
+    const colorMatch = combined.match(/(?:renk|color|led|işık|shade)[^.\n,]*/i);
+    if (colorMatch && colorMatch[0]) {
+      customColorLine = `\n• 🎨 Color & Aesthetic Details: ${colorMatch[0].trim()}`;
+    }
+
+    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse') || lower.includes('tote')) {
+      return `✨ Artisan Handcrafted Women's Handbag — Timeless Elegance & Daily Practicality!\n\n` +
+        `Expertly designed for daily versatility and refined style, this handcrafted bag combines premium artisan stitching with lightweight durability. The spacious interior and comfortable shoulder strap make it the perfect everyday companion from office to weekend outings.\n\n` +
+        `🌿 Key Highlights & Features:` +
+        customSizeLine + customColorLine +
+        `\n• 100% Handcrafted with high-density durable reinforced stitching` +
+        `\n• Adjustable and detachable comfortable shoulder strap` +
+        `\n• Secure zippered inner compartments for phone, wallet, keys, and cosmetics` +
+        `\n• Materials: ${materials || 'Genuine Artisan Leather / Premium Cotton Canvas & Brass Hardware'}` +
+        `\n• Dimensions: Approx. 11.0" x 7.8" x 3.2" (28 x 20 x 8 cm) — Ideal compact daily size\n\n` +
+        `📦 Shipping & Packaging:\n` +
+        `• ${shippingLine}\n` +
+        `Shipped in an eco-friendly protective dust bag with optional premium gift wrapping. A wonderful keepsake gift for her, birthdays, bridesmaids, or Mother's Day!`;
+    }
+
+    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry') || lower.includes('yüzük')) {
+      return `💎 Dainty 925 Sterling Silver Pendant Necklace — Minimalist Everyday Sparkle!\n\n` +
+        `Handcrafted with exquisite precision and finished with anti-tarnish protective plating for everlasting shine and comfort on sensitive skin.\n\n` +
+        `✨ Specifications & Details:` +
+        customSizeLine + customColorLine +
+        `\n• Material: ${materials || '925 Solid Sterling Silver, Hypoallergenic & Nickel-Free'}` +
+        `\n• Chain Length: 18 inches + 2-inch extender (45 cm + 5 cm adjustable)` +
+        `\n• 📦 Shipping: ${shippingLine}` +
+        `\n• Includes complimentary signature velvet jewelry pouch and microfiber polishing cloth!`;
+    }
+
+    return `🌟 Unique Handcrafted Artisan Creation — Made with Passion & Precision!\n\n` +
+      `Add a touch of elegance to your home or delight someone special with this custom handcrafted masterpiece. Each piece is individually crafted for long-lasting beauty and aesthetic charm.\n\n` +
+      `✨ Details & Specifications:` +
+      customSizeLine + customColorLine +
+      `\n• Materials: ${materials || 'Premium Eco-Friendly, Handpicked High-Quality Materials'}` +
+      `\n• 📦 Shipping: ${shippingLine}` +
+      `\n• Feel free to message our workshop for custom personalization requests!`;
   }
 
   private generateRuleBasedComplete(userInput: string, materials?: string, options?: CompleteListingOptions): CompleteListingAiResult {
@@ -1749,7 +1878,7 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     const title = this.generateRuleBasedTitle(cleanInput);
     const category = options?.category || this.detectCategoryFromKeywords(cleanInput);
     const tags = this.generateRuleBasedTags(cleanInput);
-    const description = this.generateRuleBasedDescription(cleanInput, materials, options?.preliminaryNotes);
+    const description = this.generateRuleBasedDescription(cleanInput, materials, options?.preliminaryNotes, options?.shippingInfo);
 
     return {
       title,
