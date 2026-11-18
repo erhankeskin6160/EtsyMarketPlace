@@ -92,11 +92,10 @@ export class SubscriptionService {
   readonly activePlanBadgeLabel = computed(() => {
     const sub = this.mySubscription();
     if (sub) {
-      const icon = this.getPlanEmoji(sub.planId);
-      return `${icon} ${sub.planName.toUpperCase()}`;
+      return sub.planName;
     }
     const id = this.activePlanId();
-    return `${this.getPlanEmoji(id)} ${id.toUpperCase()}`;
+    return id.charAt(0).toUpperCase() + id.slice(1);
   });
 
   normalizeFeatureKey(featureId: string): string {
@@ -208,14 +207,8 @@ export class SubscriptionService {
     return this.http.put<SubscriptionPlan>(`${this.ADMIN_BASE}/subscriptions/plans/${encodeURIComponent(planId)}`, req);
   }
 
-  getPlanEmoji(planId: string): string {
-    switch ((planId || '').toLowerCase()) {
-      case 'starter': return '🌱';
-      case 'growth': return '🚀';
-      case 'pro': return '💎';
-      case 'enterprise': return '👑';
-      default: return '💎';
-    }
+  getPlanEmoji(_planId: string): string {
+    return '';
   }
 
   private planRank(planId: string): number {

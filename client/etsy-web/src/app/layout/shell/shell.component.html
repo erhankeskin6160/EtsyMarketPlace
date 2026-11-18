@@ -40,15 +40,11 @@
              [title]="item.title">
             <span class="nav-icon"><i [class]="'fa-solid ' + item.icon"></i></span>
             <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ item.title }}</span>
-            <span class="badge badge-locked"
-                  *ngIf="!subscriptionService.isFeatureAllowed(item.id) && !apiService.isSidebarCollapsed()">
-              🔒 {{ subscriptionService.getRequiredPlanBadge(item.id) }}
-            </span>
-            <span class="badge"
-                  [class.badge-new]="item.badge === 'YENİ'"
-                  [class.badge-pro]="item.badge === 'PRO' || item.badge === 'PAKET'"
-                  *ngIf="subscriptionService.isFeatureAllowed(item.id) && item.badge && !apiService.isSidebarCollapsed()">
-              {{ item.badge }}
+            <span class="nav-lock-tag"
+                  *ngIf="!subscriptionService.isFeatureAllowed(item.id) && !apiService.isSidebarCollapsed()"
+                  [title]="'Bu modül ' + subscriptionService.getRequiredPlanBadge(item.id) + ' paketi gerektirir'">
+              <i class="fa-solid fa-lock"></i>
+              <span>{{ subscriptionService.getRequiredPlanBadge(item.id) }}</span>
             </span>
           </a>
         </nav>
@@ -81,45 +77,46 @@
 
       <div class="header-right">
         <!-- Active SaaS Subscription Tier Pill -->
-        <button class="sub-plan-pill"
+        <button class="header-control-btn"
                 (click)="router.navigate(['/settings/subscription'])"
                 title="Aktif Abonelik Paketi & Kota Detayları">
+          <span class="plan-dot"></span>
           <span>{{ subscriptionService.activePlanBadgeLabel() }}</span>
         </button>
 
-        <!-- Active AI Model Hub Badge (Matching Desktop Image 1) -->
-        <button class="ai-model-hub-badge" [ngClass]="aiService.activeBadgeClass()" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
-          <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+        <!-- Active AI Model Hub Badge -->
+        <button class="header-control-btn" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi">
+          <app-ai-logo [provider]="aiService.activeProvider()" [size]="15"></app-ai-logo>
           <span>{{ aiService.activeBadgeTextClean() }}</span>
-          <i class="fa-solid fa-gear hub-gear-icon"></i>
+          <i class="fa-solid fa-chevron-down header-chevron"></i>
         </button>
 
         <!-- Dynamic Live Etsy API Status Badge -->
-        <button class="badge-status" 
-                [ngClass]="apiService.tokenStatus()" 
-                (click)="router.navigate(['/settings/etsy-api'])" 
+        <button class="header-control-btn badge-status"
+                [ngClass]="apiService.tokenStatus()"
+                (click)="router.navigate(['/settings/etsy-api'])"
                 [title]="apiService.tokenDetails() + ' (Ayarlara gitmek için tıklayın)'">
           <span class="status-dot"></span>
           <span class="status-text">
             <ng-container [ngSwitch]="apiService.tokenStatus()">
-              <span *ngSwitchCase="'connected'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Canlı Etsy API</span>
-              <span *ngSwitchCase="'expired'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Token Süresi Doldu</span>
-              <span *ngSwitchCase="'missing'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Etsy API Bağlı Değil</span>
-              <span *ngSwitchCase="'error'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> VDS Bağlantı Hatası</span>
-              <span *ngSwitchDefault class="flex items-center gap-1.5"><i class="fa-solid fa-spinner fa-spin text-xs"></i> API Kontrol Ediliyor...</span>
+              <span *ngSwitchCase="'connected'">Etsy API Bağlı</span>
+              <span *ngSwitchCase="'expired'">Token Süresi Doldu</span>
+              <span *ngSwitchCase="'missing'">Etsy API Bağlı Değil</span>
+              <span *ngSwitchCase="'error'">VDS Bağlantı Hatası</span>
+              <span *ngSwitchDefault><i class="fa-solid fa-spinner fa-spin text-xs"></i> Kontrol Ediliyor</span>
             </ng-container>
           </span>
         </button>
 
         <!-- Live Exchange Rate -->
-        <button class="exchange-rate-pill" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
-          <span><i class="fa-solid fa-coins mr-1 text-amber-400"></i> 1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
-          <i class="fa-solid fa-pen text-xs edit-hint ml-1"></i>
+        <button class="header-control-btn" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
+          <span>1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
+          <i class="fa-solid fa-pen header-chevron"></i>
         </button>
 
         <!-- Currency Toggle -->
-        <button class="currency-toggle" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? 'USD para birimine geç' : 'TRY para birimine geç'">
-          {{ apiService.isTryCurrency() ? '₺ TRY Aktif' : '$ USD Aktif' }}
+        <button class="header-control-btn" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? 'USD para birimine geç' : 'TRY para birimine geç'">
+          {{ apiService.isTryCurrency() ? 'TRY (₺)' : 'USD ($)' }}
         </button>
 
         <!-- Store Switcher Dropdown -->
