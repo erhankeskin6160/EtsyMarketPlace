@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
-import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -74,6 +74,10 @@ export interface VariationRow {
   quantity: number;
   active: boolean;
   imageRank?: number;
+  agentNetProfitUsd?: number;
+  agentNetMarginPct?: number;
+  agentTierLabel?: string;
+  agentShippingUsd?: number;
 }
 
 @Component({
@@ -175,6 +179,19 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   customVariationPricing = false;
   variationRows: VariationRow[] = [];
   isGeneratingVariations = false;
+
+  // --- AI PRICING, COMPETITOR & SHIPPING AGENT ---
+  agentTargetCountry = 'US';
+  agentBaseWeightGrams = 250;
+  agentLengthCm = 18;
+  agentWidthCm = 14;
+  agentHeightCm = 8;
+  agentProductionCostUsd = 0;
+  agentTargetMarginPct = 30;
+  showAgentSettings = false;
+  isRunningPricingAgent = false;
+  pricingAgentResult: VariationPricingAgentResultDto | null = null;
+  pricingAgentError = '';
 
   // Publish Status & Checklist
   isLivePublish = false;
@@ -979,6 +996,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = '';
     this.customVariationPricing = false;
     this.variationRows = [];
+    this.pricingAgentResult = null;
+    this.pricingAgentError = '';
 
     // 4. Şablon & Klonlanan
     this.selectedTemplateId = '';
@@ -1482,6 +1501,22 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   onVariationRowChange(): void {
+    if (this.variationRows && this.variationRows.length > 0) {
+      for (const row of this.variationRows) {
+        if (row.agentShippingUsd !== undefined || row.agentNetMarginPct !== undefined) {
+          const breakdown = calculateEtsyNetProfit({
+            salePriceUsd: Number(row.price) || 0,
+            shippingCostUsd: row.agentShippingUsd ?? (this.estimatedShippingCostUsd ?? 0),
+            usdTryRate: this.usdTryRate,
+            includeOffsiteAds: this.includeOffsiteAdsFee
+          });
+          const net = breakdown.netRemainingUsd - (this.agentProductionCostUsd || 0);
+          row.agentNetProfitUsd = Math.round(net * 100) / 100;
+          row.agentNetMarginPct = row.price > 0 ? Math.round((net / row.price) * 1000) / 10 : 0;
+        }
+      }
+    }
+
     if (this.isVariationPricingActive) {
       const minP = this.minVariationPrice;
       if (minP > 0) {
@@ -1683,6 +1718,124 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       error: () => {
         this.isGeneratingVariations = false;
         this.showToast('❌ AI varyasyon önerisi alınamadı.');
+      }
+    });
+  }
+
+  runAiPricingAgent(): void {
+    const cleanTitle = (this.title || '').trim() || (this.description || '').trim();
+    if (!cleanTitle) {
+      this.showToast('⚠️ Ajanı çalıştırmak için lütfen önce ürün başlığı veya açıklaması girin.');
+      return;
+    }
+
+    if (this.enableVariations) {
+      this.rebuildVariationGrid();
+    }
+
+    const s = this.aiService.settings();
+    const provider = s.provider;
+    const apiKey =
+      provider === 'Gemini' ? s.geminiApiKey :
+      provider === 'DeepSeek' ? s.deepSeekApiKey :
+      provider === 'OpenAI' ? s.openAiApiKey :
+      provider === 'Claude' ? s.claudeApiKey :
+      provider === 'Grok' ? s.grokApiKey : '';
+
+    this.isRunningPricingAgent = true;
+    this.pricingAgentError = '';
+
+    this.etsyApi.runVariationPricingAgent({
+      shopId: this.etsyApi.activeShopId(),
+      title: cleanTitle,
+      description: this.description || '',
+      category: this.selectedCategory || '',
+      materials: this.sanitizeMaterialsForPayload(this.materials),
+      tags: this.tags,
+      variationType1: this.varType1,
+      variationValues1: this.varValues1,
+      enableVariation2: this.enableVar2,
+      variationType2: this.varType2,
+      variationValues2: this.varValues2,
+      existingVariations: this.variationRows.map(r => ({
+        key: r.key,
+        currentPrice: Number(r.price) || 0,
+        quantity: Number(r.quantity) || 1,
+        active: r.active !== false
+      })),
+      targetCountryCode: this.agentTargetCountry || 'US',
+      baseWeightGrams: Math.max(50, Number(this.agentBaseWeightGrams) || 250),
+      lengthCm: Math.max(1, Number(this.agentLengthCm) || 18),
+      widthCm: Math.max(1, Number(this.agentWidthCm) || 14),
+      heightCm: Math.max(1, Number(this.agentHeightCm) || 8),
+      productionCostUsd: Math.max(0, Number(this.agentProductionCostUsd) || 0),
+      targetNetMarginPercent: Math.max(5, Number(this.agentTargetMarginPct) || 30),
+      includeOffsiteAds: this.includeOffsiteAdsFee,
+      usdTryRate: this.usdTryRate,
+      provider,
+      model: this.aiService.activeModelName(),
+      apiKey: apiKey?.trim() || ''
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.isRunningPricingAgent = false;
+        this.pricingAgentResult = res;
+
+        // 1. Kargo modülü maliyetini Column 2'ye uygula
+        this.estimatedShippingCostUsd = Number((res.recommendedBaseShippingCostUsd || 0).toFixed(2));
+
+        // 2. Varyasyon grupları önerildiyse forma yansıt
+        this.enableVariations = true;
+        this.customVariationPricing = true;
+        if ((!this.variationRows || this.variationRows.length === 0) && res.suggestedVarValues1) {
+          this.varType1 = res.suggestedVarType1 || this.varType1;
+          this.varValues1 = res.suggestedVarValues1;
+          this.enableVar2 = res.suggestedEnableVar2;
+          if (res.suggestedEnableVar2 && res.suggestedVarValues2) {
+            this.varType2 = res.suggestedVarType2 || this.varType2;
+            this.varValues2 = res.suggestedVarValues2;
+          }
+          this.rebuildVariationGrid();
+        }
+
+        // 3. Her varyasyon satırına ajan fiyatını ve net kâr rozetini işle
+        const pricedMap = new Map(
+          (res.pricedVariations || []).map(p => [p.key.trim().toLowerCase(), p])
+        );
+
+        if (this.variationRows.length === 0 && res.pricedVariations.length > 0) {
+          this.variationRows = res.pricedVariations.map(p => ({
+            key: p.key,
+            price: p.recommendedPriceUsd,
+            quantity: Math.max(2, Math.floor((this.quantity || 15) / res.pricedVariations.length)),
+            active: true,
+            agentNetProfitUsd: p.netProfitUsd,
+            agentNetMarginPct: p.netMarginPercent,
+            agentTierLabel: p.pricingTierLabel,
+            agentShippingUsd: p.estimatedShippingCostUsd
+          }));
+        } else {
+          this.variationRows.forEach(row => {
+            const match = pricedMap.get(row.key.trim().toLowerCase());
+            if (match) {
+              row.price = match.recommendedPriceUsd;
+              row.agentNetProfitUsd = match.netProfitUsd;
+              row.agentNetMarginPct = match.netMarginPercent;
+              row.agentTierLabel = match.pricingTierLabel;
+              row.agentShippingUsd = match.estimatedShippingCostUsd;
+            }
+          });
+        }
+
+        this.onVariationRowChange();
+        this.saveDraftToStorage();
+        this.showToast(
+          `🤖 AI Fiyat & Kargo Ajanı tamamlandı: ${res.pricedVariations.length} varyasyon · Kargo (${res.shippingBenchmark.selectedCarrierName}): $${res.recommendedBaseShippingCostUsd.toFixed(2)} · Taban: $${res.recommendedBasePriceUsd.toFixed(2)}`
+        );
+      },
+      error: (err) => {
+        this.isRunningPricingAgent = false;
+        this.pricingAgentError = err?.error?.message || err?.message || 'AI Fiyatlandırma & Kargo Ajanı çalıştırılamadı.';
+        this.showToast(`❌ ${this.pricingAgentError}`);
       }
     });
   }

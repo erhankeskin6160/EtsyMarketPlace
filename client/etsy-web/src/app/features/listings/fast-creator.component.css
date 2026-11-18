@@ -1429,7 +1429,229 @@
 .np-shipping-row {
   display: flex;
   flex-direction: column;
+  gap: 5px;
+}
+
+.np-shipping-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.btn-agent-mini {
+  background: rgba(249, 115, 22, 0.14);
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  color: #fdba74;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-agent-mini:hover:not(:disabled) {
+  background: #f97316;
+  color: #0b0f18;
+}
+
+.btn-agent-mini:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* AI PRICING, COMPETITOR & SHIPPING AGENT PANEL */
+.ai-pricing-agent-card {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0b0f18;
+  border: 1px solid #263042;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-bar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-agent-run {
+  flex: 1;
+  min-width: 190px;
+  background: #f97316;
+  border: 1px solid #ea580c;
+  color: #0b0f18;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.15s ease;
+}
+
+.btn-agent-run:hover:not(:disabled) {
+  background: #fb923c;
+}
+
+.btn-agent-run:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-agent-gear {
+  background: #141923;
+  border: 1px solid #263042;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-agent-gear:hover {
+  border-color: #f97316;
+  color: #ffffff;
+}
+
+.agent-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+  padding: 8px;
+  background: #111622;
+  border: 1px solid #1e2636;
+  border-radius: 6px;
+}
+
+.agent-param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agent-param-field label {
+  font-size: 0.67rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.agent-param-input {
+  background: #0a0e17;
+  border: 1px solid #263042;
+  color: #f8fafc;
+  padding: 5px 7px;
+  border-radius: 5px;
+  font-size: 0.76rem;
+  min-width: 0;
+}
+
+.agent-error-alert {
+  font-size: 0.74rem;
+  color: #fca5a5;
+  background: #231215;
+  border: 1px solid #991b1b;
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+
+.agent-result-panel {
+  background: #111622;
+  border: 1px solid #222b3d;
+  border-radius: 6px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.agent-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-metric-chip {
+  font-size: 0.69rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #141923;
+  border: 1px solid #263042;
+  color: #cbd5e1;
+}
+
+.agent-metric-chip.accent {
+  border-color: rgba(249, 115, 22, 0.45);
+  color: #fdba74;
+}
+
+.agent-metric-chip.profit {
+  border-color: #166534;
+  background: #0d1f18;
+  color: #34d399;
+}
+
+.agent-steps-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-steps-list li {
+  font-size: 0.71rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.agent-steps-list i {
+  color: #10b981;
+  font-size: 0.68rem;
+  margin-top: 2px;
+}
+
+.agent-strategy-summary {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+  border-top: 1px solid #1e2636;
+  padding-top: 6px;
+  margin: 0;
+}
+
+.var-net-badge {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: #34d399;
+}
+
+.var-net-badge.negative {
+  color: #f87171;
 }
 
 .np-shipping-label {
