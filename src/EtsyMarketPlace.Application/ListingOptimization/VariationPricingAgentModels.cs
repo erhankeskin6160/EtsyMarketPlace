@@ -55,6 +55,9 @@ public sealed class VariationMarketBenchmarkDto
     public decimal AveragePriceUsd { get; set; }
     public decimal P75PriceUsd { get; set; }
     public decimal MaxPriceUsd { get; set; }
+    public decimal FreeShippingMedianUsd { get; set; }
+    public decimal PaidShippingMedianUsd { get; set; }
+    public int FilteredOutlierCount { get; set; }
     public double FreeShippingRatioPct { get; set; }
     public bool UsedLiveMarketData { get; set; }
     public List<CompetitorPriceSampleDto> TopCompetitors { get; set; } = [];

@@ -1396,6 +1396,29 @@
         <p class="agent-strategy-summary" *ngIf="agent.strategySummary">
           <strong>{{ agent.providerUsed }}:</strong> {{ agent.strategySummary }}
         </p>
+
+        <div class="agent-market-detail" *ngIf="agent.marketBenchmark.competitorCount > 0">
+          <div class="agent-market-detail-head">
+            <span>Piyasa Özeti: <code>{{ agent.searchKeywordUsed }}</code></span>
+            <span>Ücretsiz Kargo: %{{ agent.marketBenchmark.freeShippingRatioPct.toFixed(0) }}</span>
+          </div>
+          <div class="agent-market-bands">
+            <span>Min ${{ agent.marketBenchmark.minPriceUsd.toFixed(2) }}</span>
+            <span>Medyan ${{ agent.marketBenchmark.medianPriceUsd.toFixed(2) }}</span>
+            <span>P75 ${{ agent.marketBenchmark.p75PriceUsd.toFixed(2) }}</span>
+            <span>Max ${{ agent.marketBenchmark.maxPriceUsd.toFixed(2) }}</span>
+          </div>
+          <div class="agent-shipping-split" *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0 || (agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">
+            <span *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0">Ücretsiz Kargolu Medyan: ${{ (agent.marketBenchmark.freeShippingMedianUsd || 0).toFixed(2) }}</span>
+            <span *ngIf="(agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">Kargo Hariç Medyan: ${{ (agent.marketBenchmark.paidShippingMedianUsd || 0).toFixed(2) }}</span>
+          </div>
+          <ul class="agent-competitor-list" *ngIf="agent.marketBenchmark.topCompetitors?.length">
+            <li *ngFor="let comp of agent.marketBenchmark.topCompetitors.slice(0, 4)">
+              <span class="comp-title" [title]="comp.title">{{ comp.title }}</span>
+              <span class="comp-price">${{ comp.priceUsd.toFixed(2) }}{{ comp.hasFreeShipping ? ' · Ücr. Kargo' : '' }}</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </section>
   </div>

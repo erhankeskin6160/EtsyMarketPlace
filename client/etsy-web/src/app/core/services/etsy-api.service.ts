@@ -1559,6 +1559,9 @@ export interface VariationMarketBenchmarkDto {
   averagePriceUsd: number;
   p75PriceUsd: number;
   maxPriceUsd: number;
+  freeShippingMedianUsd?: number;
+  paidShippingMedianUsd?: number;
+  filteredOutlierCount?: number;
   freeShippingRatioPct: number;
   usedLiveMarketData: boolean;
   topCompetitors: CompetitorPriceSampleDto[];
