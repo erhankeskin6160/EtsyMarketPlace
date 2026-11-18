@@ -13,7 +13,9 @@ using EtsyMarketPlace.Application.BatchQueue;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ShopPerformance;
+using EtsyMarketPlace.Application.Subscriptions;
 using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Infrastructure.Subscriptions;
 using EtsyMarketPlace.Infrastructure.AbTesting;
 using EtsyMarketPlace.Api.Filters;
 using EtsyMarketPlace.Api.Security;
@@ -152,10 +154,14 @@ builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyRawDataCacheStore>(sp => sp.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<SqliteAccountingStore>();
+builder.Services.AddSingleton<SqliteSubscriptionStore>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
 builder.Services.AddScoped<IAccountingRepository, EfPostgreSqlAccountingRepository>();
+builder.Services.AddScoped<ISubscriptionRepository, EfPostgreSqlSubscriptionRepository>();
+builder.Services.AddHttpClient<ISubscriptionPaymentGateway, StripeVirtualPosPaymentGateway>();
+builder.Services.AddScoped<ISubscriptionEntitlementService, SubscriptionEntitlementService>();
 
 // PostgreSQL 16 EF Core Persistence & Unit of Work (FAZ 1: Finansal Veri Görünürlüğü)
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -321,6 +327,7 @@ using (var scope = app.Services.CreateScope())
             cts.Token);
 
         await AccountingPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
+        await SubscriptionPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
 
         var migrator = scope.ServiceProvider.GetRequiredService<PostgreSqlDataMigrator>();
         var migrationRes = await migrator.MigrateAndSeedAsync();

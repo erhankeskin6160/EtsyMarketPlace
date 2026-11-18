@@ -34,11 +34,20 @@
           <a *ngFor="let item of cat.items"
              [routerLink]="item.route"
              routerLinkActive="active-nav"
+             (click)="onNavItemClick($event, item)"
              class="nav-item"
+             [class.nav-locked]="!subscriptionService.isFeatureAllowed(item.id)"
              [title]="item.title">
             <span class="nav-icon"><i [class]="'fa-solid ' + item.icon"></i></span>
             <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ item.title }}</span>
-            <span class="badge" [class.badge-new]="item.badge === 'YENİ'" [class.badge-pro]="item.badge === 'PRO'" *ngIf="item.badge && !apiService.isSidebarCollapsed()">
+            <span class="badge badge-locked"
+                  *ngIf="!subscriptionService.isFeatureAllowed(item.id) && !apiService.isSidebarCollapsed()">
+              🔒 {{ subscriptionService.getRequiredPlanBadge(item.id) }}
+            </span>
+            <span class="badge"
+                  [class.badge-new]="item.badge === 'YENİ'"
+                  [class.badge-pro]="item.badge === 'PRO' || item.badge === 'PAKET'"
+                  *ngIf="subscriptionService.isFeatureAllowed(item.id) && item.badge && !apiService.isSidebarCollapsed()">
               {{ item.badge }}
             </span>
           </a>
@@ -71,6 +80,13 @@
       </div>
 
       <div class="header-right">
+        <!-- Active SaaS Subscription Tier Pill -->
+        <button class="sub-plan-pill"
+                (click)="router.navigate(['/settings/subscription'])"
+                title="Aktif Abonelik Paketi & Kota Detayları">
+          <span>{{ subscriptionService.activePlanBadgeLabel() }}</span>
+        </button>
+
         <!-- Active AI Model Hub Badge (Matching Desktop Image 1) -->
         <button class="ai-model-hub-badge" [ngClass]="aiService.activeBadgeClass()" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
           <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>

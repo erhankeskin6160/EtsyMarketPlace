@@ -1,6 +1,7 @@
 using EtsyMarketPlace.Domain.Accounting;
 using EtsyMarketPlace.Domain.Accounting.Entities;
 using EtsyMarketPlace.Domain.Entities;
+using EtsyMarketPlace.Domain.Subscriptions.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EtsyMarketPlace.Infrastructure.Database.Postgres;
@@ -41,6 +42,9 @@ public class EtsyMarketPlaceDbContext : DbContext
     public DbSet<FixedAssetItem> AccountingFixedAssets => Set<FixedAssetItem>();
     public DbSet<InventoryPeriodAdjustment> AccountingInventoryAdjustments => Set<InventoryPeriodAdjustment>();
     public DbSet<ShopAccountingProfile> AccountingShopProfiles => Set<ShopAccountingProfile>();
+    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
+    public DbSet<SubscriptionTransaction> SubscriptionTransactions => Set<SubscriptionTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +65,9 @@ public class EtsyMarketPlaceDbContext : DbContext
             entity.Property(e => e.MonthlyAiTokenQuota).HasColumnName("monthly_ai_token_quota").HasDefaultValue(500000);
             entity.Property(e => e.UsedAiTokens).HasColumnName("used_ai_tokens").HasDefaultValue(0);
             entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.SubscriptionPlanId).HasColumnName("subscription_plan_id").HasMaxLength(50).HasDefaultValue("pro");
+            entity.Property(e => e.SubscriptionStatus).HasColumnName("subscription_status").HasMaxLength(30).HasDefaultValue("Active");
+            entity.Property(e => e.SubscriptionExpiresAt).HasColumnName("subscription_expires_at").HasColumnType("timestamp with time zone");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
             entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at").HasColumnType("timestamp with time zone");
 
@@ -600,6 +607,82 @@ public class EtsyMarketPlaceDbContext : DbContext
             entity.Property(e => e.CustomGvkBracketsJson).HasColumnName("custom_gvk_brackets_json").HasMaxLength(4000);
             entity.Property(e => e.IncludeFxSpreadAndExchangeDifference).HasColumnName("include_fx_spread_and_exchange_difference");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        // 27. SubscriptionPlans (SaaS Abonelik Paketleri)
+        modelBuilder.Entity<SubscriptionPlan>(entity =>
+        {
+            entity.ToTable("subscription_plans");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasMaxLength(50);
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Tagline).HasColumnName("tagline").HasMaxLength(500).HasDefaultValue(string.Empty);
+            entity.Property(e => e.BadgeText).HasColumnName("badge_text").HasMaxLength(64).HasDefaultValue(string.Empty);
+            entity.Property(e => e.AccentColor).HasColumnName("accent_color").HasMaxLength(32).HasDefaultValue("#38bdf8");
+            entity.Property(e => e.MonthlyPriceUsd).HasColumnName("monthly_price_usd").HasPrecision(18, 2);
+            entity.Property(e => e.YearlyPriceUsd).HasColumnName("yearly_price_usd").HasPrecision(18, 2);
+            entity.Property(e => e.MonthlyPriceTry).HasColumnName("monthly_price_try").HasPrecision(18, 2);
+            entity.Property(e => e.YearlyPriceTry).HasColumnName("yearly_price_try").HasPrecision(18, 2);
+            entity.Property(e => e.MaxShops).HasColumnName("max_shops").HasDefaultValue(1);
+            entity.Property(e => e.MonthlyAiTokenQuota).HasColumnName("monthly_ai_token_quota").HasDefaultValue(100000);
+            entity.Property(e => e.MaxMonthlyAiListings).HasColumnName("max_monthly_ai_listings").HasDefaultValue(15);
+            entity.Property(e => e.MaxBatchQueueSize).HasColumnName("max_batch_queue_size").HasDefaultValue(0);
+            entity.Property(e => e.AllowedFeaturesJson).HasColumnName("allowed_features_json").HasColumnType("text").HasDefaultValue("[]");
+            entity.Property(e => e.IsPopular).HasColumnName("is_popular").HasDefaultValue(false);
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.DisplayOrder).HasColumnName("display_order").HasDefaultValue(1);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc").HasColumnType("timestamp with time zone");
+        });
+
+        // 28. UserSubscriptions (Kullanıcı Abonelik Kayıtları)
+        modelBuilder.Entity<UserSubscription>(entity =>
+        {
+            entity.ToTable("user_subscriptions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasMaxLength(128);
+            entity.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+            entity.Property(e => e.PlanId).HasColumnName("plan_id").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(30).HasDefaultValue("Active");
+            entity.Property(e => e.BillingCycle).HasColumnName("billing_cycle").HasMaxLength(20).HasDefaultValue("Monthly");
+            entity.Property(e => e.StartDateUtc).HasColumnName("start_date_utc").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CurrentPeriodStartUtc).HasColumnName("current_period_start_utc").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CurrentPeriodEndUtc).HasColumnName("current_period_end_utc").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.AutoRenew).HasColumnName("auto_renew").HasDefaultValue(true);
+            entity.Property(e => e.CustomMaxShopsOverride).HasColumnName("custom_max_shops_override");
+            entity.Property(e => e.CustomAiTokenQuotaOverride).HasColumnName("custom_ai_token_quota_override");
+            entity.Property(e => e.PaymentProvider).HasColumnName("payment_provider").HasMaxLength(50).HasDefaultValue("StripeVirtualPos");
+            entity.Property(e => e.LastSessionId).HasColumnName("last_session_id").HasMaxLength(128);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc").HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.UserId).IsUnique();
+        });
+
+        // 29. SubscriptionTransactions (Sanal POS & Fatura İşlemleri)
+        modelBuilder.Entity<SubscriptionTransaction>(entity =>
+        {
+            entity.ToTable("subscription_transactions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(128).IsRequired();
+            entity.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+            entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.PlanId).HasColumnName("plan_id").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.PlanName).HasColumnName("plan_name").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.BillingCycle).HasColumnName("billing_cycle").HasMaxLength(20).HasDefaultValue("Monthly");
+            entity.Property(e => e.AmountUsd).HasColumnName("amount_usd").HasPrecision(18, 2);
+            entity.Property(e => e.AmountTry).HasColumnName("amount_try").HasPrecision(18, 2);
+            entity.Property(e => e.Currency).HasColumnName("currency").HasMaxLength(10).HasDefaultValue("USD");
+            entity.Property(e => e.ExchangeRate).HasColumnName("exchange_rate").HasPrecision(18, 4);
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(30).HasDefaultValue("Pending");
+            entity.Property(e => e.PaymentProvider).HasColumnName("payment_provider").HasMaxLength(50).HasDefaultValue("StripeVirtualPos");
+            entity.Property(e => e.CardMaskedNumber).HasColumnName("card_masked_number").HasMaxLength(32);
+            entity.Property(e => e.CardHolderName).HasColumnName("card_holder_name").HasMaxLength(150);
+            entity.Property(e => e.InvoiceNumber).HasColumnName("invoice_number").HasMaxLength(64).HasDefaultValue(string.Empty);
+            entity.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.PaidAtUtc).HasColumnName("paid_at_utc").HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.SessionId).IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.CreatedAtUtc });
         });
     }
 }

@@ -34,7 +34,7 @@ public class LoginUserHandler(
         await userRepo.AddAuditLogAsync(new AuditLogEntry(0, user.Id, user.Username, "Login", "Giriş başarılı", request.RemoteIpAddress, now), cancellationToken);
 
         var token = jwtService.GenerateToken(user);
-        var userDto = new UserDto(user.Id, user.Username, user.Email, user.Role, user.AssignedShopIds, user.MonthlyAiTokenQuota, user.UsedAiTokens, user.IsActive, user.CreatedAt.ToString("O"), now.ToString("O"));
+        var userDto = user.ToDto(now);
 
         return ServiceResponse.CreateSuccess("Giriş başarılı.", new AuthResponse(true, token, "Giriş başarılı.", userDto));
     }

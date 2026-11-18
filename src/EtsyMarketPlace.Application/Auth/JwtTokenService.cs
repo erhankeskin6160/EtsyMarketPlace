@@ -43,6 +43,8 @@ public sealed class JwtTokenService
             ["name"] = user.Username,
             ["email"] = user.Email,
             ["role"] = user.Role,
+            ["plan"] = user.SubscriptionPlanId,
+            ["subStatus"] = user.SubscriptionStatus,
             ["shops"] = user.AssignedShopIds,
             ["quota"] = user.MonthlyAiTokenQuota,
             ["used"] = user.UsedAiTokens,
@@ -102,13 +104,15 @@ public sealed class JwtTokenService
             var username = root.GetProperty("name").GetString() ?? "";
             var role = root.GetProperty("role").GetString() ?? UserRoles.StoreOwner;
             var email = root.TryGetProperty("email", out var emailEl) ? emailEl.GetString() ?? "" : "";
+            var plan = root.TryGetProperty("plan", out var planEl) ? planEl.GetString() ?? "pro" : "pro";
 
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, userId),
                 new(ClaimTypes.Name, username),
                 new(ClaimTypes.Role, role),
-                new(ClaimTypes.Email, email)
+                new(ClaimTypes.Email, email),
+                new("plan", plan)
             };
 
             var identity = new ClaimsIdentity(claims, "Bearer");

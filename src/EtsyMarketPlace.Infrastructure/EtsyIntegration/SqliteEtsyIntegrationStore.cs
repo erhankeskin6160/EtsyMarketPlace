@@ -47,6 +47,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             if (_initialized) return;
             await _migrationRunner.MigrateAsync(_connectionString, EtsyFinanceMigrations.All, cancellationToken);
             await EnsureOrderCostPackagingColumnAsync(cancellationToken);
+            await EnsureUserSubscriptionColumnsAsync(cancellationToken);
             _initialized = true;
         }
         finally
@@ -79,6 +80,45 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             {
                 await using var alterCmd = connection.CreateCommand();
                 alterCmd.CommandText = "ALTER TABLE order_costs ADD COLUMN packaging_cost REAL NULL;";
+                await alterCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        catch (SqliteException)
+        {
+            // Sütun zaten mevcut veya tablo henüz başlatılmadı
+        }
+    }
+
+    private async Task EnsureUserSubscriptionColumnsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(app_users);";
+            var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    existingCols.Add(reader.GetString(1));
+                }
+            }
+
+            if (existingCols.Count == 0) return;
+
+            var alters = new List<string>();
+            if (!existingCols.Contains("subscription_plan_id"))
+                alters.Add("ALTER TABLE app_users ADD COLUMN subscription_plan_id TEXT NOT NULL DEFAULT 'pro';");
+            if (!existingCols.Contains("subscription_status"))
+                alters.Add("ALTER TABLE app_users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'Active';");
+            if (!existingCols.Contains("subscription_expires_at"))
+                alters.Add("ALTER TABLE app_users ADD COLUMN subscription_expires_at TEXT NULL;");
+
+            foreach (var sql in alters)
+            {
+                await using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = sql;
                 await alterCmd.ExecuteNonQueryAsync(cancellationToken);
             }
         }
@@ -707,12 +747,15 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$description", payout.Description);
     }
 
+    private const string UserSelectColumns =
+        "id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at, subscription_plan_id, subscription_status, subscription_expires_at";
+
     public async Task<AppUser?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users WHERE id = $id;";
+        command.CommandText = $"SELECT {UserSelectColumns} FROM app_users WHERE id = $id;";
         command.Parameters.AddWithValue("$id", id);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) return null;
@@ -724,7 +767,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users WHERE LOWER(username) = LOWER($id) OR LOWER(email) = LOWER($id);";
+        command.CommandText = $"SELECT {UserSelectColumns} FROM app_users WHERE LOWER(username) = LOWER($id) OR LOWER(email) = LOWER($id);";
         command.Parameters.AddWithValue("$id", identifier.Trim());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) return null;
@@ -736,7 +779,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users ORDER BY created_at DESC;";
+        command.CommandText = $"SELECT {UserSelectColumns} FROM app_users ORDER BY created_at DESC;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var users = new List<AppUser>();
         while (await reader.ReadAsync(cancellationToken))
@@ -752,8 +795,8 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO app_users (id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at)
-            VALUES ($id, $username, $email, $hash, $salt, $role, $shops, $quota, $usedTokens, $isActive, $createdAt, $lastLoginAt);
+            INSERT INTO app_users (id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at, subscription_plan_id, subscription_status, subscription_expires_at)
+            VALUES ($id, $username, $email, $hash, $salt, $role, $shops, $quota, $usedTokens, $isActive, $createdAt, $lastLoginAt, $subPlanId, $subStatus, $subExpiresAt);
             """;
         command.Parameters.AddWithValue("$id", user.Id);
         command.Parameters.AddWithValue("$username", user.Username);
@@ -767,6 +810,9 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
         command.Parameters.AddWithValue("$createdAt", user.CreatedAt.ToUniversalTime().ToString("O"));
         command.Parameters.AddWithValue("$lastLoginAt", (object?)user.LastLoginAt?.ToUniversalTime().ToString("O") ?? DBNull.Value);
+        command.Parameters.AddWithValue("$subPlanId", string.IsNullOrWhiteSpace(user.SubscriptionPlanId) ? "pro" : user.SubscriptionPlanId);
+        command.Parameters.AddWithValue("$subStatus", string.IsNullOrWhiteSpace(user.SubscriptionStatus) ? "Active" : user.SubscriptionStatus);
+        command.Parameters.AddWithValue("$subExpiresAt", (object?)user.SubscriptionExpiresAt?.ToUniversalTime().ToString("O") ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -782,7 +828,10 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                 assigned_shop_ids = $shops,
                 monthly_ai_token_quota = $quota,
                 used_ai_tokens = $usedTokens,
-                is_active = $isActive
+                is_active = $isActive,
+                subscription_plan_id = $subPlanId,
+                subscription_status = $subStatus,
+                subscription_expires_at = $subExpiresAt
             WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", user.Id);
@@ -792,6 +841,9 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$quota", user.MonthlyAiTokenQuota);
         command.Parameters.AddWithValue("$usedTokens", user.UsedAiTokens);
         command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
+        command.Parameters.AddWithValue("$subPlanId", string.IsNullOrWhiteSpace(user.SubscriptionPlanId) ? "pro" : user.SubscriptionPlanId);
+        command.Parameters.AddWithValue("$subStatus", string.IsNullOrWhiteSpace(user.SubscriptionStatus) ? "Active" : user.SubscriptionStatus);
+        command.Parameters.AddWithValue("$subExpiresAt", (object?)user.SubscriptionExpiresAt?.ToUniversalTime().ToString("O") ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -872,7 +924,12 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             reader.GetInt32(8),
             reader.GetInt32(9) == 1,
             DateTimeOffset.Parse(reader.GetString(10), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-            reader.IsDBNull(11) ? null : DateTimeOffset.Parse(reader.GetString(11), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+            reader.IsDBNull(11) ? null : DateTimeOffset.Parse(reader.GetString(11), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : "pro",
+            reader.FieldCount > 13 && !reader.IsDBNull(13) ? reader.GetString(13) : "Active",
+            reader.FieldCount > 14 && !reader.IsDBNull(14)
+                ? DateTimeOffset.Parse(reader.GetString(14), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                : null);
     }
 
     public async Task<TelegramShopSettings?> GetTelegramSettingsAsync(string shopId, CancellationToken cancellationToken = default)

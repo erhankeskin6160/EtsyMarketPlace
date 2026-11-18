@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Common.Models;
+using EtsyMarketPlace.Domain.Subscriptions;
 using MediatR;
 
 public class UpdateUserCommandHandler(
@@ -23,17 +24,23 @@ public class UpdateUserCommandHandler(
             return ServiceResponse.CreateNotFound("Kullanıcı bulunamadı.");
         }
 
+        var nextPlanId = !string.IsNullOrWhiteSpace(request.Request.SubscriptionPlanId) &&
+                         SubscriptionPlanCode.IsValid(request.Request.SubscriptionPlanId)
+            ? SubscriptionPlanCode.Normalize(request.Request.SubscriptionPlanId)
+            : existingUser.SubscriptionPlanId;
+
         var updated = existingUser with
         {
             Email = request.Request.Email.Trim().ToLowerInvariant(),
             Role = request.Request.Role,
             AssignedShopIds = request.Request.AssignedShopIds ?? existingUser.AssignedShopIds,
             MonthlyAiTokenQuota = request.Request.MonthlyAiTokenQuota,
-            IsActive = request.Request.IsActive
+            IsActive = request.Request.IsActive,
+            SubscriptionPlanId = nextPlanId
         };
 
         await userRepo.UpdateUserAsync(updated, cancellationToken);
-        await userRepo.AddAuditLogAsync(new AuditLogEntry(0, request.AdminId ?? "admin", request.AdminName ?? "Admin", "UpdateUser", $"Kullanıcı güncellendi: {existingUser.Username} ({updated.Role})", request.RemoteIpAddress, DateTimeOffset.UtcNow), cancellationToken);
+        await userRepo.AddAuditLogAsync(new AuditLogEntry(0, request.AdminId ?? "admin", request.AdminName ?? "Admin", "UpdateUser", $"Kullanıcı güncellendi: {existingUser.Username} ({updated.Role}, Paket: {updated.SubscriptionPlanId})", request.RemoteIpAddress, DateTimeOffset.UtcNow), cancellationToken);
 
         return ServiceResponse.CreateSuccess("Kullanıcı başarıyla güncellendi.", new { success = true });
     }

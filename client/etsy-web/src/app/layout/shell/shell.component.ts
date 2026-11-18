@@ -1,10 +1,12 @@
-import { Component, inject, HostListener } from '@angular/core';
+import { Component, DestroyRef, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { SubscriptionService } from '../../core/services/subscription.service';
 import { NavItem } from '../../core/models/etsy.models';
 
 import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
@@ -18,15 +20,29 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
-export class ShellComponent {
+export class ShellComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   authService = inject(AuthService);
   apiService = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
+  subscriptionService = inject(SubscriptionService);
   router = inject(Router);
 
   isRateModalOpen = false;
   tempRate = 48.25;
   isShopDropdownOpen = false;
+
+  ngOnInit(): void {
+    this.subscriptionService.loadPlans().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+    this.subscriptionService.fetchMySubscription().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+  }
+
+  onNavItemClick(event: Event, item: { id: string; route: string }): void {
+    if (!this.subscriptionService.isFeatureAllowed(item.id)) {
+      event.preventDefault();
+      this.router.navigate(['/settings/subscription'], { queryParams: { upgrade: item.id } });
+    }
+  }
 
   @HostListener('document:click')
   onDocumentClick(): void {
@@ -103,6 +119,7 @@ export class ShellComponent {
     {
       title: 'Sistem & Ayarlar',
       items: [
+        { id: 'subscription', title: 'Abonelik & Paketler', icon: 'fa-gem', route: '/settings/subscription', badge: 'PAKET' },
         { id: 'ai_models', title: 'AI Model & Optimizasyon', icon: 'fa-sliders', route: '/settings/ai-models', badge: 'YENİ' },
         { id: 'notifications', title: 'Telegram Bildirim Botu', icon: 'fa-paper-plane', route: '/settings/notifications', badge: 'YENİ' },
         { id: 'api', title: 'Etsy API Ayarları', icon: 'fa-key', route: '/settings/etsy-api' },

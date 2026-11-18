@@ -18,7 +18,7 @@ public class GetAllUsersHandler(
             return ServiceResponse.CreateError(ResponseMessage.OperationCancelled, HttpStatusCode.RequestTimeout);
 
         var users = await userRepo.GetAllUsersAsync(cancellationToken);
-        var dtos = users.Select(u => new UserDto(u.Id, u.Username, u.Email, u.Role, u.AssignedShopIds, u.MonthlyAiTokenQuota, u.UsedAiTokens, u.IsActive, u.CreatedAt.ToString("O"), u.LastLoginAt?.ToString("O"))).ToList();
+        var dtos = users.Select(u => u.ToDto()).ToList();
 
         return ServiceResponse.CreateSuccess(ResponseMessage.Succeed, dtos);
     }

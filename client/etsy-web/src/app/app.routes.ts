@@ -32,8 +32,10 @@ import { SystemUpdateComponent } from './features/system/system-update.component
 import { FinancialAiAnalysisComponent } from './features/finance/financial-ai-analysis.component';
 import { ExternalArbitrageRadarComponent } from './features/research/external-arbitrage.component';
 import { TaskSchedulerAutomationComponent } from './features/tools/automation-scheduler.component';
+import { SubscriptionPlansComponent } from './features/settings/subscription-plans.component';
 
 import { authGuard, adminGuard } from './core/guards/auth.guard';
+import { subscriptionFeatureGuard } from './core/guards/subscription.guard';
 
 export const routes: Routes = [
   // Public Auth Routes
@@ -52,40 +54,41 @@ export const routes: Routes = [
 
       // Core Interactive Modules
       { path: 'orders', component: OrdersComponent },
-      { path: 'finance/accounting', component: AccountingComponent },
+      { path: 'finance/accounting', component: AccountingComponent, canActivate: [subscriptionFeatureGuard('financial')] },
       { path: 'finance/profit', component: ProfitCalculatorComponent },
       { path: 'finance/product-costs', component: ProductCostManagerComponent },
       { path: 'listings/fast-creator', component: FastCreatorComponent },
       { path: 'listings/creator', redirectTo: 'listings/fast-creator', pathMatch: 'full' },
       { path: 'listings/discovery', component: ProductDiscoveryComponent },
-      { path: 'ai-studio', component: AiStudioComponent },
+      { path: 'ai-studio', component: AiStudioComponent, canActivate: [subscriptionFeatureGuard('ai_image')] },
 
       // Research & Intelligence Modules
       { path: 'research/market', component: MarketResearchComponent },
-      { path: 'research/viral-3d', component: Viral3DComponent },
-      { path: 'research/competitor', component: CompetitorSpyComponent },
-      { path: 'research/external', component: ExternalArbitrageRadarComponent },
+      { path: 'research/viral-3d', component: Viral3DComponent, canActivate: [subscriptionFeatureGuard('viral_3d')] },
+      { path: 'research/competitor', component: CompetitorSpyComponent, canActivate: [subscriptionFeatureGuard('competitor_spy')] },
+      { path: 'research/external', component: ExternalArbitrageRadarComponent, canActivate: [subscriptionFeatureGuard('external')] },
 
       // Analytics Modules
-      { path: 'analytics/ai-audit', component: AiAuditComponent },
+      { path: 'analytics/ai-audit', component: AiAuditComponent, canActivate: [subscriptionFeatureGuard('ai_audit')] },
       { path: 'analytics/shop', component: ShopPerformanceComponent },
-      { path: 'analytics/ab-test', component: AbTestDashboardComponent },
+      { path: 'analytics/ab-test', component: AbTestDashboardComponent, canActivate: [subscriptionFeatureGuard('ab_test')] },
 
       // Finance & Tools Modules
-      { path: 'finance/ai-analysis', component: FinancialAiAnalysisComponent },
-      { path: 'tools/vault', component: ShopVaultComponent },
-      { path: 'tools/automation', component: TaskSchedulerAutomationComponent },
-      { path: 'tools/batch', component: BatchQueueComponent },
+      { path: 'finance/ai-analysis', component: FinancialAiAnalysisComponent, canActivate: [subscriptionFeatureGuard('financial_ai')] },
+      { path: 'tools/vault', component: ShopVaultComponent, canActivate: [subscriptionFeatureGuard('shop_vault')] },
+      { path: 'tools/automation', component: TaskSchedulerAutomationComponent, canActivate: [subscriptionFeatureGuard('automation')] },
+      { path: 'tools/batch', component: BatchQueueComponent, canActivate: [subscriptionFeatureGuard('batch')] },
       { path: 'tools/tracking', component: LiveTrackingRadarComponent },
       { path: 'tools/ai-usage', component: AiUsageDashboardComponent },
 
       // Shipping & Logistics Modules (4-Carrier Hub)
-      { path: 'shipping/aras', component: ShippingHubComponent },
-      { path: 'shipping/shipentegra', component: ShippingHubComponent },
-      { path: 'shipping/navlungo', component: ShippingHubComponent },
-      { path: 'shipping/shiptomore', component: ShippingHubComponent },
+      { path: 'shipping/aras', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
+      { path: 'shipping/shipentegra', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
+      { path: 'shipping/navlungo', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
+      { path: 'shipping/shiptomore', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
 
       // System & Settings Modules
+      { path: 'settings/subscription', component: SubscriptionPlansComponent },
       { path: 'settings/ai-models', component: AiModelsSettingsComponent },
       { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
       { path: 'settings/notifications', component: NotificationSettingsComponent },

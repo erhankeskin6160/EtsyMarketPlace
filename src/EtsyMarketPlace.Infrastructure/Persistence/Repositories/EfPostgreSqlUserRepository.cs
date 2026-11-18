@@ -80,6 +80,9 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
             MonthlyAiTokenQuota = user.MonthlyAiTokenQuota,
             UsedAiTokens = user.UsedAiTokens,
             IsActive = user.IsActive,
+            SubscriptionPlanId = user.SubscriptionPlanId,
+            SubscriptionStatus = user.SubscriptionStatus,
+            SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime,
             CreatedAt = user.CreatedAt.UtcDateTime,
             LastLoginAt = user.LastLoginAt?.UtcDateTime
         };
@@ -102,6 +105,9 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         entity.AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []);
         entity.MonthlyAiTokenQuota = user.MonthlyAiTokenQuota;
         entity.IsActive = user.IsActive;
+        entity.SubscriptionPlanId = user.SubscriptionPlanId;
+        entity.SubscriptionStatus = user.SubscriptionStatus;
+        entity.SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -177,6 +183,9 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
             u.UsedAiTokens,
             u.IsActive,
             ToUtcOffset(u.CreatedAt),
-            u.LastLoginAt.HasValue ? ToUtcOffset(u.LastLoginAt.Value) : null);
+            u.LastLoginAt.HasValue ? ToUtcOffset(u.LastLoginAt.Value) : null,
+            string.IsNullOrWhiteSpace(u.SubscriptionPlanId) ? "pro" : u.SubscriptionPlanId,
+            string.IsNullOrWhiteSpace(u.SubscriptionStatus) ? "Active" : u.SubscriptionStatus,
+            u.SubscriptionExpiresAt.HasValue ? ToUtcOffset(u.SubscriptionExpiresAt.Value) : null);
     }
 }

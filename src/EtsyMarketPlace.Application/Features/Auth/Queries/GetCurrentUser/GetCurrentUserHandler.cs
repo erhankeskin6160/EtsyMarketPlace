@@ -22,7 +22,7 @@ public class GetCurrentUserHandler(
             return ServiceResponse.CreateError("Kullanıcı bulunamadı veya hesap askıya alınmış.", HttpStatusCode.Forbidden);
         }
 
-        var userDto = new UserDto(user.Id, user.Username, user.Email, user.Role, user.AssignedShopIds, user.MonthlyAiTokenQuota, user.UsedAiTokens, user.IsActive, user.CreatedAt.ToString("O"), user.LastLoginAt?.ToString("O"));
+        var userDto = user.ToDto();
         return ServiceResponse.CreateSuccess(ResponseMessage.Succeed, userDto);
     }
 }

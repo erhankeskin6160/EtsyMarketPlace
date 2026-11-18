@@ -2,6 +2,8 @@ import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { SubscriptionService } from '../../core/services/subscription.service';
+import { SubscriptionPlan } from '../../core/models/subscription.models';
 import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/models/auth.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -67,6 +69,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                 <th>KULLANICI</th>
                 <th>E-POSTA</th>
                 <th>ROL</th>
+                <th>ABONELİK PAKETİ</th>
                 <th>ATANMIŞ MAĞAZALAR</th>
                 <th>AYLIK AI KOTASI</th>
                 <th>DURUM</th>
@@ -93,6 +96,16 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                   </select>
                 </td>
                 <td>
+                  <select [ngModel]="u.subscriptionPlanId || 'pro'"
+                          (ngModelChange)="assignUserPlan(u, $event)"
+                          class="form-select role-select">
+                    <option value="starter">🌱 Starter ($19)</option>
+                    <option value="growth">🚀 Growth ($49)</option>
+                    <option value="pro">💎 Pro ($99)</option>
+                    <option value="enterprise">👑 Enterprise ($249)</option>
+                  </select>
+                </td>
+                <td>
                   <div class="shop-tags">
                     <span class="shop-tag" *ngFor="let shop of u.assignedShopIds">🏬 {{ shop }}</span>
                   </div>
@@ -109,6 +122,44 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                   <button class="btn btn-secondary btn-sm" (click)="toggleStatus(u)">
                     {{ u.isActive ? '🛑 Askıya Al' : '✅ Aktifleştir' }}
                   </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SUBSCRIPTION PLANS MANAGEMENT SECTION -->
+      <section class="glass-card users-section">
+        <div class="table-header">
+          <div>
+            <h3 class="section-title">💎 SaaS Abonelik Paketleri, Fiyat & Kota Yönetimi</h3>
+            <span class="section-sub">Paketlerin USD/TRY fiyatlarını, mağaza limitlerini ve aylık AI token kotalarını canlı güncelleyin</span>
+          </div>
+          <span class="badge badge-pro">{{ plans.length }} Paket</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>PAKET</th>
+                <th>AYLIK USD</th>
+                <th>AYLIK TRY</th>
+                <th>MAKS. MAĞAZA</th>
+                <th>AI TOKEN KOTASI</th>
+                <th>İŞLEM</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of plans">
+                <td><b>{{ subscriptionService.getPlanEmoji(p.id) }} {{ p.name }}</b> <code class="text-muted">({{ p.id }})</code></td>
+                <td><input type="number" [(ngModel)]="p.monthlyPriceUsd" class="role-select" style="width:90px" /></td>
+                <td><input type="number" [(ngModel)]="p.monthlyPriceTry" class="role-select" style="width:105px" /></td>
+                <td><input type="number" [(ngModel)]="p.maxShops" class="role-select" style="width:80px" /></td>
+                <td><input type="number" [(ngModel)]="p.monthlyAiTokenQuota" class="role-select" style="width:130px" /></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" (click)="savePlanConfig(p)">💾 Kaydet</button>
                 </td>
               </tr>
             </tbody>
@@ -341,8 +392,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export class AdminComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   apiService = inject(EtsyApiService);
+  subscriptionService = inject(SubscriptionService);
 
   users: User[] = [];
+  plans: SubscriptionPlan[] = [];
   logs: AuditLog[] = [];
   stats: SystemStats = {
     totalUsers: 1,
@@ -396,6 +449,53 @@ export class AdminComponent implements OnInit {
     this.apiService.getSystemStats().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => this.stats = res,
       error: () => {}
+    });
+
+    this.subscriptionService.loadPlans().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: res => this.plans = res.map(p => ({ ...p })),
+      error: () => {}
+    });
+  }
+
+  assignUserPlan(user: User, planId: string): void {
+    this.subscriptionService.adminAssignUserSubscription(user.id, { planId }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: summary => {
+        user.subscriptionPlanId = summary.planId;
+        user.monthlyAiTokenQuota = summary.monthlyAiTokenQuota;
+        this.showToast(`✓ "${user.username}" kullanıcısı ${summary.planName} paketine atandı (${summary.monthlyAiTokenQuota.toLocaleString('tr-TR')} Token).`, 'success');
+      },
+      error: (err) => {
+        const msg = err?.error?.message || err?.message || 'Paket atanamadı';
+        this.showToast(`⚠️ Paket atama hatası: ${msg}`, 'error');
+      }
+    });
+  }
+
+  savePlanConfig(plan: SubscriptionPlan): void {
+    this.subscriptionService.adminUpdatePlan(plan.id, {
+      name: plan.name,
+      tagline: plan.tagline,
+      badgeText: plan.badgeText,
+      monthlyPriceUsd: Number(plan.monthlyPriceUsd),
+      yearlyPriceUsd: Number(plan.yearlyPriceUsd),
+      monthlyPriceTry: Number(plan.monthlyPriceTry),
+      yearlyPriceTry: Number(plan.yearlyPriceTry),
+      maxShops: Number(plan.maxShops),
+      monthlyAiTokenQuota: Number(plan.monthlyAiTokenQuota),
+      maxMonthlyAiListings: Number(plan.maxMonthlyAiListings),
+      maxBatchQueueSize: Number(plan.maxBatchQueueSize),
+      allowedFeatures: plan.allowedFeatures,
+      isPopular: plan.isPopular,
+      isActive: plan.isActive
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: updated => {
+        this.showToast(`✓ "${updated.name}" paketi güncellendi ($${updated.monthlyPriceUsd}/ay, ${updated.maxShops} mağaza).`, 'success');
+        this.loadData();
+      },
+      error: (err) => {
+        const msg = err?.error?.message || err?.message || 'Paket güncellenemedi';
+        this.showToast(`⚠️ Paket güncelleme hatası: ${msg}`, 'error');
+      }
     });
   }
 

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Common.Models;
+using EtsyMarketPlace.Domain.Subscriptions;
 using MediatR;
 
 public class RegisterUserHandler(
@@ -30,6 +31,7 @@ public class RegisterUserHandler(
         var (hash, salt) = PasswordHasher.HashPassword(request.Password);
         var now = DateTimeOffset.UtcNow;
         var assignedShops = string.IsNullOrWhiteSpace(request.ShopId) ? new List<string> { "53236321" } : new List<string> { request.ShopId.Trim() };
+        var starterPlan = SubscriptionFeatureKeys.GetDefaultPlans().First(p => p.Id == SubscriptionPlanCode.Starter);
 
         var newUser = new AppUser(
             Guid.NewGuid().ToString(),
@@ -39,17 +41,20 @@ public class RegisterUserHandler(
             salt,
             UserRoles.StoreOwner,
             assignedShops,
-            500_000,
+            starterPlan.MonthlyAiTokenQuota,
             0,
             true,
             now,
-            now);
+            now,
+            SubscriptionPlanCode.Starter,
+            SubscriptionStatus.Active.ToString(),
+            now.AddMonths(1));
 
         await userRepo.CreateUserAsync(newUser, cancellationToken);
-        await userRepo.AddAuditLogAsync(new AuditLogEntry(0, newUser.Id, newUser.Username, "Register", "Yeni kayıt oluşturuldu", request.RemoteIpAddress, now), cancellationToken);
+        await userRepo.AddAuditLogAsync(new AuditLogEntry(0, newUser.Id, newUser.Username, "Register", "Yeni kayıt oluşturuldu (Starter Paketi)", request.RemoteIpAddress, now), cancellationToken);
 
         var token = jwtService.GenerateToken(newUser);
-        var userDto = new UserDto(newUser.Id, newUser.Username, newUser.Email, newUser.Role, newUser.AssignedShopIds, newUser.MonthlyAiTokenQuota, newUser.UsedAiTokens, newUser.IsActive, newUser.CreatedAt.ToString("O"), now.ToString("O"));
+        var userDto = newUser.ToDto(now);
 
         return ServiceResponse.CreateSuccess("Kayıt başarıyla tamamlandı.", new AuthResponse(true, token, "Kayıt başarıyla tamamlandı.", userDto));
     }

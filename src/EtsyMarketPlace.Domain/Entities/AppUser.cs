@@ -15,6 +15,9 @@ public class AppUser
     public int MonthlyAiTokenQuota { get; set; } = 500000;
     public int UsedAiTokens { get; set; } = 0;
     public bool IsActive { get; set; } = true;
+    public string SubscriptionPlanId { get; set; } = "pro";
+    public string SubscriptionStatus { get; set; } = "Active";
+    public DateTime? SubscriptionExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginAt { get; set; }
 }

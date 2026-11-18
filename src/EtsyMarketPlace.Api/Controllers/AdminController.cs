@@ -13,6 +13,9 @@ using EtsyMarketPlace.Application.Features.Admin.Commands.UpdateUser;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetAllUsers;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetAuditLogs;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetSystemStats;
+using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminAssignSubscription;
+using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminUpdateSubscriptionPlan;
+using EtsyMarketPlace.Application.Subscriptions;
 
 [Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.Admin)]
 [ApiController]
@@ -113,6 +116,48 @@ public class AdminController : ControllerBase
 
         var request = new GetSystemStatsRequest();
         var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("users/{id}/subscription")]
+    [EndpointSummary("Kullanıcıya Abonelik Paketi ve Kota Ata")]
+    public async Task<IActionResult> AssignUserSubscription(
+        string id,
+        [FromBody] AdminAssignSubscriptionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (isAdmin, adminId, adminName) = ValidateAdmin();
+        if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
+
+        var cmd = new AdminAssignSubscriptionCommand(
+            id,
+            adminId,
+            adminName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request);
+
+        var response = await _mediator.Send(cmd, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPut("subscriptions/plans/{planId}")]
+    [EndpointSummary("Abonelik Paketi Fiyat ve Limitlerini Güncelle")]
+    public async Task<IActionResult> UpdateSubscriptionPlan(
+        string planId,
+        [FromBody] AdminUpdateSubscriptionPlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (isAdmin, adminId, adminName) = ValidateAdmin();
+        if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
+
+        var cmd = new AdminUpdateSubscriptionPlanCommand(
+            planId,
+            adminId,
+            adminName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request);
+
+        var response = await _mediator.Send(cmd, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

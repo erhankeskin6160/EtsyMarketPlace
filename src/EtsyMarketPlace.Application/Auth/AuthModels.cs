@@ -12,7 +12,10 @@ public sealed record AppUser(
     int UsedAiTokens,
     bool IsActive,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? LastLoginAt);
+    DateTimeOffset? LastLoginAt,
+    string SubscriptionPlanId = "pro",
+    string SubscriptionStatus = "Active",
+    DateTimeOffset? SubscriptionExpiresAt = null);
 
 public sealed record AuditLogEntry(
     long Id,
@@ -47,14 +50,18 @@ public sealed record UserDto(
     int UsedAiTokens,
     bool IsActive,
     string CreatedAt,
-    string? LastLoginAt);
+    string? LastLoginAt,
+    string SubscriptionPlanId = "pro",
+    string SubscriptionStatus = "Active",
+    string? SubscriptionExpiresAt = null);
 
 public sealed record UpdateUserRequest(
     string Email,
     string Role,
     List<string> AssignedShopIds,
     int MonthlyAiTokenQuota,
-    bool IsActive);
+    bool IsActive,
+    string? SubscriptionPlanId = null);
 
 public sealed record AuditLogDto(
     long Id,
@@ -71,3 +78,22 @@ public sealed record SystemStatsDto(
     int TotalShops,
     long TotalUsedAiTokens,
     int AuditLogCount);
+
+public static class AuthUserExtensions
+{
+    public static UserDto ToDto(this AppUser user, DateTimeOffset? lastLoginOverride = null)
+        => new(
+            user.Id,
+            user.Username,
+            user.Email,
+            user.Role,
+            user.AssignedShopIds,
+            user.MonthlyAiTokenQuota,
+            user.UsedAiTokens,
+            user.IsActive,
+            user.CreatedAt.ToString("O"),
+            (lastLoginOverride ?? user.LastLoginAt)?.ToString("O"),
+            user.SubscriptionPlanId,
+            user.SubscriptionStatus,
+            user.SubscriptionExpiresAt?.ToString("O"));
+}

@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS app_users (
     monthly_ai_token_quota INTEGER NOT NULL DEFAULT 500000,
     used_ai_tokens INTEGER NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    subscription_plan_id VARCHAR(50) NOT NULL DEFAULT 'pro',
+    subscription_status VARCHAR(30) NOT NULL DEFAULT 'Active',
+    subscription_expires_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at TIMESTAMPTZ NULL
 );

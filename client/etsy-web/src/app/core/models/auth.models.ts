@@ -2,13 +2,16 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'Admin' | 'StoreOwner' | 'Demo';
+  role: 'Admin' | 'StoreOwner' | 'Demo' | 'Operator';
   assignedShopIds: string[];
   monthlyAiTokenQuota: number;
   usedAiTokens: number;
   isActive: boolean;
   createdAt: string;
   lastLoginAt?: string;
+  subscriptionPlanId?: string;
+  subscriptionStatus?: string;
+  subscriptionExpiresAt?: string;
 }
 
 export interface LoginRequest {
@@ -36,6 +39,7 @@ export interface UpdateUserRequest {
   assignedShopIds: string[];
   monthlyAiTokenQuota: number;
   isActive: boolean;
+  subscriptionPlanId?: string;
 }
 
 export interface AuditLog {

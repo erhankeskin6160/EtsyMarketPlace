@@ -1,0 +1,418 @@
+<div class="sub-page">
+  <!-- PAGE HEADER -->
+  <header class="sub-header glass-card">
+    <div class="sub-header-left">
+      <div class="pill-badge">💎 SAAS ABONELİK & STRIPE SANAL POS</div>
+      <h1 class="sub-title">Abonelik Paketleri, Kota Yönetimi & Ödeme Merkezi</h1>
+      <p class="sub-subtitle">
+        Mağaza kapasitenizi, aylık AI token kotanızı ve gelişmiş Etsy otomasyon modüllerinizi buradan yönetin.
+      </p>
+    </div>
+
+    <div class="sub-header-controls">
+      <div class="cycle-toggle" role="group" aria-label="Faturalama dönemi seçimi">
+        <button type="button"
+                class="toggle-btn"
+                [class.active]="billingCycle === 'Monthly'"
+                (click)="billingCycle = 'Monthly'">
+          Aylık
+        </button>
+        <button type="button"
+                class="toggle-btn"
+                [class.active]="billingCycle === 'Yearly'"
+                (click)="billingCycle = 'Yearly'">
+          Yıllık <span class="save-chip">%20 İNDİRİM</span>
+        </button>
+      </div>
+
+      <div class="currency-switch" role="group" aria-label="Para birimi seçimi">
+        <button type="button"
+                class="toggle-btn"
+                [class.active]="currency === 'USD'"
+                (click)="currency = 'USD'">
+          $ USD
+        </button>
+        <button type="button"
+                class="toggle-btn"
+                [class.active]="currency === 'TRY'"
+                (click)="currency = 'TRY'">
+          ₺ TRY
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LOCKED FEATURE UPGRADE BANNER -->
+  <section *ngIf="upgradeFeatureKey" class="upgrade-alert-banner" role="alert" aria-live="polite">
+    <div class="upgrade-alert-content">
+      <span class="lock-icon" aria-hidden="true">🔒</span>
+      <div>
+        <strong>{{ upgradeFeatureTitle }} modülü mevcut paketinizde kilitli.</strong>
+        <p>
+          Bu özelliği kullanabilmek için en az
+          <span class="req-plan-pill">{{ requiredPlanForUpgrade.toUpperCase() }}</span>
+          paketine geçiş yapmanız gerekmektedir. Aşağıdaki paketlerden birini seçip Stripe Sanal POS ile anında açabilirsiniz.
+        </p>
+      </div>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" (click)="clearUpgradeNotice()">Kapat</button>
+  </section>
+
+  <!-- FEEDBACK / PAYMENT STATUS BANNER -->
+  <section *ngIf="statusMessage"
+           class="status-banner"
+           [class.success]="statusType === 'success'"
+           [class.error]="statusType === 'error'"
+           role="status"
+           aria-live="polite">
+    <span>{{ statusMessage }}</span>
+    <button type="button" class="btn-close-banner" (click)="statusMessage = null" aria-label="Bildirimi kapat">✕</button>
+  </section>
+
+  <!-- ACTIVE SUBSCRIPTION & QUOTA SUMMARY -->
+  <section class="glass-card current-sub-card" *ngIf="subscriptionService.mySubscription() as sub">
+    <div class="current-sub-top">
+      <div class="current-plan-meta">
+        <span class="plan-emoji" aria-hidden="true">{{ subscriptionService.getPlanEmoji(sub.planId) }}</span>
+        <div>
+          <div class="current-plan-row">
+            <h2>Mevcut Paket: {{ sub.planName }}</h2>
+            <span class="status-chip" [class.active]="sub.status === 'Active' || sub.isAdminExempt">
+              {{ sub.isAdminExempt ? 'ADMIN MUAF (SINIRSIZ)' : sub.status.toUpperCase() }}
+            </span>
+          </div>
+          <p class="period-meta">
+            Faturalama: <strong>{{ sub.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }}</strong> ·
+            Dönem Bitişi: <strong>{{ sub.currentPeriodEndUtc | date:'dd.MM.yyyy' }}</strong>
+            ({{ sub.daysRemaining }} gün kaldı)
+          </p>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-secondary btn-sm" (click)="refreshAll()">
+        <i class="fa-solid fa-arrows-rotate"></i> Verileri Yenile
+      </button>
+    </div>
+
+    <div class="quota-grid">
+      <div class="quota-box">
+        <div class="quota-header">
+          <span>🏬 Bağlı Mağaza Limiti</span>
+          <strong>{{ sub.assignedShopsCount }} / {{ sub.maxShops }} Mağaza</strong>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill cyan" [style.width.%]="getShopUsagePct(sub)"></div>
+        </div>
+        <span class="quota-hint">Kalan boş mağaza slotu: {{ sub.remainingShopSlots }}</span>
+      </div>
+
+      <div class="quota-box">
+        <div class="quota-header">
+          <span>🧠 Aylık AI Token Kotası</span>
+          <strong>{{ sub.usedAiTokens | number }} / {{ sub.monthlyAiTokenQuota | number }}</strong>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill purple" [style.width.%]="sub.aiUsagePercentage"></div>
+        </div>
+        <span class="quota-hint">Kalan bakiye: {{ sub.remainingAiTokens | number }} token (%{{ sub.aiUsagePercentage }} kullanıldı)</span>
+      </div>
+
+      <div class="quota-box">
+        <div class="quota-header">
+          <span>⚡ Toplu Kuyruk & AI İlan</span>
+          <strong>
+            {{ sub.maxMonthlyAiListings < 0 ? 'Sınırsız İlan' : sub.maxMonthlyAiListings + ' İlan/Ay' }}
+          </strong>
+        </div>
+        <div class="quota-mini-pills">
+          <span class="mini-pill">Batch Kuyruk: {{ sub.maxBatchQueueSize > 0 ? sub.maxBatchQueueSize + ' Ürün' : 'Kapalı' }}</span>
+          <span class="mini-pill">Açık Modül: {{ sub.allowedFeatures.length }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STRIPE VIRTUAL POS CHECKOUT PANEL -->
+  <section *ngIf="activeCheckoutSession as session" class="glass-card vpos-checkout-card" id="stripe-vpos-panel">
+    <div class="vpos-header">
+      <div class="vpos-brand">
+        <span class="stripe-badge">STRIPE SANAL POS</span>
+        <div>
+          <h3>Güvenli Ödeme ve Paket Aktivasyonu</h3>
+          <p class="vpos-sub">Oturum: <code>{{ session.sessionId }}</code> · Fatura: <code>{{ session.invoiceNumber }}</code></p>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" (click)="cancelCheckout()">✕ Ödemeyi İptal Et</button>
+    </div>
+
+    <div class="vpos-grid">
+      <!-- ORDER SUMMARY -->
+      <div class="vpos-summary">
+        <h4>Sipariş Özeti</h4>
+        <div class="summary-row">
+          <span>Seçilen Paket</span>
+          <strong>{{ session.planName }} ({{ session.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }})</strong>
+        </div>
+        <div class="summary-row">
+          <span>Ödeme Sağlayıcısı</span>
+          <strong>{{ session.provider }}</strong>
+        </div>
+        <div class="summary-row">
+          <span>Fatura Numarası</span>
+          <strong>{{ session.invoiceNumber }}</strong>
+        </div>
+        <div class="summary-divider"></div>
+        <div class="summary-row total">
+          <span>Ödenecek Tutar</span>
+          <strong class="total-amount">{{ formatSessionAmount(session) }}</strong>
+        </div>
+        <div class="summary-alt">
+          Karşılık: {{ session.currency === 'TRY' ? ('$' + (session.amountUsd | number:'1.2-2') + ' USD') : ('₺' + (session.amountTry | number:'1.2-2') + ' TRY') }}
+        </div>
+
+        <div class="test-cards-box">
+          <span class="test-cards-title">Hızlı Sanal POS Test Kartları</span>
+          <div class="test-cards-actions">
+            <button type="button" class="btn btn-secondary btn-xs" (click)="fillTestCard('success')">
+              ✅ Başarılı Kart (4242)
+            </button>
+            <button type="button" class="btn btn-danger btn-xs" (click)="fillTestCard('decline')">
+              ❌ Reddedilen Kart (0002)
+            </button>
+          </div>
+        </div>
+
+        <div class="ssl-note">
+          <i class="fa-solid fa-shield-halved text-emerald"></i>
+          <span>256-Bit SSL şifreli Stripe Sanal POS provizyonu ile paket ve AI token kotanız anında tanımlanır.</span>
+        </div>
+      </div>
+
+      <!-- CARD PAYMENT FORM (Following modern-web-guidance autofill-payment-form) -->
+      <form class="vpos-form" (ngSubmit)="submitVirtualPosPayment()" novalidate>
+        <div class="field-group">
+          <label for="cc-name">Kart Üzerindeki Ad Soyad <span aria-hidden="true">*</span></label>
+          <input id="cc-name"
+                 name="cc-name"
+                 type="text"
+                 class="form-input"
+                 autocomplete="cc-name"
+                 enterkeyhint="next"
+                 maxlength="80"
+                 required
+                 [(ngModel)]="cardForm.cardHolderName"
+                 (input)="clearPaymentError()"
+                 placeholder="Örn: Erhan Keskin" />
+        </div>
+
+        <div class="field-group">
+          <label for="cc-number">Kart Numarası <span aria-hidden="true">*</span></label>
+          <input id="cc-number"
+                 name="cc-number"
+                 type="text"
+                 class="form-input mono-input"
+                 autocomplete="cc-number"
+                 inputmode="numeric"
+                 enterkeyhint="next"
+                 maxlength="23"
+                 required
+                 [(ngModel)]="cardForm.cardNumber"
+                 (input)="clearPaymentError()"
+                 placeholder="4242 4242 4242 4242" />
+        </div>
+
+        <div class="field-row-2">
+          <div class="field-group">
+            <label for="cc-exp">Son Kullanma Tarihi <span aria-hidden="true">*</span></label>
+            <span id="exp-hint" class="field-hint-top">Format: AA/YY (Örn: 12/28)</span>
+            <input id="cc-exp"
+                   name="cc-exp"
+                   type="text"
+                   class="form-input mono-input"
+                   autocomplete="cc-exp"
+                   inputmode="numeric"
+                   enterkeyhint="next"
+                   aria-describedby="exp-hint"
+                   maxlength="7"
+                   required
+                   [(ngModel)]="cardForm.expiry"
+                   (input)="clearPaymentError()"
+                   placeholder="12/28" />
+          </div>
+
+          <div class="field-group">
+            <label for="cc-csc">Güvenlik Kodu (CVC) <span aria-hidden="true">*</span></label>
+            <span id="csc-hint" class="field-hint-top">Kartın arkasındaki 3-4 hane</span>
+            <input id="cc-csc"
+                   name="cc-csc"
+                   type="text"
+                   class="form-input mono-input"
+                   autocomplete="cc-csc"
+                   inputmode="numeric"
+                   enterkeyhint="done"
+                   aria-describedby="csc-hint"
+                   maxlength="4"
+                   required
+                   [(ngModel)]="cardForm.cvc"
+                   (input)="clearPaymentError()"
+                   placeholder="424" />
+          </div>
+        </div>
+
+        <div *ngIf="paymentError" class="vpos-error-box" role="alert">
+          ⚠️ {{ paymentError }}
+        </div>
+
+        <button type="submit"
+                class="btn btn-pay-stripe"
+                [disabled]="isPaying">
+          <ng-container *ngIf="!isPaying">
+            🔒 Stripe Sanal POS ile {{ formatSessionAmount(session) }} Öde & Aktifleştir
+          </ng-container>
+          <ng-container *ngIf="isPaying">
+            <i class="fa-solid fa-spinner fa-spin"></i> Kart Provizyonu Doğrulanıyor...
+          </ng-container>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 4-TIER PRICING CARDS -->
+  <section class="plans-grid" aria-label="Abonelik paket seçenekleri">
+    <article *ngFor="let plan of subscriptionService.plans()"
+             class="glass-card plan-card"
+             [class.popular]="plan.isPopular"
+             [class.current-plan]="isCurrentPlan(plan.id)"
+             [class.recommended-upgrade]="isRecommendedUpgrade(plan.id)"
+             [style.--plan-accent]="plan.accentColor || '#38bdf8'">
+      <header class="plan-card-header">
+        <div class="plan-badge-row">
+          <span class="plan-badge">{{ plan.badgeText || plan.id.toUpperCase() }}</span>
+          <span *ngIf="isCurrentPlan(plan.id)" class="current-chip">MEVCUT PAKET</span>
+          <span *ngIf="isRecommendedUpgrade(plan.id)" class="upgrade-chip">ÖNERİLEN</span>
+        </div>
+        <h3 class="plan-name">{{ subscriptionService.getPlanEmoji(plan.id) }} {{ plan.name }}</h3>
+        <p class="plan-tagline">{{ plan.tagline }}</p>
+      </header>
+
+      <div class="plan-price-block">
+        <div class="price-main">{{ formatPlanPrice(plan) }}</div>
+        <div class="price-period">
+          {{ billingCycle === 'Yearly' ? '/ yıl (Aylık ' + formatMonthlyEquivalent(plan) + ')' : '/ ay' }}
+        </div>
+      </div>
+
+      <div class="plan-limits-box">
+        <div class="limit-item">
+          <span>🏬 Mağaza Sayısı</span>
+          <strong>{{ plan.maxShops }} Mağaza</strong>
+        </div>
+        <div class="limit-item">
+          <span>🧠 Aylık AI Token</span>
+          <strong>{{ plan.monthlyAiTokenQuota | number }}</strong>
+        </div>
+        <div class="limit-item">
+          <span>⚡ Aylık AI İlan</span>
+          <strong>{{ plan.maxMonthlyAiListings < 0 ? 'Sınırsız' : plan.maxMonthlyAiListings + ' İlan' }}</strong>
+        </div>
+        <div class="limit-item">
+          <span>📦 Toplu Kuyruk</span>
+          <strong>{{ plan.maxBatchQueueSize > 0 ? plan.maxBatchQueueSize + ' Ürün' : 'Kapalı' }}</strong>
+        </div>
+      </div>
+
+      <ul class="plan-features-list">
+        <li *ngFor="let feat of featureRows"
+            [class.included]="planIncludesFeature(plan, feat.key)"
+            [class.excluded]="!planIncludesFeature(plan, feat.key)">
+          <span class="feat-icon" aria-hidden="true">{{ planIncludesFeature(plan, feat.key) ? '✅' : '—' }}</span>
+          <span>{{ feat.label }}</span>
+        </li>
+      </ul>
+
+      <footer class="plan-card-footer">
+        <button type="button"
+                class="btn w-full"
+                [class.btn-orange]="plan.isPopular && !isCurrentPlan(plan.id)"
+                [class.btn-primary]="!plan.isPopular && !isCurrentPlan(plan.id)"
+                [class.btn-secondary]="isCurrentPlan(plan.id)"
+                [disabled]="isCurrentPlan(plan.id) || startingCheckoutPlanId === plan.id"
+                (click)="startCheckout(plan)">
+          <ng-container *ngIf="isCurrentPlan(plan.id)">
+            ✓ Aktif Paketiniz
+          </ng-container>
+          <ng-container *ngIf="!isCurrentPlan(plan.id) && startingCheckoutPlanId === plan.id">
+            <i class="fa-solid fa-spinner fa-spin"></i> Sanal POS Hazırlanıyor...
+          </ng-container>
+          <ng-container *ngIf="!isCurrentPlan(plan.id) && startingCheckoutPlanId !== plan.id">
+            💳 Stripe Sanal POS ile Geç
+          </ng-container>
+        </button>
+      </footer>
+    </article>
+  </section>
+
+  <!-- BILLING & VIRTUAL POS TRANSACTION HISTORY -->
+  <section class="glass-card transactions-section">
+    <div class="section-header-row">
+      <div>
+        <h3>🧾 Abonelik Ödeme & Fatura Geçmişi</h3>
+        <p class="section-sub">Stripe Sanal POS üzerinden oluşturulan tüm abonelik oturumları ve onaylı faturalar</p>
+      </div>
+      <span class="badge badge-pro">{{ subscriptionService.transactions().length }} İşlem</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="sub-table">
+        <thead>
+          <tr>
+            <th>FATURA NO</th>
+            <th>TARİH</th>
+            <th>PAKET & DÖNEM</th>
+            <th>TUTAR</th>
+            <th>SAĞLAYICI / KART</th>
+            <th>DURUM</th>
+            <th>İŞLEM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let tx of subscriptionService.transactions()">
+            <td><code>{{ tx.invoiceNumber }}</code></td>
+            <td>{{ tx.createdAtUtc | date:'dd.MM.yyyy HH:mm' }}</td>
+            <td>
+              <strong>{{ tx.planName }}</strong>
+              <span class="cycle-tag">{{ tx.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }}</span>
+            </td>
+            <td class="amount-cell">
+              {{ tx.currency === 'TRY' ? ('₺' + (tx.amountTry | number:'1.2-2')) : ('$' + (tx.amountUsd | number:'1.2-2')) }}
+            </td>
+            <td>
+              <span>{{ tx.paymentProvider }}</span>
+              <span *ngIf="tx.cardMaskedNumber" class="card-mask">{{ tx.cardMaskedNumber }}</span>
+            </td>
+            <td>
+              <span class="tx-status"
+                    [class.paid]="tx.status === 'Paid'"
+                    [class.pending]="tx.status === 'Pending'"
+                    [class.failed]="tx.status === 'Failed'">
+                {{ tx.status === 'Paid' ? 'ÖDENDİ' : tx.status === 'Pending' ? 'BEKLİYOR' : 'REDDEDİLDİ' }}
+              </span>
+            </td>
+            <td>
+              <button *ngIf="tx.status === 'Pending'"
+                      type="button"
+                      class="btn btn-primary btn-xs"
+                      (click)="resumePendingTransaction(tx)">
+                Ödemeyi Tamamla
+              </button>
+              <span *ngIf="tx.status !== 'Pending'" class="text-muted text-xs">—</span>
+            </td>
+          </tr>
+          <tr *ngIf="subscriptionService.transactions().length === 0">
+            <td colspan="7" class="empty-row">Henüz ödeme işlemi bulunmuyor.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
