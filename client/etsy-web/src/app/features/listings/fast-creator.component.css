@@ -1774,6 +1774,140 @@
   color: #cbd5e1;
 }
 
+.np-var-selector-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.np-var-select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 7px;
+  color: #e2e8f0;
+  padding: 6px 9px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.np-var-select:focus {
+  outline: none;
+  border-color: #34d399;
+}
+
+.np-variations-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.22);
+  padding-top: 8px;
+}
+
+.np-var-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #c7d2fe;
+}
+
+.np-var-range-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.np-var-table-wrap {
+  max-height: 185px;
+  overflow-y: auto;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.np-var-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.71rem;
+}
+
+.np-var-table th {
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+  color: #94a3b8;
+  text-align: left;
+  padding: 5px 7px;
+  font-weight: 600;
+  border-bottom: 1px solid #334155;
+}
+
+.np-var-table td {
+  padding: 5px 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.np-var-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.np-var-row:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.np-var-row.selected {
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.np-var-row.inactive {
+  opacity: 0.5;
+}
+
+.np-var-key {
+  font-family: inherit !important;
+  font-weight: 600;
+  color: #f1f5f9 !important;
+}
+
+.np-var-fee {
+  color: #fca5a5 !important;
+}
+
+.np-var-net {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.np-var-net.pos strong {
+  color: #34d399;
+}
+
+.np-var-net.neg strong {
+  color: #f87171;
+}
+
+.np-var-try {
+  font-size: 0.64rem;
+  color: #94a3b8;
+}
+
+.np-var-margin {
+  color: #cbd5e1 !important;
+}
+
 .ai-studio-header-flex {
   display: flex;
   align-items: center;
@@ -2100,6 +2234,32 @@
   padding: 3px 6px;
   border-radius: 4px;
   font-size: 0.75rem;
+}
+
+.var-net-cell {
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.var-net-cell .var-net-usd {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.var-net-cell.pos .var-net-usd {
+  color: #34d399;
+}
+
+.var-net-cell.neg .var-net-usd {
+  color: #f87171;
+}
+
+.var-net-cell .var-net-pct {
+  display: block;
+  font-size: 0.64rem;
+  color: #94a3b8;
 }
 
 /* Live Checklist Box */

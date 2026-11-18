@@ -138,8 +138,8 @@
                   <span *ngIf="isVariationPricingActive" class="lock-badge" title="Fiyat varyasyon tablosundaki taban fiyata kilitlendi">🔒 Varyasyona Göre</span>
                 </div>
                 <input type="number" step="0.5" class="std-input" [class.input-locked]="isVariationPricingActive" [disabled]="isVariationPricingActive" [ngModel]="isVariationPricingActive ? minVariationPrice : priceUsd" (ngModelChange)="priceUsd = $event; onPriceChange()" placeholder="0.00" />
-                <span class="currency-hint" *ngIf="!isVariationPricingActive">≈ ₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }}</span>
-                <span class="currency-hint locked-hint" *ngIf="isVariationPricingActive">Taban varyasyon fiyatı: ${{ minVariationPrice.toFixed(2) }} (≈ ₺{{ (minVariationPrice * usdTryRate).toFixed(2) }})</span>
+                <span class="currency-hint notranslate" translate="no" *ngIf="!isVariationPricingActive">≈ ₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }}</span>
+                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">Taban varyasyon fiyatı: ${{ minVariationPrice.toFixed(2) }} (≈ ₺{{ (minVariationPrice * usdTryRate).toFixed(2) }})</span>
               </div>
               <div class="field-wrap">
                 <div class="field-label-row">
@@ -147,7 +147,7 @@
                   <span *ngIf="isVariationPricingActive" class="lock-badge" title="Stok adedi varyasyonların toplam stoğuna kilitlendi">🔒 Otomatik Toplam</span>
                 </div>
                 <input type="number" min="1" class="std-input" [class.input-locked]="isVariationPricingActive" [disabled]="isVariationPricingActive" [ngModel]="isVariationPricingActive ? totalVariationStock : quantity" (ngModelChange)="quantity = $event" placeholder="0" />
-                <span class="currency-hint locked-hint" *ngIf="isVariationPricingActive">Varyasyon toplam stoğu: {{ totalVariationStock }} adet</span>
+                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">Varyasyon toplam stoğu: {{ totalVariationStock }} adet</span>
               </div>
             </div>
           </div>
@@ -311,18 +311,18 @@
                     <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies">🔄</span> Yenile
                   </button>
                 </div>
-                <select class="std-select" [(ngModel)]="selectedShippingProfileId">
+                <select class="std-select" [(ngModel)]="selectedShippingProfileId" (ngModelChange)="saveDraftToStorage()">
                   <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">⏳ Etsy kargo profilleri yükleniyor...</option>
                   <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">⚠️ Mağazada kargo profili bulunamadı</option>
                   <option *ngFor="let prof of shippingProfilesList" [ngValue]="prof.id">
-                    📦 {{ prof.title }} (ID: {{ prof.id }})
+                    📦 {{ prof.title }} (ID: {{ prof.id }}){{ prof.deliveryDaysDisplay ? ' — ' + prof.deliveryDaysDisplay : (prof.processingDaysDisplay ? ' — ' + prof.processingDaysDisplay : '') }}
                   </option>
                 </select>
               </div>
 
               <div class="field-wrap half">
                 <label>⏱️ Hazırlık Durumu:</label>
-                <select class="std-select" [(ngModel)]="selectedReadinessStateId">
+                <select class="std-select" [(ngModel)]="selectedReadinessStateId" (ngModelChange)="saveDraftToStorage()">
                   <option *ngIf="isLoadingReadinessStates" [ngValue]="null">⏳ Etsy hazırlık durumları yükleniyor...</option>
                   <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">⚠️ Hazırlık durumu bulunamadı</option>
                   <option *ngFor="let rState of readinessStatesList" [ngValue]="rState.id">
@@ -598,33 +598,88 @@
                   [(ngModel)]="estimatedShippingCostUsd"
                   (ngModelChange)="saveDraftToStorage()"
                   placeholder="0.00" />
-                <span class="np-shipping-try">≈ ₺{{ ((estimatedShippingCostUsd || 0) * usdTryRate).toFixed(2) }}</span>
+                <span class="np-shipping-try notranslate" translate="no">≈ ₺{{ ((estimatedShippingCostUsd || 0) * usdTryRate).toFixed(2) }}</span>
               </div>
+            </div>
+
+            <div class="np-var-selector-row notranslate" *ngIf="hasActiveVariations" translate="no">
+              <label class="np-shipping-label" for="npVariationSelect">🎨 Hesaplanan Varyasyon Seçeneği</label>
+              <select
+                id="npVariationSelect"
+                class="np-var-select notranslate"
+                [(ngModel)]="selectedProfitVariationKey">
+                <option value="__base__">
+                  📊 Taban / Genel ({{ minVariationPrice === maxVariationPrice ? ('$' + minVariationPrice.toFixed(2)) : ('$' + minVariationPrice.toFixed(2) + ' – $' + maxVariationPrice.toFixed(2)) }})
+                </option>
+                <option *ngFor="let vr of variationProfitRows" [value]="vr.key">
+                  {{ vr.key }} — Satış: ${{ vr.priceUsd.toFixed(2) }} → Net: ${{ vr.breakdown.netRemainingUsd.toFixed(2) }} (%{{ vr.breakdown.netMarginPercent.toFixed(1) }})
+                </option>
+              </select>
             </div>
 
             <div class="np-breakdown-list">
               <div class="np-row">
-                <span>Satış Fiyatı{{ isVariationPricingActive ? ' (Taban)' : '' }}</span>
-                <span class="np-val">${{ np.salePriceUsd.toFixed(2) }}</span>
+                <span>Satış Fiyatı{{ hasActiveVariations ? (selectedProfitVariationKey !== '__base__' ? ' (' + selectedProfitVariationKey + ')' : ' (Taban)') : '' }}</span>
+                <span class="np-val notranslate" translate="no">${{ np.salePriceUsd.toFixed(2) }}</span>
               </div>
               <div class="np-row np-deduct">
                 <span>Etsy Kesintileri (İşlem %6.5 + Ödeme %6.5+₺3 + Düz. %1.1 + $0.20 + KDV %20{{ includeOffsiteAdsFee ? ' + Offsite %15' : '' }})</span>
-                <span class="np-val">-${{ np.totalEtsyFeesUsd.toFixed(2) }}</span>
+                <span class="np-val notranslate" translate="no">-${{ np.totalEtsyFeesUsd.toFixed(2) }}</span>
               </div>
               <div class="np-row np-deduct">
                 <span>Kargo Maliyeti</span>
-                <span class="np-val">-${{ np.shippingCostUsd.toFixed(2) }}</span>
+                <span class="np-val notranslate" translate="no">-${{ np.shippingCostUsd.toFixed(2) }}</span>
               </div>
             </div>
 
             <div class="np-result-banner" [class.positive]="np.netRemainingUsd >= 0" [class.negative]="np.netRemainingUsd < 0">
               <div class="np-result-left">
                 <span class="np-result-label">Bize Kalan Net</span>
-                <span class="np-result-margin" *ngIf="np.salePriceUsd > 0">Net Marj: %{{ np.netMarginPercent.toFixed(1) }}</span>
+                <span class="np-result-margin notranslate" translate="no" *ngIf="np.salePriceUsd > 0">Net Marj: %{{ np.netMarginPercent.toFixed(1) }}</span>
               </div>
-              <div class="np-result-right">
+              <div class="np-result-right notranslate" translate="no">
                 <strong class="np-result-usd">${{ np.netRemainingUsd.toFixed(2) }}</strong>
                 <span class="np-result-try">≈ ₺{{ np.netRemainingTry.toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <div class="np-variations-box notranslate" *ngIf="hasActiveVariations" translate="no">
+              <div class="np-var-box-header">
+                <span>🎨 Varyasyon Seçenekleri Net Kâr Hesaplaması ({{ variationProfitRows.length }} Seçenek)</span>
+                <span *ngIf="variationProfitSummary.hasPriceSpread" class="np-var-range-pill">
+                  Net: ${{ variationProfitSummary.minNetRemainingUsd.toFixed(2) }} – ${{ variationProfitSummary.maxNetRemainingUsd.toFixed(2) }}
+                </span>
+              </div>
+              <div class="np-var-table-wrap">
+                <table class="np-var-table">
+                  <thead>
+                    <tr>
+                      <th>Seçenek</th>
+                      <th>Satış</th>
+                      <th>Kesinti</th>
+                      <th>Bize Kalan Net</th>
+                      <th>Marj</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      *ngFor="let vr of variationProfitRows"
+                      class="np-var-row"
+                      [class.selected]="selectedProfitVariationKey === vr.key"
+                      [class.inactive]="!vr.active"
+                      (click)="selectProfitVariation(vr.key)"
+                      title="Detaylı kesinti kırılımını görmek için tıklayın">
+                      <td class="np-var-key">{{ vr.key }}</td>
+                      <td>${{ vr.priceUsd.toFixed(2) }}</td>
+                      <td class="np-var-fee">-${{ vr.breakdown.totalEtsyFeesUsd.toFixed(2) }}</td>
+                      <td class="np-var-net" [class.pos]="vr.breakdown.netRemainingUsd >= 0" [class.neg]="vr.breakdown.netRemainingUsd < 0">
+                        <strong>${{ vr.breakdown.netRemainingUsd.toFixed(2) }}</strong>
+                        <span class="np-var-try">₺{{ vr.breakdown.netRemainingTry.toFixed(0) }}</span>
+                      </td>
+                      <td class="np-var-margin">%{{ vr.breakdown.netMarginPercent.toFixed(1) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -873,10 +928,10 @@
                   <span>💲 Her varyasyona özel farklı fiyat & stok belirle</span>
                 </label>
 
-                <div *ngIf="customVariationPricing" class="pricing-matrix-box">
+                <div *ngIf="customVariationPricing" class="pricing-matrix-box notranslate" translate="no">
                   <div class="matrix-toolbar">
-                    <button type="button" class="btn-sync-price" (click)="syncBasePriceToVariations()">
-                      ⚡ Fiyatı Eşitle (${{ (priceUsd || 0).toFixed(2) }})
+                    <button type="button" class="btn-sync-price notranslate" translate="no" (click)="syncBasePriceToVariations()">
+                      ⚡ Fiyatı Eşitle (${{ effectivePrice.toFixed(2) }})
                     </button>
                     <div class="toolbar-right-actions">
                       <button type="button" class="btn-auto-img" (click)="autoAssignVariationImages()" title="Galerideki görselleri sırasıyla varyasyonlara bağlar">
@@ -892,9 +947,10 @@
                       <thead>
                         <tr>
                           <th>Varyasyon</th>
-                          <th style="width: 105px;">Görsel</th>
-                          <th style="width: 65px;">Fiyat ($)</th>
-                          <th style="width: 55px;">Stok</th>
+                          <th style="width: 92px;">Görsel</th>
+                          <th style="width: 60px;">Fiyat ($)</th>
+                          <th style="width: 50px;">Stok</th>
+                          <th style="width: 72px;">Net Kalan</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -923,6 +979,10 @@
                           <td>
                             <input type="number" min="0" [(ngModel)]="r.quantity" (ngModelChange)="onVariationRowChange()" class="grid-input" />
                           </td>
+                          <td class="var-net-cell notranslate" translate="no" *ngIf="getRowNetProfit(r) as rnp" [class.pos]="rnp.netRemainingUsd >= 0" [class.neg]="rnp.netRemainingUsd < 0">
+                            <span class="var-net-usd">${{ rnp.netRemainingUsd.toFixed(2) }}</span>
+                            <span class="var-net-pct">%{{ rnp.netMarginPercent.toFixed(0) }}</span>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -940,9 +1000,14 @@
                 <span class="icon">{{ isTitleReady ? '✅' : '⚪' }}</span>
                 <span>Ürün başlığı hazır ({{ title.length }}/140)</span>
               </div>
-              <div class="check-item" [class.done]="isPriceReady">
+              <div class="check-item notranslate" [class.done]="isPriceReady" translate="no">
                 <span class="icon">{{ isPriceReady ? '✅' : '⚪' }}</span>
-                <span>Fiyat ${{ (priceUsd || 0).toFixed(2) }} | Stok: {{ quantity || 0 }}</span>
+                <span *ngIf="!hasActiveVariations || minVariationPrice === maxVariationPrice">
+                  Fiyat ${{ effectivePrice.toFixed(2) }} | Stok: {{ effectiveQuantity }}
+                </span>
+                <span *ngIf="hasActiveVariations && minVariationPrice !== maxVariationPrice">
+                  Varyasyon Fiyatı ${{ minVariationPrice.toFixed(2) }} – ${{ maxVariationPrice.toFixed(2) }} | Toplam Stok: {{ effectiveQuantity }}
+                </span>
               </div>
               <div class="check-item" [class.done]="isImagesReady">
                 <span class="icon">{{ isImagesReady ? '✅' : '⚪' }}</span>
@@ -1071,9 +1136,9 @@
         <div class="mock-details">
           <h4 class="mock-title">{{ title || 'Örnek Başlık Girilmedi' }}</h4>
           <span class="mock-shop">Etsy mağaza/yorum bilgisi API tarafından sunulmuyor.</span>
-          <div class="mock-price-row">
-            <span class="mock-price">${{ (priceUsd || 0).toFixed(2) }}</span>
-            <span class="mock-try">₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }}</span>
+          <div class="mock-price-row notranslate" translate="no">
+            <span class="mock-price">${{ effectivePrice.toFixed(2) }}</span>
+            <span class="mock-try">₺{{ (effectivePrice * usdTryRate).toFixed(2) }}</span>
             <span class="mock-shipping-tag">Kargo bilgisi girilmedi</span>
           </div>
           <p class="mock-desc">{{ description.slice(0, 200) }}...</p>
@@ -1115,11 +1180,11 @@
         <div class="info-card-split">
           <div class="info-card">
             <span class="info-card-label">Fiyat</span>
-            <span class="info-card-val highlight-green">${{ (createdListingResult?.price || priceUsd || 0).toFixed(2) }} (₺{{ (((createdListingResult?.price || priceUsd || 0)) * usdTryRate).toFixed(2) }})</span>
+            <span class="info-card-val highlight-green notranslate" translate="no">${{ (createdListingResult?.price || effectivePrice || 0).toFixed(2) }} (₺{{ (((createdListingResult?.price || effectivePrice || 0)) * usdTryRate).toFixed(2) }})</span>
           </div>
           <div class="info-card">
             <span class="info-card-label">Stok</span>
-            <span class="info-card-val">{{ createdListingResult?.quantity || quantity || 15 }} Adet</span>
+            <span class="info-card-val notranslate" translate="no">{{ createdListingResult?.quantity || effectiveQuantity || 15 }} Adet</span>
           </div>
           <div class="info-card">
             <span class="info-card-label">Yüklenen Görseller</span>

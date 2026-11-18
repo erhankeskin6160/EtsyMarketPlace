@@ -5,12 +5,12 @@ import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
 import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
-import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
+import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, AiShippingContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
-import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard } from '../../core/utils/etsy-variation-parser';
-import { calculateEtsyNetProfit, EtsyNetProfitBreakdown } from '../../core/utils/etsy-fee-calculator';
+import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard, parseInlineVariationOptionPrice, resolveVariationOptionPairPrice } from '../../core/utils/etsy-variation-parser';
+import { calculateEtsyNetProfit, calculateVariationNetProfits, EtsyNetProfitBreakdown, VariationNetProfitRow, VariationNetProfitSummary } from '../../core/utils/etsy-fee-calculator';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -122,10 +122,23 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   departmentsList: Array<{ name: string; count: number; icon: string }> = [];
   isLoadingCategories = false;
   shippingProfile = '';
-  shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
+  shippingProfilesList: Array<{
+    id: number;
+    title: string;
+    minDays?: number;
+    maxDays?: number;
+    processingDaysDisplay?: string;
+    minDeliveryDays?: number;
+    maxDeliveryDays?: number;
+    deliveryDaysDisplay?: string;
+    hasFreeShipping?: boolean;
+    originCountryIso?: string;
+    mailClass?: string;
+    destinationsSummary?: string;
+  }> = [];
   selectedShippingProfileId: number | null = null;
   isLoadingShippingProfiles = false;
-  readinessStatesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number; state?: string }> = [];
+  readinessStatesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number; state?: string; unit?: string }> = [];
   selectedReadinessStateId: number | null = null;
   isLoadingReadinessStates = false;
   readinessState = '';
@@ -178,6 +191,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   varValues2 = 'Siyah, Beyaz, Altın';
   customVariationPricing = false;
   variationRows: VariationRow[] = [];
+  selectedProfitVariationKey = '__base__';
   isGeneratingVariations = false;
 
   // --- AI PRICING, COMPETITOR & SHIPPING AGENT ---
@@ -482,8 +496,18 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.hasRestoredDraft = true;
 
       this.updatePriceTry();
-      if (this.enableVariations && this.variationRows.length === 0) {
-        this.rebuildVariationGrid();
+      this.selectedProfitVariationKey = '__base__';
+      if (this.enableVariations) {
+        if (this.variationRows.length === 0) {
+          this.rebuildVariationGrid();
+        } else if (!this.customVariationPricing) {
+          const activePrices = this.variationRows
+            .filter(r => r.active !== false && Number(r.price) > 0)
+            .map(r => Number(r.price));
+          if (new Set(activePrices).size > 1) {
+            this.customVariationPricing = true;
+          }
+        }
       }
 
       return true;
@@ -737,13 +761,27 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isLoadingShippingProfiles = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
         if (results.length > 0) {
-          this.shippingProfilesList = results.map((p: any) => ({
-            id: p.shipping_profile_id,
-            title: p.title || `Profil #${p.shipping_profile_id}`,
-            minDays: p.min_processing_days,
-            maxDays: p.max_processing_days
-          }));
-          if (!this.selectedShippingProfileId) {
+          this.shippingProfilesList = results
+            .map((p: any) => {
+              const id = Number(p.shippingProfileId ?? p.shipping_profile_id ?? p.id ?? 0);
+              return {
+                id,
+                title: p.title || `Profil #${id}`,
+                minDays: p.minProcessingDays ?? p.min_processing_days ?? undefined,
+                maxDays: p.maxProcessingDays ?? p.max_processing_days ?? undefined,
+                processingDaysDisplay: p.processingDaysDisplay ?? p.processing_days_display ?? p.processing_days_display_label ?? undefined,
+                minDeliveryDays: p.minDeliveryDays ?? p.min_delivery_days ?? undefined,
+                maxDeliveryDays: p.maxDeliveryDays ?? p.max_delivery_days ?? undefined,
+                deliveryDaysDisplay: p.deliveryDaysDisplay ?? p.delivery_days_display ?? undefined,
+                hasFreeShipping: !!(p.hasFreeShipping ?? p.has_free_shipping),
+                originCountryIso: p.originCountryIso ?? p.origin_country_iso ?? undefined,
+                mailClass: p.mailClass ?? p.mail_class ?? undefined,
+                destinationsSummary: p.destinationsSummary ?? p.destinations_summary ?? undefined
+              };
+            })
+            .filter((p: { id: number }) => p.id > 0);
+          if (this.shippingProfilesList.length > 0 &&
+              (!this.selectedShippingProfileId || !this.shippingProfilesList.some(p => p.id === Number(this.selectedShippingProfileId)))) {
             this.selectedShippingProfileId = this.shippingProfilesList[0].id;
           }
         }
@@ -761,14 +799,21 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isLoadingReadinessStates = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
         if (results.length > 0) {
-          this.readinessStatesList = results.map((r: any) => ({
-            id: r.readiness_state_id,
-            title: r.title || `Hazırlık Durumu #${r.readiness_state_id}`,
-            minDays: r.min_processing_time,
-            maxDays: r.max_processing_time,
-            state: r.readiness_state
-          }));
-          if (!this.selectedReadinessStateId) {
+          this.readinessStatesList = results
+            .map((r: any) => {
+              const id = Number(r.readinessStateId ?? r.readiness_state_id ?? r.id ?? 0);
+              return {
+                id,
+                title: r.title || `Hazırlık Durumu #${id}`,
+                minDays: r.minProcessingTime ?? r.min_processing_time ?? undefined,
+                maxDays: r.maxProcessingTime ?? r.max_processing_time ?? undefined,
+                state: r.readinessState ?? r.readiness_state ?? undefined,
+                unit: r.processingTimeUnit ?? r.processing_time_unit ?? undefined
+              };
+            })
+            .filter((r: { id: number }) => r.id > 0);
+          if (this.readinessStatesList.length > 0 &&
+              (!this.selectedReadinessStateId || !this.readinessStatesList.some(r => r.id === Number(this.selectedReadinessStateId)))) {
             this.selectedReadinessStateId = this.readinessStatesList[0].id;
           }
         }
@@ -883,14 +928,47 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.etsyApi.exchangeRate();
   }
 
+  get variationProfitSummary(): VariationNetProfitSummary {
+    return calculateVariationNetProfits(
+      this.variationRows || [],
+      Number(this.priceUsd) || 0,
+      Number(this.estimatedShippingCostUsd) || 0,
+      this.usdTryRate,
+      this.includeOffsiteAdsFee
+    );
+  }
+
+  get variationProfitRows(): VariationNetProfitRow[] {
+    return this.variationProfitSummary.rows;
+  }
+
   get netProfitBreakdown(): EtsyNetProfitBreakdown {
-    const activeSalePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 0);
+    if (this.hasActiveVariations && this.selectedProfitVariationKey !== '__base__') {
+      const selected = this.variationProfitRows.find(r => r.key === this.selectedProfitVariationKey);
+      if (selected) {
+        return selected.breakdown;
+      }
+    }
     return calculateEtsyNetProfit({
-      salePriceUsd: activeSalePrice,
+      salePriceUsd: this.effectivePrice,
       shippingCostUsd: this.estimatedShippingCostUsd ?? 0,
       usdTryRate: this.usdTryRate,
       includeOffsiteAds: this.includeOffsiteAdsFee
     });
+  }
+
+  getRowNetProfit(row: VariationRow): EtsyNetProfitBreakdown {
+    const rowPrice = Number(row.price) > 0 ? Number(row.price) : (Number(this.priceUsd) || 0);
+    return calculateEtsyNetProfit({
+      salePriceUsd: rowPrice,
+      shippingCostUsd: this.estimatedShippingCostUsd ?? 0,
+      usdTryRate: this.usdTryRate,
+      includeOffsiteAds: this.includeOffsiteAdsFee
+    });
+  }
+
+  selectProfitVariation(key: string): void {
+    this.selectedProfitVariationKey = key || '__base__';
   }
 
   // --- TEMPLATE ACTIONS ---
@@ -942,14 +1020,26 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   // --- PRICING & LOGISTICS ---
   onPriceChange(): void {
     this.updatePriceTry();
-    this.rebuildVariationGrid();
+    this.propagateBasePriceToVariations();
   }
 
   onPriceTryChange(): void {
     if (this.usdTryRate > 0) {
       this.priceUsd = Number((this.priceTry / this.usdTryRate).toFixed(2));
-      this.rebuildVariationGrid();
+      this.propagateBasePriceToVariations();
     }
+  }
+
+  private propagateBasePriceToVariations(): void {
+    if (this.enableVariations && this.variationRows.length > 0) {
+      const base = Number(this.priceUsd) || 0;
+      if (!this.customVariationPricing || this.variationRows.every(r => (Number(r.price) || 0) <= 0)) {
+        this.variationRows.forEach(r => {
+          r.price = base;
+        });
+      }
+    }
+    this.rebuildVariationGrid();
   }
 
   updatePriceTry(): void {
@@ -996,6 +1086,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = '';
     this.customVariationPricing = false;
     this.variationRows = [];
+    this.selectedProfitVariationKey = '__base__';
     this.pricingAgentResult = null;
     this.pricingAgentError = '';
 
@@ -1271,6 +1362,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
 
     const variationsSummary = this.getVariationsSummary();
+    const shippingInfo = this.buildShippingAiContext();
 
     const context: AiDescriptionContext = {
       productTitle: titleText || descText,
@@ -1278,7 +1370,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       materials: this.materials.trim(),
       category: this.selectedCategory,
       tags: this.tags,
-      variationsSummary
+      variationsSummary,
+      shippingInfo
     };
 
     this.isGeneratingDesc = true;
@@ -1293,6 +1386,81 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
       }
     });
+  }
+
+  private buildShippingAiContext(): AiShippingContext {
+    if (this.listingType === 'digital') {
+      return { isDigital: true };
+    }
+
+    const profile =
+      this.shippingProfilesList.find(p => p.id === Number(this.selectedShippingProfileId))
+      ?? this.shippingProfilesList[0];
+    const readiness =
+      this.readinessStatesList.find(r => r.id === Number(this.selectedReadinessStateId))
+      ?? this.readinessStatesList[0];
+    const returnPolicy =
+      this.returnPoliciesList.find(rp => rp.returnPolicyId === Number(this.selectedReturnPolicyId))
+      ?? this.returnPoliciesList[0];
+
+    let minProcessingDays: number | null = null;
+    let maxProcessingDays: number | null = null;
+    let processingTimeUnit: string = readiness?.unit || 'business_days';
+
+    if (readiness && ((readiness.minDays ?? 0) > 0 || (readiness.maxDays ?? 0) > 0)) {
+      minProcessingDays = readiness.minDays ?? null;
+      maxProcessingDays = readiness.maxDays ?? null;
+    } else if (profile && ((profile.minDays ?? 0) > 0 || (profile.maxDays ?? 0) > 0)) {
+      minProcessingDays = profile.minDays ?? null;
+      maxProcessingDays = profile.maxDays ?? null;
+    } else {
+      const readinessMatch = readiness?.title?.match(/(\d+)\s*[-–]\s*(\d+)/);
+      const displayMatch = profile?.processingDaysDisplay?.match(/(\d+)\s*[-–]\s*(\d+)/);
+      const titleMatch = profile?.title?.match(/(\d+)\s*[-–]\s*(\d+)\s*(?:iş günü|gün|business\s*days?|days?|hafta|weeks?)/i);
+      const matched = readinessMatch || displayMatch || titleMatch;
+      if (matched) {
+        minProcessingDays = Number(matched[1]);
+        maxProcessingDays = Number(matched[2]);
+        if (/hafta|week/i.test(matched[0]) || (readiness?.title && /hafta|week/i.test(readiness.title))) {
+          processingTimeUnit = 'weeks';
+        }
+      }
+    }
+
+    let returnPolicySummary: string | undefined;
+    if (returnPolicy) {
+      const deadlineText = returnPolicy.returnDeadline && returnPolicy.returnDeadline > 0
+        ? ` within ${returnPolicy.returnDeadline} days`
+        : '';
+      if (returnPolicy.acceptsReturns && returnPolicy.acceptsExchanges) {
+        returnPolicySummary = `Returns and exchanges accepted${deadlineText}`;
+      } else if (returnPolicy.acceptsReturns) {
+        returnPolicySummary = `Returns accepted${deadlineText}`;
+      } else if (returnPolicy.acceptsExchanges) {
+        returnPolicySummary = `Exchanges accepted${deadlineText}`;
+      } else {
+        returnPolicySummary = 'Returns and exchanges are not accepted';
+      }
+    }
+
+    return {
+      isDigital: false,
+      profileId: profile?.id ?? this.selectedShippingProfileId,
+      profileTitle: profile?.title,
+      minProcessingDays,
+      maxProcessingDays,
+      processingDaysDisplay: profile?.processingDaysDisplay,
+      readinessState: readiness?.state,
+      readinessTitle: readiness?.title,
+      minDeliveryDays: profile?.minDeliveryDays ?? null,
+      maxDeliveryDays: profile?.maxDeliveryDays ?? null,
+      processingTimeUnit,
+      hasFreeShipping: profile?.hasFreeShipping ?? false,
+      originCountryIso: profile?.originCountryIso,
+      mailClass: profile?.mailClass,
+      destinationsSummary: profile?.destinationsSummary,
+      returnPolicySummary
+    };
   }
 
   private getVariationsSummary(): string {
@@ -1325,12 +1493,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     const sellerNotes = descInput || this.originalNotesBackup || '';
     const variationsSummary = this.getVariationsSummary();
+    const shippingInfo = this.buildShippingAiContext();
 
     this.isGeneratingAll = true;
     this.listingAiService.generateCompleteListing(input, this.materials, {
       preliminaryNotes: sellerNotes,
       variationsSummary,
-      category: this.selectedCategory
+      category: this.selectedCategory,
+      shippingInfo
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingAll = false;
@@ -1483,18 +1653,40 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   // --- VARIATIONS & PRICING LOCK LOGIC ---
+  get hasActiveVariations(): boolean {
+    return this.enableVariations && Array.isArray(this.variationRows) && this.variationRows.length > 0;
+  }
+
   get isVariationPricingActive(): boolean {
-    return this.enableVariations && this.customVariationPricing && this.variationRows && this.variationRows.length > 0;
+    return this.hasActiveVariations && this.customVariationPricing;
   }
 
   get minVariationPrice(): number {
-    if (!this.variationRows || this.variationRows.length === 0) return this.priceUsd || 0;
-    const active = this.variationRows.filter(r => (r.active !== false) && r.price > 0);
-    return active.length > 0 ? Math.min(...active.map(r => r.price)) : (this.priceUsd || 0);
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.priceUsd) || 0;
+    const active = this.variationRows.filter(r => r.active !== false && Number(r.price) > 0);
+    if (active.length > 0) return Math.min(...active.map(r => Number(r.price)));
+    const anyPositive = this.variationRows.filter(r => Number(r.price) > 0);
+    return anyPositive.length > 0 ? Math.min(...anyPositive.map(r => Number(r.price))) : (Number(this.priceUsd) || 0);
+  }
+
+  get maxVariationPrice(): number {
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.priceUsd) || 0;
+    const active = this.variationRows.filter(r => r.active !== false && Number(r.price) > 0);
+    if (active.length > 0) return Math.max(...active.map(r => Number(r.price)));
+    const anyPositive = this.variationRows.filter(r => Number(r.price) > 0);
+    return anyPositive.length > 0 ? Math.max(...anyPositive.map(r => Number(r.price))) : (Number(this.priceUsd) || 0);
+  }
+
+  get effectivePrice(): number {
+    return this.isVariationPricingActive ? this.minVariationPrice : (Number(this.priceUsd) || 0);
+  }
+
+  get effectiveQuantity(): number {
+    return this.isVariationPricingActive ? this.totalVariationStock : (Number(this.quantity) || 0);
   }
 
   get totalVariationStock(): number {
-    if (!this.variationRows || this.variationRows.length === 0) return this.quantity || 0;
+    if (!this.variationRows || this.variationRows.length === 0) return Number(this.quantity) || 0;
     return this.variationRows
       .filter(r => r.active !== false)
       .reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
@@ -1528,19 +1720,34 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.quantity = totalQ;
       }
     }
+    this.saveDraftToStorage();
   }
 
   onVariationPricingToggle(): void {
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
+    } else if (this.enableVariations && this.variationRows.length > 0) {
+      const base = Number(this.priceUsd) || 0;
+      if (base > 0) {
+        this.variationRows.forEach(r => {
+          r.price = base;
+        });
+      }
+      this.saveDraftToStorage();
     }
   }
 
   onVariationsToggled(): void {
+    if (this.enableVariations) {
+      this.customVariationPricing = true;
+    } else {
+      this.selectedProfitVariationKey = '__base__';
+    }
     this.rebuildVariationGrid();
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
     }
+    this.saveDraftToStorage();
   }
 
   setVarType(groupIndex: number, typeName: string): void {
@@ -1566,7 +1773,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0);
+    const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0, this.usdTryRate);
     if (!parsed.hasVariations) {
       if (!silentOnMiss) {
         this.showToast('⚠️ Varyasyon grubu tespit edilemedi. Etsy sayfasında 🔖 Yer İmini tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C yapıp yapıştırın.');
@@ -1582,6 +1789,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = parsed.varValues2;
     this.variationRows = parsed.variationRows.map(r => ({ ...r }));
     this.customVariationPricing = true;
+    this.selectedProfitVariationKey = '__base__';
     this.variationImportWarning = '';
     this.showVariationImportBox = false;
     this.variationPasteInput = '';
@@ -1591,59 +1799,127 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.showToast(`✅ ${parsed.variationRows.length} varyasyon kombinasyonu (${parsed.sourceFormat.toUpperCase()}) başarıyla aktarıldı!`);
   }
 
+  private parseVariationOptionGroup(raw: string) {
+    const parsed = (raw || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map(s => parseInlineVariationOptionPrice(s, this.usdTryRate))
+      .filter(o => o.cleanValue.length > 0);
+
+    const unique: typeof parsed = [];
+    const seen = new Set<string>();
+    for (const o of parsed) {
+      const k = o.cleanValue.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        unique.push(o);
+      }
+    }
+    return unique;
+  }
+
   rebuildVariationGrid(): void {
     if (!this.enableVariations) {
       this.variationRows = [];
+      this.selectedProfitVariationKey = '__base__';
       return;
     }
 
-    const v1 = this.varValues1.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (v1.length === 0) {
+    const basePrice = Number(this.priceUsd) || 0;
+    const opts1 = this.parseVariationOptionGroup(this.varValues1);
+    if (opts1.length === 0) {
       this.variationRows = [];
+      this.selectedProfitVariationKey = '__base__';
       return;
     }
 
-    const combinations: string[] = [];
-    if (this.enableVar2) {
-      const v2 = this.varValues2.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      if (v2.length > 0) {
-        for (const val1 of v1) {
-          for (const val2 of v2) {
-            combinations.push(`${val1} / ${val2}`);
-          }
+    const opts2 = this.enableVar2 ? this.parseVariationOptionGroup(this.varValues2) : [];
+    const hasAnyInlinePrice =
+      opts1.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined) ||
+      opts2.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined);
+    if (hasAnyInlinePrice) {
+      this.customVariationPricing = true;
+    }
+
+    const combinations: Array<{ key: string; inlinePrice?: number; active: boolean }> = [];
+    if (this.enableVar2 && opts2.length > 0) {
+      for (const o1 of opts1) {
+        for (const o2 of opts2) {
+          combinations.push({
+            key: `${o1.cleanValue} / ${o2.cleanValue}`,
+            inlinePrice: resolveVariationOptionPairPrice(basePrice, o1, o2),
+            active: o1.active && o2.active
+          });
         }
-      } else {
-        combinations.push(...v1);
       }
     } else {
-      combinations.push(...v1);
+      for (const o1 of opts1) {
+        combinations.push({
+          key: o1.cleanValue,
+          inlinePrice: resolveVariationOptionPairPrice(basePrice, o1),
+          active: o1.active
+        });
+      }
     }
 
-    // Preserve existing prices if any
     const existing = new Map(this.variationRows.map(r => [r.key, r]));
-    this.variationRows = combinations.map(key => {
-      if (existing.has(key)) {
-        return existing.get(key)!;
+    const defaultPerRowQty = Math.max(5, Math.floor((Number(this.quantity) || 15) / Math.max(1, combinations.length)));
+
+    this.variationRows = combinations.map(combo => {
+      const prev = existing.get(combo.key);
+      if (prev) {
+        let nextPrice = Number(prev.price) || 0;
+        if (combo.inlinePrice !== undefined) {
+          nextPrice = combo.inlinePrice;
+        } else if ((!this.customVariationPricing || nextPrice <= 0) && basePrice > 0) {
+          nextPrice = basePrice;
+        }
+        return {
+          ...prev,
+          price: nextPrice,
+          active: combo.active ? prev.active : false
+        };
       }
+
+      const initialPrice = combo.inlinePrice !== undefined ? combo.inlinePrice : basePrice;
       return {
-        key: key,
-        price: this.priceUsd || 0,
-        quantity: Math.max(1, Math.floor((this.quantity || 10) / (combinations.length || 1))),
-        active: true
+        key: combo.key,
+        price: initialPrice,
+        quantity: combo.active ? defaultPerRowQty : 0,
+        active: combo.active
       };
     });
+
+    if (
+      this.selectedProfitVariationKey !== '__base__' &&
+      !this.variationRows.some(r => r.key === this.selectedProfitVariationKey)
+    ) {
+      this.selectedProfitVariationKey = '__base__';
+    }
+
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
     }
   }
 
   syncBasePriceToVariations(): void {
-    const p = this.priceUsd || 0;
+    let p = Number(this.priceUsd) || 0;
+    if (p <= 0) {
+      const firstPositive = this.variationRows.find(r => (Number(r.price) || 0) > 0);
+      if (firstPositive) {
+        p = Number(firstPositive.price);
+      }
+    }
+    if (p <= 0) {
+      this.showToast('⚠️ Lütfen önce taban fiyat veya en az bir varyasyon fiyatı girin.');
+      return;
+    }
     this.variationRows.forEach(row => {
       row.price = p;
     });
     this.onVariationRowChange();
-    this.showToast(`⚡ Tüm varyasyon fiyatları ${p.toFixed(2)} olarak eşitlendi!`);
+    this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
   }
 
   getSelectedImageForRank(rank?: number): GalleryImage | undefined {
@@ -1702,14 +1978,30 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.isGeneratingVariations = false;
         if (res.suggestedVariations && res.suggestedVariations.length > 0) {
           this.enableVariations = true;
+          this.customVariationPricing = true;
           this.varType1 = res.suggestedVariations[0].name;
           this.varValues1 = res.suggestedVariations[0].values.join(', ');
           if (res.suggestedVariations.length > 1) {
             this.enableVar2 = true;
             this.varType2 = res.suggestedVariations[1].name;
             this.varValues2 = res.suggestedVariations[1].values.join(', ');
+          } else {
+            this.enableVar2 = false;
+            this.varValues2 = '';
           }
-          this.rebuildVariationGrid();
+          if (res.suggestedOfferings && res.suggestedOfferings.length > 0) {
+            this.variationRows = res.suggestedOfferings.map(o => ({
+              key: o.key,
+              price: Number(o.price) > 0 ? Number(o.price) : (Number(this.priceUsd) || 0),
+              quantity: Math.max(0, Number(o.quantity) || 0),
+              active: o.active !== false
+            }));
+            this.selectedProfitVariationKey = '__base__';
+            this.onVariationRowChange();
+          } else {
+            this.rebuildVariationGrid();
+          }
+          this.saveDraftToStorage();
           this.showToast(`✨ ${res.provider} ile varyasyonlar oluşturuldu (${res.suggestedVariations.map(v => v.name).join(' & ')})`);
         } else {
           this.showToast('Varyasyon önerisi bulunamadı.');
@@ -1845,9 +2137,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.title.trim().length > 0 && this.title.length <= 140;
   }
   get isPriceReady(): boolean {
-    const currentPrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd ?? 0);
-    const currentQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity ?? 0);
-    return currentPrice > 0 && currentQuantity > 0;
+    return this.effectivePrice > 0 && this.effectiveQuantity > 0;
   }
   get isImagesReady(): boolean {
     return this.galleryImages.length > 0;
@@ -1980,17 +2270,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       ? [
           {
             name: this.varType1,
-            values: this.varValues1.split(',').map(s => s.trim()).filter(Boolean)
+            values: this.parseVariationOptionGroup(this.varValues1).map(o => o.cleanValue)
           },
           ...(this.enableVar2 ? [{
             name: this.varType2,
-            values: this.varValues2.split(',').map(s => s.trim()).filter(Boolean)
+            values: this.parseVariationOptionGroup(this.varValues2).map(o => o.cleanValue)
           }] : [])
         ]
       : undefined;
 
-    const effectivePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 39.90);
-    const effectiveQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity || 15);
+    const effectivePrice = this.effectivePrice > 0 ? this.effectivePrice : 39.90;
+    const effectiveQuantity = this.effectiveQuantity > 0 ? this.effectiveQuantity : 15;
 
     const payload = {
       title: this.title.trim(),
@@ -2019,8 +2309,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           this.createdListingResult = {
             ...res,
             title: this.title,
-            price: this.priceUsd || 0,
-            quantity: this.quantity || 15,
+            price: effectivePrice,
+            quantity: effectiveQuantity,
             uploadedImages: this.galleryImages.length
           };
           this.isPublishSuccessModalOpen = true;
