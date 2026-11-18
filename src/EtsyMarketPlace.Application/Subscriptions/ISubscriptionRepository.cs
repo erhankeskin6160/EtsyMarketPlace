@@ -18,4 +18,7 @@ public interface ISubscriptionRepository
     Task<SubscriptionTransaction?> GetTransactionBySessionIdAsync(string sessionId, CancellationToken cancellationToken = default);
     Task<SubscriptionTransaction> UpdateTransactionAsync(SubscriptionTransaction transaction, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SubscriptionTransaction>> GetTransactionsByUserAsync(string userId, int limit = 50, CancellationToken cancellationToken = default);
+
+    Task<PaymentGatewayConfig?> GetPaymentGatewayConfigAsync(CancellationToken cancellationToken = default);
+    Task<PaymentGatewayConfig> UpsertPaymentGatewayConfigAsync(PaymentGatewayConfig config, CancellationToken cancellationToken = default);
 }

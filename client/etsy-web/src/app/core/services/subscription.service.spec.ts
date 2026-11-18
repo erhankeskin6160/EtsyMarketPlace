@@ -117,4 +117,42 @@ describe('SubscriptionService', () => {
       }
     ]);
   });
+
+  it('should call admin payment settings endpoints and confirmAdminTest', () => {
+    service.getAdminPaymentSettings().subscribe(cfg => {
+      expect(cfg.activeProvider).toBe('PayTR');
+    });
+    const getReq = httpTesting.expectOne('/api/admin/subscriptions/payment-settings');
+    expect(getReq.request.method).toBe('GET');
+    getReq.flush({
+      activeProvider: 'PayTR',
+      isSandbox: true,
+      iyzicoApiKey: '',
+      hasIyzicoSecretKey: false,
+      iyzicoSecretKeyMask: '',
+      iyzicoBaseUrl: 'https://sandbox-api.iyzipay.com',
+      paytrMerchantId: '123456',
+      hasPaytrMerchantKey: true,
+      paytrMerchantKeyMask: '••••9999',
+      hasPaytrMerchantSalt: true,
+      paytrMerchantSaltMask: '••••8888',
+      hasStripeSecretKey: false,
+      stripeSecretKeyMask: '',
+      configSource: 'Admin Paneli (Veritabanı)',
+      updatedAtUtc: '2026-11-18T14:00:00Z'
+    });
+
+    service.confirmAdminTest('cs_vpos_test').subscribe(res => {
+      expect(res.success).toBeTrue();
+    });
+    const testReq = httpTesting.expectOne('/api/subscriptions/confirm-admin-test');
+    expect(testReq.request.method).toBe('POST');
+    expect(testReq.request.body).toEqual({ sessionId: 'cs_vpos_test' });
+    testReq.flush({
+      success: true,
+      message: 'Onaylandı',
+      transaction: { id: 1, sessionId: 'cs_vpos_test' },
+      subscription: { planId: 'pro', planName: 'Pro', status: 'Active', allowedFeatures: ['ai_image'] }
+    });
+  });
 });

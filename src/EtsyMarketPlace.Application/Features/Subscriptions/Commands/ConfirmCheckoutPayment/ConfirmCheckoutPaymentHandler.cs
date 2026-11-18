@@ -55,103 +55,19 @@ public sealed class ConfirmCheckoutPaymentHandler(
                 HttpStatusCode.PaymentRequired);
         }
 
-        var now = DateTime.UtcNow;
-        tx.Status = "Paid";
-        tx.PaidAtUtc = now;
-        tx.CardMaskedNumber = chargeResult.CardMaskedNumber;
-        tx.CardHolderName = request.Request.CardHolderName.Trim();
-        tx = await subscriptionRepository.UpdateTransactionAsync(tx, cancellationToken);
-
-        var plan = await SubscriptionLifecycleHelper.ResolvePlanAsync(subscriptionRepository, tx.PlanId, cancellationToken)
-                   ?? SubscriptionFeatureKeys.GetDefaultPlans().First(p => p.Id == SubscriptionPlanCode.Pro);
-
-        var periodEnd = SubscriptionLifecycleHelper.CalculatePeriodEnd(now, tx.BillingCycle);
-        var existingSub = await subscriptionRepository.GetUserSubscriptionAsync(tx.UserId, cancellationToken);
-
-        var nextSub = existingSub is null
-            ? new UserSubscription
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                UserId = tx.UserId,
-                PlanId = plan.Id,
-                Status = SubscriptionStatus.Active.ToString(),
-                BillingCycle = tx.BillingCycle,
-                StartDateUtc = now,
-                CurrentPeriodStartUtc = now,
-                CurrentPeriodEndUtc = periodEnd,
-                AutoRenew = true,
-                PaymentProvider = tx.PaymentProvider,
-                LastSessionId = tx.SessionId,
-                UpdatedAtUtc = now
-            }
-            : new UserSubscription
-            {
-                Id = existingSub.Id,
-                UserId = existingSub.UserId,
-                PlanId = plan.Id,
-                Status = SubscriptionStatus.Active.ToString(),
-                BillingCycle = tx.BillingCycle,
-                StartDateUtc = existingSub.StartDateUtc,
-                CurrentPeriodStartUtc = now,
-                CurrentPeriodEndUtc = periodEnd,
-                AutoRenew = true,
-                CustomMaxShopsOverride = null,
-                CustomAiTokenQuotaOverride = null,
-                PaymentProvider = tx.PaymentProvider,
-                LastSessionId = tx.SessionId,
-                UpdatedAtUtc = now
-            };
-
-        await subscriptionRepository.UpsertUserSubscriptionAsync(nextSub, plan.MonthlyAiTokenQuota, cancellationToken);
-
-        var user = await SubscriptionLifecycleHelper.TryFindUserAsync(userRepository, tx.UserId, cancellationToken);
-        await SubscriptionLifecycleHelper.TryUpdateUserSnapshotAsync(
+        var confirmed = await SubscriptionLifecycleHelper.ActivatePaidTransactionAsync(
+            subscriptionRepository,
             userRepository,
-            user,
-            plan.Id,
-            SubscriptionStatus.Active.ToString(),
-            periodEnd,
-            plan.MonthlyAiTokenQuota,
-            cancellationToken);
-
-        await SubscriptionLifecycleHelper.TryAddAuditLogAsync(
-            userRepository,
-            tx.UserId,
-            tx.Username,
-            "SubscriptionUpgraded",
-            $"Stripe Sanal POS ödemesi onaylandı: {plan.Name} ({tx.BillingCycle}), Fatura: {tx.InvoiceNumber}, Kart: {tx.CardMaskedNumber}",
+            entitlementService,
+            jwtTokenService,
+            tx,
+            chargeResult.CardMaskedNumber,
+            request.Request.CardHolderName.Trim(),
+            request.RoleHint,
             request.RemoteIpAddress,
+            $"Sanal POS ödemesi onaylandı ({tx.PaymentProvider}): {tx.PlanName} ({tx.BillingCycle}), Fatura: {tx.InvoiceNumber}, Kart: {chargeResult.CardMaskedNumber}",
             cancellationToken);
 
-        UserDto? updatedUserDto = null;
-        string? refreshedToken = null;
-        if (user is not null)
-        {
-            var updatedUser = user with
-            {
-                SubscriptionPlanId = plan.Id,
-                SubscriptionStatus = SubscriptionStatus.Active.ToString(),
-                SubscriptionExpiresAt = new DateTimeOffset(periodEnd, TimeSpan.Zero),
-                MonthlyAiTokenQuota = plan.MonthlyAiTokenQuota
-            };
-            updatedUserDto = updatedUser.ToDto();
-            refreshedToken = jwtTokenService.GenerateToken(updatedUser);
-        }
-
-        var summary = await entitlementService.GetEntitlementSummaryAsync(
-            tx.UserId,
-            user?.Role ?? request.RoleHint,
-            tx.Username,
-            cancellationToken);
-
-        return ServiceResponse.CreateSuccess(
-            $"{plan.Name} paketi başarıyla aktifleştirildi!",
-            new ConfirmPaymentResponseDto(
-                true,
-                $"{plan.Name} paketi başarıyla aktifleştirildi!",
-                tx.ToDto(),
-                summary,
-                updatedUserDto,
-                refreshedToken));
+        return ServiceResponse.CreateSuccess(confirmed.Message, confirmed);
     }
 }

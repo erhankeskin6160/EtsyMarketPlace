@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
@@ -102,6 +105,68 @@ public sealed class SubscriptionsApiTests : IClassFixture<ApiTestFactory>, IDisp
         Assert.Equal(HttpStatusCode.OK, txResp.StatusCode);
         using var txDoc = JsonDocument.Parse(await txResp.Content.ReadAsStringAsync());
         Assert.True(txDoc.RootElement.GetArrayLength() >= 1);
+    }
+
+    [Fact]
+    public async Task AdminPaymentSettings_And_ConfirmAdminTest_And_PaytrCallback_WorkEndToEnd()
+    {
+        using var adminClient = TestAuthHelper.CreateAuthenticatedClient(_factory);
+
+        // 1. Update payment gateway settings with PayTR sandbox values
+        var updateResp = await adminClient.PutAsJsonAsync("/api/admin/subscriptions/payment-settings", new
+        {
+            activeProvider = "PayTR",
+            isSandbox = true,
+            paytrMerchantId = "776655",
+            paytrMerchantKey = "api_paytr_key_9999",
+            paytrMerchantSalt = "api_paytr_salt_8888"
+        });
+        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
+
+        var getResp = await adminClient.GetAsync("/api/admin/subscriptions/payment-settings");
+        Assert.Equal(HttpStatusCode.OK, getResp.StatusCode);
+        using (var doc = JsonDocument.Parse(await getResp.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("PayTR", doc.RootElement.GetProperty("activeProvider").GetString());
+            Assert.True(doc.RootElement.GetProperty("hasPaytrMerchantKey").GetBoolean());
+            Assert.EndsWith("9999", doc.RootElement.GetProperty("paytrMerchantKeyMask").GetString());
+        }
+
+        // 2. Invalid PayTR callback hash returns 400 BadRequest
+        using var anonClient = _factory.CreateClient();
+        var badCbResp = await anonClient.PostAsync("/api/subscriptions/callback/paytr",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["merchant_oid"] = "PAYTRUNKNOWN0001",
+                ["status"] = "success",
+                ["total_amount"] = "65000",
+                ["hash"] = "bad_hash"
+            }));
+        Assert.Equal(HttpStatusCode.BadRequest, badCbResp.StatusCode);
+
+        // 3. Switch back to Unconfigured and test Admin one-click test activation endpoint
+        var resetResp = await adminClient.PutAsJsonAsync("/api/admin/subscriptions/payment-settings", new
+        {
+            activeProvider = "Unconfigured",
+            isSandbox = true
+        });
+        Assert.Equal(HttpStatusCode.OK, resetResp.StatusCode);
+
+        var sessionResp = await adminClient.PostAsJsonAsync("/api/subscriptions/checkout-session", new
+        {
+            planId = "starter",
+            billingCycle = "Monthly",
+            currency = "TRY"
+        });
+        Assert.Equal(HttpStatusCode.OK, sessionResp.StatusCode);
+        using var sessionDoc = JsonDocument.Parse(await sessionResp.Content.ReadAsStringAsync());
+        var sessionId = sessionDoc.RootElement.GetProperty("sessionId").GetString() ?? string.Empty;
+
+        var adminTestResp = await adminClient.PostAsJsonAsync("/api/subscriptions/confirm-admin-test", new { sessionId });
+        Assert.Equal(HttpStatusCode.OK, adminTestResp.StatusCode);
+        using var testDoc = JsonDocument.Parse(await adminTestResp.Content.ReadAsStringAsync());
+        Assert.True(testDoc.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("Yönetici Test Onayı", testDoc.RootElement.GetProperty("transaction").GetProperty("cardMaskedNumber").GetString());
     }
 
     public void Dispose()

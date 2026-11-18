@@ -11,8 +11,10 @@ import {
   ConfirmVirtualPosPaymentRequest,
   CreateCheckoutSessionRequest,
   FeatureAccessCheck,
+  PaymentGatewaySettings,
   SubscriptionPlan,
   SubscriptionTransaction,
+  UpdatePaymentGatewaySettingsRequest,
   UserSubscriptionSummary
 } from '../models/subscription.models';
 
@@ -184,15 +186,31 @@ export class SubscriptionService {
 
   confirmPayment(req: ConfirmVirtualPosPaymentRequest): Observable<ConfirmPaymentResponse> {
     return this.http.post<ConfirmPaymentResponse>(`${this.API_BASE}/confirm-payment`, req).pipe(
-      tap(res => {
-        if (res.success && res.subscription) {
-          this.mySubscription.set(res.subscription);
-        }
-        if (res.success && res.refreshedToken && res.user) {
-          this.authService.setSession(res.refreshedToken, res.user);
-        }
-      })
+      tap(res => this.applyConfirmedSubscription(res))
     );
+  }
+
+  confirmAdminTest(sessionId: string): Observable<ConfirmPaymentResponse> {
+    return this.http.post<ConfirmPaymentResponse>(`${this.API_BASE}/confirm-admin-test`, { sessionId }).pipe(
+      tap(res => this.applyConfirmedSubscription(res))
+    );
+  }
+
+  getAdminPaymentSettings(): Observable<PaymentGatewaySettings> {
+    return this.http.get<PaymentGatewaySettings>(`${this.ADMIN_BASE}/subscriptions/payment-settings`);
+  }
+
+  updateAdminPaymentSettings(req: UpdatePaymentGatewaySettingsRequest): Observable<PaymentGatewaySettings> {
+    return this.http.put<PaymentGatewaySettings>(`${this.ADMIN_BASE}/subscriptions/payment-settings`, req);
+  }
+
+  private applyConfirmedSubscription(res: ConfirmPaymentResponse): void {
+    if (res.success && res.subscription) {
+      this.mySubscription.set(res.subscription);
+    }
+    if (res.success && res.refreshedToken && res.user) {
+      this.authService.setSession(res.refreshedToken, res.user);
+    }
   }
 
   checkFeature(featureKey: string): Observable<FeatureAccessCheck> {

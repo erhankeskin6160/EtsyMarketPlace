@@ -132,12 +132,12 @@
     </div>
   </section>
 
-  <!-- STRIPE / VIRTUAL POS CHECKOUT PANEL -->
+  <!-- PAYMENT CHECKOUT PANEL (IYZICO / PAYTR IFRAME OR UNCONFIGURED SETUP NOTICE) -->
   <section *ngIf="activeCheckoutSession as session" class="corp-card vpos-checkout-card" id="stripe-vpos-panel">
     <div class="vpos-header">
       <div>
         <span class="eyebrow-label">Güvenli Ödeme Adımı</span>
-        <h3>{{ session.planName }} Paketi — Kart ile Ödeme</h3>
+        <h3>{{ session.planName }} Paketi — Güvenli Ödeme</h3>
       </div>
       <button type="button" class="btn-corp btn-corp-ghost btn-sm" (click)="cancelCheckout()">
         <i class="fa-solid fa-xmark"></i> Vazgeç
@@ -153,8 +153,8 @@
           <strong>{{ session.planName }} ({{ session.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }})</strong>
         </div>
         <div class="summary-row">
-          <span>Ödeme Yöntemi</span>
-          <strong>Kredi / Banka Kartı (3D Secure)</strong>
+          <span>Ödeme Altyapısı</span>
+          <strong>{{ getProviderDisplayLabel(session.provider) }}</strong>
         </div>
         <div class="summary-row">
           <span>Fatura Numarası</span>
@@ -171,125 +171,74 @@
 
         <div class="ssl-note">
           <i class="fa-solid fa-shield-halved"></i>
-          <span>Ödemeniz 256-Bit TLS/SSL ve PCI-DSS Level 1 altyapısı ile korunur. Onay sonrası paketiniz ve kotanız anında tanımlanır.</span>
+          <span>Ödemeniz 256-Bit TLS/SSL, PCI-DSS Level 1 ve banka 3D Secure doğrulamasıyla korunur. Kart bilgileriniz sunucularımızda saklanmaz.</span>
         </div>
       </div>
 
-      <!-- CARD PAYMENT FORM -->
-      <form class="vpos-form" (ngSubmit)="submitVirtualPosPayment()" novalidate>
+      <!-- PROVIDER IFRAME OR SETUP NOTICE -->
+      <div class="vpos-form">
         <div class="accepted-cards-bar">
-          <ng-container *ngTemplateOutlet="cardBrandMarks; context: { activeBrand: detectedCardBrand() }"></ng-container>
-          <div class="demo-links">
-            <span>Demo:</span>
-            <button type="button" class="demo-link-btn" (click)="fillTestCard('success')">Visa</button>
-            <span>·</span>
-            <button type="button" class="demo-link-btn" (click)="fillTestCard('troy')">TROY</button>
-            <span>·</span>
-            <button type="button" class="demo-link-btn" (click)="fillTestCard('decline')">Ret</button>
-          </div>
-        </div>
-
-        <div class="field-group">
-          <label for="cc-name">Kart Üzerindeki Ad Soyad <span aria-hidden="true">*</span></label>
-          <input id="cc-name"
-                 name="cc-name"
-                 type="text"
-                 class="form-input"
-                 autocomplete="cc-name"
-                 enterkeyhint="next"
-                 maxlength="80"
-                 required
-                 [(ngModel)]="cardForm.cardHolderName"
-                 (input)="clearPaymentError()"
-                 placeholder="Ad Soyad" />
-        </div>
-
-        <div class="field-group">
-          <div class="field-label-row">
-            <label for="cc-number">Kart Numarası <span aria-hidden="true">*</span></label>
-            <span *ngIf="detectedCardBrand() !== 'unknown'" class="detected-brand-pill">
-              {{ detectedCardBrand().toUpperCase() }}
-            </span>
-          </div>
-          <input id="cc-number"
-                 name="cc-number"
-                 type="text"
-                 class="form-input mono-input"
-                 autocomplete="cc-number"
-                 inputmode="numeric"
-                 enterkeyhint="next"
-                 maxlength="23"
-                 required
-                 [(ngModel)]="cardForm.cardNumber"
-                 (input)="clearPaymentError()"
-                 placeholder="0000 0000 0000 0000" />
-        </div>
-
-        <div class="field-row-2">
-          <div class="field-group">
-            <label for="cc-exp">Son Kullanma Tarihi <span aria-hidden="true">*</span></label>
-            <span id="exp-hint" class="field-hint-top">Format: AA/YY</span>
-            <input id="cc-exp"
-                   name="cc-exp"
-                   type="text"
-                   class="form-input mono-input"
-                   autocomplete="cc-exp"
-                   inputmode="numeric"
-                   enterkeyhint="next"
-                   aria-describedby="exp-hint"
-                   maxlength="7"
-                   required
-                   [(ngModel)]="cardForm.expiry"
-                   (input)="clearPaymentError()"
-                   placeholder="12/28" />
-          </div>
-
-          <div class="field-group">
-            <label for="cc-csc">Güvenlik Kodu (CVC) <span aria-hidden="true">*</span></label>
-            <span id="csc-hint" class="field-hint-top">3 veya 4 hane</span>
-            <input id="cc-csc"
-                   name="cc-csc"
-                   type="text"
-                   class="form-input mono-input"
-                   autocomplete="cc-csc"
-                   inputmode="numeric"
-                   enterkeyhint="done"
-                   aria-describedby="csc-hint"
-                   maxlength="4"
-                   required
-                   [(ngModel)]="cardForm.cvc"
-                   (input)="clearPaymentError()"
-                   placeholder="123" />
-          </div>
-        </div>
-
-        <div class="terms-consent-row">
-          <input id="terms-accept"
-                 name="terms-accept"
-                 type="checkbox"
-                 class="terms-checkbox"
-                 [(ngModel)]="termsAccepted"
-                 (change)="clearPaymentError()" />
-          <label for="terms-accept" class="terms-label">
-            Ön Bilgilendirme Formu, Mesafeli Satış Sözleşmesi ve {{ session.billingCycle === 'Yearly' ? 'yıllık' : 'aylık' }} abonelik yenileme / iptal koşullarını onaylıyorum.
-          </label>
+          <ng-container *ngTemplateOutlet="cardBrandMarks; context: { activeBrand: 'all' }"></ng-container>
+          <span class="provider-caption">{{ getProviderDisplayLabel(session.provider) }}</span>
         </div>
 
         <div *ngIf="paymentError" class="vpos-error-box" role="alert">
           <i class="fa-solid fa-circle-exclamation mr-1"></i> {{ paymentError }}
         </div>
 
-        <button type="submit"
-                class="btn-corp btn-corp-primary btn-pay"
-                [disabled]="isPaying">
-          <ng-container *ngIf="!isPaying">
-            <i class="fa-solid fa-lock"></i> {{ formatSessionAmount(session) }} Ödemeyi Tamamla
-          </ng-container>
-          <ng-container *ngIf="isPaying">
-            <i class="fa-solid fa-spinner fa-spin"></i> Provizyon Doğrulanıyor...
-          </ng-container>
-        </button>
-      </form>
+        <!-- OFFICIAL IYZICO / PAYTR 3D SECURE IFRAME -->
+        <div *ngIf="session.mode === 'Iframe' && trustedCheckoutIframeUrl" class="vpos-iframe-wrapper">
+          <iframe class="vpos-iframe"
+                  [src]="trustedCheckoutIframeUrl"
+                  title="3D Secure Güvenli Ödeme Ekranı"
+                  referrerpolicy="strict-origin-when-cross-origin"
+                  allow="payment">
+          </iframe>
+        </div>
+
+        <!-- UNCONFIGURED GATEWAY NOTICE (NO FAKE CARD FORM) -->
+        <div *ngIf="session.mode !== 'Iframe'" class="vpos-unconfigured-card">
+          <div class="unconfigured-head">
+            <i class="fa-solid fa-key" aria-hidden="true"></i>
+            <div>
+              <h4>Canlı Sanal POS (İyzico / PayTR) Henüz Yapılandırılmadı</h4>
+              <p>
+                Gerçek kredi ve banka kartlarından tahsilat yapılabilmesi için Admin Panelinden İyzico veya PayTR mağaza API anahtarlarının girilmesi gerekmektedir.
+              </p>
+            </div>
+          </div>
+
+          <ul class="unconfigured-checklist">
+            <li><i class="fa-solid fa-check" aria-hidden="true"></i> İyzico veya PayTR üye işyeri başvurunuzdan aldığınız API/Merchant anahtarlarını tanımlayın.</li>
+            <li><i class="fa-solid fa-check" aria-hidden="true"></i> Anahtarlar kaydedildiğinde bu alanda doğrudan resmi 3D Secure ortak ödeme formu (iFrame) açılır.</li>
+          </ul>
+
+          <div *ngIf="authService.isAdmin(); else nonAdminSetupHint" class="unconfigured-actions">
+            <button type="button"
+                    class="btn-corp btn-corp-secondary"
+                    (click)="goToAdminPaymentSettings()">
+              <i class="fa-solid fa-sliders"></i> Admin Panelinden Ödeme Anahtarlarını Gir
+            </button>
+            <button type="button"
+                    class="btn-corp btn-corp-primary"
+                    [disabled]="isPaying"
+                    (click)="confirmAdminTestActivation()">
+              <ng-container *ngIf="!isPaying">
+                <i class="fa-solid fa-circle-check"></i> Yönetici Test Onayı ile Paketi Aktifleştir
+              </ng-container>
+              <ng-container *ngIf="isPaying">
+                <i class="fa-solid fa-spinner fa-spin"></i> Paket Aktifleştiriliyor...
+              </ng-container>
+            </button>
+          </div>
+
+          <ng-template #nonAdminSetupHint>
+            <p class="non-admin-hint">
+              Canlı ödeme altyapısını aktifleştirmek için sistem yöneticinizle iletişime geçiniz.
+            </p>
+          </ng-template>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -447,7 +396,7 @@
       <span class="seal-pill">256-Bit SSL</span>
       <span class="seal-pill">3D Secure</span>
       <span class="seal-pill">PCI-DSS Level 1</span>
-      <span class="seal-pill">Stripe</span>
+      <span class="seal-pill">İyzico / PayTR</span>
     </div>
   </footer>
 </div>

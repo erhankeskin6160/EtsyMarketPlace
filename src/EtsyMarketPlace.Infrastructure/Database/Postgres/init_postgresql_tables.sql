@@ -576,3 +576,18 @@ CREATE TABLE IF NOT EXISTS accounting_inventory_adjustments (
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (shop_id, year, month)
 );
+
+-- 36. Payment Gateway Configs (İyzico / PayTR / Stripe Ayarları)
+CREATE TABLE IF NOT EXISTS payment_gateway_configs (
+    id VARCHAR(50) PRIMARY KEY,
+    active_provider VARCHAR(32) NOT NULL DEFAULT 'Unconfigured',
+    is_sandbox BOOLEAN NOT NULL DEFAULT TRUE,
+    iyzico_api_key VARCHAR(256) NOT NULL DEFAULT '',
+    iyzico_secret_key VARCHAR(512) NOT NULL DEFAULT '',
+    iyzico_base_url VARCHAR(256) NOT NULL DEFAULT 'https://sandbox-api.iyzipay.com',
+    paytr_merchant_id VARCHAR(128) NOT NULL DEFAULT '',
+    paytr_merchant_key VARCHAR(256) NOT NULL DEFAULT '',
+    paytr_merchant_salt VARCHAR(256) NOT NULL DEFAULT '',
+    stripe_secret_key VARCHAR(512) NOT NULL DEFAULT '',
+    updated_at_utc TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

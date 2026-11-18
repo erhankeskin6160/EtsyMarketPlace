@@ -122,6 +122,20 @@ public sealed class SqliteSubscriptionStore : ISubscriptionRepository, IAsyncDis
 
                 CREATE INDEX IF NOT EXISTS ix_subscription_tx_user_created
                     ON subscription_transactions (user_id, created_at_utc DESC);
+
+                CREATE TABLE IF NOT EXISTS payment_gateway_configs (
+                    id TEXT PRIMARY KEY,
+                    active_provider TEXT NOT NULL DEFAULT 'Unconfigured',
+                    is_sandbox INTEGER NOT NULL DEFAULT 1,
+                    iyzico_api_key TEXT NOT NULL DEFAULT '',
+                    iyzico_secret_key TEXT NOT NULL DEFAULT '',
+                    iyzico_base_url TEXT NOT NULL DEFAULT 'https://sandbox-api.iyzipay.com',
+                    paytr_merchant_id TEXT NOT NULL DEFAULT '',
+                    paytr_merchant_key TEXT NOT NULL DEFAULT '',
+                    paytr_merchant_salt TEXT NOT NULL DEFAULT '',
+                    stripe_secret_key TEXT NOT NULL DEFAULT '',
+                    updated_at_utc TEXT NOT NULL
+                );
                 """;
             await ddlCmd.ExecuteNonQueryAsync(cancellationToken);
 
@@ -374,6 +388,88 @@ public sealed class SqliteSubscriptionStore : ISubscriptionRepository, IAsyncDis
             list.Add(MapTransaction(reader));
         }
         return list;
+    }
+
+    public async Task<PaymentGatewayConfig?> GetPaymentGatewayConfigAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, active_provider, is_sandbox,
+                   iyzico_api_key, iyzico_secret_key, iyzico_base_url,
+                   paytr_merchant_id, paytr_merchant_key, paytr_merchant_salt,
+                   stripe_secret_key, updated_at_utc
+            FROM payment_gateway_configs
+            WHERE id = 'default'
+            LIMIT 1;
+            """;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new PaymentGatewayConfig
+        {
+            Id = reader.GetString(0),
+            ActiveProvider = reader.GetString(1),
+            IsSandbox = reader.GetInt32(2) == 1,
+            IyzicoApiKey = reader.GetString(3),
+            IyzicoSecretKey = reader.GetString(4),
+            IyzicoBaseUrl = reader.GetString(5),
+            PaytrMerchantId = reader.GetString(6),
+            PaytrMerchantKey = reader.GetString(7),
+            PaytrMerchantSalt = reader.GetString(8),
+            StripeSecretKey = reader.GetString(9),
+            UpdatedAtUtc = ParseUtc(reader.GetString(10))
+        };
+    }
+
+    public async Task<PaymentGatewayConfig> UpsertPaymentGatewayConfigAsync(
+        PaymentGatewayConfig config,
+        CancellationToken cancellationToken = default)
+    {
+        config.Id = "default";
+        config.UpdatedAtUtc = DateTime.UtcNow;
+
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO payment_gateway_configs (
+                id, active_provider, is_sandbox,
+                iyzico_api_key, iyzico_secret_key, iyzico_base_url,
+                paytr_merchant_id, paytr_merchant_key, paytr_merchant_salt,
+                stripe_secret_key, updated_at_utc)
+            VALUES (
+                $id, $provider, $sandbox,
+                $iyzKey, $iyzSec, $iyzUrl,
+                $paytrId, $paytrKey, $paytrSalt,
+                $stripeSec, $updatedAt)
+            ON CONFLICT(id) DO UPDATE SET
+                active_provider = excluded.active_provider,
+                is_sandbox = excluded.is_sandbox,
+                iyzico_api_key = excluded.iyzico_api_key,
+                iyzico_secret_key = excluded.iyzico_secret_key,
+                iyzico_base_url = excluded.iyzico_base_url,
+                paytr_merchant_id = excluded.paytr_merchant_id,
+                paytr_merchant_key = excluded.paytr_merchant_key,
+                paytr_merchant_salt = excluded.paytr_merchant_salt,
+                stripe_secret_key = excluded.stripe_secret_key,
+                updated_at_utc = excluded.updated_at_utc;
+            """;
+
+        cmd.Parameters.AddWithValue("$id", config.Id);
+        cmd.Parameters.AddWithValue("$provider", config.ActiveProvider);
+        cmd.Parameters.AddWithValue("$sandbox", config.IsSandbox ? 1 : 0);
+        cmd.Parameters.AddWithValue("$iyzKey", config.IyzicoApiKey ?? string.Empty);
+        cmd.Parameters.AddWithValue("$iyzSec", config.IyzicoSecretKey ?? string.Empty);
+        cmd.Parameters.AddWithValue("$iyzUrl", config.IyzicoBaseUrl ?? "https://sandbox-api.iyzipay.com");
+        cmd.Parameters.AddWithValue("$paytrId", config.PaytrMerchantId ?? string.Empty);
+        cmd.Parameters.AddWithValue("$paytrKey", config.PaytrMerchantKey ?? string.Empty);
+        cmd.Parameters.AddWithValue("$paytrSalt", config.PaytrMerchantSalt ?? string.Empty);
+        cmd.Parameters.AddWithValue("$stripeSec", config.StripeSecretKey ?? string.Empty);
+        cmd.Parameters.AddWithValue("$updatedAt", config.UpdatedAtUtc.ToUniversalTime().ToString("O"));
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+        return config;
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)

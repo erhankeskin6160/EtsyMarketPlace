@@ -81,7 +81,7 @@ export interface CreateCheckoutSessionRequest {
 export interface CheckoutSessionResponse {
   sessionId: string;
   checkoutUrl: string;
-  mode: 'VirtualPos' | 'StripeLive' | string;
+  mode: 'VirtualPos' | 'Iframe' | 'StripeLive' | string;
   provider: string;
   planId: string;
   planName: string;
@@ -91,6 +91,38 @@ export interface CheckoutSessionResponse {
   currency: string;
   invoiceNumber: string;
   expiresAtUtc: string;
+}
+
+export type PaymentProviderType = 'Unconfigured' | 'Iyzico' | 'PayTR' | 'Stripe' | string;
+
+export interface PaymentGatewaySettings {
+  activeProvider: PaymentProviderType;
+  isSandbox: boolean;
+  iyzicoApiKey: string;
+  hasIyzicoSecretKey: boolean;
+  iyzicoSecretKeyMask: string;
+  iyzicoBaseUrl: string;
+  paytrMerchantId: string;
+  hasPaytrMerchantKey: boolean;
+  paytrMerchantKeyMask: string;
+  hasPaytrMerchantSalt: boolean;
+  paytrMerchantSaltMask: string;
+  hasStripeSecretKey: boolean;
+  stripeSecretKeyMask: string;
+  configSource: string;
+  updatedAtUtc: string;
+}
+
+export interface UpdatePaymentGatewaySettingsRequest {
+  activeProvider: PaymentProviderType;
+  isSandbox: boolean;
+  iyzicoApiKey?: string;
+  iyzicoSecretKey?: string;
+  iyzicoBaseUrl?: string;
+  paytrMerchantId?: string;
+  paytrMerchantKey?: string;
+  paytrMerchantSalt?: string;
+  stripeSecretKey?: string;
 }
 
 export interface ConfirmVirtualPosPaymentRequest {

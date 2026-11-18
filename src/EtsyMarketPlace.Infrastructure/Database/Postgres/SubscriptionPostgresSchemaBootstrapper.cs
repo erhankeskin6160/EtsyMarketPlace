@@ -90,6 +90,21 @@ public static class SubscriptionPostgresSchemaBootstrapper
 
         CREATE INDEX IF NOT EXISTS "IX_subscription_transactions_user_id_created"
             ON subscription_transactions (user_id, created_at_utc DESC);
+
+        CREATE TABLE IF NOT EXISTS payment_gateway_configs (
+            id character varying(50) NOT NULL,
+            active_provider character varying(32) NOT NULL DEFAULT 'Unconfigured',
+            is_sandbox boolean NOT NULL DEFAULT TRUE,
+            iyzico_api_key character varying(256) NOT NULL DEFAULT '',
+            iyzico_secret_key character varying(512) NOT NULL DEFAULT '',
+            iyzico_base_url character varying(256) NOT NULL DEFAULT 'https://sandbox-api.iyzipay.com',
+            paytr_merchant_id character varying(128) NOT NULL DEFAULT '',
+            paytr_merchant_key character varying(256) NOT NULL DEFAULT '',
+            paytr_merchant_salt character varying(256) NOT NULL DEFAULT '',
+            stripe_secret_key character varying(512) NOT NULL DEFAULT '',
+            updated_at_utc timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "PK_payment_gateway_configs" PRIMARY KEY (id)
+        );
         """;
 
     public static async Task<bool> EnsureTablesExistAsync(

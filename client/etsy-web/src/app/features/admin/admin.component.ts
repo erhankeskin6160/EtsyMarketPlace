@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
-import { SubscriptionPlan } from '../../core/models/subscription.models';
+import { PaymentGatewaySettings, SubscriptionPlan } from '../../core/models/subscription.models';
 import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/models/auth.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -165,6 +165,211 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             </tbody>
           </table>
         </div>
+      </section>
+
+      <!-- PAYMENT GATEWAY CONFIGURATION SECTION (IYZICO / PAYTR / STRIPE) -->
+      <section class="glass-card users-section payment-settings-card" id="payment-gateway-settings">
+        <div class="table-header">
+          <div>
+            <h3 class="section-title" id="payment-gateway-heading">
+              <i class="fa-solid fa-credit-card pg-heading-icon" aria-hidden="true"></i>
+              Ödeme Altyapısı (İyzico & PayTR Sanal POS) Ayarları
+            </h3>
+            <span class="section-sub">
+              Hangi sanal POS sağlayıcısının API anahtarlarını girip aktif ederseniz abonelik sayfasında doğrudan o sağlayıcının 3D Secure iFrame ekranı açılır.
+            </span>
+          </div>
+          <span class="pg-source-pill">
+            Kaynak: {{ paymentSettings?.configSource || 'Henüz Yapılandırılmadı' }}
+          </span>
+        </div>
+
+        <form class="pg-form"
+              aria-labelledby="payment-gateway-heading"
+              method="POST"
+              (ngSubmit)="savePaymentGatewaySettings()">
+          <div class="pg-top-grid">
+            <div class="pg-field">
+              <label for="pg-provider">Aktif Ödeme Sağlayıcısı</label>
+              <select id="pg-provider"
+                      name="activeProvider"
+                      [(ngModel)]="paymentForm.activeProvider"
+                      class="pg-input">
+                <option value="Unconfigured">Henüz Yapılandırılmadı (Sadece Yönetici Test Onayı)</option>
+                <option value="PayTR">PayTR (Ortak Ödeme / 3D Secure iFrame)</option>
+                <option value="Iyzico">iyzico (Checkout Form / 3D Secure iFrame)</option>
+                <option value="Stripe">Stripe Checkout (Uluslararası USD/TRY)</option>
+              </select>
+            </div>
+
+            <div class="pg-field">
+              <label for="pg-env">Çalışma Ortamı</label>
+              <select id="pg-env"
+                      name="isSandbox"
+                      [ngModel]="paymentForm.isSandbox"
+                      (ngModelChange)="onSandboxChanged($event)"
+                      class="pg-input">
+                <option [ngValue]="true">Test / Sandbox Ortamı</option>
+                <option [ngValue]="false">Canlı Üretim Ortamı (Gerçek Tahsilat)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- PAYTR SETTINGS -->
+          <fieldset *ngIf="paymentForm.activeProvider === 'PayTR'" class="pg-fieldset">
+            <legend>PayTR Mağaza API Bilgileri</legend>
+            <div class="pg-fields-grid">
+              <div class="pg-field">
+                <label for="paytr-id">Merchant ID (Mağaza No)</label>
+                <input id="paytr-id"
+                       name="paytrMerchantId"
+                       type="text"
+                       class="pg-input pg-mono"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.paytrMerchantId"
+                       placeholder="Örn: 123456" />
+              </div>
+
+              <div class="pg-field">
+                <div class="pg-label-row">
+                  <label for="paytr-key">Merchant Key (Mağaza Parolası)</label>
+                  <span *ngIf="paymentSettings?.hasPaytrMerchantKey" class="pg-saved-badge">
+                    Kayıtlı ({{ paymentSettings?.paytrMerchantKeyMask }})
+                  </span>
+                </div>
+                <input id="paytr-key"
+                       name="paytrMerchantKey"
+                       type="password"
+                       class="pg-input pg-mono"
+                       autocomplete="off"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.paytrMerchantKey"
+                       placeholder="Değiştirmek için yeni Merchant Key girin" />
+              </div>
+
+              <div class="pg-field">
+                <div class="pg-label-row">
+                  <label for="paytr-salt">Merchant Salt (Mağaza Gizli Anahtar)</label>
+                  <span *ngIf="paymentSettings?.hasPaytrMerchantSalt" class="pg-saved-badge">
+                    Kayıtlı ({{ paymentSettings?.paytrMerchantSaltMask }})
+                  </span>
+                </div>
+                <input id="paytr-salt"
+                       name="paytrMerchantSalt"
+                       type="password"
+                       class="pg-input pg-mono"
+                       autocomplete="off"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.paytrMerchantSalt"
+                       placeholder="Değiştirmek için yeni Merchant Salt girin" />
+              </div>
+            </div>
+
+            <div class="pg-callback-notice">
+              <i class="fa-solid fa-link" aria-hidden="true"></i>
+              <div>
+                <strong>PayTR Mağaza Paneline Tanımlanacak Bildirim URL'si (Callback):</strong>
+                <code>{{ paytrCallbackUrl }}</code>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- IYZICO SETTINGS -->
+          <fieldset *ngIf="paymentForm.activeProvider === 'Iyzico'" class="pg-fieldset">
+            <legend>iyzico Üye İşyeri API Bilgileri</legend>
+            <div class="pg-fields-grid">
+              <div class="pg-field">
+                <label for="iyzi-key">API Key</label>
+                <input id="iyzi-key"
+                       name="iyzicoApiKey"
+                       type="text"
+                       class="pg-input pg-mono"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.iyzicoApiKey"
+                       placeholder="sandbox-... veya canlı API Key" />
+              </div>
+
+              <div class="pg-field">
+                <div class="pg-label-row">
+                  <label for="iyzi-secret">Secret Key</label>
+                  <span *ngIf="paymentSettings?.hasIyzicoSecretKey" class="pg-saved-badge">
+                    Kayıtlı ({{ paymentSettings?.iyzicoSecretKeyMask }})
+                  </span>
+                </div>
+                <input id="iyzi-secret"
+                       name="iyzicoSecretKey"
+                       type="password"
+                       class="pg-input pg-mono"
+                       autocomplete="off"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.iyzicoSecretKey"
+                       placeholder="Değiştirmek için yeni Secret Key girin" />
+              </div>
+
+              <div class="pg-field">
+                <label for="iyzi-url">API Base URL</label>
+                <input id="iyzi-url"
+                       name="iyzicoBaseUrl"
+                       type="url"
+                       class="pg-input pg-mono"
+                       autocorrect="off"
+                       autocapitalize="none"
+                       spellcheck="false"
+                       [(ngModel)]="paymentForm.iyzicoBaseUrl"
+                       placeholder="https://sandbox-api.iyzipay.com" />
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- STRIPE SETTINGS -->
+          <fieldset *ngIf="paymentForm.activeProvider === 'Stripe'" class="pg-fieldset">
+            <legend>Stripe Checkout API Bilgisi</legend>
+            <div class="pg-field">
+              <div class="pg-label-row">
+                <label for="stripe-secret">Stripe Secret Key</label>
+                <span *ngIf="paymentSettings?.hasStripeSecretKey" class="pg-saved-badge">
+                  Kayıtlı ({{ paymentSettings?.stripeSecretKeyMask }})
+                </span>
+              </div>
+              <input id="stripe-secret"
+                     name="stripeSecretKey"
+                     type="password"
+                     class="pg-input pg-mono"
+                     autocomplete="off"
+                     autocorrect="off"
+                     autocapitalize="none"
+                     spellcheck="false"
+                     [(ngModel)]="paymentForm.stripeSecretKey"
+                     placeholder="sk_test_... veya sk_live_..." />
+            </div>
+          </fieldset>
+
+          <div class="pg-footer-actions">
+            <span class="pg-hint-note">
+              Gizli anahtar alanlarını boş bırakırsanız veritabanındaki kayıtlı mevcut anahtarlar korunur.
+            </span>
+            <button type="submit"
+                    class="btn pg-btn-save"
+                    [disabled]="savingPaymentSettings">
+              <ng-container *ngIf="!savingPaymentSettings">
+                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Ödeme Ayarlarını Kaydet
+              </ng-container>
+              <ng-container *ngIf="savingPaymentSettings">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Kaydediliyor...
+              </ng-container>
+            </button>
+          </div>
+        </form>
       </section>
 
       <!-- AUDIT LOGS SECTION -->
@@ -387,6 +592,110 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     .admin-toast.error { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; }
     .admin-toast.info { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; }
     .btn-close-toast { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; }
+
+    /* PAYMENT GATEWAY SETTINGS */
+    .payment-settings-card {
+      background: #111622;
+      border: 1px solid #222b3d;
+    }
+    .pg-heading-icon { color: #f97316; margin-right: 6px; }
+    .pg-source-pill {
+      font-size: 0.73rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #141923;
+      border: 1px solid #263042;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+    .pg-form { display: flex; flex-direction: column; gap: 16px; }
+    .pg-top-grid, .pg-fields-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .pg-field { display: flex; flex-direction: column; gap: 6px; }
+    .pg-field label { font-size: 0.78rem; font-weight: 600; color: #cbd5e1; }
+    .pg-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pg-saved-badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #34d399;
+      background: #0d1f18;
+      border: 1px solid #166534;
+      padding: 1px 7px;
+      border-radius: 4px;
+    }
+    .pg-input {
+      background: #0a0e17;
+      border: 1px solid #263042;
+      color: #f8fafc;
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      min-height: 40px;
+    }
+    .pg-input:focus-visible { outline: 2px solid #f97316; outline-offset: 2px; }
+    .pg-mono { font-family: 'JetBrains Mono', monospace; }
+    .pg-fieldset {
+      border: 1px solid #222b3d;
+      border-radius: 8px;
+      padding: 16px;
+      background: #0b0f18;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pg-fieldset legend {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #f97316;
+      padding: 0 8px;
+    }
+    .pg-callback-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #141923;
+      border: 1px solid #263042;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+    }
+    .pg-callback-notice i { color: #f97316; margin-top: 3px; }
+    .pg-callback-notice code {
+      display: block;
+      margin-top: 4px;
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+    }
+    .pg-footer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 4px;
+    }
+    .pg-hint-note { font-size: 0.75rem; color: #64748b; }
+    .pg-btn-save {
+      background: #f97316;
+      color: #0b0f18;
+      border: 1px solid #ea580c;
+      border-radius: 6px;
+      padding: 9px 18px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pg-btn-save:hover:not(:disabled) { background: #fb923c; }
+    .pg-btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
   `]
 })
 export class AdminComponent implements OnInit {
@@ -407,6 +716,24 @@ export class AdminComponent implements OnInit {
 
   toastMessage: string | null = null;
   toastType: 'success' | 'error' | 'info' = 'info';
+
+  paymentSettings: PaymentGatewaySettings | null = null;
+  savingPaymentSettings = false;
+  paymentForm = {
+    activeProvider: 'Unconfigured',
+    isSandbox: true,
+    iyzicoApiKey: '',
+    iyzicoSecretKey: '',
+    iyzicoBaseUrl: 'https://sandbox-api.iyzipay.com',
+    paytrMerchantId: '',
+    paytrMerchantKey: '',
+    paytrMerchantSalt: '',
+    stripeSecretKey: ''
+  };
+
+  get paytrCallbackUrl(): string {
+    return `${window.location.origin}/api/subscriptions/callback/paytr`;
+  }
 
   showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
     this.toastMessage = message;
@@ -455,6 +782,62 @@ export class AdminComponent implements OnInit {
       next: res => this.plans = res.map(p => ({ ...p })),
       error: () => {}
     });
+
+    this.subscriptionService.getAdminPaymentSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: cfg => this.hydratePaymentForm(cfg),
+      error: () => {}
+    });
+  }
+
+  onSandboxChanged(isSandbox: boolean): void {
+    this.paymentForm.isSandbox = isSandbox;
+    const url = (this.paymentForm.iyzicoBaseUrl || '').trim();
+    if (!url || url === 'https://sandbox-api.iyzipay.com' || url === 'https://api.iyzipay.com') {
+      this.paymentForm.iyzicoBaseUrl = isSandbox ? 'https://sandbox-api.iyzipay.com' : 'https://api.iyzipay.com';
+    }
+  }
+
+  savePaymentGatewaySettings(): void {
+    if (this.savingPaymentSettings) return;
+    this.savingPaymentSettings = true;
+
+    this.subscriptionService.updateAdminPaymentSettings({
+      activeProvider: this.paymentForm.activeProvider,
+      isSandbox: this.paymentForm.isSandbox,
+      iyzicoApiKey: this.paymentForm.iyzicoApiKey,
+      iyzicoSecretKey: this.paymentForm.iyzicoSecretKey || undefined,
+      iyzicoBaseUrl: this.paymentForm.iyzicoBaseUrl,
+      paytrMerchantId: this.paymentForm.paytrMerchantId,
+      paytrMerchantKey: this.paymentForm.paytrMerchantKey || undefined,
+      paytrMerchantSalt: this.paymentForm.paytrMerchantSalt || undefined,
+      stripeSecretKey: this.paymentForm.stripeSecretKey || undefined
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: saved => {
+        this.savingPaymentSettings = false;
+        this.hydratePaymentForm(saved);
+        this.showToast(`✓ Ödeme altyapısı ayarları kaydedildi (${saved.activeProvider}).`, 'success');
+      },
+      error: err => {
+        this.savingPaymentSettings = false;
+        const msg = err?.error?.message || err?.error?.error || err?.message || 'Ödeme ayarları kaydedilemedi';
+        this.showToast(`Ödeme ayarları hatası: ${msg}`, 'error');
+      }
+    });
+  }
+
+  private hydratePaymentForm(cfg: PaymentGatewaySettings): void {
+    this.paymentSettings = cfg;
+    this.paymentForm = {
+      activeProvider: cfg.activeProvider || 'Unconfigured',
+      isSandbox: cfg.isSandbox,
+      iyzicoApiKey: cfg.iyzicoApiKey || '',
+      iyzicoSecretKey: '',
+      iyzicoBaseUrl: cfg.iyzicoBaseUrl || (cfg.isSandbox ? 'https://sandbox-api.iyzipay.com' : 'https://api.iyzipay.com'),
+      paytrMerchantId: cfg.paytrMerchantId || '',
+      paytrMerchantKey: '',
+      paytrMerchantSalt: '',
+      stripeSecretKey: ''
+    };
   }
 
   assignUserPlan(user: User, planId: string): void {
