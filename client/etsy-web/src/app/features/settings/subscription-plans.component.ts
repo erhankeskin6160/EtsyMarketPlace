@@ -48,6 +48,7 @@ export class SubscriptionPlansComponent implements OnInit {
     expiry: '',
     cvc: ''
   };
+  termsAccepted = true;
 
   readonly featureRows = [
     { key: 'fast_creator', label: 'AI Hızlı Ürün Ekle (13 Etiket + SEO)' },
@@ -194,7 +195,17 @@ export class SubscriptionPlansComponent implements OnInit {
     }, 50);
   }
 
-  fillTestCard(kind: 'success' | 'decline'): void {
+  detectedCardBrand(): 'visa' | 'mastercard' | 'troy' | 'amex' | 'unknown' {
+    const digits = (this.cardForm.cardNumber || '').replace(/\D/g, '');
+    if (!digits) return 'unknown';
+    if (digits.startsWith('9792') || digits.startsWith('650')) return 'troy';
+    if (digits.startsWith('34') || digits.startsWith('37')) return 'amex';
+    if (digits.startsWith('4')) return 'visa';
+    if (/^(5[1-5]|222[1-9]|22[3-9]|2[3-6]|27[01]|2720)/.test(digits)) return 'mastercard';
+    return 'unknown';
+  }
+
+  fillTestCard(kind: 'success' | 'troy' | 'decline'): void {
     this.paymentError = null;
     if (kind === 'success') {
       this.cardForm = {
@@ -202,6 +213,13 @@ export class SubscriptionPlansComponent implements OnInit {
         cardNumber: '4242 4242 4242 4242',
         expiry: '12/28',
         cvc: '424'
+      };
+    } else if (kind === 'troy') {
+      this.cardForm = {
+        cardHolderName: this.subscriptionService.mySubscription()?.username || 'TROY Test Kullanıcı',
+        cardNumber: '9792 0000 0000 0003',
+        expiry: '12/28',
+        cvc: '792'
       };
     } else {
       this.cardForm = {
@@ -215,6 +233,11 @@ export class SubscriptionPlansComponent implements OnInit {
 
   submitVirtualPosPayment(): void {
     if (!this.activeCheckoutSession || this.isPaying) return;
+
+    if (!this.termsAccepted) {
+      this.paymentError = 'Lütfen Mesafeli Satış Sözleşmesi, Ön Bilgilendirme ve Abonelik İptal/İade Koşullarını onaylayınız.';
+      return;
+    }
 
     const { month, year } = this.parseExpiry(this.cardForm.expiry);
     if (!this.cardForm.cardHolderName.trim() || !this.cardForm.cardNumber.trim() || !month || !year || !this.cardForm.cvc.trim()) {

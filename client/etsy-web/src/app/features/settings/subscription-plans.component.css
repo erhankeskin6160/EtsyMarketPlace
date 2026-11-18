@@ -745,3 +745,145 @@
   color: var(--text-muted);
   padding: 24px !important;
 }
+
+/* CARD ACCEPTANCE LOGOS, BIN DETECTION & COMPLIANCE FOOTER */
+.accepted-cards-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(9, 13, 22, 0.65);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.accepted-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.card-brands-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-brand-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-width: 60px;
+  height: 28px;
+  transition: opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card-brand-pill.amex-pill {
+  background: #006fcf;
+  border-color: #60a5fa;
+}
+
+.card-brand-pill.active {
+  border-color: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35);
+  transform: translateY(-1px);
+}
+
+.card-brand-pill.dimmed {
+  opacity: 0.38;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detected-brand-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 1px 8px;
+  border-radius: 9999px;
+}
+
+.terms-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.terms-checkbox {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #635bff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.terms-label {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.payment-compliance-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.compliance-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.compliance-note {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.security-seals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seal-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  border: 1px solid var(--border-color);
+  color: #cbd5e1;
+}
+
+.seal-pill.stripe-seal {
+  background: rgba(99, 91, 255, 0.16);
+  border-color: rgba(99, 91, 255, 0.45);
+  color: #c7d2fe;
+}
