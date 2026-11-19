@@ -15,7 +15,8 @@ public sealed record AppUser(
     DateTimeOffset? LastLoginAt,
     string SubscriptionPlanId = "pro",
     string SubscriptionStatus = "Active",
-    DateTimeOffset? SubscriptionExpiresAt = null);
+    DateTimeOffset? SubscriptionExpiresAt = null,
+    string? SecurityStamp = null);
 
 public sealed record AuditLogEntry(
     long Id,
@@ -29,9 +30,15 @@ public sealed record AuditLogEntry(
 public static class UserRoles
 {
     public const string Admin = "Admin";
+    public const string SuperAdmin = "SuperAdmin";
+    public const string AdminRoles = "Admin,SuperAdmin";
     public const string StoreOwner = "StoreOwner";
     public const string Demo = "Demo";
     public const string Operator = "Operator";
+
+    public static bool IsAdminRole(string? role) =>
+        string.Equals(role, Admin, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(role, SuperAdmin, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record LoginRequest(string UsernameOrEmail, string Password);

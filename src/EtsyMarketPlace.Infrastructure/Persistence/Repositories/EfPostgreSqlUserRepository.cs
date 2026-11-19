@@ -6,39 +6,44 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Infrastructure.Database.Postgres;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
-using DomainUser = EtsyMarketPlace.Domain.Entities.AppUser;
+using EtsyMarketPlace.Infrastructure.Identity;
 using DomainAuditLog = EtsyMarketPlace.Domain.Entities.AuditLog;
 using AppUserRecord = EtsyMarketPlace.Application.Auth.AppUser;
 
 /// <summary>
-/// PostgreSQL 16 EF Core tabanlı kullanıcı ve audit günlüğü deposu.
+/// PostgreSQL 16 EF Core + ASP.NET Core Identity tabanlı kullanıcı ve audit günlüğü deposu.
 /// PostgreSQL erişilemez olduğunda yerel SQLite yedeğine (<see cref="SqliteEtsyIntegrationStore"/>) düşer.
 /// </summary>
 public sealed class EfPostgreSqlUserRepository : IUserRepository
 {
     private readonly EtsyMarketPlaceDbContext _context;
+    private readonly UserManager<ApplicationIdentityUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<EfPostgreSqlUserRepository> _logger;
     private readonly SqliteEtsyIntegrationStore? _fallbackStore;
 
     public EfPostgreSqlUserRepository(
         EtsyMarketPlaceDbContext context,
+        UserManager<ApplicationIdentityUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        IMemoryCache cache,
         ILogger<EfPostgreSqlUserRepository> logger,
         SqliteEtsyIntegrationStore? fallbackStore = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _roleManager = roleManager ?? throw new ArgumentNullException(nameof(roleManager));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fallbackStore = fallbackStore;
-    }
-
-    private static DateTimeOffset ToUtcOffset(DateTime dt)
-    {
-        var utc = dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-        return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 
     public Task<AppUserRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
@@ -49,7 +54,10 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
                 var entity = await _context.Users
                     .AsNoTracking()
                     .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
-                return entity is null ? null : ToRecord(entity);
+                if (entity is null) return null;
+
+                var roles = await GetRoleNamesAsync(entity.Id, cancellationToken);
+                return IdentityUserMapper.ToRecord(entity, roles);
             },
             store => store.GetByIdAsync(id, cancellationToken),
             $"GetById({id})");
@@ -60,14 +68,19 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         if (string.IsNullOrWhiteSpace(identifier))
             return Task.FromResult<AppUserRecord?>(null);
 
-        string normalized = identifier.Trim().ToLowerInvariant();
+        var normalized = identifier.Trim().ToUpperInvariant();
         return ExecuteWithFallbackAsync<AppUserRecord?>(
             async () =>
             {
                 var entity = await _context.Users
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Username.ToLower() == normalized || u.Email.ToLower() == normalized, cancellationToken);
-                return entity is null ? null : ToRecord(entity);
+                    .FirstOrDefaultAsync(
+                        u => u.NormalizedUserName == normalized || u.NormalizedEmail == normalized,
+                        cancellationToken);
+                if (entity is null) return null;
+
+                var roles = await GetRoleNamesAsync(entity.Id, cancellationToken);
+                return IdentityUserMapper.ToRecord(entity, roles);
             },
             store => store.GetByUsernameOrEmailAsync(identifier, cancellationToken),
             "GetByUsernameOrEmail");
@@ -82,7 +95,22 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
                     .AsNoTracking()
                     .OrderByDescending(u => u.CreatedAt)
                     .ToListAsync(cancellationToken);
-                return entities.Select(ToRecord).ToList();
+
+                var userRolePairs = await (
+                    from ur in _context.UserRoles.AsNoTracking()
+                    join r in _context.Roles.AsNoTracking() on ur.RoleId equals r.Id
+                    select new { ur.UserId, RoleName = r.Name ?? string.Empty }
+                ).ToListAsync(cancellationToken);
+
+                var rolesByUser = userRolePairs
+                    .GroupBy(x => x.UserId)
+                    .ToDictionary(g => g.Key, g => (IList<string>)g.Select(x => x.RoleName).Where(n => !string.IsNullOrEmpty(n)).ToList());
+
+                return entities.Select(u =>
+                {
+                    rolesByUser.TryGetValue(u.Id, out var roles);
+                    return IdentityUserMapper.ToRecord(u, roles);
+                }).ToList();
             },
             store => store.GetAllUsersAsync(cancellationToken),
             "GetAllUsers");
@@ -95,14 +123,13 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         return ExecuteWithFallbackAsync(
             async () =>
             {
-                var entity = new DomainUser
+                var entity = new ApplicationIdentityUser
                 {
                     Id = string.IsNullOrWhiteSpace(user.Id) ? Guid.NewGuid().ToString("N") : user.Id,
-                    Username = user.Username,
+                    UserName = user.Username,
                     Email = user.Email,
-                    PasswordHash = user.PasswordHash,
-                    PasswordSalt = user.PasswordSalt,
-                    Role = user.Role,
+                    EmailConfirmed = true,
+                    PrimaryRole = user.Role,
                     AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []),
                     MonthlyAiTokenQuota = user.MonthlyAiTokenQuota,
                     UsedAiTokens = user.UsedAiTokens,
@@ -111,11 +138,25 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
                     SubscriptionStatus = user.SubscriptionStatus,
                     SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime,
                     CreatedAt = user.CreatedAt.UtcDateTime,
-                    LastLoginAt = user.LastLoginAt?.UtcDateTime
+                    LastLoginAt = user.LastLoginAt?.UtcDateTime,
+                    LockoutEnabled = true,
+                    AccessFailedCount = 0,
+                    LegacyPasswordHash = string.IsNullOrWhiteSpace(user.PasswordSalt) ? null : user.PasswordHash,
+                    LegacyPasswordSalt = string.IsNullOrWhiteSpace(user.PasswordSalt) ? null : user.PasswordSalt
                 };
 
-                _context.Users.Add(entity);
-                await _context.SaveChangesAsync(cancellationToken);
+                var createRes = await _userManager.CreateAsync(entity);
+                if (!createRes.Succeeded)
+                {
+                    throw new InvalidOperationException(string.Join("; ", createRes.Errors.Select(e => e.Description)));
+                }
+
+                var targetRole = string.IsNullOrWhiteSpace(user.Role) ? UserRoles.StoreOwner : user.Role;
+                if (!await _roleManager.RoleExistsAsync(targetRole))
+                {
+                    await _roleManager.CreateAsync(new IdentityRole(targetRole));
+                }
+                await _userManager.AddToRoleAsync(entity, targetRole);
                 return true;
             },
             async store =>
@@ -133,13 +174,18 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         return ExecuteWithFallbackAsync(
             async () =>
             {
-                var entity = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Id == user.Id, cancellationToken);
-
+                var entity = await _userManager.FindByIdAsync(user.Id);
                 if (entity is null) return true;
 
-                entity.Email = user.Email;
-                entity.Role = user.Role;
+                var roleChanged = !string.Equals(entity.PrimaryRole, user.Role, StringComparison.OrdinalIgnoreCase);
+                var deactivated = entity.IsActive && !user.IsActive;
+
+                if (!string.Equals(entity.Email, user.Email, StringComparison.OrdinalIgnoreCase))
+                {
+                    await _userManager.SetEmailAsync(entity, user.Email);
+                }
+
+                entity.PrimaryRole = user.Role;
                 entity.AssignedShopIds = JsonSerializer.Serialize(user.AssignedShopIds ?? []);
                 entity.MonthlyAiTokenQuota = user.MonthlyAiTokenQuota;
                 entity.IsActive = user.IsActive;
@@ -147,7 +193,31 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
                 entity.SubscriptionStatus = user.SubscriptionStatus;
                 entity.SubscriptionExpiresAt = user.SubscriptionExpiresAt?.UtcDateTime;
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _userManager.UpdateAsync(entity);
+
+                if (roleChanged && !string.IsNullOrWhiteSpace(user.Role))
+                {
+                    var currentRoles = await _userManager.GetRolesAsync(entity);
+                    if (currentRoles.Count > 0)
+                    {
+                        await _userManager.RemoveFromRolesAsync(entity, currentRoles);
+                    }
+
+                    if (!await _roleManager.RoleExistsAsync(user.Role))
+                    {
+                        await _roleManager.CreateAsync(new IdentityRole(user.Role));
+                    }
+
+                    await _userManager.AddToRoleAsync(entity, user.Role);
+                }
+
+                // Rol değişikliği veya hesap askıya alma durumunda mevcut tüm JWT token'ları anında iptal et
+                if (roleChanged || deactivated)
+                {
+                    await _userManager.UpdateSecurityStampAsync(entity);
+                    _cache.Remove(IdentityUserMapper.GetStampCacheKey(entity.Id));
+                }
+
                 return true;
             },
             async store =>
@@ -227,10 +297,20 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
                     e.Action,
                     e.Details,
                     e.IpAddress,
-                    ToUtcOffset(e.Timestamp))).ToList();
+                    IdentityUserMapper.ToUtcOffset(e.Timestamp))).ToList();
             },
             store => store.GetAuditLogsAsync(limit, cancellationToken),
             "GetAuditLogs");
+    }
+
+    private async Task<IList<string>> GetRoleNamesAsync(string userId, CancellationToken ct)
+    {
+        return await (
+            from ur in _context.UserRoles.AsNoTracking()
+            join r in _context.Roles.AsNoTracking() on ur.RoleId equals r.Id
+            where ur.UserId == userId && r.Name != null
+            select r.Name!
+        ).ToListAsync(ct);
     }
 
     private async Task<T> ExecuteWithFallbackAsync<T>(
@@ -263,35 +343,5 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
             }
         }
         return false;
-    }
-
-    private static AppUserRecord ToRecord(DomainUser u)
-    {
-        List<string> shopIds;
-        try
-        {
-            shopIds = JsonSerializer.Deserialize<List<string>>(u.AssignedShopIds) ?? [];
-        }
-        catch
-        {
-            shopIds = [];
-        }
-
-        return new AppUserRecord(
-            u.Id,
-            u.Username,
-            u.Email,
-            u.PasswordHash,
-            u.PasswordSalt,
-            u.Role,
-            shopIds,
-            u.MonthlyAiTokenQuota,
-            u.UsedAiTokens,
-            u.IsActive,
-            ToUtcOffset(u.CreatedAt),
-            u.LastLoginAt.HasValue ? ToUtcOffset(u.LastLoginAt.Value) : null,
-            string.IsNullOrWhiteSpace(u.SubscriptionPlanId) ? "pro" : u.SubscriptionPlanId,
-            string.IsNullOrWhiteSpace(u.SubscriptionStatus) ? "Active" : u.SubscriptionStatus,
-            u.SubscriptionExpiresAt.HasValue ? ToUtcOffset(u.SubscriptionExpiresAt.Value) : null);
     }
 }

@@ -31,7 +31,9 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   if (isInternalApi) {
     const authService = inject(AuthService);
     const token = localStorage.getItem('etsy_web_jwt_token');
-    const isAuthEndpoint = req.url.includes('/api/auth/login') || req.url.includes('/api/auth/register');
+    const isAuthEndpoint = req.url.includes('/api/auth/login') ||
+                           req.url.includes('/api/auth/register') ||
+                           req.url.includes('/api/auth/logout');
 
     const outgoing = token
       ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
@@ -41,8 +43,8 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
       catchError((err: unknown) => {
         if (err instanceof HttpErrorResponse && err.status === 401 && !isAuthEndpoint) {
           const msg = typeof err.error?.error === 'string' ? err.error.error : '';
-          if (msg.includes('Bearer token') || msg.includes('Yetkisiz erişim')) {
-            authService.logout();
+          if (msg.includes('Bearer token') || msg.includes('Yetkisiz erişim') || msg.includes('Oturum sonlandırılmış')) {
+            authService.logout(false);
           }
         }
         return throwError(() => err);

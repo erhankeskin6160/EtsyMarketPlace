@@ -7,11 +7,12 @@ using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Domain.Entities;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
+using EtsyMarketPlace.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using DomainUser = EtsyMarketPlace.Domain.Entities.AppUser;
 
 namespace EtsyMarketPlace.Infrastructure.Database.Postgres;
 
@@ -32,15 +33,21 @@ public record PostgreSqlMigrationResult(
 public sealed class PostgreSqlDataMigrator
 {
     private readonly EtsyMarketPlaceDbContext _db;
+    private readonly UserManager<ApplicationIdentityUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
     private readonly EtsyIntegrationOptions _options;
     private readonly ILogger<PostgreSqlDataMigrator> _logger;
 
     public PostgreSqlDataMigrator(
         EtsyMarketPlaceDbContext db,
+        UserManager<ApplicationIdentityUser> userManager,
+        RoleManager<IdentityRole> roleManager,
         IOptions<EtsyIntegrationOptions> options,
         ILogger<PostgreSqlDataMigrator> logger)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+        _roleManager = roleManager ?? throw new ArgumentNullException(nameof(roleManager));
         _options = options?.Value ?? new EtsyIntegrationOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -91,29 +98,117 @@ public sealed class PostgreSqlDataMigrator
 
         try
         {
-            // 1. Seed default AppUser if empty
-            DomainUser? adminUser = await _db.Users.FirstOrDefaultAsync(u => u.Username == "admin", cancellationToken);
+            // 1. ASP.NET Core Identity temel rollerini tohumla
+            string[] defaultRoles = [UserRoles.Admin, UserRoles.SuperAdmin, UserRoles.StoreOwner, UserRoles.Operator, UserRoles.Demo];
+            foreach (var roleName in defaultRoles)
+            {
+                if (!await _roleManager.RoleExistsAsync(roleName))
+                {
+                    await _roleManager.CreateAsync(new IdentityRole(roleName));
+                }
+            }
+
+            // 1.1. Eski app_users tablosundan AspNetUsers tablosuna tek seferlik kesintisiz göç
+            try
+            {
+                var legacyUsers = await _db.LegacyUsers.AsNoTracking().ToListAsync(cancellationToken);
+                foreach (var legacy in legacyUsers)
+                {
+                    var existing = await _userManager.FindByIdAsync(legacy.Id)
+                        ?? await _userManager.FindByNameAsync(legacy.Username)
+                        ?? await _userManager.FindByEmailAsync(legacy.Email);
+
+                    if (existing is not null) continue;
+
+                    var targetRole = UserRoles.IsAdminRole(legacy.Role)
+                        ? UserRoles.Admin
+                        : (string.IsNullOrWhiteSpace(legacy.Role) ? UserRoles.StoreOwner : legacy.Role);
+
+                    var migrated = new ApplicationIdentityUser
+                    {
+                        Id = legacy.Id,
+                        UserName = legacy.Username,
+                        Email = legacy.Email,
+                        EmailConfirmed = true,
+                        PrimaryRole = targetRole,
+                        AssignedShopIds = string.IsNullOrWhiteSpace(legacy.AssignedShopIds) ? "[]" : legacy.AssignedShopIds,
+                        MonthlyAiTokenQuota = legacy.MonthlyAiTokenQuota,
+                        UsedAiTokens = legacy.UsedAiTokens,
+                        IsActive = legacy.IsActive,
+                        SubscriptionPlanId = string.IsNullOrWhiteSpace(legacy.SubscriptionPlanId) ? "pro" : legacy.SubscriptionPlanId,
+                        SubscriptionStatus = string.IsNullOrWhiteSpace(legacy.SubscriptionStatus) ? "Active" : legacy.SubscriptionStatus,
+                        SubscriptionExpiresAt = legacy.SubscriptionExpiresAt,
+                        CreatedAt = legacy.CreatedAt,
+                        LastLoginAt = legacy.LastLoginAt,
+                        LockoutEnabled = true,
+                        AccessFailedCount = 0,
+                        LockoutEnd = null,
+                        LegacyPasswordHash = legacy.PasswordHash,
+                        LegacyPasswordSalt = legacy.PasswordSalt
+                    };
+
+                    var createRes = await _userManager.CreateAsync(migrated);
+                    if (createRes.Succeeded)
+                    {
+                        await _userManager.AddToRoleAsync(migrated, targetRole);
+                        if (UserRoles.IsAdminRole(legacy.Role) && !await _userManager.IsInRoleAsync(migrated, UserRoles.SuperAdmin))
+                        {
+                            await _userManager.AddToRoleAsync(migrated, UserRoles.SuperAdmin);
+                        }
+                        usersSeeded++;
+                        _logger.LogInformation("PostgreSQL Identity: Eski kullanıcı {Username} AspNetUsers tablosuna aktarıldı.", legacy.Username);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Legacy app_users göçü atlandı veya tablo bulunamadı: {Msg}", ex.Message);
+            }
+
+            // 1.2. Varsayılan admin kullanıcısını ASP.NET Core Identity ile tohumla
+            var adminUser = await _userManager.FindByNameAsync("admin");
             if (adminUser is null)
             {
-                var (hash, salt) = PasswordHasher.HashPassword("Admin123*!");
-                adminUser = new DomainUser
+                adminUser = new ApplicationIdentityUser
                 {
                     Id = Guid.NewGuid().ToString("N"),
-                    Username = "admin",
+                    UserName = "admin",
                     Email = "admin@etsymarketplace.local",
-                    PasswordHash = hash,
-                    PasswordSalt = salt,
-                    Role = "SuperAdmin",
+                    EmailConfirmed = true,
+                    PrimaryRole = UserRoles.Admin,
                     AssignedShopIds = "[\"53236321\"]",
                     MonthlyAiTokenQuota = 1000000,
                     UsedAiTokens = 0,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    SubscriptionPlanId = "enterprise",
+                    SubscriptionStatus = "Active",
+                    CreatedAt = DateTime.UtcNow,
+                    LockoutEnabled = true,
+                    AccessFailedCount = 0
                 };
-                _db.Users.Add(adminUser);
-                await _db.SaveChangesAsync(cancellationToken);
-                usersSeeded++;
-                _logger.LogInformation("PostgreSQL: Varsayılan admin kullanıcısı tohumlandı.");
+
+                var createAdminRes = await _userManager.CreateAsync(adminUser, "Admin123*!");
+                if (createAdminRes.Succeeded)
+                {
+                    await _userManager.AddToRoleAsync(adminUser, UserRoles.Admin);
+                    await _userManager.AddToRoleAsync(adminUser, UserRoles.SuperAdmin);
+                    usersSeeded++;
+                    _logger.LogInformation("PostgreSQL Identity: Varsayılan admin kullanıcısı tohumlandı.");
+                }
+                else
+                {
+                    _logger.LogWarning("PostgreSQL Identity: Varsayılan admin oluşturulamadı: {Errors}",
+                        string.Join(", ", createAdminRes.Errors.Select(e => e.Description)));
+                }
+            }
+            else if (!await _userManager.IsInRoleAsync(adminUser, UserRoles.Admin))
+            {
+                await _userManager.AddToRoleAsync(adminUser, UserRoles.Admin);
+                if (!string.Equals(adminUser.PrimaryRole, UserRoles.Admin, StringComparison.OrdinalIgnoreCase))
+                {
+                    adminUser.PrimaryRole = UserRoles.Admin;
+                    await _userManager.UpdateAsync(adminUser);
+                }
             }
 
             // 2. Seed default ShopConnection if empty
@@ -753,7 +848,7 @@ public sealed class PostgreSqlDataMigrator
             _db.AuditLogs.Add(new AuditLog
             {
                 UserId = adminUser.Id,
-                Username = adminUser.Username,
+                Username = adminUser.UserName ?? "admin",
                 Action = "PostgreSqlDataMigration",
                 Details = $"PostgreSQL göçü ve tohumlama tamamlandı: {payoutsMigrated} payouts, {transactionsMigrated} transactions, {syncStatesMigrated} syncStates, {orderAddressesMigrated} orderAddresses.",
                 IpAddress = "127.0.0.1",

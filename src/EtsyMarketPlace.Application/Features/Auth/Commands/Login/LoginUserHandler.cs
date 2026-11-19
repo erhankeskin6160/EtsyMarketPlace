@@ -10,7 +10,8 @@ using MediatR;
 
 public class LoginUserHandler(
     IUserRepository userRepo,
-    JwtTokenService jwtService
+    JwtTokenService jwtService,
+    IIdentityAuthService? identityAuthService = null
 ) : IRequestHandler<LoginUserRequest, ServiceResponse>
 {
     public async Task<ServiceResponse> Handle(LoginUserRequest request, CancellationToken cancellationToken)
@@ -18,15 +19,36 @@ public class LoginUserHandler(
         if (cancellationToken.IsCancellationRequested)
             return ServiceResponse.CreateError(ResponseMessage.OperationCancelled, HttpStatusCode.RequestTimeout);
 
-        var user = await userRepo.GetByUsernameOrEmailAsync(request.UsernameOrEmail, cancellationToken);
-        if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
+        AppUser? user;
+        if (identityAuthService is not null)
         {
-            return ServiceResponse.CreateError("Geçersiz kullanıcı adı veya şifre.", HttpStatusCode.Unauthorized);
-        }
+            var authResult = await identityAuthService.AuthenticateAsync(
+                request.UsernameOrEmail,
+                request.Password,
+                request.RemoteIpAddress,
+                cancellationToken);
 
-        if (!user.IsActive)
+            if (!authResult.Succeeded || authResult.Data is null)
+            {
+                return ServiceResponse.CreateError(
+                    authResult.ErrorMessage ?? "Geçersiz kullanıcı adı veya şifre.",
+                    authResult.StatusCode);
+            }
+
+            user = authResult.Data;
+        }
+        else
         {
-            return ServiceResponse.CreateError("Hesabınız askıya alınmıştır. Lütfen yöneticiyle iletişime geçin.", HttpStatusCode.Forbidden);
+            user = await userRepo.GetByUsernameOrEmailAsync(request.UsernameOrEmail, cancellationToken);
+            if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
+            {
+                return ServiceResponse.CreateError("Geçersiz kullanıcı adı veya şifre.", HttpStatusCode.Unauthorized);
+            }
+
+            if (!user.IsActive)
+            {
+                return ServiceResponse.CreateError("Hesabınız askıya alınmıştır. Lütfen yöneticiyle iletişime geçin.", HttpStatusCode.Forbidden);
+            }
         }
 
         var now = DateTimeOffset.UtcNow;

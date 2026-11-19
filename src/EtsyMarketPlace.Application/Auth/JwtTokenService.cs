@@ -40,6 +40,7 @@ public sealed class JwtTokenService
             ["iss"] = _issuer,
             ["aud"] = _audience,
             ["sub"] = user.Id,
+            ["jti"] = Guid.NewGuid().ToString("N"),
             ["name"] = user.Username,
             ["email"] = user.Email,
             ["role"] = user.Role,
@@ -48,6 +49,7 @@ public sealed class JwtTokenService
             ["shops"] = user.AssignedShopIds,
             ["quota"] = user.MonthlyAiTokenQuota,
             ["used"] = user.UsedAiTokens,
+            ["sec_stamp"] = user.SecurityStamp ?? string.Empty,
             ["iat"] = iat,
             ["exp"] = exp
         };
@@ -105,6 +107,8 @@ public sealed class JwtTokenService
             var role = root.GetProperty("role").GetString() ?? UserRoles.StoreOwner;
             var email = root.TryGetProperty("email", out var emailEl) ? emailEl.GetString() ?? "" : "";
             var plan = root.TryGetProperty("plan", out var planEl) ? planEl.GetString() ?? "pro" : "pro";
+            var secStamp = root.TryGetProperty("sec_stamp", out var stampEl) ? stampEl.GetString() ?? "" : "";
+            var jti = root.TryGetProperty("jti", out var jtiEl) ? jtiEl.GetString() ?? "" : "";
 
             var claims = new List<Claim>
             {
@@ -112,8 +116,15 @@ public sealed class JwtTokenService
                 new(ClaimTypes.Name, username),
                 new(ClaimTypes.Role, role),
                 new(ClaimTypes.Email, email),
-                new("plan", plan)
+                new("plan", plan),
+                new("sec_stamp", secStamp),
+                new("jti", jti)
             };
+
+            if (string.Equals(role, UserRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, UserRoles.Admin));
+            }
 
             var identity = new ClaimsIdentity(claims, "Bearer");
             var principal = new ClaimsPrincipal(identity);

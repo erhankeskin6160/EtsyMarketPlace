@@ -52,16 +52,23 @@
     </div>
 
     <!-- User Profile Bar in Sidebar Bottom -->
-    <div class="sidebar-footer" *ngIf="!apiService.isSidebarCollapsed()">
-      <div class="user-info">
+    <div class="sidebar-footer" [class.collapsed]="apiService.isSidebarCollapsed()">
+      <div class="user-info" *ngIf="!apiService.isSidebarCollapsed()">
         <div class="user-avatar">{{ authService.currentUser()?.username?.charAt(0)?.toUpperCase() || 'U' }}</div>
         <div class="user-details">
           <div class="user-name">{{ authService.currentUser()?.username || 'Kullanıcı' }}</div>
           <div class="user-role">{{ authService.currentUser()?.role || 'StoreOwner' }}</div>
         </div>
       </div>
-      <button class="btn-logout" (click)="authService.logout()" title="Çıkış Yap">
-        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      <button
+        type="button"
+        class="btn-logout"
+        [class.compact]="apiService.isSidebarCollapsed()"
+        (click)="authService.logout()"
+        title="Oturumu Kapat (Çıkış Yap)"
+        aria-label="Oturumu Kapat (Çıkış Yap)">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span *ngIf="!apiService.isSidebarCollapsed()">Çıkış</span>
       </button>
     </div>
   </aside>
@@ -164,6 +171,17 @@
         <!-- Refresh Button -->
         <button class="btn-refresh" (click)="router.navigate([router.url])" title="Sayfayı Yenile">
           <i class="fa-solid fa-arrows-rotate mr-1"></i> Yenile
+        </button>
+
+        <!-- Logout Button -->
+        <button
+          type="button"
+          class="btn-header-logout"
+          (click)="authService.logout()"
+          title="Oturumu Kapat (Çıkış Yap)"
+          aria-label="Oturumu Kapat (Çıkış Yap)">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span>Çıkış Yap</span>
         </button>
       </div>
     </header>

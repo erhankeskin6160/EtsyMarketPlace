@@ -19,14 +19,17 @@ public class BearerAuthenticationHandlerTests
     private const string Secret = "Test_Integration_Secret_Key_For_Bearer_Handler_0123456789";
     private readonly JwtTokenService _jwtTokenService = new(Secret);
 
-    private (BearerAuthenticationHandler handler, DefaultHttpContext context) CreateHandler(string? authHeader = null)
+    private (BearerAuthenticationHandler handler, DefaultHttpContext context) CreateHandler(
+        string? authHeader = null,
+        IIdentityAuthService? identityAuthService = null)
     {
         var optionsMonitor = new TestOptionsMonitor<AuthenticationSchemeOptions>(new AuthenticationSchemeOptions());
         var handler = new BearerAuthenticationHandler(
             optionsMonitor,
             NullLoggerFactory.Instance,
             UrlEncoder.Default,
-            _jwtTokenService);
+            _jwtTokenService,
+            identityAuthService);
 
         var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
@@ -129,5 +132,54 @@ public class BearerAuthenticationHandlerTests
         using var reader = new StreamReader(context.Response.Body);
         var body = await reader.ReadToEndAsync();
         Assert.Contains("Yetkisiz erişim", body);
+    }
+
+    private sealed class StubIdentityAuthService(bool stampIsValid) : IIdentityAuthService
+    {
+        public Task<IdentityOperationResult<AppUser>> AuthenticateAsync(string usernameOrEmail, string password, string? remoteIpAddress = null, System.Threading.CancellationToken cancellationToken = default)
+            => Task.FromResult(IdentityOperationResult<AppUser>.Fail("unused", System.Net.HttpStatusCode.Unauthorized));
+        public Task<IdentityOperationResult<AppUser>> RegisterAsync(string username, string email, string password, string? shopId, System.Threading.CancellationToken cancellationToken = default)
+            => Task.FromResult(IdentityOperationResult<AppUser>.Fail("unused", System.Net.HttpStatusCode.BadRequest));
+        public Task<bool> LogoutAsync(string userId, System.Threading.CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+        public Task<bool> ValidateSecurityStampAsync(string userId, string? securityStamp, System.Threading.CancellationToken cancellationToken = default)
+            => Task.FromResult(stampIsValid && !string.IsNullOrWhiteSpace(securityStamp));
+        public void InvalidateSecurityStampCache(string userId) { }
+    }
+
+    [Fact]
+    public async Task Authenticate_WhenSecurityStampMatches_ReturnsSuccess()
+    {
+        var user = new AppUser(
+            "user-123", "testuser", "test@example.com", "hash", "", UserRoles.Admin,
+            new List<string> { "53236321" }, 100_000, 0, true, DateTimeOffset.UtcNow, null,
+            SecurityStamp: "valid-stamp-1");
+
+        var token = _jwtTokenService.GenerateToken(user);
+        var (handler, context) = CreateHandler($"Bearer {token}", new StubIdentityAuthService(stampIsValid: true));
+        await handler.InitializeAsync(new AuthenticationScheme("Bearer", null, typeof(BearerAuthenticationHandler)), context);
+
+        var result = await handler.AuthenticateAsync();
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Authenticate_WhenSecurityStampRevokedAfterLogout_ReturnsFail()
+    {
+        var user = new AppUser(
+            "user-123", "testuser", "test@example.com", "hash", "", UserRoles.Admin,
+            new List<string> { "53236321" }, 100_000, 0, true, DateTimeOffset.UtcNow, null,
+            SecurityStamp: "revoked-stamp");
+
+        var token = _jwtTokenService.GenerateToken(user);
+        var (handler, context) = CreateHandler($"Bearer {token}", new StubIdentityAuthService(stampIsValid: false));
+        await handler.InitializeAsync(new AuthenticationScheme("Bearer", null, typeof(BearerAuthenticationHandler)), context);
+
+        var result = await handler.AuthenticateAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.Failure);
+        Assert.Contains("Oturum sonlandırılmış", result.Failure.Message);
     }
 }

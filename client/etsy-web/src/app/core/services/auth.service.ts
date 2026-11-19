@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, of, throwError } from 'rxjs';
+import { Observable, tap, catchError, finalize, of, throwError } from 'rxjs';
 import { AuthResponse, LoginRequest, RegisterRequest, User } from '../models/auth.models';
 import { environment } from '../../../environments/environment';
 
@@ -16,16 +16,33 @@ export class AuthService {
   private readonly TOKEN_KEY = 'etsy_web_jwt_token';
   private readonly USER_KEY = 'etsy_web_user';
   private sessionVerified = false;
+  private isLoggingOut = false;
 
   // Signals for reactive state
   readonly currentUser = signal<User | null>(null);
   readonly token = signal<string | null>(this.getStoredToken());
 
   readonly isAuthenticated = computed(() => !!this.currentUser());
-  readonly isAdmin = computed(() => this.currentUser()?.role === 'Admin');
-  readonly isStoreOwner = computed(() => this.currentUser()?.role === 'StoreOwner' || this.currentUser()?.role === 'Admin');
+  readonly isAdmin = computed(() => {
+    const role = this.currentUser()?.role;
+    return role === 'Admin' || role === 'SuperAdmin';
+  });
+  readonly isStoreOwner = computed(() => {
+    const role = this.currentUser()?.role;
+    return role === 'StoreOwner' || role === 'Admin' || role === 'SuperAdmin';
+  });
 
-  constructor() {}
+  constructor() {
+    // Çoklu sekme (multi-tab) çıkış senkronizasyonu: başka bir sekmede token silindiğinde bu sekmede de oturumu kapat
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event: StorageEvent) => {
+        if (event.key === this.TOKEN_KEY && !event.newValue && (this.token() || this.currentUser())) {
+          this.clearSession();
+          this.router.navigate(['/auth/login']);
+        }
+      });
+    }
+  }
 
   login(request: LoginRequest): Observable<AuthResponse> {
     const primaryUrl = `${this.API_BASE}/login`;
@@ -89,14 +106,39 @@ export class AuthService {
     );
   }
 
-  logout(): void {
+  logout(notifyServer = true): void {
+    if (this.isLoggingOut) {
+      return;
+    }
+
+    const activeToken = this.token() ?? this.getStoredToken();
+    if (notifyServer && activeToken) {
+      this.isLoggingOut = true;
+      const logoutUrl = `${this.API_BASE}/logout`;
+      this.http.post(logoutUrl, {}, {
+        headers: { Authorization: `Bearer ${activeToken}` }
+      }).pipe(
+        catchError(() => of(null)),
+        finalize(() => {
+          this.clearSession();
+          this.isLoggingOut = false;
+          this.router.navigate(['/auth/login']);
+        })
+      ).subscribe();
+      return;
+    }
+
     this.clearSession();
     this.router.navigate(['/auth/login']);
   }
 
   private clearSession(): void {
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_KEY);
+    try {
+      localStorage.removeItem(this.TOKEN_KEY);
+      localStorage.removeItem(this.USER_KEY);
+    } catch {
+      // Ignore storage access errors
+    }
     this.token.set(null);
     this.currentUser.set(null);
     this.sessionVerified = false;
@@ -121,5 +163,4 @@ export class AuthService {
       return null;
     }
   }
-
 }
