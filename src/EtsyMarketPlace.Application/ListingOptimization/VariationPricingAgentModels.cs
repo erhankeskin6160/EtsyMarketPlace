@@ -33,7 +33,8 @@ public sealed record VariationPricingAgentRequestDto(
     decimal UsdTryRate = 50.45m,
     string? Provider = null,
     string? Model = null,
-    string? ApiKey = null
+    string? ApiKey = null,
+    bool? EnableVariations = null
 );
 
 public sealed class CompetitorPriceSampleDto
@@ -115,6 +116,7 @@ public sealed class PricedVariationRowDto
 
 public sealed class VariationPricingAgentResultDto
 {
+    public bool IsSingleProductPricing { get; set; }
     public bool UsedAi { get; set; }
     public string ProviderUsed { get; set; } = "Akıllı Fiyatlandırma Motoru";
     public string SearchKeywordUsed { get; set; } = string.Empty;
@@ -123,6 +125,11 @@ public sealed class VariationPricingAgentResultDto
     public decimal RecommendedBasePriceUsd { get; set; }
     public decimal RecommendedBaseShippingCostUsd { get; set; }
     public decimal AverageNetMarginPercent { get; set; }
+    public decimal RecommendedBreakEvenPriceUsd { get; set; }
+    public decimal RecommendedEtsyFeesUsd { get; set; }
+    public decimal RecommendedNetProfitUsd { get; set; }
+    public string RecommendedPricingTierLabel { get; set; } = string.Empty;
+    public string RecommendedPricingReasoning { get; set; } = string.Empty;
     public string StrategySummary { get; set; } = string.Empty;
     public string SuggestedVarType1 { get; set; } = string.Empty;
     public string SuggestedVarValues1 { get; set; } = string.Empty;

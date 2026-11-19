@@ -816,16 +816,38 @@
               </div>
             </div>
 
+            <!-- AI Varyasyon Analiz Özeti -->
+            <div *ngIf="variationAiAnalysis as va" class="var-ai-analysis-box" [class.has-warning]="!!va.warning">
+              <div class="var-ai-analysis-head">
+                <div class="var-ai-analysis-badges">
+                  <span class="var-ai-provider-pill">{{ va.usedAi ? '✨ Canlı AI' : '⚡ Ürün Motoru' }} · {{ va.provider }}{{ va.model ? (' (' + va.model + ')') : '' }}</span>
+                </div>
+                <button type="button" class="btn-dismiss-var-analysis" (click)="dismissVariationAiAnalysis()" aria-label="Analiz özetini kapat" title="Özeti kapat">×</button>
+              </div>
+              <p *ngIf="va.summary" class="var-ai-analysis-text">{{ va.summary }}</p>
+              <p *ngIf="va.warning" class="var-ai-analysis-warn">⚠️ {{ va.warning }}</p>
+            </div>
+
             <div *ngIf="enableVariations" class="var-options-box">
               <div class="field-wrap">
                 <div class="field-header-row">
                   <label>1. Varyasyon Tipi:</label>
-                  <div class="quick-preset-chips">
-                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Renk / Color'" (click)="setVarType(1, 'Renk / Color')">🎨 Renk</button>
-                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Boyut / Size'" (click)="setVarType(1, 'Boyut / Size')">📏 Boyut</button>
-                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Materyal / Material'" (click)="setVarType(1, 'Materyal / Material')">🪵 Materyal</button>
-                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Stil / Style'" (click)="setVarType(1, 'Stil / Style')">✨ Stil</button>
-                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Desen / Pattern'" (click)="setVarType(1, 'Desen / Pattern')">📐 Desen</button>
+                  <div class="var-group-header-right">
+                    <div class="quick-preset-chips">
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Renk / Color'" (click)="setVarType(1, 'Renk / Color')">🎨 Renk</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Boyut / Size'" (click)="setVarType(1, 'Boyut / Size')">📏 Boyut</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Materyal / Material'" (click)="setVarType(1, 'Materyal / Material')">🪵 Materyal</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Stil / Style'" (click)="setVarType(1, 'Stil / Style')">✨ Stil</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Desen / Pattern'" (click)="setVarType(1, 'Desen / Pattern')">📐 Desen</button>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn-remove-var-group"
+                      (click)="removeVariationGroup(1)"
+                      aria-label="1. varyasyon grubunu kaldır"
+                      title="1. varyasyon grubunu kaldır (2. grup varsa 1. sıraya taşınır)">
+                      ×
+                    </button>
                   </div>
                 </div>
                 <div class="var-type-input-box">
@@ -852,6 +874,19 @@
                   </datalist>
                 </div>
                 <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large (Virgülle ayırın)" />
+                <div *ngIf="varOptions1.length > 0" class="var-value-chips">
+                  <span *ngFor="let opt of varOptions1; let optIdx = index" class="var-value-chip">
+                    <span>{{ opt }}</span>
+                    <button
+                      type="button"
+                      class="btn-remove-var-chip"
+                      (click)="removeVariationOption(1, optIdx)"
+                      [attr.aria-label]="opt + ' seçeneğini kaldır'"
+                      title="Seçeneği kaldır">
+                      ×
+                    </button>
+                  </span>
+                </div>
               </div>
 
               <!-- 2. Varyasyon Grubu -->
@@ -863,12 +898,22 @@
               <div *ngIf="enableVar2" class="field-wrap">
                 <div class="field-header-row">
                   <label>2. Varyasyon Tipi:</label>
-                  <div class="quick-preset-chips">
-                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Renk / Color'" (click)="setVarType(2, 'Renk / Color')">🎨 Renk</button>
-                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Paketleme / Packaging'" (click)="setVarType(2, 'Paketleme / Packaging')">📦 Paketleme</button>
-                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Stil / Style'" (click)="setVarType(2, 'Stil / Style')">✨ Stil</button>
-                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Desen / Pattern'" (click)="setVarType(2, 'Desen / Pattern')">📐 Desen</button>
-                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Bitiş / Finish'" (click)="setVarType(2, 'Bitiş / Finish')">✨ Finish</button>
+                  <div class="var-group-header-right">
+                    <div class="quick-preset-chips">
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Renk / Color'" (click)="setVarType(2, 'Renk / Color')">🎨 Renk</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Paketleme / Packaging'" (click)="setVarType(2, 'Paketleme / Packaging')">📦 Paketleme</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Stil / Style'" (click)="setVarType(2, 'Stil / Style')">✨ Stil</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Desen / Pattern'" (click)="setVarType(2, 'Desen / Pattern')">📐 Desen</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Bitiş / Finish'" (click)="setVarType(2, 'Bitiş / Finish')">✨ Finish</button>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn-remove-var-group"
+                      (click)="removeVariationGroup(2)"
+                      aria-label="2. varyasyon grubunu kaldır"
+                      title="2. varyasyon grubunu kaldır">
+                      ×
+                    </button>
                   </div>
                 </div>
                 <div class="var-type-input-box">
@@ -895,6 +940,19 @@
                   </datalist>
                 </div>
                 <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın (Virgülle ayırın)" />
+                <div *ngIf="varOptions2.length > 0" class="var-value-chips">
+                  <span *ngFor="let opt of varOptions2; let optIdx = index" class="var-value-chip">
+                    <span>{{ opt }}</span>
+                    <button
+                      type="button"
+                      class="btn-remove-var-chip"
+                      (click)="removeVariationOption(2, optIdx)"
+                      [attr.aria-label]="opt + ' seçeneğini kaldır'"
+                      title="Seçeneği kaldır">
+                      ×
+                    </button>
+                  </span>
+                </div>
               </div>
 
               <!-- Custom Pricing & Stock Grid -->
@@ -927,10 +985,11 @@
                           <th style="width: 60px;">Fiyat ($)</th>
                           <th style="width: 50px;">Stok</th>
                           <th style="width: 72px;">Net Kalan</th>
+                          <th style="width: 28px;" aria-label="Kaldır"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr *ngFor="let r of variationRows">
+                        <tr *ngFor="let r of variationRows; let rowIdx = index">
                           <td class="var-key-cell">{{ r.key }}</td>
                           <td class="var-img-cell">
                             <div class="var-img-selector">
@@ -959,6 +1018,16 @@
                           <td class="var-net-cell notranslate" translate="no" *ngIf="getRowNetProfit(r) as rnp" [class.pos]="rnp.netRemainingUsd >= 0" [class.neg]="rnp.netRemainingUsd < 0">
                             <span class="var-net-usd">${{ rnp.netRemainingUsd.toFixed(2) }}</span>
                             <span class="var-net-pct">%{{ rnp.netMarginPercent.toFixed(0) }}</span>
+                          </td>
+                          <td class="var-remove-cell">
+                            <button
+                              type="button"
+                              class="btn-remove-var-row"
+                              (click)="removeVariationRow(rowIdx)"
+                              [attr.aria-label]="r.key + ' varyasyonunu kaldır'"
+                              title="Bu varyasyon satırını kaldır">
+                              ×
+                            </button>
                           </td>
                         </tr>
                       </tbody>
@@ -1395,6 +1464,10 @@
     <!-- 3. AI FİYAT & RAKİP AJANI -->
     <section class="drawer-section">
       <div class="drawer-sec-title">🤖 AI Fiyat, Rakip &amp; Varyasyon Ajanı</div>
+      <div class="agent-mode-pill" [class.is-variations]="hasPricingVariations">
+        <span *ngIf="!hasPricingVariations">📦 Tekil Ürün Modu (Varyasyon eklenmez)</span>
+        <span *ngIf="hasPricingVariations">🎨 Varyasyonlu Mod ({{ variationRows.length }} kombinasyon fiyatlanır)</span>
+      </div>
       <button
         type="button"
         id="runAiPricingAgentBtn"
@@ -1416,6 +1489,9 @@
           </span>
           <span class="agent-metric-chip accent">
             {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} ({{ agent.shippingBenchmark.estimatedDays }})
+          </span>
+          <span class="agent-metric-chip profit" *ngIf="agent.isSingleProductPricing">
+            Önerilen: ${{ agent.recommendedBasePriceUsd.toFixed(2) }} · Net: ${{ (agent.recommendedNetProfitUsd || 0).toFixed(2) }}
           </span>
           <span class="agent-metric-chip profit">
             Ort. Net Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}

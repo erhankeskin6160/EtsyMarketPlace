@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Application.Features.Listings.Validation;
 using System;
 using System.Linq;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
+using EtsyMarketPlace.Application.Features.Listings.Commands.SuggestListingVariations;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListingState;
 using EtsyMarketPlace.Application.Features.Listings.Images;
@@ -165,5 +166,22 @@ public sealed class AnalyzeListingImagesCommandValidator : AbstractValidator<Ana
         RuleFor(x => x.ListingId)
             .GreaterThan(0)
             .WithMessage("Görsel analizi için geçerli bir ilan kimliği belirtilmelidir.");
+    }
+}
+
+public sealed class SuggestListingVariationsCommandValidator : AbstractValidator<SuggestListingVariationsCommand>
+{
+    public SuggestListingVariationsCommandValidator()
+    {
+        RuleFor(x => x.Request)
+            .NotNull()
+            .WithMessage("Varyasyon öneri verileri boş olamaz.");
+
+        When(x => x.Request != null, () =>
+        {
+            RuleFor(x => x.Request)
+                .Must(r => !string.IsNullOrWhiteSpace(r.Title) || !string.IsNullOrWhiteSpace(r.Description))
+                .WithMessage("AI varyasyon önerisi için en az ürün başlığı veya açıklaması girilmelidir.");
+        });
     }
 }

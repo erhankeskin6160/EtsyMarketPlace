@@ -149,7 +149,24 @@ public class EtsyMarketController : BaseApiController
         [FromBody] AiLqsImprovementCommand command,
         CancellationToken cancellationToken = default)
     {
-        var response = await _mediator.Send(new ImproveListingLqsCommand(command), cancellationToken);
+        if (command == null)
+        {
+            return BadRequest(new { success = false, message = "LQS iyileştirme isteği boş olamaz." });
+        }
+
+        var isGeminiOrDefault = string.IsNullOrWhiteSpace(command.Provider)
+            || command.Provider.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+
+        var resolvedApiKey = !string.IsNullOrWhiteSpace(command.ApiKey)
+            ? command.ApiKey.Trim()
+            : isGeminiOrDefault && Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+                ? hKey.ToString().Trim()
+                : isGeminiOrDefault
+                    ? _config["Gemini:ApiKey"] ?? string.Empty
+                    : string.Empty;
+
+        var enriched = command with { ApiKey = resolvedApiKey };
+        var response = await _mediator.Send(new ImproveListingLqsCommand(enriched), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

@@ -136,7 +136,42 @@ public sealed class RunVariationPricingAgentHandlerTests
         Assert.True(result.Success);
         var data = Assert.IsType<VariationPricingAgentResultDto>(result.Data);
         Assert.True(data.UsedAi);
+        Assert.False(data.IsSingleProductPricing);
         Assert.All(data.PricedVariations, v => Assert.True(v.RecommendedPriceUsd >= v.BreakEvenPriceUsd));
+    }
+
+    [Fact]
+    public async Task Handle_WhenVariationsOmitted_RunsSingleProductModeWithoutCreatingVariations()
+    {
+        var marketService = new StubMarketResearchService(_ => new MarketSearchResponse
+        {
+            Listings =
+            [
+                new MarketListingItemDto { Id = 1, Title = "Desk Figurine A", PriceUsd = 28m },
+                new MarketListingItemDto { Id = 2, Title = "Desk Figurine B", PriceUsd = 34m },
+                new MarketListingItemDto { Id = 3, Title = "Desk Figurine C", PriceUsd = 42m }
+            ]
+        });
+
+        var handler = new RunVariationPricingAgentHandler(
+            marketService,
+            new StubShipmentOrchestratorService(),
+            new StubGeminiClient());
+
+        var result = await handler.Handle(new RunVariationPricingAgentCommand(new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Thinking Alien Desk Figurine",
+            BaseWeightGrams: 250,
+            ProductionCostUsd: 4m,
+            TargetNetMarginPercent: 30m
+        )), CancellationToken.None);
+
+        Assert.True(result.Success);
+        var data = Assert.IsType<VariationPricingAgentResultDto>(result.Data);
+        Assert.True(data.IsSingleProductPricing);
+        Assert.Empty(data.PricedVariations);
+        Assert.Empty(data.SuggestedVarValues1);
+        Assert.True(data.RecommendedBasePriceUsd > data.RecommendedBreakEvenPriceUsd);
     }
 
     private sealed class StubMarketResearchService(Func<MarketSearchQuery, MarketSearchResponse> responder) : IMarketResearchService

@@ -1517,7 +1517,7 @@ public sealed class MarketResearchService : IMarketResearchService
                 1. Title: 125-140 characters. Put high-search intent keywords first. Use readable separators (e.g. ' | ' or ' - '). No keyword stuffing.
                 2. Tags: Exactly 13 tags. Each tag MUST be 20 characters or fewer. Use 2-3 word long-tail phrases. No duplicate tags.
                 3. Description: Structured, high-converting product description. First 160 characters optimized for Google SEO meta description, followed by key features, dimensions, care guide, and why choose handmade.
-                4. Variations: Recommend 1-2 variation groups (e.g. Size, Color) with popular choices.
+                4. Variations: Analyze the listing title, description, materials, and category, then recommend 1-2 product-specific English variation groups (do NOT invent generic unrelated presets; preserve measurements/colors already in the listing if present).
                 5. Output strictly JSON with no markdown wrapping:
                 {
                   "optimized_title": "...",
@@ -1525,11 +1525,10 @@ public sealed class MarketResearchService : IMarketResearchService
                   "optimized_description": "...",
                   "suggested_materials": ["mat 1", "mat 2"],
                   "variations": [
-                    { "name": "Size", "values": ["Small (15cm)", "Medium (24cm)", "Large (30cm)"] },
-                    { "name": "Color", "values": ["Rainbow Silk", "Matte Black", "Metallic Bronze"] }
+                    { "name": "<Product-specific Etsy variation group name>", "values": ["<Option 1>", "<Option 2>", "<Option 3>"] }
                   ],
                   "audit_summary": "...",
-                  "improvement_highlights": ["Etiket sayısı 13'e tamamlandı", "Başlık 138 karaktere optimize edildi", "Varyasyon fiyatlandırması eklendi"]
+                  "improvement_highlights": ["Etiket sayısı 13'e tamamlandı", "Başlık 138 karaktere optimize edildi", "Ürüne özel varyasyon yapısı önerildi"]
                 }
                 """;
 
@@ -1717,18 +1716,28 @@ public sealed class MarketResearchService : IMarketResearchService
         sbDesc.AppendLine("- Securely cushioned and shipped in protective packaging.");
         sbDesc.AppendLine("- Tracking number provided promptly upon dispatch.");
 
-        var vars = new List<CompetitorVariationGroupDto>
-        {
-            new() { Name = "Boyut / Size", Values = ["Small (15 cm)", "Medium (24 cm)", "Large (30 cm)"] },
-            new() { Name = "Renk / Color", Values = ["Gökkuşağı / Rainbow", "Mat Siyah", "İpek Bronz"] }
-        };
+        var (suggestedHeuristicGroups, _) = ProductAwareVariationHeuristic.Suggest(
+            rawTitle,
+            command.Description,
+            category,
+            command.Tags,
+            command.Materials,
+            "physical");
+
+        var vars = suggestedHeuristicGroups
+            .Select(g => new CompetitorVariationGroupDto
+            {
+                Name = g.Name,
+                Values = g.Values
+            })
+            .ToList();
 
         var highlights = new List<string>
         {
             "Başlık 125-140 karakter aralığına ve yüksek arama hacimli kelimelere uyarlandı.",
             "13 Arama Etiketi (13/13) tamalandı; tüm etiketler 20 karakter altında ve 2-3 kelimelik long-tail formatına getirildi.",
             "Google SEO meta açıklaması ve maddeli ürün özellikleri eklendi.",
-            "Boyut ve Renk varyasyon yapısı ile satış dönüşüm oranı artırıldı."
+            "Ürün başlığı ve açıklamasına uygun varyasyon yapısı ile satış dönüşüm oranı artırıldı."
         };
 
         return new AiLqsImprovementResultDto

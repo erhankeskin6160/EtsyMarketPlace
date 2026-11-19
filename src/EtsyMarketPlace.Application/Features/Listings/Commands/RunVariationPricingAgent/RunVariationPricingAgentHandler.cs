@@ -24,6 +24,8 @@ public sealed class RunVariationPricingAgentHandler(
     IGeminiListingApiClient aiClient)
     : IRequestHandler<RunVariationPricingAgentCommand, ServiceResponse>
 {
+    private const string SingleProductSeedKey = "__SINGLE_PRODUCT__";
+
     private static readonly Regex DimensionRegex = new(
         @"(\d+(?:[.,]\d+)?)\s*(cm|mm|in(?:ch|ches)?|"")",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -112,9 +114,9 @@ public sealed class RunVariationPricingAgentHandler(
             Summary = $"Türkiye kesintileri (%16.92 + $0.31{(dto.IncludeOffsiteAds ? " + %15 Offsite Ads" : "")}) ve kargo düşülerek taban koruma bandı ${minFloor:F2}–${maxFloor:F2} olarak kilitlendi."
         });
 
-        // 5. Adım: LLM Stratejik Varyasyon Fiyatlandırması (anahtar yoksa veya hata olursa deterministik)
+        // 5. Adım: LLM Stratejik Fiyatlandırma (anahtar yoksa veya hata olursa deterministik)
         var (usedAi, providerLabel, strategySummary, llmOverrides) = await TryRunLlmPricingAsync(
-            dto, searchKeyword, marketBenchmark, shippingBenchmark, preparedRows, cancellationToken);
+            dto, searchKeyword, marketBenchmark, shippingBenchmark, preparedRows, variationPlan.IsSingleProduct, cancellationToken);
 
         var pricedRows = FinalizePricedVariations(
             preparedRows,
@@ -122,23 +124,47 @@ public sealed class RunVariationPricingAgentHandler(
             dto.IncludeOffsiteAds,
             usdTryRate);
 
-        var basePrice = pricedRows.Count > 0 ? pricedRows.Min(r => r.RecommendedPriceUsd) : 19.90m;
+        decimal basePrice;
+        decimal avgMargin;
         var baseShipping = shippingBenchmark.BaseShippingCostUsd;
-        var avgMargin = pricedRows.Count > 0
-            ? Math.Round(pricedRows.Average(r => r.NetMarginPercent), 1)
-            : targetMarginPct;
+        PricedVariationRowDto? anchorRow;
 
-        steps.Add(new VariationAgentStepDto
+        if (variationPlan.IsSingleProduct)
         {
-            StepNumber = 4,
-            ToolName = "LlmPricingStrategist",
-            Title = "LLM Varyasyon Fiyatlandırması",
-            Status = "completed",
-            Summary = $"{pricedRows.Count} varyasyon {providerLabel} ile fiyatlandı: taban ${basePrice:F2}, ort. net marj %{avgMargin:F1}."
-        });
+            anchorRow = pricedRows.FirstOrDefault();
+            basePrice = anchorRow?.RecommendedPriceUsd ?? 19.90m;
+            avgMargin = anchorRow?.NetMarginPercent ?? targetMarginPct;
+
+            steps.Add(new VariationAgentStepDto
+            {
+                StepNumber = 4,
+                ToolName = "LlmPricingStrategist",
+                Title = "LLM Tekil Ürün Fiyatlandırması",
+                Status = "completed",
+                Summary = $"Tekil ürün (varyasyonsuz) {providerLabel} ile fiyatlandı: önerilen ${basePrice:F2}, net kâr ${(anchorRow?.NetProfitUsd ?? 0m):F2} (%{avgMargin:F1} net marj)."
+            });
+        }
+        else
+        {
+            anchorRow = pricedRows.OrderBy(r => r.RecommendedPriceUsd).FirstOrDefault();
+            basePrice = anchorRow?.RecommendedPriceUsd ?? 19.90m;
+            avgMargin = pricedRows.Count > 0
+                ? Math.Round(pricedRows.Average(r => r.NetMarginPercent), 1)
+                : targetMarginPct;
+
+            steps.Add(new VariationAgentStepDto
+            {
+                StepNumber = 4,
+                ToolName = "LlmPricingStrategist",
+                Title = "LLM Varyasyon Fiyatlandırması",
+                Status = "completed",
+                Summary = $"{pricedRows.Count} varyasyon {providerLabel} ile fiyatlandı: taban ${basePrice:F2}, ort. net marj %{avgMargin:F1}."
+            });
+        }
 
         var result = new VariationPricingAgentResultDto
         {
+            IsSingleProductPricing = variationPlan.IsSingleProduct,
             UsedAi = usedAi,
             ProviderUsed = providerLabel,
             SearchKeywordUsed = searchKeyword,
@@ -147,14 +173,19 @@ public sealed class RunVariationPricingAgentHandler(
             RecommendedBasePriceUsd = basePrice,
             RecommendedBaseShippingCostUsd = baseShipping,
             AverageNetMarginPercent = avgMargin,
+            RecommendedBreakEvenPriceUsd = anchorRow?.BreakEvenPriceUsd ?? 0m,
+            RecommendedEtsyFeesUsd = anchorRow?.EtsyFeesUsd ?? 0m,
+            RecommendedNetProfitUsd = anchorRow?.NetProfitUsd ?? 0m,
+            RecommendedPricingTierLabel = anchorRow?.PricingTierLabel ?? string.Empty,
+            RecommendedPricingReasoning = anchorRow?.Reasoning ?? string.Empty,
             StrategySummary = strategySummary,
-            SuggestedVarType1 = variationPlan.VarType1,
-            SuggestedVarValues1 = variationPlan.VarValues1,
-            SuggestedEnableVar2 = variationPlan.EnableVar2,
-            SuggestedVarType2 = variationPlan.VarType2,
-            SuggestedVarValues2 = variationPlan.VarValues2,
+            SuggestedVarType1 = variationPlan.IsSingleProduct ? string.Empty : variationPlan.VarType1,
+            SuggestedVarValues1 = variationPlan.IsSingleProduct ? string.Empty : variationPlan.VarValues1,
+            SuggestedEnableVar2 = !variationPlan.IsSingleProduct && variationPlan.EnableVar2,
+            SuggestedVarType2 = variationPlan.IsSingleProduct ? string.Empty : variationPlan.VarType2,
+            SuggestedVarValues2 = variationPlan.IsSingleProduct ? string.Empty : variationPlan.VarValues2,
             AgentSteps = steps,
-            PricedVariations = pricedRows
+            PricedVariations = variationPlan.IsSingleProduct ? [] : pricedRows
         };
 
         return ServiceResponse.CreateSuccess("AI Fiyat, Rakip ve Kargo Ajanı analizini tamamladı.", result);
@@ -437,6 +468,7 @@ public sealed class RunVariationPricingAgentHandler(
     }
 
     private static (
+        bool IsSingleProduct,
         string VarType1,
         string VarValues1,
         bool EnableVar2,
@@ -444,6 +476,19 @@ public sealed class RunVariationPricingAgentHandler(
         string VarValues2,
         List<VariationSeed> Seeds) BuildVariationPlan(VariationPricingAgentRequestDto dto, int baseWeightGrams)
     {
+        if (dto.EnableVariations == false)
+        {
+            return (
+                true,
+                string.Empty,
+                string.Empty,
+                false,
+                string.Empty,
+                string.Empty,
+                [new VariationSeed(SingleProductSeedKey, baseWeightGrams, 1.0, 1.0)]
+            );
+        }
+
         var varType1 = dto.VariationType1?.Trim() ?? string.Empty;
         var varValues1 = dto.VariationValues1?.Trim() ?? string.Empty;
         var enableVar2 = dto.EnableVariation2;
@@ -479,17 +524,15 @@ public sealed class RunVariationPricingAgentHandler(
 
         if (rawKeys.Count == 0)
         {
-            varType1 = string.IsNullOrWhiteSpace(varType1) ? "Boyut / Size" : varType1;
-            varValues1 = "Small (15 cm), Medium (24 cm), Large (30 cm)";
-            enableVar2 = true;
-            varType2 = string.IsNullOrWhiteSpace(varType2) ? "Renk / Color" : varType2;
-            varValues2 = "Mat Siyah, Gökkuşağı / Rainbow, İpek Bronz";
-
-            foreach (var s in SplitValues(varValues1))
-            {
-                foreach (var c in SplitValues(varValues2))
-                    rawKeys.Add($"{s} / {c}");
-            }
+            return (
+                true,
+                string.Empty,
+                string.Empty,
+                false,
+                string.Empty,
+                string.Empty,
+                [new VariationSeed(SingleProductSeedKey, baseWeightGrams, 1.0, 1.0)]
+            );
         }
 
         // First pass: extract explicit cm sizes across all variations for proportional scaling
@@ -509,7 +552,7 @@ public sealed class RunVariationPricingAgentHandler(
             seeds.Add(new VariationSeed(key, estWeight, weightScale, qualityScale));
         }
 
-        return (varType1, varValues1, enableVar2, varType2, varValues2, seeds);
+        return (false, varType1, varValues1, enableVar2, varType2, varValues2, seeds);
     }
 
     private static List<PreparedVariationModel> PrepareVariationBreakEvenModels(
@@ -565,25 +608,51 @@ public sealed class RunVariationPricingAgentHandler(
         VariationMarketBenchmarkDto market,
         VariationShippingBenchmarkDto shipping,
         IReadOnlyList<PreparedVariationModel> preparedRows,
+        bool isSingleProduct,
         CancellationToken cancellationToken)
     {
         var apiKey = dto.ApiKey?.Trim() ?? string.Empty;
         var provider = string.IsNullOrWhiteSpace(dto.Provider) ? "Akıllı Fiyatlandırma Motoru" : dto.Provider.Trim();
-        var model = string.IsNullOrWhiteSpace(dto.Model) ? "gemini-2.5-flash" : dto.Model.Trim();
+        var model = ResolveDefaultModel(provider, dto.Model);
 
         if (string.IsNullOrWhiteSpace(apiKey) ||
             string.Equals(provider, "Offline", StringComparison.OrdinalIgnoreCase))
         {
-            var offlineSummary = market.CompetitorCount > 0
-                ? $"'{keyword}' aramasında {market.CompetitorCount} Etsy rakibi (Medyan ${market.MedianPriceUsd:F2}) ve {shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}) analiz edilerek tüm varyasyonlar %{dto.TargetNetMarginPercent:F0} hedef net marj ve başabaş kalkanı ile fiyatlandı."
-                : $"{shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}), Türkiye Etsy komisyon kesintileri ve boyut/kalite ölçeği baz alınarak zararsız kademeli varyasyon fiyatları oluşturuldu.";
+            var offlineSummary = isSingleProduct
+                ? (market.CompetitorCount > 0
+                    ? $"'{keyword}' aramasında {market.CompetitorCount} Etsy rakibi (Medyan ${market.MedianPriceUsd:F2}) ve {shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}) analiz edilerek tekil ürün için %{dto.TargetNetMarginPercent:F0} hedef net marj ve başabaş kalkanı ile fiyat belirlendi."
+                    : $"{shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}), Türkiye Etsy komisyon kesintileri ve hedef net marj baz alınarak zararsız tekil ürün fiyatı hesaplandı.")
+                : (market.CompetitorCount > 0
+                    ? $"'{keyword}' aramasında {market.CompetitorCount} Etsy rakibi (Medyan ${market.MedianPriceUsd:F2}) ve {shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}) analiz edilerek tüm varyasyonlar %{dto.TargetNetMarginPercent:F0} hedef net marj ve başabaş kalkanı ile fiyatlandı."
+                    : $"{shipping.SelectedCarrierName} kargo teklifi (${shipping.BaseShippingCostUsd:F2}), Türkiye Etsy komisyon kesintileri ve boyut/kalite ölçeği baz alınarak zararsız kademeli varyasyon fiyatları oluşturuldu.");
 
             return (false, "Akıllı Finansal Fiyat Motoru", offlineSummary, new Dictionary<string, LlmVariationOverride>(StringComparer.OrdinalIgnoreCase));
         }
 
         try
         {
-            const string systemPrompt = """
+            const string singleSystemPrompt = """
+                You are an expert Etsy Pricing Strategist and E-Commerce Profit Agent for Turkish Etsy sellers.
+                This listing is a SINGLE-SKU product with NO variations.
+                Your task is to determine ONE optimal USD sale price using:
+                1. Real competitor market prices on Etsy (if available),
+                2. Real international shipping quote from the logistics module,
+                3. Etsy Turkey seller fees (16.92% + $0.31, plus 15% Offsite Ads if enabled) and the strict break-even floor price.
+
+                CRITICAL RULES:
+                - NEVER invent, suggest, or mention product variations, sizes, or colors.
+                - NEVER recommend `price_usd` lower than `floor_price_usd`.
+                - Keep Turkish concise `tier_label` (2-4 words), `reasoning` (1 short sentence), and `strategy_summary` (1-2 Turkish sentences).
+                - Output ONLY strict JSON with no markdown code fences:
+                {
+                  "strategy_summary": "Turkish summary of single-product pricing logic (1-2 sentences)",
+                  "price_usd": 24.90,
+                  "tier_label": "Hedef Net Marj",
+                  "reasoning": "Kargo $X ve Etsy kesintileri sonrası %Y net marj bırakır."
+                }
+                """;
+
+            const string variationSystemPrompt = """
                 You are an expert Etsy Pricing Strategist and E-Commerce Profit Agent for Turkish Etsy sellers.
                 Your task is to determine optimal USD prices for every product variation using:
                 1. Real competitor market prices on Etsy (if available),
@@ -592,7 +661,7 @@ public sealed class RunVariationPricingAgentHandler(
 
                 CRITICAL RULES:
                 - NEVER recommend a price_usd lower than that variation's `floor_price_usd`.
-                - Use strategic Etsy tiering: entry/small options can act as attractive CTR anchor prices (still strictly >= `floor_price_usd`), while larger sizes or premium finishes (Rainbow, Silk, Metallic, Gold, Personalized, Multi-packs) step up smoothly to cover extra cargo weight and protect target net profit margin.
+                - Use strategic Etsy tiering: entry/small options can act as attractive CTR anchor prices (still strictly >= `floor_price_usd`), while larger sizes or premium finishes step up smoothly to cover extra cargo weight and protect target net profit margin.
                 - Keep Turkish concise `tier_label` (2-4 words) and `reasoning` (1 short sentence).
                 - Output ONLY strict JSON with no markdown code fences:
                 {
@@ -608,65 +677,115 @@ public sealed class RunVariationPricingAgentHandler(
                 }
                 """;
 
-            var promptModel = new
-            {
-                product = new
+            var singleRow = preparedRows.FirstOrDefault();
+            object promptModel = isSingleProduct
+                ? new
                 {
-                    title = dto.Title,
-                    category = dto.Category,
-                    materials = dto.Materials,
-                    target_country = shipping.TargetCountryCode,
-                    target_net_margin_pct = dto.TargetNetMarginPercent,
-                    production_cost_usd = dto.ProductionCostUsd,
-                    include_offsite_ads = dto.IncludeOffsiteAds
-                },
-                market_benchmark = new
+                    mode = "single_product_no_variations",
+                    product = new
+                    {
+                        title = dto.Title,
+                        category = dto.Category,
+                        materials = dto.Materials,
+                        target_country = shipping.TargetCountryCode,
+                        target_net_margin_pct = dto.TargetNetMarginPercent,
+                        production_cost_usd = dto.ProductionCostUsd,
+                        include_offsite_ads = dto.IncludeOffsiteAds
+                    },
+                    market_benchmark = new
+                    {
+                        search_keyword = keyword,
+                        competitor_count = market.CompetitorCount,
+                        min_usd = market.MinPriceUsd,
+                        median_usd = market.MedianPriceUsd,
+                        average_usd = market.AveragePriceUsd,
+                        p75_usd = market.P75PriceUsd,
+                        max_usd = market.MaxPriceUsd,
+                        free_shipping_pct = market.FreeShippingRatioPct,
+                        free_shipping_median_usd = market.FreeShippingMedianUsd,
+                        paid_shipping_median_usd = market.PaidShippingMedianUsd,
+                        top_competitors = market.TopCompetitors.Select(c => new { c.Title, c.PriceUsd, c.ShopSales, c.HasFreeShipping })
+                    },
+                    shipping_benchmark = new
+                    {
+                        carrier = shipping.SelectedCarrierName,
+                        service = shipping.SelectedServiceName,
+                        base_shipping_usd = shipping.BaseShippingCostUsd,
+                        hs_code = shipping.HsCodeUsed
+                    },
+                    single_sku_guardrails = new
+                    {
+                        estimated_weight_grams = singleRow?.Seed.EstimatedWeightGrams ?? dto.BaseWeightGrams,
+                        shipping_cost_usd = singleRow?.ShippingUsd ?? shipping.BaseShippingCostUsd,
+                        break_even_usd = singleRow?.BreakEvenUsd ?? 0m,
+                        floor_price_usd = singleRow?.FloorPriceUsd ?? 0m,
+                        initial_suggested_usd = singleRow?.SuggestedPriceUsd ?? 0m
+                    }
+                }
+                : new
                 {
-                    search_keyword = keyword,
-                    competitor_count = market.CompetitorCount,
-                    min_usd = market.MinPriceUsd,
-                    median_usd = market.MedianPriceUsd,
-                    average_usd = market.AveragePriceUsd,
-                    p75_usd = market.P75PriceUsd,
-                    max_usd = market.MaxPriceUsd,
-                    free_shipping_pct = market.FreeShippingRatioPct,
-                    free_shipping_median_usd = market.FreeShippingMedianUsd,
-                    paid_shipping_median_usd = market.PaidShippingMedianUsd,
-                    top_competitors = market.TopCompetitors.Select(c => new { c.Title, c.PriceUsd, c.ShopSales, c.HasFreeShipping })
-                },
-                shipping_benchmark = new
-                {
-                    carrier = shipping.SelectedCarrierName,
-                    service = shipping.SelectedServiceName,
-                    base_shipping_usd = shipping.BaseShippingCostUsd,
-                    hs_code = shipping.HsCodeUsed
-                },
-                variations = preparedRows.Take(40).Select(r => new
-                {
-                    key = r.Seed.Key,
-                    estimated_weight_grams = r.Seed.EstimatedWeightGrams,
-                    shipping_cost_usd = r.ShippingUsd,
-                    break_even_usd = r.BreakEvenUsd,
-                    floor_price_usd = r.FloorPriceUsd,
-                    initial_suggested_usd = r.SuggestedPriceUsd
-                })
-            };
+                    product = new
+                    {
+                        title = dto.Title,
+                        category = dto.Category,
+                        materials = dto.Materials,
+                        target_country = shipping.TargetCountryCode,
+                        target_net_margin_pct = dto.TargetNetMarginPercent,
+                        production_cost_usd = dto.ProductionCostUsd,
+                        include_offsite_ads = dto.IncludeOffsiteAds
+                    },
+                    market_benchmark = new
+                    {
+                        search_keyword = keyword,
+                        competitor_count = market.CompetitorCount,
+                        min_usd = market.MinPriceUsd,
+                        median_usd = market.MedianPriceUsd,
+                        average_usd = market.AveragePriceUsd,
+                        p75_usd = market.P75PriceUsd,
+                        max_usd = market.MaxPriceUsd,
+                        free_shipping_pct = market.FreeShippingRatioPct,
+                        free_shipping_median_usd = market.FreeShippingMedianUsd,
+                        paid_shipping_median_usd = market.PaidShippingMedianUsd,
+                        top_competitors = market.TopCompetitors.Select(c => new { c.Title, c.PriceUsd, c.ShopSales, c.HasFreeShipping })
+                    },
+                    shipping_benchmark = new
+                    {
+                        carrier = shipping.SelectedCarrierName,
+                        service = shipping.SelectedServiceName,
+                        base_shipping_usd = shipping.BaseShippingCostUsd,
+                        hs_code = shipping.HsCodeUsed
+                    },
+                    variations = preparedRows.Take(40).Select(r => new
+                    {
+                        key = r.Seed.Key,
+                        estimated_weight_grams = r.Seed.EstimatedWeightGrams,
+                        shipping_cost_usd = r.ShippingUsd,
+                        break_even_usd = r.BreakEvenUsd,
+                        floor_price_usd = r.FloorPriceUsd,
+                        initial_suggested_usd = r.SuggestedPriceUsd
+                    })
+                };
 
+            var systemPrompt = isSingleProduct ? singleSystemPrompt : variationSystemPrompt;
             var userPrompt = JsonSerializer.Serialize(promptModel);
             var (success, content, _) = await aiClient.GenerateOptimizationJsonAsync(
                 systemPrompt, userPrompt, model, apiKey, cancellationToken);
 
             if (success && !string.IsNullOrWhiteSpace(content))
             {
-                var parsed = ParseLlmPricingResponse(content);
+                var parsed = ParseLlmPricingResponse(content, isSingleProduct);
                 if (parsed.Overrides.Count > 0)
                 {
                     var label = model.Contains(provider, StringComparison.OrdinalIgnoreCase)
                         ? model
                         : $"{provider} ({model})";
 
+                    var fallbackSummary = isSingleProduct
+                        ? $"{label} ile tekil ürün rakip verisi ve {shipping.SelectedCarrierName} kargo tarifesine göre fiyatlandı."
+                        : $"{label} ile {preparedRows.Count} varyasyon rakip verisi ve {shipping.SelectedCarrierName} kargo tarifesine göre fiyatlandı.";
+
                     var summary = string.IsNullOrWhiteSpace(parsed.Summary)
-                        ? $"{label} ile {preparedRows.Count} varyasyon rakip verisi ve {shipping.SelectedCarrierName} kargo tarifesine göre fiyatlandı."
+                        ? fallbackSummary
                         : parsed.Summary;
 
                     return (true, label, summary, parsed.Overrides);
@@ -681,8 +800,25 @@ public sealed class RunVariationPricingAgentHandler(
         return (
             false,
             $"{provider} Yedeği (Finansal Motor)",
-            $"{shipping.SelectedCarrierName} kargo (${shipping.BaseShippingCostUsd:F2}) ve başabaş kalkanı ile güvenli kademeli fiyatlandırma uygulandı.",
+            isSingleProduct
+                ? $"{shipping.SelectedCarrierName} kargo (${shipping.BaseShippingCostUsd:F2}) ve başabaş kalkanı ile güvenli tekil ürün fiyatı uygulandı."
+                : $"{shipping.SelectedCarrierName} kargo (${shipping.BaseShippingCostUsd:F2}) ve başabaş kalkanı ile güvenli kademeli fiyatlandırma uygulandı.",
             new Dictionary<string, LlmVariationOverride>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static string ResolveDefaultModel(string provider, string? requestedModel)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedModel))
+            return requestedModel.Trim();
+
+        return provider.Trim().ToLowerInvariant() switch
+        {
+            "deepseek" => "deepseek-chat",
+            "openai" => "gpt-4o-mini",
+            "claude" => "claude-3-7-sonnet-20250219",
+            "grok" => "grok-3",
+            _ => "gemini-2.5-flash"
+        };
     }
 
     private static List<PricedVariationRowDto> FinalizePricedVariations(
@@ -729,13 +865,22 @@ public sealed class RunVariationPricingAgentHandler(
         return results;
     }
 
-    private static (string Summary, Dictionary<string, LlmVariationOverride> Overrides) ParseLlmPricingResponse(string rawContent)
+    private static (string Summary, Dictionary<string, LlmVariationOverride> Overrides) ParseLlmPricingResponse(
+        string rawContent,
+        bool isSingleProduct)
     {
         var clean = rawContent.Trim();
         if (clean.StartsWith("```json", StringComparison.OrdinalIgnoreCase)) clean = clean[7..];
         if (clean.StartsWith("```")) clean = clean[3..];
         if (clean.EndsWith("```")) clean = clean[..^3];
         clean = clean.Trim();
+
+        var firstBrace = clean.IndexOf('{');
+        var lastBrace = clean.LastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace)
+        {
+            clean = clean[firstBrace..(lastBrace + 1)];
+        }
 
         var overrides = new Dictionary<string, LlmVariationOverride>(StringComparer.OrdinalIgnoreCase);
         using var doc = JsonDocument.Parse(clean);
@@ -745,23 +890,31 @@ public sealed class RunVariationPricingAgentHandler(
             ? (ss.GetString() ?? string.Empty).Trim()
             : string.Empty;
 
+        if (isSingleProduct)
+        {
+            var singlePrice = ReadDecimalProperty(root, "price_usd");
+            if (singlePrice > 0m)
+            {
+                var label = root.TryGetProperty("tier_label", out var lEl) && lEl.ValueKind == JsonValueKind.String
+                    ? (lEl.GetString() ?? string.Empty).Trim()
+                    : string.Empty;
+                var reason = root.TryGetProperty("reasoning", out var rEl) && rEl.ValueKind == JsonValueKind.String
+                    ? (rEl.GetString() ?? string.Empty).Trim()
+                    : string.Empty;
+                overrides[SingleProductSeedKey] = new LlmVariationOverride(singlePrice, label, reason);
+            }
+        }
+
         if (root.TryGetProperty("variations", out var varArr) && varArr.ValueKind == JsonValueKind.Array)
         {
+            LlmVariationOverride? firstSingleFallback = null;
             foreach (var item in varArr.EnumerateArray())
             {
                 var key = item.TryGetProperty("key", out var kEl) && kEl.ValueKind == JsonValueKind.String
                     ? (kEl.GetString() ?? string.Empty).Trim()
                     : string.Empty;
 
-                decimal price = 0m;
-                if (item.TryGetProperty("price_usd", out var pEl))
-                {
-                    if (pEl.ValueKind == JsonValueKind.Number && pEl.TryGetDecimal(out var dec))
-                        price = dec;
-                    else if (pEl.ValueKind == JsonValueKind.String &&
-                             decimal.TryParse(pEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedDec))
-                        price = parsedDec;
-                }
+                var price = ReadDecimalProperty(item, "price_usd");
 
                 var label = item.TryGetProperty("tier_label", out var lEl) && lEl.ValueKind == JsonValueKind.String
                     ? (lEl.GetString() ?? string.Empty).Trim()
@@ -770,14 +923,39 @@ public sealed class RunVariationPricingAgentHandler(
                     ? (rEl.GetString() ?? string.Empty).Trim()
                     : string.Empty;
 
-                if (!string.IsNullOrWhiteSpace(key) && price > 0m)
+                if (price > 0m)
                 {
-                    overrides[key] = new LlmVariationOverride(price, label, reason);
+                    var ov = new LlmVariationOverride(price, label, reason);
+                    firstSingleFallback ??= ov;
+                    if (!string.IsNullOrWhiteSpace(key))
+                    {
+                        overrides[key] = ov;
+                    }
                 }
+            }
+
+            if (isSingleProduct && !overrides.ContainsKey(SingleProductSeedKey) && firstSingleFallback is not null)
+            {
+                overrides[SingleProductSeedKey] = firstSingleFallback;
             }
         }
 
         return (summary, overrides);
+    }
+
+    private static decimal ReadDecimalProperty(JsonElement obj, string propName)
+    {
+        if (!obj.TryGetProperty(propName, out var pEl))
+            return 0m;
+
+        if (pEl.ValueKind == JsonValueKind.Number && pEl.TryGetDecimal(out var dec))
+            return dec;
+
+        if (pEl.ValueKind == JsonValueKind.String &&
+            decimal.TryParse(pEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedDec))
+            return parsedDec;
+
+        return 0m;
     }
 
     private static (decimal TotalFeesUsd, decimal NetProfitUsd, decimal NetMarginPct) CalculateEtsyFeesAndNet(
