@@ -182,6 +182,10 @@ public sealed class SuggestListingVariationsCommandValidator : AbstractValidator
             RuleFor(x => x.Request)
                 .Must(r => !string.IsNullOrWhiteSpace(r.Title) || !string.IsNullOrWhiteSpace(r.Description))
                 .WithMessage("AI varyasyon önerisi için en az ürün başlığı veya açıklaması girilmelidir.");
+
+            RuleFor(x => x.Request.PriceUsd)
+                .GreaterThanOrEqualTo(0m)
+                .WithMessage("Ürün taban fiyatı negatif olamaz.");
         });
     }
 }

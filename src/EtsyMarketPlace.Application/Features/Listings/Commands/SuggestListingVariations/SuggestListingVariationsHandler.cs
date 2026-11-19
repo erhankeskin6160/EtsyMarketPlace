@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Common.Models;
@@ -16,6 +17,12 @@ namespace EtsyMarketPlace.Application.Features.Listings.Commands.SuggestListingV
 public sealed class SuggestListingVariationsHandler(IGeminiListingApiClient aiClient)
     : IRequestHandler<SuggestListingVariationsCommand, ServiceResponse>
 {
+    private static readonly JsonSerializerOptions PromptJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private static readonly Regex MultiWhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
     public async Task<ServiceResponse> Handle(SuggestListingVariationsCommand request, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
@@ -95,10 +102,7 @@ public sealed class SuggestListingVariationsHandler(IGeminiListingApiClient aiCl
                 current_variations = currentVariations
             };
 
-            var userPrompt = JsonSerializer.Serialize(promptModel, new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            });
+            var userPrompt = JsonSerializer.Serialize(promptModel, PromptJsonOptions);
             var (success, content, errorMessage) = await aiClient.GenerateOptimizationJsonAsync(
                 systemPrompt, userPrompt, model, apiKey, cancellationToken);
 
@@ -250,7 +254,7 @@ public sealed class SuggestListingVariationsHandler(IGeminiListingApiClient aiCl
                     foreach (var valEl in valArr.EnumerateArray())
                     {
                         var valStr = valEl.ValueKind == JsonValueKind.String
-                            ? (valEl.GetString() ?? string.Empty).Trim()
+                            ? SanitizeOptionValue(valEl.GetString() ?? string.Empty)
                             : string.Empty;
 
                         if (!string.IsNullOrWhiteSpace(valStr) && seenVals.Add(valStr) && values.Count < 5)
@@ -276,6 +280,17 @@ public sealed class SuggestListingVariationsHandler(IGeminiListingApiClient aiCl
         }
 
         return (analysisSummary, groups, multipliers);
+    }
+
+    private static string SanitizeOptionValue(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+
+        var sanitized = Regex.Replace(raw, @"\s*/\s*", " - ");
+        sanitized = Regex.Replace(sanitized, @"\s*,\s*", " & ");
+        sanitized = MultiWhitespaceRegex.Replace(sanitized, " ").Trim();
+        return sanitized;
     }
 
     private static string ResolveDefaultModel(string provider, string? requestedModel)
