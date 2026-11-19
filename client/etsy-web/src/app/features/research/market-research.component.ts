@@ -975,7 +975,7 @@ export class MarketResearchComponent implements OnInit {
       topShopSales: this.topShopSales || 0,
       topCompetitorTitles,
       topTags: topTagList,
-      apiKey: this.aiService.settings().geminiApiKey || undefined,
+      apiKey: this.aiService.getActiveApiKey() || undefined,
       model: this.aiService.activeModelName(),
       provider: this.aiService.activeProvider()
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({

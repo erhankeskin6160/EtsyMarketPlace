@@ -78,11 +78,16 @@ public class EtsyMarketController : BaseApiController
         }
 
         var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var isGeminiOrDefault = string.IsNullOrWhiteSpace(request.Provider)
+            || request.Provider.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+
         var apiKey = !string.IsNullOrWhiteSpace(request.ApiKey)
             ? request.ApiKey.Trim()
-            : Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+            : isGeminiOrDefault && Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
                 ? hKey.ToString().Trim()
-                : _config["Gemini:ApiKey"] ?? string.Empty;
+                : isGeminiOrDefault
+                    ? _config["Gemini:ApiKey"] ?? string.Empty
+                    : string.Empty;
 
         var command = new MarketAiReportCommand(
             Keyword: request.Keyword,

@@ -307,6 +307,47 @@ public sealed class RunVariationPricingAgentTests
         Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
     }
 
+    [Fact]
+    public async Task Agent_DoesNotFalseMatchLedOrPossessiveSInVariationKeys()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "Ceramic Vase",
+            Total = 0,
+            Listings = []
+        });
+        var shippingStub = new StubShipmentOrchestratorService();
+        var llmStub = new StubGeminiListingApiClient(string.Empty);
+
+        var handler = new RunVariationPricingAgentHandler(marketStub, shippingStub, llmStub);
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Ceramic Glazed Vase",
+            EnableVariations: true,
+            ExistingVariations:
+            [
+                new("Women's Medium / Speckled White", 0m, 5, true),
+                new("Standard Medium / Matte White", 0m, 5, true)
+            ],
+            BaseWeightGrams: 300,
+            ProductionCostUsd: 2.50m,
+            TargetNetMarginPercent: 30m,
+            UsdTryRate: 50.0m);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.Equal(2, result.PricedVariations.Count);
+
+        var speckledRow = result.PricedVariations.Single(v => v.Key.StartsWith("Women's"));
+        var standardRow = result.PricedVariations.Single(v => v.Key.StartsWith("Standard"));
+
+        // "'s" must not trigger 0.80x Small weight scaling, and "speckled" must not trigger 1.18x LED premium
+        Assert.Equal(standardRow.EstimatedWeightGrams, speckledRow.EstimatedWeightGrams);
+        Assert.Equal(standardRow.RecommendedPriceUsd, speckledRow.RecommendedPriceUsd);
+    }
+
     private sealed class StubMarketResearchService(MarketSearchResponse searchResult) : IMarketResearchService
     {
         public Task<MarketSearchResponse> SearchMarketAsync(MarketSearchQuery query, CancellationToken cancellationToken = default)

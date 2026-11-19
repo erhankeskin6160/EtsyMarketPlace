@@ -1818,6 +1818,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.customVariationPricing = true;
     } else {
       this.selectedProfitVariationKey = '__base__';
+      if (this.variationAiAnalysis && !this.variationAiAnalysis.warning) {
+        this.variationAiAnalysis = null;
+      }
     }
     this.rebuildVariationGrid();
     if (this.isVariationPricingActive) {
@@ -2768,6 +2771,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (variationsPayload && builtGroups.length === 2 && this.excludedVariationKeys.length > 0) {
       const existingLower = new Set(variationsPayload.map(v => v.key.trim().toLowerCase()));
       const excludedSet = new Set(this.excludedVariationKeys.map(k => k.trim().toLowerCase()));
+      const fallbackInactiveQty = Math.max(1, Number(variationsPayload[0]?.quantity) || 1);
       for (const v1 of builtGroups[0].values) {
         for (const v2 of builtGroups[1].values) {
           const comboKey = `${v1} / ${v2}`;
@@ -2776,7 +2780,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
             variationsPayload.push({
               key: comboKey,
               price: effectivePrice,
-              quantity: 1,
+              quantity: fallbackInactiveQty,
               active: false,
               imageRank: undefined
             });

@@ -34,11 +34,11 @@ public sealed class RunVariationPricingAgentHandler(
 
     private static readonly Regex DimensionRegex = new(
         @"(\d+(?:[.,]\d+)?)\s*(cm|mm|in(?:ch|ches)?|"")",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex PackCountRegex = new(
         @"(?:(\d+)\s*(?:pcs|pieces|pack|adet|set|'lı|'li|'lü)|(?:set\s+of|pack\s+of)\s+(\d+))",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -1051,7 +1051,7 @@ public sealed class RunVariationPricingAgentHandler(
                 sizeScale = 1.55;
             else if (Regex.IsMatch(lower, @"\b(large|l|büyük)\b"))
                 sizeScale = 1.30;
-            else if (Regex.IsMatch(lower, @"\b(small|s|küçük|mini|xs)\b"))
+            else if (Regex.IsMatch(lower, @"(?<!['’])\b(small|s|küçük|mini|xs)\b"))
                 sizeScale = 0.80;
         }
 
@@ -1071,7 +1071,7 @@ public sealed class RunVariationPricingAgentHandler(
     private static double ResolveQualityTierScale(string key)
     {
         var lower = key.ToLowerInvariant();
-        if (lower.Contains("custom") || lower.Contains("kişisel") || lower.Contains("personal") || lower.Contains("led"))
+        if (lower.Contains("custom") || lower.Contains("kişisel") || lower.Contains("personal") || Regex.IsMatch(lower, @"\bled\b"))
             return 1.18;
         if (lower.Contains("rainbow") || lower.Contains("gökkuşa") || lower.Contains("silk") || lower.Contains("ipek") ||
             lower.Contains("metallic") || lower.Contains("chrome") || lower.Contains("krom") || lower.Contains("glow") ||

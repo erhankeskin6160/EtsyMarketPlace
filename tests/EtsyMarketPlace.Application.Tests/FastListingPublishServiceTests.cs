@@ -355,4 +355,98 @@ public sealed class FastListingPublishServiceTests
         Assert.NotNull(fakeClient.LastDraftRequest);
         Assert.Null(fakeClient.LastDraftRequest!.ReturnPolicyId);
     }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenVariationsContainDuplicateKeys_DoesNotThrowAndUsesFirstMatch()
+    {
+        var fakeClient = new FakeEtsyListingApiClient();
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "53236321",
+            Title: "Handmade Ceramic Planter",
+            Description: "Minimalist speckled planter.",
+            Price: 25m,
+            Quantity: 10,
+            TaxonomyId: 1042,
+            ShippingProfileId: 123456,
+            ReadinessStateId: 789,
+            IsDigital: false,
+            Tags: ["ceramic planter"],
+            Materials: ["Ceramic"],
+            State: "draft",
+            VariationGroups:
+            [
+                new ListingVariationGroupInput("Boyut / Size", ["Small", "Medium"])
+            ],
+            Variations:
+            [
+                new ListingVariationInput("Small", 25m, 5, true),
+                new ListingVariationInput(" small ", 99m, 5, true),
+                new ListingVariationInput("Medium", 35m, 5, true)
+            ]
+        );
+
+        var result = await service.PublishListingAsync(command);
+
+        Assert.True(result.Success);
+        var payload = fakeClient.LastInventoryPayload;
+        Assert.NotNull(payload);
+        Assert.Equal(2, payload!.Products.Count);
+        Assert.Equal(25.0, payload.Products[0].Offerings[0].Price);
+        Assert.Equal(35.0, payload.Products[1].Offerings[0].Price);
+    }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenQuantitiesVaryOrExcludedRowIsInactive_SetsIsEnabledFalseAndQuantityOnProperty()
+    {
+        var fakeClient = new FakeEtsyListingApiClient();
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "53236321",
+            Title: "Handcrafted Oak Table Lamp",
+            Description: "Warm glowing wooden table lamp.",
+            Price: 45m,
+            Quantity: 16,
+            TaxonomyId: 1042,
+            ShippingProfileId: 123456,
+            ReadinessStateId: 789,
+            IsDigital: false,
+            Tags: ["wood lamp"],
+            Materials: ["Wood"],
+            State: "draft",
+            VariationGroups:
+            [
+                new ListingVariationGroupInput("Boyut / Size", ["Small", "Large"]),
+                new ListingVariationGroupInput("Renk / Color", ["Black", "White"])
+            ],
+            Variations:
+            [
+                new ListingVariationInput("Small / Black", 45m, 1, false),
+                new ListingVariationInput("Small / White", 45m, 5, true),
+                new ListingVariationInput("Large / Black", 55m, 5, true),
+                new ListingVariationInput("Large / White", 55m, 5, true)
+            ]
+        );
+
+        var result = await service.PublishListingAsync(command);
+
+        Assert.True(result.Success);
+        var payload = fakeClient.LastInventoryPayload;
+        Assert.NotNull(payload);
+        Assert.Equal(4, payload!.Products.Count);
+
+        var smallBlack = payload.Products[0];
+        Assert.False(smallBlack.Offerings[0].IsEnabled);
+        Assert.True(payload.Products[1].Offerings[0].IsEnabled);
+        Assert.True(payload.Products[2].Offerings[0].IsEnabled);
+        Assert.True(payload.Products[3].Offerings[0].IsEnabled);
+
+        Assert.Contains(513L, payload.QuantityOnProperty);
+        Assert.Contains(514L, payload.QuantityOnProperty);
+        Assert.Contains(513L, payload.PriceOnProperty);
+    }
 }

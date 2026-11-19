@@ -393,4 +393,57 @@ describe('FastCreatorComponent (Pricing Agent, AI Variations & Removal Regressio
     expect(inactiveExcluded?.active).toBeFalse();
     expect(activeRemaining.length).toBe(3);
   });
+
+  it('onVariationsToggled clears stale non-warning AI analysis when unchecked while keeping error warnings', () => {
+    component.enableVariations = true;
+    component.variationAiAnalysis = {
+      provider: 'DeepSeek',
+      model: 'DeepSeek-V4-Flash',
+      usedAi: true,
+      summary: 'Ürüne özel öneri',
+      warning: null
+    };
+
+    component.enableVariations = false;
+    component.onVariationsToggled();
+    expect(component.variationAiAnalysis).toBeNull();
+
+    component.enableVariations = true;
+    component.variationAiAnalysis = {
+      provider: 'DeepSeek',
+      model: 'DeepSeek-V4-Flash',
+      usedAi: false,
+      summary: '',
+      warning: 'API anahtarı bulunamadı'
+    };
+
+    component.enableVariations = false;
+    component.onVariationsToggled();
+    expect(component.variationAiAnalysis?.warning).toBe('API anahtarı bulunamadı');
+  });
+
+  it('publishListingToEtsy matches active row quantity on excluded 2-group inactive rows', () => {
+    component.title = 'Handcrafted Oak Lamp';
+    component.description = 'Minimalist oak table lamp in two sizes and finishes.';
+    component.priceUsd = 45;
+    component.enableVariations = true;
+    component.varType1 = 'Size';
+    component.varValues1 = 'Small, Large';
+    component.enableVar2 = true;
+    component.varType2 = 'Color';
+    component.varValues2 = 'Black, White';
+    component.excludedVariationKeys = [];
+    component.rebuildVariationGrid();
+
+    component.variationRows.forEach(r => (r.quantity = 5));
+    component.removeVariationRow(0); // Exclude 'Small / Black'
+
+    component.publishListingToEtsy();
+    expect(createListingSpy).toHaveBeenCalled();
+    const payload = createListingSpy.calls.mostRecent().args[0] as CreateListingPayload;
+    const inactiveExcluded = payload.variations?.find(v => v.key === 'Small / Black');
+
+    expect(inactiveExcluded?.active).toBeFalse();
+    expect(inactiveExcluded?.quantity).toBe(5);
+  });
 });
