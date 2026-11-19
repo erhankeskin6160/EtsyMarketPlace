@@ -61,7 +61,7 @@ public sealed class RunVariationPricingAgentHandler(
         var targetCountry = string.IsNullOrWhiteSpace(dto.TargetCountryCode) ? "US" : dto.TargetCountryCode.Trim().ToUpperInvariant();
         var targetMarginPct = Math.Clamp(dto.TargetNetMarginPercent, 5m, 65m);
         var productionCost = Math.Max(0m, dto.ProductionCostUsd);
-        var candidateKeywords = BuildCandidateSearchQueries(dto.Title, dto.Tags, dto.Category);
+        var candidateKeywords = BuildCandidateSearchQueries(dto.Title, dto.Tags, dto.Category, dto.CustomSearchKeyword);
 
         var steps = new List<VariationAgentStepDto>();
 
@@ -235,7 +235,11 @@ public sealed class RunVariationPricingAgentHandler(
 
         if (bestListings.Count == 0)
         {
-            return (new VariationMarketBenchmarkDto { UsedLiveMarketData = false }, primaryKeyword);
+            return (new VariationMarketBenchmarkDto
+            {
+                UsedLiveMarketData = false,
+                SourceModule = "Pazar Araştırması Modülü (Etsy API v3)"
+            }, primaryKeyword);
         }
 
         var (filteredListings, filteredOutlierCount) = FilterExtremeLowOutliers(bestListings);
@@ -247,25 +251,29 @@ public sealed class RunVariationPricingAgentHandler(
         var freeShippingPrices = filteredListings.Where(l => l.HasFreeShipping).Select(l => l.PriceUsd).OrderBy(p => p).ToList();
         var paidShippingPrices = filteredListings.Where(l => !l.HasFreeShipping).Select(l => l.PriceUsd).OrderBy(p => p).ToList();
 
+        var keptReferences = new HashSet<MarketListingItemDto>(filteredListings, ReferenceEqualityComparer.Instance);
+
         var topSamples = filteredListings
             .OrderByDescending(l => l.IsBestseller)
             .ThenByDescending(l => l.EstimatedMonthlySales)
             .ThenByDescending(l => l.MarketScore)
             .Take(5)
-            .Select(l => new CompetitorPriceSampleDto
-            {
-                ListingId = l.Id,
-                Title = l.Title,
-                PriceUsd = l.PriceUsd,
-                ShopName = l.ShopName,
-                ShopSales = l.ShopSales,
-                HasFreeShipping = l.HasFreeShipping,
-                EstimatedMonthlySales = l.EstimatedMonthlySales
-            })
+            .Select(l => MapCompetitorSample(l, isOutlierFiltered: false))
+            .ToList();
+
+        var scannedSamples = bestListings
+            .Select(l => MapCompetitorSample(l, isOutlierFiltered: !keptReferences.Contains(l)))
+            .OrderBy(s => s.IsOutlierFiltered)
+            .ThenByDescending(s => s.IsBestseller)
+            .ThenByDescending(s => s.EstimatedMonthlySales)
+            .ThenByDescending(s => s.MarketScore)
+            .ThenBy(s => s.PriceUsd)
+            .Take(25)
             .ToList();
 
         var benchmark = new VariationMarketBenchmarkDto
         {
+            SourceModule = "Pazar Araştırması Modülü (Etsy API v3)",
             CompetitorCount = filteredListings.Count,
             MinPriceUsd = sortedPrices.First(),
             MedianPriceUsd = median,
@@ -277,10 +285,38 @@ public sealed class RunVariationPricingAgentHandler(
             FilteredOutlierCount = filteredOutlierCount,
             FreeShippingRatioPct = Math.Round((double)freeShippingPrices.Count / filteredListings.Count * 100.0, 1),
             UsedLiveMarketData = true,
-            TopCompetitors = topSamples
+            TopCompetitors = topSamples,
+            ScannedCompetitors = scannedSamples
         };
 
         return (benchmark, resolvedKeyword);
+    }
+
+    private static CompetitorPriceSampleDto MapCompetitorSample(MarketListingItemDto listing, bool isOutlierFiltered)
+    {
+        var fallbackListingUrl = listing.Id > 0 ? $"https://www.etsy.com/listing/{listing.Id}" : string.Empty;
+        var primaryImage = !string.IsNullOrWhiteSpace(listing.ImageUrl)
+            ? listing.ImageUrl
+            : (listing.ImageUrls?.FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? string.Empty);
+
+        return new CompetitorPriceSampleDto
+        {
+            ListingId = listing.Id,
+            Title = listing.Title,
+            PriceUsd = listing.PriceUsd,
+            ShopName = listing.ShopName,
+            ShopSales = listing.ShopSales,
+            HasFreeShipping = listing.HasFreeShipping,
+            EstimatedMonthlySales = listing.EstimatedMonthlySales,
+            ImageUrl = primaryImage,
+            ListingUrl = !string.IsNullOrWhiteSpace(listing.ListingUrl) ? listing.ListingUrl : fallbackListingUrl,
+            ShopUrl = listing.ShopUrl ?? string.Empty,
+            Favorites = listing.Favorites,
+            Views = listing.Views,
+            MarketScore = listing.MarketScore,
+            IsBestseller = listing.IsBestseller,
+            IsOutlierFiltered = isOutlierFiltered
+        };
     }
 
     private static (List<MarketListingItemDto> Filtered, int RemovedCount) FilterExtremeLowOutliers(
@@ -311,9 +347,18 @@ public sealed class RunVariationPricingAgentHandler(
             : Math.Round((sortedPrices[mid - 1] + sortedPrices[mid]) / 2m, 2);
     }
 
-    private static List<string> BuildCandidateSearchQueries(string title, List<string>? tags, string? category)
+    private static List<string> BuildCandidateSearchQueries(
+        string title,
+        List<string>? tags,
+        string? category,
+        string? customSearchKeyword = null)
     {
         var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(customSearchKeyword))
+        {
+            AddDistinct(candidates, customSearchKeyword.Trim());
+        }
+
         var primary = ExtractSearchKeyword(title, tags, category);
         AddDistinct(candidates, primary);
 

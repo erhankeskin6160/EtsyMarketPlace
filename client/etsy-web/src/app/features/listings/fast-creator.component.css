@@ -1704,6 +1704,40 @@
   border: 1px solid #1c2536;
   border-radius: 4px;
   padding: 4px 6px;
+  cursor: pointer;
+}
+
+.agent-competitor-list li:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.agent-source-module-tag {
+  font-size: 0.64rem;
+  color: #38bdf8;
+  margin-bottom: 6px;
+}
+
+.btn-open-competitors-flyout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-open-competitors-flyout:hover,
+.btn-open-competitors-flyout.active {
+  background: rgba(14, 165, 233, 0.26);
+  color: #e0f2fe;
 }
 
 .agent-competitor-list .comp-title {

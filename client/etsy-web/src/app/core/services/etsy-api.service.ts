@@ -1548,6 +1548,7 @@ export interface VariationPricingAgentRequestDto {
   model?: string;
   apiKey?: string;
   enableVariations?: boolean;
+  customSearchKeyword?: string;
 }
 
 export interface CompetitorPriceSampleDto {
@@ -1558,9 +1559,18 @@ export interface CompetitorPriceSampleDto {
   shopSales: number;
   hasFreeShipping: boolean;
   estimatedMonthlySales: number;
+  imageUrl?: string;
+  listingUrl?: string;
+  shopUrl?: string;
+  favorites?: number;
+  views?: number;
+  marketScore?: number;
+  isBestseller?: boolean;
+  isOutlierFiltered?: boolean;
 }
 
 export interface VariationMarketBenchmarkDto {
+  sourceModule?: string;
   competitorCount: number;
   minPriceUsd: number;
   medianPriceUsd: number;
@@ -1573,6 +1583,7 @@ export interface VariationMarketBenchmarkDto {
   freeShippingRatioPct: number;
   usedLiveMarketData: boolean;
   topCompetitors: CompetitorPriceSampleDto[];
+  scannedCompetitors?: CompetitorPriceSampleDto[];
 }
 
 export interface AgentCarrierQuoteSummaryDto {

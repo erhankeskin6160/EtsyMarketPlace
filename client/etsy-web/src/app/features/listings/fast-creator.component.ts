@@ -8,6 +8,7 @@ import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-s
 import { ExtensionBridgeService } from '../../core/services/extension-bridge.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, AiShippingContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { PricingCompetitorsDrawerComponent } from './components/pricing-competitors-drawer.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
 import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard, parseInlineVariationOptionPrice, resolveVariationOptionPairPrice } from '../../core/utils/etsy-variation-parser';
@@ -87,7 +88,7 @@ export interface VariationRow {
 @Component({
   selector: 'app-fast-creator',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent],
+  imports: [CommonModule, FormsModule, AiLogoComponent, PricingCompetitorsDrawerComponent],
   templateUrl: './fast-creator.component.html',
   styleUrls: ['./fast-creator.component.css']
 })
@@ -224,6 +225,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   // --- RIGHT-SIDE SHIPPING & PRICING DRAWER ---
   isShippingDrawerOpen = false;
+  isCompetitorPanelOpen = false;
+  agentCustomSearchKeyword = '';
   isLoadingCarrierQuotes = false;
   carrierQuotesError = '';
   drawerCarrierQuotes: AgentCarrierQuoteSummaryDto[] = [];
@@ -391,6 +394,10 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
+    if (this.isCompetitorPanelOpen) {
+      this.closeCompetitorPanel();
+      return;
+    }
     if (this.isShippingDrawerOpen) {
       this.closeShippingDrawer();
     }
@@ -1126,6 +1133,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.selectedProfitVariationKey = '__base__';
     this.pricingAgentResult = null;
     this.pricingAgentError = '';
+    this.isCompetitorPanelOpen = false;
+    this.agentCustomSearchKeyword = '';
     this.drawerCarrierQuotes = [];
     this.carrierQuotesError = '';
     this.selectedCarrierKey = '';
@@ -2442,6 +2451,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   closeShippingDrawer(): void {
+    this.isCompetitorPanelOpen = false;
     this.isShippingDrawerOpen = false;
   }
 
@@ -2451,6 +2461,38 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     } else {
       this.openShippingDrawer();
     }
+  }
+
+  get scannedCompetitorsCount(): number {
+    const mb = this.pricingAgentResult?.marketBenchmark;
+    if (!mb) return 0;
+    return mb.scannedCompetitors?.length || mb.topCompetitors?.length || mb.competitorCount || 0;
+  }
+
+  openCompetitorPanel(): void {
+    if (this.scannedCompetitorsCount > 0) {
+      this.isShippingDrawerOpen = true;
+      this.isCompetitorPanelOpen = true;
+    }
+  }
+
+  closeCompetitorPanel(): void {
+    this.isCompetitorPanelOpen = false;
+  }
+
+  toggleCompetitorPanel(): void {
+    if (this.isCompetitorPanelOpen) {
+      this.closeCompetitorPanel();
+    } else {
+      this.openCompetitorPanel();
+    }
+  }
+
+  rescanPricingWithKeyword(keyword: string): void {
+    const cleaned = (keyword || '').trim();
+    if (!cleaned) return;
+    this.agentCustomSearchKeyword = cleaned;
+    this.runAiPricingAgent(cleaned);
   }
 
   get computedDesi(): number {
@@ -2536,13 +2578,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.showToast(`🚚 ${quote.carrierName} ($${quote.priceUsd.toFixed(2)}) kargo maliyeti olarak uygulandı!`);
   }
 
-  runAiPricingAgent(): void {
+  runAiPricingAgent(customKeywordOverride?: string): void {
     const cleanTitle = (this.title || '').trim() || (this.description || '').trim();
     if (!cleanTitle) {
       this.showToast('⚠️ Ajanı çalıştırmak için lütfen önce ürün başlığı veya açıklaması girin.');
       return;
     }
 
+    const customKeyword = (customKeywordOverride || '').trim() || undefined;
     const hasUserVariations = this.hasPricingVariations;
     if (hasUserVariations) {
       this.rebuildVariationGrid();
@@ -2563,6 +2606,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       category: this.selectedCategory || '',
       materials: this.sanitizeMaterialsForPayload(this.materials),
       tags: this.tags,
+      customSearchKeyword: customKeyword,
       enableVariations: effectiveHasVariations,
       variationType1: effectiveHasVariations ? this.varType1 : '',
       variationValues1: effectiveHasVariations ? this.varValues1 : '',
@@ -2593,6 +2637,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.isRunningPricingAgent = false;
         this.pricingAgentResult = res;
+        this.agentCustomSearchKeyword = res.searchKeywordUsed || customKeyword || '';
 
         // 1. Kargo modülü maliyetini ve taşıyıcı tekliflerini senkronize et
         this.estimatedShippingCostUsd = Number((res.recommendedBaseShippingCostUsd || 0).toFixed(2));

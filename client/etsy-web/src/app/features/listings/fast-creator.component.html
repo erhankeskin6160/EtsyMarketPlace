@@ -1514,6 +1514,9 @@
             <span>Piyasa Özeti: <code>{{ agent.searchKeywordUsed }}</code></span>
             <span>Ücretsiz Kargo: %{{ agent.marketBenchmark.freeShippingRatioPct.toFixed(0) }}</span>
           </div>
+          <div class="agent-source-module-tag">
+            <span>📡 {{ agent.marketBenchmark.sourceModule || 'Pazar Araştırması Modülü (Etsy API v3)' }}</span>
+          </div>
           <div class="agent-market-bands">
             <span>Min ${{ agent.marketBenchmark.minPriceUsd.toFixed(2) }}</span>
             <span>Medyan ${{ agent.marketBenchmark.medianPriceUsd.toFixed(2) }}</span>
@@ -1524,8 +1527,16 @@
             <span *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0">Ücretsiz Kargolu Medyan: ${{ (agent.marketBenchmark.freeShippingMedianUsd || 0).toFixed(2) }}</span>
             <span *ngIf="(agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">Kargo Hariç Medyan: ${{ (agent.marketBenchmark.paidShippingMedianUsd || 0).toFixed(2) }}</span>
           </div>
+          <button
+            type="button"
+            class="btn-open-competitors-flyout"
+            [class.active]="isCompetitorPanelOpen"
+            (click)="toggleCompetitorPanel()">
+            <span>🔍 Taranan {{ scannedCompetitorsCount }} Rakip Ürünü {{ isCompetitorPanelOpen ? 'Gizle' : 'Yan Panelde Gör' }}</span>
+            <span class="flyout-arrow">{{ isCompetitorPanelOpen ? '▸' : '◂' }}</span>
+          </button>
           <ul class="agent-competitor-list" *ngIf="agent.marketBenchmark.topCompetitors?.length">
-            <li *ngFor="let comp of agent.marketBenchmark.topCompetitors.slice(0, 4)">
+            <li *ngFor="let comp of agent.marketBenchmark.topCompetitors.slice(0, 4)" (click)="openCompetitorPanel()" title="Tüm taranan rakip ürünleri yan panelde gör">
               <span class="comp-title" [title]="comp.title">{{ comp.title }}</span>
               <span class="comp-price">${{ comp.priceUsd.toFixed(2) }}{{ comp.hasFreeShipping ? ' · Ücr. Kargo' : '' }}</span>
             </li>
@@ -1535,3 +1546,12 @@
     </section>
   </div>
 </aside>
+
+<app-pricing-competitors-drawer
+  [isOpen]="isShippingDrawerOpen && isCompetitorPanelOpen"
+  [isLoading]="isRunningPricingAgent"
+  [searchKeywordUsed]="pricingAgentResult?.searchKeywordUsed || agentCustomSearchKeyword"
+  [benchmark]="pricingAgentResult?.marketBenchmark || null"
+  (closed)="closeCompetitorPanel()"
+  (rescanWithKeyword)="rescanPricingWithKeyword($event)">
+</app-pricing-competitors-drawer>

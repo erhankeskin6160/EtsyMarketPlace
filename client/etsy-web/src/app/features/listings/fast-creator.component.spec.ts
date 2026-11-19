@@ -446,4 +446,72 @@ describe('FastCreatorComponent (Pricing Agent, AI Variations & Removal Regressio
     expect(inactiveExcluded?.active).toBeFalse();
     expect(inactiveExcluded?.quantity).toBe(5);
   });
+
+  it('manages side competitor flyout panel state and Escape close order cleanly', () => {
+    component.isShippingDrawerOpen = true;
+    component.pricingAgentResult = {
+      ...buildSingleProductPricingResult(29.9),
+      searchKeywordUsed: 'thinking alien',
+      marketBenchmark: {
+        sourceModule: 'Pazar Araştırması Modülü (Etsy API v3)',
+        competitorCount: 2,
+        minPriceUsd: 18,
+        medianPriceUsd: 24,
+        averagePriceUsd: 24,
+        p75PriceUsd: 29,
+        maxPriceUsd: 30,
+        freeShippingRatioPct: 50,
+        usedLiveMarketData: true,
+        topCompetitors: [],
+        scannedCompetitors: [
+          {
+            listingId: 1,
+            title: 'Thinking Alien Resin Figurine',
+            priceUsd: 24.9,
+            shopName: 'AlienShop',
+            shopSales: 300,
+            hasFreeShipping: true,
+            estimatedMonthlySales: 20
+          }
+        ]
+      }
+    };
+
+    expect(component.scannedCompetitorsCount).toBe(1);
+    component.toggleCompetitorPanel();
+    expect(component.isCompetitorPanelOpen).toBeTrue();
+
+    // First Escape closes only the competitor flyout panel
+    component.onEscapeKey();
+    expect(component.isCompetitorPanelOpen).toBeFalse();
+    expect(component.isShippingDrawerOpen).toBeTrue();
+
+    // Second Escape closes the main shipping drawer
+    component.onEscapeKey();
+    expect(component.isShippingDrawerOpen).toBeFalse();
+
+    // Closing the main shipping drawer also closes an open competitor panel
+    component.isShippingDrawerOpen = true;
+    component.isCompetitorPanelOpen = true;
+    component.closeShippingDrawer();
+    expect(component.isShippingDrawerOpen).toBeFalse();
+    expect(component.isCompetitorPanelOpen).toBeFalse();
+  });
+
+  it('rescanPricingWithKeyword forwards customSearchKeyword to pricing agent request', () => {
+    runVariationPricingAgentSpy.and.returnValue(of({
+      ...buildSingleProductPricingResult(32.9),
+      searchKeywordUsed: 'thinking alien figurine'
+    }));
+
+    component.title = 'Thinking Alien Desk Statue';
+    component.enableVariations = false;
+
+    component.rescanPricingWithKeyword('  thinking alien figurine  ');
+
+    expect(runVariationPricingAgentSpy).toHaveBeenCalledTimes(1);
+    const reqArg = runVariationPricingAgentSpy.calls.mostRecent().args[0] as VariationPricingAgentRequestDto;
+    expect(reqArg.customSearchKeyword).toBe('thinking alien figurine');
+    expect(component.agentCustomSearchKeyword).toBe('thinking alien figurine');
+  });
 });

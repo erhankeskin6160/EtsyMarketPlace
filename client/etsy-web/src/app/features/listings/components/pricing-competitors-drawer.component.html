@@ -1,0 +1,176 @@
+<aside
+  class="comp-flyout-panel notranslate"
+  [class.open]="isOpen"
+  [attr.aria-hidden]="!isOpen"
+  aria-label="Taranan Rakip Ürünler Paneli"
+  translate="no"
+  (click)="$event.stopPropagation()">
+
+  <div class="comp-flyout-header">
+    <div class="comp-flyout-title-wrap">
+      <div class="comp-flyout-title-row">
+        <h4>🔍 Taranan Rakip Ürünler ({{ allCompetitors.length }})</h4>
+        <span class="comp-source-badge">
+          📡 {{ benchmark?.sourceModule || 'Pazar Araştırması Modülü (Etsy API v3)' }}
+        </span>
+      </div>
+      <p class="comp-flyout-sub" *ngIf="searchKeywordUsed">
+        Aktif sorgu: <code>{{ searchKeywordUsed }}</code>
+        <span *ngIf="benchmark?.filteredOutlierCount"> · {{ benchmark?.filteredOutlierCount }} aykırı medyan dışı</span>
+      </p>
+    </div>
+    <button
+      type="button"
+      class="btn-close-comp-flyout"
+      (click)="closePanel()"
+      aria-label="Rakip ürünler panelini kapat"
+      title="Paneli kapat">
+      ×
+    </button>
+  </div>
+
+  <!-- Özel Anahtar Kelimeyle Yeniden Tarama -->
+  <div class="comp-rescan-bar">
+    <label for="compRescanInput" class="comp-rescan-label">
+      Doğru rakip çıkmadıysa özel sorguyla tara:
+    </label>
+    <div class="comp-rescan-row">
+      <input
+        id="compRescanInput"
+        type="text"
+        class="comp-rescan-input"
+        [(ngModel)]="rescanKeywordInput"
+        (keyup.enter)="submitRescan()"
+        placeholder="Örn: thinking alien figurine"
+      />
+      <button
+        type="button"
+        class="btn-comp-rescan"
+        [disabled]="isLoading || !rescanKeywordInput.trim()"
+        (click)="submitRescan()">
+        {{ isLoading ? '⏳ Taranıyor...' : '🔄 Yeniden Tara' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Kısa Piyasa Özeti -->
+  <div class="comp-kpi-strip" *ngIf="benchmark as b">
+    <span>Min <strong>${{ b.minPriceUsd.toFixed(2) }}</strong></span>
+    <span>Medyan <strong>${{ b.medianPriceUsd.toFixed(2) }}</strong></span>
+    <span>P75 <strong>${{ b.p75PriceUsd.toFixed(2) }}</strong></span>
+    <span>Max <strong>${{ b.maxPriceUsd.toFixed(2) }}</strong></span>
+    <span>Ücr. Kargo <strong>%{{ b.freeShippingRatioPct.toFixed(0) }}</strong></span>
+  </div>
+
+  <!-- Filtre & Sıralama -->
+  <div class="comp-controls">
+    <div class="comp-filter-pills">
+      <button type="button" [class.active]="filterMode === 'all'" (click)="setFilter('all')">
+        Tümü ({{ allCompetitors.length }})
+      </button>
+      <button type="button" [class.active]="filterMode === 'free_shipping'" (click)="setFilter('free_shipping')">
+        Ücr. Kargo ({{ freeShippingCount }})
+      </button>
+      <button type="button" [class.active]="filterMode === 'bestseller'" (click)="setFilter('bestseller')">
+        ⭐ Bestseller ({{ bestsellerCount }})
+      </button>
+      <button type="button" *ngIf="outlierCount > 0" [class.active]="filterMode === 'outliers'" (click)="setFilter('outliers')">
+        ⚠️ Aykırı ({{ outlierCount }})
+      </button>
+    </div>
+
+    <div class="comp-search-sort-row">
+      <input
+        type="text"
+        class="comp-filter-input"
+        [(ngModel)]="textFilter"
+        placeholder="Başlık veya mağaza ara..."
+      />
+      <select class="comp-sort-select" [(ngModel)]="sortBy" aria-label="Rakip sıralama">
+        <option value="score">Pazar Skoru</option>
+        <option value="price_asc">Fiyat (Artan)</option>
+        <option value="price_desc">Fiyat (Azalan)</option>
+        <option value="sales">Aylık Satış</option>
+        <option value="favorites">Favori</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Rakip İlan Listesi -->
+  <div class="comp-cards-scroll">
+    <div *ngIf="filteredCompetitors.length === 0" class="comp-empty-state">
+      Bu filtreyle eşleşen taranmış rakip ilan bulunamadı.
+    </div>
+
+    <article
+      *ngFor="let comp of filteredCompetitors; trackBy: trackByListingId"
+      class="comp-product-card"
+      [class.is-outlier]="!!comp.isOutlierFiltered">
+      <a
+        *ngIf="getEtsyUrl(comp) as url; else thumbPlain"
+        [href]="url"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="comp-thumb-link">
+        <img *ngIf="comp.imageUrl; else thumbPlaceholder" [src]="comp.imageUrl" [alt]="comp.title" loading="lazy" class="comp-thumb" />
+      </a>
+      <ng-template #thumbPlain>
+        <div class="comp-thumb-link">
+          <img *ngIf="comp.imageUrl; else thumbPlaceholder" [src]="comp.imageUrl" [alt]="comp.title" loading="lazy" class="comp-thumb" />
+        </div>
+      </ng-template>
+      <ng-template #thumbPlaceholder>
+        <div class="comp-thumb-placeholder">🛍️</div>
+      </ng-template>
+
+      <div class="comp-card-body">
+        <div class="comp-card-top">
+          <a
+            *ngIf="getEtsyUrl(comp) as url; else titlePlain"
+            [href]="url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="comp-card-title"
+            [title]="comp.title">
+            {{ comp.title }}
+          </a>
+          <ng-template #titlePlain>
+            <span class="comp-card-title" [title]="comp.title">{{ comp.title }}</span>
+          </ng-template>
+          <strong class="comp-card-price">${{ comp.priceUsd.toFixed(2) }}</strong>
+        </div>
+
+        <div class="comp-card-badges">
+          <span class="badge-free-ship" *ngIf="comp.hasFreeShipping">Ücretsiz Kargo</span>
+          <span class="badge-bestseller" *ngIf="comp.isBestseller">⭐ Bestseller</span>
+          <span class="badge-outlier" *ngIf="comp.isOutlierFiltered" title="Aşırı düşük fiyatlı olduğundan medyan hesabından çıkarıldı">⚠️ Medyandan Elendi</span>
+          <span class="badge-score" *ngIf="(comp.marketScore || 0) > 0">Skor {{ comp.marketScore }}</span>
+        </div>
+
+        <div class="comp-card-meta">
+          <a
+            *ngIf="comp.shopUrl; else shopPlain"
+            [href]="comp.shopUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="comp-shop-link">
+            🏪 {{ comp.shopName || 'Mağaza' }}
+          </a>
+          <ng-template #shopPlain>
+            <span>🏪 {{ comp.shopName || 'Mağaza' }}</span>
+          </ng-template>
+          <span *ngIf="comp.shopSales > 0">· {{ comp.shopSales }} satış</span>
+          <span *ngIf="comp.estimatedMonthlySales > 0">· ~{{ comp.estimatedMonthlySales }}/ay</span>
+          <span *ngIf="(comp.favorites || 0) > 0">· ❤️ {{ comp.favorites }}</span>
+          <span *ngIf="(comp.views || 0) > 0">· 👁️ {{ comp.views }}</span>
+        </div>
+
+        <div class="comp-card-actions" *ngIf="getEtsyUrl(comp) as etsyUrl">
+          <a [href]="etsyUrl" target="_blank" rel="noopener noreferrer" class="btn-open-etsy">
+            🛍️ Etsy'de Aç ↗
+          </a>
+        </div>
+      </div>
+    </article>
+  </div>
+</aside>

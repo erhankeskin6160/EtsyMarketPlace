@@ -34,7 +34,8 @@ public sealed record VariationPricingAgentRequestDto(
     string? Provider = null,
     string? Model = null,
     string? ApiKey = null,
-    bool? EnableVariations = null
+    bool? EnableVariations = null,
+    string? CustomSearchKeyword = null
 );
 
 public sealed class CompetitorPriceSampleDto
@@ -46,10 +47,19 @@ public sealed class CompetitorPriceSampleDto
     public int ShopSales { get; set; }
     public bool HasFreeShipping { get; set; }
     public int EstimatedMonthlySales { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public string ListingUrl { get; set; } = string.Empty;
+    public string ShopUrl { get; set; } = string.Empty;
+    public int Favorites { get; set; }
+    public int Views { get; set; }
+    public int MarketScore { get; set; }
+    public bool IsBestseller { get; set; }
+    public bool IsOutlierFiltered { get; set; }
 }
 
 public sealed class VariationMarketBenchmarkDto
 {
+    public string SourceModule { get; set; } = "Pazar Araştırması Modülü (Etsy API v3)";
     public int CompetitorCount { get; set; }
     public decimal MinPriceUsd { get; set; }
     public decimal MedianPriceUsd { get; set; }
@@ -62,6 +72,7 @@ public sealed class VariationMarketBenchmarkDto
     public double FreeShippingRatioPct { get; set; }
     public bool UsedLiveMarketData { get; set; }
     public List<CompetitorPriceSampleDto> TopCompetitors { get; set; } = [];
+    public List<CompetitorPriceSampleDto> ScannedCompetitors { get; set; } = [];
 }
 
 public sealed class AgentCarrierQuoteSummaryDto

@@ -348,10 +348,154 @@ public sealed class RunVariationPricingAgentTests
         Assert.Equal(standardRow.RecommendedPriceUsd, speckledRow.RecommendedPriceUsd);
     }
 
+    [Fact]
+    public async Task Agent_ReturnsAllScannedCompetitorsWithRichMetadataAndSourceModule()
+    {
+        var listings = Enumerable.Range(1, 10).Select(i => new MarketListingItemDto
+        {
+            Id = 5000 + i,
+            Title = $"Thinking Alien Desk Sculpture #{i}",
+            PriceUsd = 20m + i,
+            ShopName = $"Studio{i}",
+            ShopSales = 100 * i,
+            HasFreeShipping = i % 2 == 0,
+            EstimatedMonthlySales = 5 + i,
+            ImageUrl = $"https://i.etsystatic.com/sample_{i}.jpg",
+            ListingUrl = $"https://www.etsy.com/listing/{5000 + i}",
+            ShopUrl = $"https://www.etsy.com/shop/Studio{i}",
+            Favorites = 20 * i,
+            Views = 200 * i,
+            MarketScore = 50 + i,
+            IsBestseller = i == 10
+        }).ToList();
+
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "thinking alien figurine",
+            Total = 10,
+            Listings = listings
+        });
+        var handler = new RunVariationPricingAgentHandler(
+            marketStub,
+            new StubShipmentOrchestratorService(),
+            new StubGeminiListingApiClient(string.Empty));
+
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Thinking Alien Desk Figurine",
+            BaseWeightGrams: 250,
+            ProductionCostUsd: 2.5m,
+            TargetNetMarginPercent: 30m,
+            UsdTryRate: 50.0m,
+            EnableVariations: false);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.Equal("Pazar Araştırması Modülü (Etsy API v3)", result.MarketBenchmark.SourceModule);
+        Assert.Equal(5, result.MarketBenchmark.TopCompetitors.Count);
+        Assert.Equal(10, result.MarketBenchmark.ScannedCompetitors.Count);
+
+        var top = result.MarketBenchmark.ScannedCompetitors.First();
+        Assert.True(top.IsBestseller);
+        Assert.False(top.IsOutlierFiltered);
+        Assert.StartsWith("https://i.etsystatic.com/", top.ImageUrl);
+        Assert.StartsWith("https://www.etsy.com/listing/", top.ListingUrl);
+        Assert.True(top.Favorites > 0);
+        Assert.True(top.Views > 0);
+    }
+
+    [Fact]
+    public async Task Agent_FlagsFilteredLowOutliersInScannedCompetitorsWhileExcludingFromMedian()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "thinking alien",
+            Total = 6,
+            Listings =
+            [
+                new MarketListingItemDto { Id = 1, Title = "Digital Alien Pattern PDF", PriceUsd = 1.50m, ShopName = "DigShop" },
+                new MarketListingItemDto { Id = 2, Title = "Alien Desk Statue Small", PriceUsd = 26.00m, ShopName = "Shop2", MarketScore = 70 },
+                new MarketListingItemDto { Id = 3, Title = "Alien Sculpture Bronze", PriceUsd = 29.00m, ShopName = "Shop3", MarketScore = 75 },
+                new MarketListingItemDto { Id = 4, Title = "Alien Resin Decor", PriceUsd = 31.00m, ShopName = "Shop4", MarketScore = 80 },
+                new MarketListingItemDto { Id = 5, Title = "Thinking Alien Collector", PriceUsd = 34.00m, ShopName = "Shop5", MarketScore = 85 },
+                new MarketListingItemDto { Id = 6, Title = "Large Alien Bust", PriceUsd = 42.00m, ShopName = "Shop6", MarketScore = 90 }
+            ]
+        });
+
+        var handler = new RunVariationPricingAgentHandler(
+            marketStub,
+            new StubShipmentOrchestratorService(),
+            new StubGeminiListingApiClient(string.Empty));
+
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Thinking Alien Sculpture",
+            BaseWeightGrams: 250,
+            UsdTryRate: 50.0m,
+            EnableVariations: false);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.Equal(1, result.MarketBenchmark.FilteredOutlierCount);
+        Assert.Equal(5, result.MarketBenchmark.CompetitorCount);
+        Assert.Equal(26.00m, result.MarketBenchmark.MinPriceUsd);
+        Assert.Equal(6, result.MarketBenchmark.ScannedCompetitors.Count);
+
+        var flagged = Assert.Single(result.MarketBenchmark.ScannedCompetitors, s => s.IsOutlierFiltered);
+        Assert.Equal(1.50m, flagged.PriceUsd);
+        Assert.Equal(5, result.MarketBenchmark.ScannedCompetitors.Count(s => !s.IsOutlierFiltered));
+    }
+
+    [Fact]
+    public async Task Agent_WithCustomSearchKeyword_QueriesCustomKeywordFirst()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "thinking alien figurine",
+            Total = 3,
+            Listings =
+            [
+                new MarketListingItemDto { Id = 11, Title = "Alien Figurine A", PriceUsd = 25.00m },
+                new MarketListingItemDto { Id = 12, Title = "Alien Figurine B", PriceUsd = 28.00m },
+                new MarketListingItemDto { Id = 13, Title = "Alien Figurine C", PriceUsd = 32.00m }
+            ]
+        });
+
+        var handler = new RunVariationPricingAgentHandler(
+            marketStub,
+            new StubShipmentOrchestratorService(),
+            new StubGeminiListingApiClient(string.Empty));
+
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Thinking Alien Desk Statue | Handmade Sculpture",
+            CustomSearchKeyword: "thinking alien figurine",
+            BaseWeightGrams: 250,
+            UsdTryRate: 50.0m,
+            EnableVariations: false);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.NotEmpty(marketStub.CapturedKeywords);
+        Assert.Equal("thinking alien figurine", marketStub.CapturedKeywords[0]);
+        Assert.Equal("thinking alien figurine", result.SearchKeywordUsed);
+    }
+
     private sealed class StubMarketResearchService(MarketSearchResponse searchResult) : IMarketResearchService
     {
+        public List<string> CapturedKeywords { get; } = [];
+
         public Task<MarketSearchResponse> SearchMarketAsync(MarketSearchQuery query, CancellationToken cancellationToken = default)
-            => Task.FromResult(searchResult);
+        {
+            CapturedKeywords.Add(query.Keyword);
+            return Task.FromResult(searchResult);
+        }
 
         public Task<MarketAiReportResultDto> GenerateAiMarketReportAsync(MarketAiReportCommand command, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
