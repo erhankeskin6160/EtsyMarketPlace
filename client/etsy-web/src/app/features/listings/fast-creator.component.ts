@@ -1718,7 +1718,11 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   get hasPricingVariations(): boolean {
-    return this.enableVariations && (this.variationRows.length > 0 || !!this.varValues1.trim());
+    return this.enableVariations && (
+      this.variationRows.length > 0 ||
+      this.varOptions1.length > 0 ||
+      (this.enableVar2 && this.varOptions2.length > 0)
+    );
   }
 
   get varOptions1(): string[] {
@@ -2070,7 +2074,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const preservedBase = this.effectivePrice || Number(this.priceUsd) || 0;
 
     if (groupIndex === 1) {
-      const hasGroup2 = this.enableVar2 && (this.varValues2.trim().length > 0 || this.varType2.trim().length > 0);
+      const hasGroup2 = this.enableVar2 && this.varOptions2.length > 0;
       if (hasGroup2) {
         this.varType1 = this.varType2.trim() || 'Color';
         this.varValues1 = this.varValues2;
@@ -2092,6 +2096,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           this.updatePriceTry();
         }
         this.varValues1 = '';
+        this.enableVar2 = false;
+        this.varValues2 = '';
         this.variationRows = [];
         this.excludedVariationKeys = [];
         this.enableVariations = false;
@@ -2107,33 +2113,60 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.enableVar2 = false;
     this.varValues2 = '';
     this.excludedVariationKeys = [];
-    this.rebuildVariationGrid();
+    if (this.varOptions1.length === 0) {
+      if (preservedBase > 0 && !(Number(this.priceUsd) > 0)) {
+        this.priceUsd = preservedBase;
+        this.updatePriceTry();
+      }
+      this.enableVariations = false;
+      this.customVariationPricing = false;
+      this.variationRows = [];
+      this.variationAiAnalysis = null;
+      this.selectedProfitVariationKey = '__base__';
+    } else {
+      this.rebuildVariationGrid();
+    }
     this.saveDraftToStorage();
     this.showToast('✕ 2. varyasyon grubu kaldırıldı.');
   }
 
   removeVariationOption(groupIndex: 1 | 2, optionIndex: number): void {
+    const options = groupIndex === 1 ? this.varOptions1 : this.varOptions2;
+    const targetOption = options[optionIndex];
+    if (!targetOption) return;
+
+    const targetNorm = targetOption.trim().toLowerCase();
     const raw = groupIndex === 1 ? this.varValues1 : this.varValues2;
     const parts = (raw || '')
       .split(',')
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    if (optionIndex < 0 || optionIndex >= parts.length) return;
-    parts.splice(optionIndex, 1);
+    const nextParts = parts.filter(part => {
+      const clean = parseInlineVariationOptionPrice(part, this.usdTryRate).cleanValue.trim().toLowerCase();
+      return clean !== targetNorm;
+    });
 
-    if (parts.length === 0) {
+    if (nextParts.length === 0) {
       this.removeVariationGroup(groupIndex);
       return;
     }
 
     if (groupIndex === 1) {
-      this.varValues1 = parts.join(', ');
+      this.varValues1 = nextParts.join(', ');
     } else {
-      this.varValues2 = parts.join(', ');
+      this.varValues2 = nextParts.join(', ');
     }
     this.rebuildVariationGrid();
     this.saveDraftToStorage();
+  }
+
+  private splitTwoGroupKey(key: string): string[] {
+    const clean = (key || '').trim();
+    if (!clean) return [];
+    const spaced = clean.split(' / ').map(p => p.trim()).filter(Boolean);
+    if (spaced.length >= 2) return spaced;
+    return clean.split('/').map(p => p.trim()).filter(Boolean);
   }
 
   removeVariationRow(rowIndex: number): void {
@@ -2201,7 +2234,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const usedG1 = new Set<string>();
     const usedG2 = new Set<string>();
     for (const row of this.variationRows) {
-      const segs = (row.key || '').split('/').map(p => p.trim());
+      const segs = this.splitTwoGroupKey(row.key || '');
       if (segs[0]) usedG1.add(segs[0].toLowerCase());
       if (segs[1]) usedG2.add(segs[1].toLowerCase());
     }
@@ -2230,18 +2263,22 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.varValues2 = '';
       this.excludedVariationKeys = [];
       this.variationRows = this.variationRows.map(r => {
-        const parts = (r.key || '').split('/').map(p => p.trim());
+        const parts = this.splitTwoGroupKey(r.key || '');
         return { ...r, key: parts[1] || parts[0] || r.key };
       });
     } else if (remainingOpts2.length === 0) {
       this.enableVar2 = false;
       this.varValues2 = '';
       this.excludedVariationKeys = [];
+      this.variationRows = this.variationRows.map(r => {
+        const parts = this.splitTwoGroupKey(r.key || '');
+        return { ...r, key: parts[0] || r.key };
+      });
     } else {
       const opt1Set = new Set(remainingOpts1.map(o => o.toLowerCase()));
       const opt2Set = new Set(remainingOpts2.map(o => o.toLowerCase()));
       this.excludedVariationKeys = this.excludedVariationKeys.filter(k => {
-        const segs = k.split('/').map(s => s.trim());
+        const segs = this.splitTwoGroupKey(k);
         return segs.length === 2 && opt1Set.has(segs[0]) && opt2Set.has(segs[1]);
       });
     }
@@ -2507,6 +2544,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (hasUserVariations) {
       this.rebuildVariationGrid();
     }
+    const effectiveHasVariations = this.enableVariations && this.variationRows.length > 0;
 
     const s = this.aiService.settings();
     const provider = s.provider;
@@ -2522,13 +2560,13 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       category: this.selectedCategory || '',
       materials: this.sanitizeMaterialsForPayload(this.materials),
       tags: this.tags,
-      enableVariations: hasUserVariations,
-      variationType1: hasUserVariations ? this.varType1 : '',
-      variationValues1: hasUserVariations ? this.varValues1 : '',
-      enableVariation2: hasUserVariations ? this.enableVar2 : false,
-      variationType2: hasUserVariations ? this.varType2 : '',
-      variationValues2: hasUserVariations ? this.varValues2 : '',
-      existingVariations: hasUserVariations
+      enableVariations: effectiveHasVariations,
+      variationType1: effectiveHasVariations ? this.varType1 : '',
+      variationValues1: effectiveHasVariations ? this.varValues1 : '',
+      enableVariation2: effectiveHasVariations ? this.enableVar2 : false,
+      variationType2: effectiveHasVariations ? this.varType2 : '',
+      variationValues2: effectiveHasVariations ? this.varValues2 : '',
+      existingVariations: effectiveHasVariations
         ? this.variationRows.map(r => ({
             key: r.key,
             currentPrice: Number(r.price) || 0,
@@ -2564,7 +2602,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         }
 
         // 2. Tekil ürün modu: Varyasyonlar kapalıysa ASLA varyasyon açma veya üretme
-        if (!hasUserVariations || res.isSingleProductPricing || !res.pricedVariations || res.pricedVariations.length === 0) {
+        if (!effectiveHasVariations || res.isSingleProductPricing || !res.pricedVariations || res.pricedVariations.length === 0) {
           if (res.recommendedBasePriceUsd > 0) {
             this.priceUsd = Number(res.recommendedBasePriceUsd.toFixed(2));
             this.updatePriceTry();

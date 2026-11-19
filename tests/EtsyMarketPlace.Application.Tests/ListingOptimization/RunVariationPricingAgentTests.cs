@@ -180,6 +180,133 @@ public sealed class RunVariationPricingAgentTests
         Assert.True(result.RecommendedNetProfitUsd > 0m);
     }
 
+    [Fact]
+    public async Task Agent_WithEnableVariationsFalse_IgnoresLlmVariationsArrayAndStaysSingleProduct()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "Wooden Bowl",
+            Total = 0,
+            Listings = []
+        });
+        var shippingStub = new StubShipmentOrchestratorService();
+        var llmStub = new StubGeminiListingApiClient("""
+            {
+              "strategy_summary": "Tekil ürün fiyatı belirlendi.",
+              "variations": [
+                { "key": "Small", "price_usd": 34.90, "tier_label": "Tekil", "reasoning": "Güvenli marj" }
+              ]
+            }
+            """);
+
+        var handler = new RunVariationPricingAgentHandler(marketStub, shippingStub, llmStub);
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Handcrafted Olive Wood Serving Bowl",
+            BaseWeightGrams: 300,
+            ProductionCostUsd: 3.50m,
+            TargetNetMarginPercent: 30m,
+            IncludeOffsiteAds: false,
+            UsdTryRate: 50.0m,
+            Provider: "OpenAI",
+            Model: "gpt-4o-mini",
+            ApiKey: "sk-openai-test",
+            EnableVariations: false);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.True(result.IsSingleProductPricing);
+        Assert.True(result.UsedAi);
+        Assert.Empty(result.PricedVariations);
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
+        Assert.True(result.RecommendedBasePriceUsd >= 34.90m);
+        Assert.True(result.RecommendedBasePriceUsd > result.RecommendedBreakEvenPriceUsd);
+    }
+
+    [Fact]
+    public async Task Agent_WithEnableVariationsTrue_AndEmptyVariations_RemainsSingleProductWithoutHardcodedFallback()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "Candle Holder",
+            Total = 0,
+            Listings = []
+        });
+        var shippingStub = new StubShipmentOrchestratorService();
+        var llmStub = new StubGeminiListingApiClient("""
+            {
+              "strategy_summary": "Varyasyonsuz tek fiyat uygulandı.",
+              "price_usd": 28.90,
+              "tier_label": "Hedef Marj",
+              "reasoning": "Güvenli marj"
+            }
+            """);
+
+        var handler = new RunVariationPricingAgentHandler(marketStub, shippingStub, llmStub);
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Minimalist Ceramic Candle Holder",
+            BaseWeightGrams: 250,
+            ProductionCostUsd: 2.00m,
+            TargetNetMarginPercent: 30m,
+            UsdTryRate: 50.0m,
+            Provider: "Gemini",
+            Model: "gemini-2.5-flash",
+            ApiKey: "gm-test",
+            EnableVariations: true,
+            VariationValues1: "",
+            ExistingVariations: []);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.True(result.IsSingleProductPricing);
+        Assert.Empty(result.PricedVariations);
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
+        Assert.False(result.SuggestedEnableVar2);
+    }
+
+    [Fact]
+    public async Task Agent_WithAllInactiveExistingVariations_DoesNotResurrectFromVariationValues1()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
+        {
+            Keyword = "Sculpture",
+            Total = 0,
+            Listings = []
+        });
+        var shippingStub = new StubShipmentOrchestratorService();
+        var llmStub = new StubGeminiListingApiClient(string.Empty);
+
+        var handler = new RunVariationPricingAgentHandler(marketStub, shippingStub, llmStub);
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Abstract Resin Sculpture",
+            EnableVariations: true,
+            VariationType1: "Size",
+            VariationValues1: "Small, Large",
+            ExistingVariations:
+            [
+                new("Small", 25.0m, 5, false),
+                new("Large", 35.0m, 5, false)
+            ],
+            BaseWeightGrams: 300,
+            ProductionCostUsd: 2.50m,
+            TargetNetMarginPercent: 30m,
+            UsdTryRate: 50.0m);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.True(result.IsSingleProductPricing);
+        Assert.Empty(result.PricedVariations);
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
+    }
+
     private sealed class StubMarketResearchService(MarketSearchResponse searchResult) : IMarketResearchService
     {
         public Task<MarketSearchResponse> SearchMarketAsync(MarketSearchQuery query, CancellationToken cancellationToken = default)

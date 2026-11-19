@@ -381,7 +381,7 @@ internal static class ProductAwareVariationHeuristic
         var safeBase = basePriceUsd > 0m ? basePriceUsd : 24.90m;
         var g1 = groups[0].Values.Take(5).ToList();
         var g2 = groups.Count > 1 && groups[1].Values.Count > 0
-            ? groups[1].Values.Take(4).ToList()
+            ? groups[1].Values.Take(5).ToList()
             : [];
 
         var m1 = groupMultipliers is { Count: > 0 } ? groupMultipliers[0] : null;
@@ -409,9 +409,6 @@ internal static class ProductAwareVariationHeuristic
             var mult1 = ResolveMultiplier(m1, i, g1.Count, isPrimaryDimension: true);
             for (int j = 0; j < g2.Count; j++)
             {
-                if (offerings.Count >= 16)
-                    return offerings;
-
                 var mult2 = ResolveMultiplier(m2, j, g2.Count, isPrimaryDimension: false);
                 offerings.Add(new SuggestedVariationOfferingDto
                 {

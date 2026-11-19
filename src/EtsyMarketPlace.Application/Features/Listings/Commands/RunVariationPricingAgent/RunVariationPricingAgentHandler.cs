@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -25,6 +26,11 @@ public sealed class RunVariationPricingAgentHandler(
     : IRequestHandler<RunVariationPricingAgentCommand, ServiceResponse>
 {
     private const string SingleProductSeedKey = "__SINGLE_PRODUCT__";
+
+    private static readonly JsonSerializerOptions PromptJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private static readonly Regex DimensionRegex = new(
         @"(\d+(?:[.,]\d+)?)\s*(cm|mm|in(?:ch|ches)?|"")",
@@ -495,20 +501,21 @@ public sealed class RunVariationPricingAgentHandler(
         var varType2 = dto.VariationType2?.Trim() ?? string.Empty;
         var varValues2 = dto.VariationValues2?.Trim() ?? string.Empty;
 
+        var hasExplicitExistingList = dto.ExistingVariations is { Count: > 0 };
         var rawKeys = (dto.ExistingVariations ?? [])
             .Where(v => v.Active && !string.IsNullOrWhiteSpace(v.Key))
             .Select(v => v.Key.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (rawKeys.Count == 0 && !string.IsNullOrWhiteSpace(varValues1))
+        if (rawKeys.Count == 0 && !hasExplicitExistingList)
         {
-            var v1List = SplitValues(varValues1);
+            var v1List = !string.IsNullOrWhiteSpace(varValues1) ? SplitValues(varValues1) : [];
             var v2List = enableVar2 && !string.IsNullOrWhiteSpace(varValues2)
                 ? SplitValues(varValues2)
                 : [];
 
-            if (v2List.Count > 0)
+            if (v1List.Count > 0 && v2List.Count > 0)
             {
                 foreach (var a in v1List)
                 {
@@ -516,9 +523,13 @@ public sealed class RunVariationPricingAgentHandler(
                         rawKeys.Add($"{a} / {b}");
                 }
             }
-            else
+            else if (v1List.Count > 0)
             {
                 rawKeys.AddRange(v1List);
+            }
+            else if (v2List.Count > 0)
+            {
+                rawKeys.AddRange(v2List);
             }
         }
 
@@ -767,7 +778,7 @@ public sealed class RunVariationPricingAgentHandler(
                 };
 
             var systemPrompt = isSingleProduct ? singleSystemPrompt : variationSystemPrompt;
-            var userPrompt = JsonSerializer.Serialize(promptModel);
+            var userPrompt = JsonSerializer.Serialize(promptModel, PromptJsonOptions);
             var (success, content, _) = await aiClient.GenerateOptimizationJsonAsync(
                 systemPrompt, userPrompt, model, apiKey, cancellationToken);
 
