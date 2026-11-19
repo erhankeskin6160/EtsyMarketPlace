@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -19,27 +20,25 @@ using EtsyMarketPlace.Application.Features.Subscriptions.Commands.AdminUpdateSub
 using EtsyMarketPlace.Application.Features.Subscriptions.Queries.GetPaymentGatewaySettings;
 using EtsyMarketPlace.Application.Subscriptions;
 
-[Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.Admin)]
+[Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.AdminRoles)]
 [ApiController]
 [Route("api/v{version:apiVersion}/admin")]
 [Route("api/admin")]
 public class AdminController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly JwtTokenService _jwtService;
 
-    public AdminController(IMediator mediator, JwtTokenService jwtService)
+    public AdminController(IMediator mediator)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
-        _jwtService = jwtService ?? throw new ArgumentNullException(nameof(jwtService));
     }
 
     private (bool IsValid, string? AdminId, string? AdminName) ValidateAdmin()
     {
-        var authHeader = HttpContext.Request.Headers["Authorization"].ToString();
-        var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
-        var (isValid, _, adminId, role, adminName) = _jwtService.ValidateToken(token);
-        if (!isValid || role != UserRoles.Admin)
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var adminName = User.Identity?.Name;
+        var isAdmin = User.IsInRole(UserRoles.Admin) || User.IsInRole(UserRoles.SuperAdmin);
+        if (!isAdmin || string.IsNullOrWhiteSpace(adminId))
         {
             return (false, null, null);
         }

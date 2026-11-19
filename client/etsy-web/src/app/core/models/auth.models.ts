@@ -2,7 +2,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'Admin' | 'StoreOwner' | 'Demo' | 'Operator';
+  role: 'Admin' | 'SuperAdmin' | 'StoreOwner' | 'Demo' | 'Operator';
   assignedShopIds: string[];
   monthlyAiTokenQuota: number;
   usedAiTokens: number;

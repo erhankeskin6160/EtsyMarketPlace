@@ -21,6 +21,7 @@ using EtsyMarketPlace.Api.Filters;
 using EtsyMarketPlace.Api.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using EtsyMarketPlace.Application.Common.Validation;
 using EtsyMarketPlace.Infrastructure.AiUsage;
@@ -155,6 +156,27 @@ builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyRawDataCacheStore>(sp => sp.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<SqliteAccountingStore>();
 builder.Services.AddSingleton<SqliteSubscriptionStore>();
+builder.Services.AddMemoryCache();
+
+// 2.2. ASP.NET Core Identity (Stateless JWT API uyumlu — cookie şeması çakışması olmadan AddIdentityCore)
+builder.Services
+    .AddIdentityCore<EtsyMarketPlace.Infrastructure.Identity.ApplicationIdentityUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.Password.RequiredLength = 6;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    })
+    .AddRoles<Microsoft.AspNetCore.Identity.IdentityRole>()
+    .AddEntityFrameworkStores<EtsyMarketPlaceDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddScoped<IIdentityAuthService, EtsyMarketPlace.Infrastructure.Identity.IdentityAuthService>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
@@ -344,6 +366,7 @@ using (var scope = app.Services.CreateScope())
 
         await AccountingPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
         await SubscriptionPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
+        await IdentityPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
 
         var migrator = scope.ServiceProvider.GetRequiredService<PostgreSqlDataMigrator>();
         var migrationRes = await migrator.MigrateAndSeedAsync();

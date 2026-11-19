@@ -2,21 +2,28 @@ using EtsyMarketPlace.Domain.Accounting;
 using EtsyMarketPlace.Domain.Accounting.Entities;
 using EtsyMarketPlace.Domain.Entities;
 using EtsyMarketPlace.Domain.Subscriptions.Entities;
+using EtsyMarketPlace.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace EtsyMarketPlace.Infrastructure.Database.Postgres;
 
 /// <summary>
-/// PostgreSQL tabanlı EtsyMarketPlace Entity Framework Core Veritabanı Bağlamı (DbContext).
+/// PostgreSQL tabanlı EtsyMarketPlace Entity Framework Core + ASP.NET Core Identity Veritabanı Bağlamı.
 /// </summary>
-public class EtsyMarketPlaceDbContext : DbContext
+public class EtsyMarketPlaceDbContext : IdentityDbContext<ApplicationIdentityUser, IdentityRole, string>
 {
     public EtsyMarketPlaceDbContext(DbContextOptions<EtsyMarketPlaceDbContext> options)
         : base(options)
     {
     }
 
-    public DbSet<AppUser> Users => Set<AppUser>();
+    /// <summary>
+    /// Eski özel kullanıcı tablosu (app_users) — yalnızca mevcut verilerin tek seferlik
+    /// ASP.NET Core Identity (AspNetUsers) göçü için korunmaktadır.
+    /// </summary>
+    public DbSet<AppUser> LegacyUsers => Set<AppUser>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ShopConnection> ShopConnections => Set<ShopConnection>();
     public DbSet<OAuthToken> OAuthTokens => Set<OAuthToken>();
@@ -51,7 +58,24 @@ public class EtsyMarketPlaceDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // 1. AppUser
+        // 0. ASP.NET Core Identity (ApplicationIdentityUser) özel alanları
+        modelBuilder.Entity<ApplicationIdentityUser>(entity =>
+        {
+            entity.Property(e => e.PrimaryRole).HasColumnName("primary_role").HasMaxLength(50).HasDefaultValue("StoreOwner");
+            entity.Property(e => e.AssignedShopIds).HasColumnName("assigned_shop_ids").HasColumnType("text").HasDefaultValue("[]");
+            entity.Property(e => e.MonthlyAiTokenQuota).HasColumnName("monthly_ai_token_quota").HasDefaultValue(500000);
+            entity.Property(e => e.UsedAiTokens).HasColumnName("used_ai_tokens").HasDefaultValue(0);
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.SubscriptionPlanId).HasColumnName("subscription_plan_id").HasMaxLength(50).HasDefaultValue("pro");
+            entity.Property(e => e.SubscriptionStatus).HasColumnName("subscription_status").HasMaxLength(30).HasDefaultValue("Active");
+            entity.Property(e => e.SubscriptionExpiresAt).HasColumnName("subscription_expires_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.LegacyPasswordHash).HasColumnName("legacy_password_hash").HasColumnType("text");
+            entity.Property(e => e.LegacyPasswordSalt).HasColumnName("legacy_password_salt").HasColumnType("text");
+        });
+
+        // 1. Legacy AppUser (app_users - veri göçü uyumluluğu için korunur)
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.ToTable("app_users");
