@@ -2781,7 +2781,7 @@ export class CompetitorSpyComponent implements OnInit {
     this.isImprovingLqs = true;
     this.activeProductDetailTab = 'ai-doctor';
     const s = this.aiSettings.settings();
-    const apiKey = (s as any)[`${s.provider.toLowerCase()}ApiKey`] || s.geminiApiKey || s.deepSeekApiKey || '';
+    const apiKey = this.aiSettings.getActiveApiKey();
     const cmd: AiLqsImprovementCommandDto = {
       listingId: sel.listingId,
       title: sel.title,

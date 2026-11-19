@@ -1086,6 +1086,13 @@ export class EtsyApiService {
     );
   }
 
+  suggestListingVariations(request: SuggestListingVariationsRequestDto): Observable<SuggestListingVariationsResultDto> {
+    return this.http.post<SuggestListingVariationsResultDto>(
+      `${this.API_BASE}/api/etsy/listings/ai-suggest-variations`,
+      request
+    );
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
@@ -1540,6 +1547,7 @@ export interface VariationPricingAgentRequestDto {
   provider?: string;
   model?: string;
   apiKey?: string;
+  enableVariations?: boolean;
 }
 
 export interface CompetitorPriceSampleDto {
@@ -1614,6 +1622,7 @@ export interface PricedVariationRowDto {
 }
 
 export interface VariationPricingAgentResultDto {
+  isSingleProductPricing?: boolean;
   usedAi: boolean;
   providerUsed: string;
   searchKeywordUsed: string;
@@ -1622,6 +1631,11 @@ export interface VariationPricingAgentResultDto {
   recommendedBasePriceUsd: number;
   recommendedBaseShippingCostUsd: number;
   averageNetMarginPercent: number;
+  recommendedBreakEvenPriceUsd?: number;
+  recommendedEtsyFeesUsd?: number;
+  recommendedNetProfitUsd?: number;
+  recommendedPricingTierLabel?: string;
+  recommendedPricingReasoning?: string;
   strategySummary: string;
   suggestedVarType1: string;
   suggestedVarValues1: string;
@@ -1630,6 +1644,40 @@ export interface VariationPricingAgentResultDto {
   suggestedVarValues2: string;
   agentSteps: VariationAgentStepDto[];
   pricedVariations: PricedVariationRowDto[];
+}
+
+export interface SuggestListingVariationsRequestDto {
+  title?: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  materials?: string[];
+  listingType?: 'physical' | 'digital';
+  priceUsd?: number;
+  currentVarType1?: string;
+  currentVarValues1?: string;
+  currentVarType2?: string;
+  currentVarValues2?: string;
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  strictNeverOffline?: boolean;
+}
+
+export interface SuggestedVariationGroupDto {
+  name: string;
+  values: string[];
+  reason?: string;
+}
+
+export interface SuggestListingVariationsResultDto {
+  usedAi: boolean;
+  provider: string;
+  model: string;
+  analysisSummary: string;
+  warningMessage?: string | null;
+  suggestedVariations: SuggestedVariationGroupDto[];
+  suggestedOfferings: CompetitorVariationOfferingDto[];
 }
 
 

@@ -63,6 +63,7 @@ export interface FastCreatorDraft {
   varValues2: string;
   customVariationPricing: boolean;
   variationRows: VariationRow[];
+  excludedVariationKeys?: string[];
   selectedTemplateId: string;
   isLivePublish: boolean;
   savedAt: string;
@@ -191,14 +192,22 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   readonly bookmarkletSafeUrl: SafeUrl = this.sanitizer.bypassSecurityTrustUrl(buildEtsyVariationBookmarkletUrl());
   varType1 = 'Boyut / Size';
-  varValues1 = 'Small, Medium, Large';
+  varValues1 = '';
   enableVar2 = false;
   varType2 = 'Renk / Color';
-  varValues2 = 'Siyah, Beyaz, Altın';
+  varValues2 = '';
   customVariationPricing = false;
   variationRows: VariationRow[] = [];
+  excludedVariationKeys: string[] = [];
   selectedProfitVariationKey = '__base__';
   isGeneratingVariations = false;
+  variationAiAnalysis: {
+    provider: string;
+    model: string;
+    usedAi: boolean;
+    summary: string;
+    warning?: string | null;
+  } | null = null;
 
   // --- AI PRICING, COMPETITOR & SHIPPING AGENT ---
   agentTargetCountry = 'US';
@@ -273,6 +282,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
       if (cloned.hasVariations) {
         this.enableVariations = true;
+        this.excludedVariationKeys = [];
+        this.variationAiAnalysis = null;
         if (cloned.varType1) this.varType1 = cloned.varType1;
         if (cloned.varValues1) this.varValues1 = cloned.varValues1;
         if (cloned.enableVar2) {
@@ -434,6 +445,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         varValues2: this.varValues2,
         customVariationPricing: this.customVariationPricing,
         variationRows: this.variationRows,
+        excludedVariationKeys: this.excludedVariationKeys,
         selectedTemplateId: this.selectedTemplateId,
         isLivePublish: this.isLivePublish,
         savedAt: timeStr,
@@ -506,6 +518,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.varValues2 = draft.varValues2 || '';
       this.customVariationPricing = !!draft.customVariationPricing;
       this.variationRows = Array.isArray(draft.variationRows) ? [...draft.variationRows] : [];
+      this.excludedVariationKeys = Array.isArray(draft.excludedVariationKeys) ? [...draft.excludedVariationKeys] : [];
       this.selectedTemplateId = draft.selectedTemplateId || '';
       this.isLivePublish = !!draft.isLivePublish;
       this.estimatedShippingCostUsd = draft.estimatedShippingCostUsd ?? null;
@@ -1108,6 +1121,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varValues2 = '';
     this.customVariationPricing = false;
     this.variationRows = [];
+    this.excludedVariationKeys = [];
+    this.variationAiAnalysis = null;
     this.selectedProfitVariationKey = '__base__';
     this.pricingAgentResult = null;
     this.pricingAgentError = '';
@@ -1702,6 +1717,18 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.enableVariations && Array.isArray(this.variationRows) && this.variationRows.length > 0;
   }
 
+  get hasPricingVariations(): boolean {
+    return this.enableVariations && (this.variationRows.length > 0 || !!this.varValues1.trim());
+  }
+
+  get varOptions1(): string[] {
+    return this.parseVariationOptionGroup(this.varValues1).map(o => o.cleanValue);
+  }
+
+  get varOptions2(): string[] {
+    return this.parseVariationOptionGroup(this.varValues2).map(o => o.cleanValue);
+  }
+
   get isVariationPricingActive(): boolean {
     return this.hasActiveVariations && this.customVariationPricing;
   }
@@ -1836,6 +1863,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.varType2 = parsed.varType2;
     this.varValues2 = parsed.varValues2;
     this.variationRows = parsed.variationRows.map(r => ({ ...r }));
+    this.excludedVariationKeys = [];
+    this.variationAiAnalysis = null;
     this.customVariationPricing = true;
     this.selectedProfitVariationKey = '__base__';
     this.variationImportWarning = '';
@@ -1884,6 +1913,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   private applyExtensionInventoryToForm(inv: CompetitorListingInventoryDto): void {
     this.enableVariations = true;
+    this.excludedVariationKeys = [];
+    this.variationAiAnalysis = null;
     this.varType1 = inv.varType1 || this.varType1;
     this.varValues1 = inv.varValues1 || '';
     this.enableVar2 = Boolean(inv.enableVar2 && inv.varType2 && inv.varValues2);
@@ -1940,13 +1971,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     const basePrice = Number(this.priceUsd) || 0;
     const opts1 = this.parseVariationOptionGroup(this.varValues1);
-    if (opts1.length === 0) {
+    const opts2 = this.enableVar2 ? this.parseVariationOptionGroup(this.varValues2) : [];
+
+    if (opts1.length === 0 && opts2.length === 0) {
       this.variationRows = [];
       this.selectedProfitVariationKey = '__base__';
       return;
     }
 
-    const opts2 = this.enableVar2 ? this.parseVariationOptionGroup(this.varValues2) : [];
     const hasAnyInlinePrice =
       opts1.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined) ||
       opts2.some(o => o.priceUsd !== undefined || o.deltaUsd !== undefined);
@@ -1954,27 +1986,42 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.customVariationPricing = true;
     }
 
-    const combinations: Array<{ key: string; inlinePrice?: number; active: boolean }> = [];
-    if (this.enableVar2 && opts2.length > 0) {
+    const allCombinations: Array<{ key: string; inlinePrice?: number; active: boolean }> = [];
+    if (opts1.length > 0 && this.enableVar2 && opts2.length > 0) {
       for (const o1 of opts1) {
         for (const o2 of opts2) {
-          combinations.push({
+          allCombinations.push({
             key: `${o1.cleanValue} / ${o2.cleanValue}`,
             inlinePrice: resolveVariationOptionPairPrice(basePrice, o1, o2),
             active: o1.active && o2.active
           });
         }
       }
-    } else {
+    } else if (opts1.length > 0) {
       for (const o1 of opts1) {
-        combinations.push({
+        allCombinations.push({
           key: o1.cleanValue,
           inlinePrice: resolveVariationOptionPairPrice(basePrice, o1),
           active: o1.active
         });
       }
+    } else {
+      for (const o2 of opts2) {
+        allCombinations.push({
+          key: o2.cleanValue,
+          inlinePrice: resolveVariationOptionPairPrice(basePrice, o2),
+          active: o2.active
+        });
+      }
     }
 
+    const validKeySet = new Set(allCombinations.map(c => c.key.trim().toLowerCase()));
+    this.excludedVariationKeys = (this.excludedVariationKeys || [])
+      .map(k => k.trim().toLowerCase())
+      .filter((k, idx, arr) => k.length > 0 && validKeySet.has(k) && arr.indexOf(k) === idx);
+    const excludedSet = new Set(this.excludedVariationKeys);
+
+    const combinations = allCombinations.filter(c => !excludedSet.has(c.key.trim().toLowerCase()));
     const existing = new Map(this.variationRows.map(r => [r.key, r]));
     const defaultPerRowQty = Math.max(5, Math.floor((Number(this.quantity) || 15) / Math.max(1, combinations.length)));
 
@@ -2013,6 +2060,194 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (this.isVariationPricingActive) {
       this.onVariationRowChange();
     }
+  }
+
+  dismissVariationAiAnalysis(): void {
+    this.variationAiAnalysis = null;
+  }
+
+  removeVariationGroup(groupIndex: 1 | 2): void {
+    const preservedBase = this.effectivePrice || Number(this.priceUsd) || 0;
+
+    if (groupIndex === 1) {
+      const hasGroup2 = this.enableVar2 && (this.varValues2.trim().length > 0 || this.varType2.trim().length > 0);
+      if (hasGroup2) {
+        this.varType1 = this.varType2.trim() || 'Color';
+        this.varValues1 = this.varValues2;
+        this.enableVar2 = false;
+        this.varType2 = 'Renk / Color';
+        this.varValues2 = '';
+        this.excludedVariationKeys = [];
+        if (preservedBase > 0 && !(Number(this.priceUsd) > 0)) {
+          this.priceUsd = preservedBase;
+          this.updatePriceTry();
+        }
+        this.variationRows = [];
+        this.rebuildVariationGrid();
+        this.saveDraftToStorage();
+        this.showToast('✕ 1. varyasyon grubu kaldırıldı; 2. grup 1. sıraya taşındı.');
+      } else {
+        if (preservedBase > 0 && !(Number(this.priceUsd) > 0)) {
+          this.priceUsd = preservedBase;
+          this.updatePriceTry();
+        }
+        this.varValues1 = '';
+        this.variationRows = [];
+        this.excludedVariationKeys = [];
+        this.enableVariations = false;
+        this.customVariationPricing = false;
+        this.variationAiAnalysis = null;
+        this.selectedProfitVariationKey = '__base__';
+        this.saveDraftToStorage();
+        this.showToast('✕ 1. varyasyon grubu kaldırıldı.');
+      }
+      return;
+    }
+
+    this.enableVar2 = false;
+    this.varValues2 = '';
+    this.excludedVariationKeys = [];
+    this.rebuildVariationGrid();
+    this.saveDraftToStorage();
+    this.showToast('✕ 2. varyasyon grubu kaldırıldı.');
+  }
+
+  removeVariationOption(groupIndex: 1 | 2, optionIndex: number): void {
+    const raw = groupIndex === 1 ? this.varValues1 : this.varValues2;
+    const parts = (raw || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    if (optionIndex < 0 || optionIndex >= parts.length) return;
+    parts.splice(optionIndex, 1);
+
+    if (parts.length === 0) {
+      this.removeVariationGroup(groupIndex);
+      return;
+    }
+
+    if (groupIndex === 1) {
+      this.varValues1 = parts.join(', ');
+    } else {
+      this.varValues2 = parts.join(', ');
+    }
+    this.rebuildVariationGrid();
+    this.saveDraftToStorage();
+  }
+
+  removeVariationRow(rowIndex: number): void {
+    if (!this.variationRows || rowIndex < 0 || rowIndex >= this.variationRows.length) return;
+
+    const removed = this.variationRows[rowIndex];
+    const preservedBase = this.effectivePrice || Number(this.priceUsd) || 0;
+    const removedNorm = (removed.key || '').trim().toLowerCase();
+    const hasTwoGroups = this.enableVar2 && this.varOptions1.length > 0 && this.varOptions2.length > 0;
+
+    if (!hasTwoGroups) {
+      const targetGroup: 1 | 2 = this.varOptions1.length > 0 ? 1 : 2;
+      const raw = targetGroup === 1 ? this.varValues1 : this.varValues2;
+      const parts = (raw || '').split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const nextParts = parts.filter(part => {
+        const parsed = parseInlineVariationOptionPrice(part, this.usdTryRate);
+        return parsed.cleanValue.trim().toLowerCase() !== removedNorm && part.toLowerCase() !== removedNorm;
+      });
+
+      if (nextParts.length === 0) {
+        this.removeVariationGroup(targetGroup);
+        return;
+      }
+
+      if (targetGroup === 1) {
+        this.varValues1 = nextParts.join(', ');
+      } else {
+        this.varValues2 = nextParts.join(', ');
+      }
+      this.variationRows.splice(rowIndex, 1);
+      if (this.selectedProfitVariationKey === removed.key) {
+        this.selectedProfitVariationKey = '__base__';
+      }
+      this.onVariationRowChange();
+      this.saveDraftToStorage();
+      return;
+    }
+
+    if (removedNorm && !this.excludedVariationKeys.includes(removedNorm)) {
+      this.excludedVariationKeys = [...this.excludedVariationKeys, removedNorm];
+    }
+    this.variationRows.splice(rowIndex, 1);
+
+    if (this.selectedProfitVariationKey === removed.key) {
+      this.selectedProfitVariationKey = '__base__';
+    }
+
+    if (this.variationRows.length === 0) {
+      if (preservedBase > 0 && !(Number(this.priceUsd) > 0)) {
+        this.priceUsd = preservedBase;
+        this.updatePriceTry();
+      }
+      this.enableVariations = false;
+      this.enableVar2 = false;
+      this.varValues1 = '';
+      this.varValues2 = '';
+      this.excludedVariationKeys = [];
+      this.customVariationPricing = false;
+      this.variationAiAnalysis = null;
+      this.selectedProfitVariationKey = '__base__';
+      this.saveDraftToStorage();
+      return;
+    }
+
+    const usedG1 = new Set<string>();
+    const usedG2 = new Set<string>();
+    for (const row of this.variationRows) {
+      const segs = (row.key || '').split('/').map(p => p.trim());
+      if (segs[0]) usedG1.add(segs[0].toLowerCase());
+      if (segs[1]) usedG2.add(segs[1].toLowerCase());
+    }
+
+    const filterGroupText = (raw: string, usedSet: Set<string>): string =>
+      (raw || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => {
+          if (!s) return false;
+          const clean = parseInlineVariationOptionPrice(s, this.usdTryRate).cleanValue.trim().toLowerCase();
+          return usedSet.has(clean);
+        })
+        .join(', ');
+
+    this.varValues1 = filterGroupText(this.varValues1, usedG1);
+    this.varValues2 = filterGroupText(this.varValues2, usedG2);
+
+    const remainingOpts1 = this.varOptions1;
+    const remainingOpts2 = this.varOptions2;
+    if (remainingOpts1.length === 0 && remainingOpts2.length > 0) {
+      this.varType1 = this.varType2.trim() || 'Color';
+      this.varValues1 = this.varValues2;
+      this.enableVar2 = false;
+      this.varType2 = 'Renk / Color';
+      this.varValues2 = '';
+      this.excludedVariationKeys = [];
+      this.variationRows = this.variationRows.map(r => {
+        const parts = (r.key || '').split('/').map(p => p.trim());
+        return { ...r, key: parts[1] || parts[0] || r.key };
+      });
+    } else if (remainingOpts2.length === 0) {
+      this.enableVar2 = false;
+      this.varValues2 = '';
+      this.excludedVariationKeys = [];
+    } else {
+      const opt1Set = new Set(remainingOpts1.map(o => o.toLowerCase()));
+      const opt2Set = new Set(remainingOpts2.map(o => o.toLowerCase()));
+      this.excludedVariationKeys = this.excludedVariationKeys.filter(k => {
+        const segs = k.split('/').map(s => s.trim());
+        return segs.length === 2 && opt1Set.has(segs[0]) && opt2Set.has(segs[1]);
+      });
+    }
+
+    this.onVariationRowChange();
+    this.saveDraftToStorage();
   }
 
   syncBasePriceToVariations(): void {
@@ -2068,27 +2303,46 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   suggestAiVariations(): void {
-    const title = this.title.trim() || 'Handmade Product';
+    const cleanTitle = (this.title || '').trim();
+    const cleanDesc = (this.description || '').trim();
+    if (!cleanTitle && !cleanDesc) {
+      this.showToast('⚠️ AI varyasyon önerisi için lütfen önce ürün başlığı veya açıklaması girin.');
+      return;
+    }
+
     this.isGeneratingVariations = true;
     const s = this.aiService.settings();
-    const cmd = {
-      listingId: 0,
-      title,
-      tags: this.tags,
-      description: this.description,
-      materials: this.materials ? this.materials.split(',').map(m => m.trim()) : [],
-      priceUsd: this.priceUsd || 25,
-      category: this.selectedCategory,
-      currentLqsScore: 80,
-      provider: s.provider,
-      apiKey: (s as any)[`${s.provider.toLowerCase()}ApiKey`] || s.geminiApiKey || s.deepSeekApiKey || '',
-      model: this.aiService.activeModelName()
-    };
+    const activeApiKey = this.aiService.getActiveApiKey();
 
-    this.etsyApi.improveListingLqs(cmd).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.etsyApi.suggestListingVariations({
+      title: cleanTitle,
+      description: cleanDesc,
+      category: this.selectedCategory || '',
+      tags: this.tags,
+      materials: this.sanitizeMaterialsForPayload(this.materials),
+      listingType: this.listingType,
+      priceUsd: this.effectivePrice || Number(this.priceUsd) || 0,
+      currentVarType1: this.enableVariations ? this.varType1 : '',
+      currentVarValues1: this.enableVariations ? this.varValues1 : '',
+      currentVarType2: this.enableVariations && this.enableVar2 ? this.varType2 : '',
+      currentVarValues2: this.enableVariations && this.enableVar2 ? this.varValues2 : '',
+      provider: s.provider,
+      model: this.aiService.activeModelName(),
+      apiKey: activeApiKey,
+      strictNeverOffline: s.strictNeverOffline
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isGeneratingVariations = false;
+        this.variationAiAnalysis = {
+          provider: res.provider,
+          model: res.model,
+          usedAi: res.usedAi,
+          summary: res.analysisSummary,
+          warning: res.warningMessage
+        };
+
         if (res.suggestedVariations && res.suggestedVariations.length > 0) {
+          this.excludedVariationKeys = [];
           this.enableVariations = true;
           this.customVariationPricing = true;
           this.varType1 = res.suggestedVariations[0].name;
@@ -2114,14 +2368,27 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
             this.rebuildVariationGrid();
           }
           this.saveDraftToStorage();
-          this.showToast(`✨ ${res.provider} ile varyasyonlar oluşturuldu (${res.suggestedVariations.map(v => v.name).join(' & ')})`);
+          const groupLabel = res.suggestedVariations.map(v => v.name).join(' & ');
+          if (res.warningMessage) {
+            this.showToast(`⚠️ ${res.warningMessage}`);
+          } else {
+            this.showToast(`✨ ${res.provider} ürüne özel varyasyonları oluşturdu (${groupLabel})`);
+          }
         } else {
-          this.showToast('Varyasyon önerisi bulunamadı.');
+          this.showToast('⚠️ Bu ürün için uygun varyasyon önerisi bulunamadı.');
         }
       },
-      error: () => {
+      error: (err) => {
         this.isGeneratingVariations = false;
-        this.showToast('❌ AI varyasyon önerisi alınamadı.');
+        const detail = err?.error?.message || err?.error?.detail || err?.message || 'AI varyasyon önerisi alınamadı.';
+        this.variationAiAnalysis = {
+          provider: s.provider,
+          model: this.aiService.activeModelName(),
+          usedAi: false,
+          summary: '',
+          warning: detail
+        };
+        this.showToast(`❌ ${detail}`);
       }
     });
   }
@@ -2236,18 +2503,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.enableVariations) {
+    const hasUserVariations = this.hasPricingVariations;
+    if (hasUserVariations) {
       this.rebuildVariationGrid();
     }
 
     const s = this.aiService.settings();
     const provider = s.provider;
-    const apiKey =
-      provider === 'Gemini' ? s.geminiApiKey :
-      provider === 'DeepSeek' ? s.deepSeekApiKey :
-      provider === 'OpenAI' ? s.openAiApiKey :
-      provider === 'Claude' ? s.claudeApiKey :
-      provider === 'Grok' ? s.grokApiKey : '';
+    const apiKey = this.aiService.getActiveApiKey();
 
     this.isRunningPricingAgent = true;
     this.pricingAgentError = '';
@@ -2259,17 +2522,20 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       category: this.selectedCategory || '',
       materials: this.sanitizeMaterialsForPayload(this.materials),
       tags: this.tags,
-      variationType1: this.varType1,
-      variationValues1: this.varValues1,
-      enableVariation2: this.enableVar2,
-      variationType2: this.varType2,
-      variationValues2: this.varValues2,
-      existingVariations: this.variationRows.map(r => ({
-        key: r.key,
-        currentPrice: Number(r.price) || 0,
-        quantity: Number(r.quantity) || 1,
-        active: r.active !== false
-      })),
+      enableVariations: hasUserVariations,
+      variationType1: hasUserVariations ? this.varType1 : '',
+      variationValues1: hasUserVariations ? this.varValues1 : '',
+      enableVariation2: hasUserVariations ? this.enableVar2 : false,
+      variationType2: hasUserVariations ? this.varType2 : '',
+      variationValues2: hasUserVariations ? this.varValues2 : '',
+      existingVariations: hasUserVariations
+        ? this.variationRows.map(r => ({
+            key: r.key,
+            currentPrice: Number(r.price) || 0,
+            quantity: Number(r.quantity) || 1,
+            active: r.active !== false
+          }))
+        : [],
       targetCountryCode: this.agentTargetCountry || 'US',
       baseWeightGrams: Math.max(50, Number(this.agentBaseWeightGrams) || 250),
       lengthCm: Math.max(1, Number(this.agentLengthCm) || 18),
@@ -2281,7 +2547,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       usdTryRate: this.usdTryRate,
       provider,
       model: this.aiService.activeModelName(),
-      apiKey: apiKey?.trim() || ''
+      apiKey
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isRunningPricingAgent = false;
@@ -2297,48 +2563,35 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           }
         }
 
-        // 2. Varyasyon grupları önerildiyse forma yansıt
-        this.enableVariations = true;
-        this.customVariationPricing = true;
-        if ((!this.variationRows || this.variationRows.length === 0) && res.suggestedVarValues1) {
-          this.varType1 = res.suggestedVarType1 || this.varType1;
-          this.varValues1 = res.suggestedVarValues1;
-          this.enableVar2 = res.suggestedEnableVar2;
-          if (res.suggestedEnableVar2 && res.suggestedVarValues2) {
-            this.varType2 = res.suggestedVarType2 || this.varType2;
-            this.varValues2 = res.suggestedVarValues2;
+        // 2. Tekil ürün modu: Varyasyonlar kapalıysa ASLA varyasyon açma veya üretme
+        if (!hasUserVariations || res.isSingleProductPricing || !res.pricedVariations || res.pricedVariations.length === 0) {
+          if (res.recommendedBasePriceUsd > 0) {
+            this.priceUsd = Number(res.recommendedBasePriceUsd.toFixed(2));
+            this.updatePriceTry();
           }
-          this.rebuildVariationGrid();
+          this.saveDraftToStorage();
+          this.showToast(
+            `🤖 AI Fiyat & Kargo Ajanı tamamlandı (Tekil Ürün): Önerilen $${res.recommendedBasePriceUsd.toFixed(2)} · Kargo (${res.shippingBenchmark.selectedCarrierName}): $${res.recommendedBaseShippingCostUsd.toFixed(2)} · Net Marj: %${res.averageNetMarginPercent.toFixed(1)}`
+          );
+          return;
         }
 
-        // 3. Her varyasyon satırına ajan fiyatını ve net kâr rozetini işle
+        // 3. Varyasyonlu mod: Yalnızca kullanıcının mevcut varyasyon satırlarını fiyatlandır
+        this.customVariationPricing = true;
         const pricedMap = new Map(
-          (res.pricedVariations || []).map(p => [p.key.trim().toLowerCase(), p])
+          res.pricedVariations.map(p => [p.key.trim().toLowerCase(), p])
         );
 
-        if (this.variationRows.length === 0 && res.pricedVariations.length > 0) {
-          this.variationRows = res.pricedVariations.map(p => ({
-            key: p.key,
-            price: p.recommendedPriceUsd,
-            quantity: Math.max(2, Math.floor((this.quantity || 15) / res.pricedVariations.length)),
-            active: true,
-            agentNetProfitUsd: p.netProfitUsd,
-            agentNetMarginPct: p.netMarginPercent,
-            agentTierLabel: p.pricingTierLabel,
-            agentShippingUsd: p.estimatedShippingCostUsd
-          }));
-        } else {
-          this.variationRows.forEach(row => {
-            const match = pricedMap.get(row.key.trim().toLowerCase());
-            if (match) {
-              row.price = match.recommendedPriceUsd;
-              row.agentNetProfitUsd = match.netProfitUsd;
-              row.agentNetMarginPct = match.netMarginPercent;
-              row.agentTierLabel = match.pricingTierLabel;
-              row.agentShippingUsd = match.estimatedShippingCostUsd;
-            }
-          });
-        }
+        this.variationRows.forEach(row => {
+          const match = pricedMap.get(row.key.trim().toLowerCase());
+          if (match) {
+            row.price = match.recommendedPriceUsd;
+            row.agentNetProfitUsd = match.netProfitUsd;
+            row.agentNetMarginPct = match.netMarginPercent;
+            row.agentTierLabel = match.pricingTierLabel;
+            row.agentShippingUsd = match.estimatedShippingCostUsd;
+          }
+        });
 
         this.onVariationRowChange();
         this.saveDraftToStorage();
@@ -2449,8 +2702,22 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       rank: idx + 1
     }));
 
-    // Prepare variations
-    const variationsPayload = this.enableVariations && this.variationRows.length > 0
+    const effectivePrice = this.effectivePrice > 0 ? this.effectivePrice : 39.90;
+    const effectiveQuantity = this.effectiveQuantity > 0 ? this.effectiveQuantity : 15;
+
+    // Prepare variation groups (yalnızca boş olmayan gruplar gönderilir)
+    const rawGroup1Vals = this.parseVariationOptionGroup(this.varValues1).map(o => o.cleanValue);
+    const rawGroup2Vals = this.enableVar2 ? this.parseVariationOptionGroup(this.varValues2).map(o => o.cleanValue) : [];
+    const builtGroups = this.enableVariations && this.variationRows.length > 0
+      ? [
+          ...(rawGroup1Vals.length > 0 ? [{ name: this.varType1, values: rawGroup1Vals }] : []),
+          ...(rawGroup2Vals.length > 0 ? [{ name: this.varType2, values: rawGroup2Vals }] : [])
+        ]
+      : [];
+    const variationGroupsPayload = builtGroups.length > 0 ? builtGroups : undefined;
+
+    // Prepare variations (iki grupta hariç tutulan kombinasyonlar Etsy'de pasif olarak işaretlenir)
+    let variationsPayload = this.enableVariations && this.variationRows.length > 0
       ? this.variationRows.map(r => ({
           key: r.key,
           price: r.price,
@@ -2459,6 +2726,26 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           imageRank: r.imageRank
         }))
       : undefined;
+
+    if (variationsPayload && builtGroups.length === 2 && this.excludedVariationKeys.length > 0) {
+      const existingLower = new Set(variationsPayload.map(v => v.key.trim().toLowerCase()));
+      const excludedSet = new Set(this.excludedVariationKeys.map(k => k.trim().toLowerCase()));
+      for (const v1 of builtGroups[0].values) {
+        for (const v2 of builtGroups[1].values) {
+          const comboKey = `${v1} / ${v2}`;
+          const lower = comboKey.toLowerCase();
+          if (excludedSet.has(lower) && !existingLower.has(lower)) {
+            variationsPayload.push({
+              key: comboKey,
+              price: effectivePrice,
+              quantity: 1,
+              active: false,
+              imageRank: undefined
+            });
+          }
+        }
+      }
+    }
 
     // Clean tags (Etsy max 13, <=20 chars)
     const validTags = this.tags
@@ -2486,23 +2773,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (this.listingType !== 'digital' && !returnPolicyId && this.returnPoliciesList.length > 0) {
       returnPolicyId = this.returnPoliciesList[0].returnPolicyId;
     }
-
-    // Prepare variation groups
-    const variationGroupsPayload = this.enableVariations && this.variationRows.length > 0
-      ? [
-          {
-            name: this.varType1,
-            values: this.parseVariationOptionGroup(this.varValues1).map(o => o.cleanValue)
-          },
-          ...(this.enableVar2 ? [{
-            name: this.varType2,
-            values: this.parseVariationOptionGroup(this.varValues2).map(o => o.cleanValue)
-          }] : [])
-        ]
-      : undefined;
-
-    const effectivePrice = this.effectivePrice > 0 ? this.effectivePrice : 39.90;
-    const effectiveQuantity = this.effectiveQuantity > 0 ? this.effectiveQuantity : 15;
 
     const payload = {
       title: this.title.trim(),

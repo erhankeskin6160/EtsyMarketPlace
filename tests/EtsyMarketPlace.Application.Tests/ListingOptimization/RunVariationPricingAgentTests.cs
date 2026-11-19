@@ -85,7 +85,7 @@ public sealed class RunVariationPricingAgentTests
     }
 
     [Fact]
-    public async Task Agent_WithoutApiKey_AndEmptyMarket_SuggestsDefaultVariationsAndPreventsLoss()
+    public async Task Agent_WithoutApiKey_AndEmptyMarket_RunsSingleProductModeAndPreventsLoss()
     {
         var marketStub = new StubMarketResearchService(new MarketSearchResponse
         {
@@ -111,14 +111,73 @@ public sealed class RunVariationPricingAgentTests
         Assert.True(resp.Success);
         var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
         Assert.False(result.UsedAi);
+        Assert.True(result.IsSingleProductPricing);
         Assert.Equal(0, result.MarketBenchmark.CompetitorCount);
-        Assert.NotEmpty(result.PricedVariations);
-        Assert.False(string.IsNullOrWhiteSpace(result.SuggestedVarType1));
-        Assert.All(result.PricedVariations, v =>
+        Assert.Empty(result.PricedVariations);
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarType1));
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
+        Assert.False(result.SuggestedEnableVar2);
+        Assert.True(result.RecommendedBasePriceUsd > result.RecommendedBreakEvenPriceUsd);
+        Assert.True(result.RecommendedNetProfitUsd > 0m);
+    }
+
+    [Fact]
+    public async Task Agent_WithEnableVariationsFalse_IgnoresStaleVariationInputsAndReturnsSingleProductPrice()
+    {
+        var marketStub = new StubMarketResearchService(new MarketSearchResponse
         {
-            Assert.True(v.RecommendedPriceUsd > v.BreakEvenPriceUsd);
-            Assert.True(v.NetProfitUsd > 0m);
+            Keyword = "Thinking Alien",
+            Total = 3,
+            Listings =
+            [
+                new MarketListingItemDto { Id = 1, Title = "Alien Figurine A", PriceUsd = 24.00m, HasFreeShipping = true },
+                new MarketListingItemDto { Id = 2, Title = "Alien Figurine B", PriceUsd = 29.00m, HasFreeShipping = true },
+                new MarketListingItemDto { Id = 3, Title = "Alien Figurine C", PriceUsd = 35.00m, HasFreeShipping = false }
+            ]
         });
+        var shippingStub = new StubShipmentOrchestratorService();
+        var llmStub = new StubGeminiListingApiClient("""
+            {
+              "strategy_summary": "Tekil ürün için kargo ve Etsy kesintileri düşülerek %30 net marjlı tek fiyat belirlendi.",
+              "price_usd": 29.90,
+              "tier_label": "Tekil Ürün Hedef Marj",
+              "reasoning": "Kargo ve kesintiler sonrası güvenli net kâr sağlar."
+            }
+            """);
+
+        var handler = new RunVariationPricingAgentHandler(marketStub, shippingStub, llmStub);
+        var req = new VariationPricingAgentRequestDto(
+            ShopId: "53236321",
+            Title: "Thinking Alien Desk Figurine",
+            VariationType1: "Boyut / Size",
+            VariationValues1: "Small, Medium, Large",
+            EnableVariation2: true,
+            VariationType2: "Renk / Color",
+            VariationValues2: "Siyah, Beyaz",
+            ExistingVariations: [new("Small / Siyah", 19.90m, 5, true)],
+            BaseWeightGrams: 250,
+            ProductionCostUsd: 2.00m,
+            TargetNetMarginPercent: 30m,
+            IncludeOffsiteAds: false,
+            UsdTryRate: 50.0m,
+            Provider: "DeepSeek",
+            Model: "deepseek-chat",
+            ApiKey: "sk-test-key",
+            EnableVariations: false);
+
+        var resp = await handler.Handle(new RunVariationPricingAgentCommand(req), CancellationToken.None);
+
+        Assert.True(resp.Success);
+        var result = Assert.IsType<VariationPricingAgentResultDto>(resp.Data);
+        Assert.True(result.UsedAi);
+        Assert.True(result.IsSingleProductPricing);
+        Assert.Empty(result.PricedVariations);
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarType1));
+        Assert.True(string.IsNullOrWhiteSpace(result.SuggestedVarValues1));
+        Assert.False(result.SuggestedEnableVar2);
+        Assert.True(result.RecommendedBasePriceUsd >= 29.90m);
+        Assert.True(result.RecommendedBasePriceUsd > result.RecommendedBreakEvenPriceUsd);
+        Assert.True(result.RecommendedNetProfitUsd > 0m);
     }
 
     private sealed class StubMarketResearchService(MarketSearchResponse searchResult) : IMarketResearchService

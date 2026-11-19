@@ -13,6 +13,7 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.RunVariationPricingAgent;
+using EtsyMarketPlace.Application.Features.Listings.Commands.SuggestListingVariations;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListingState;
 using EtsyMarketPlace.Application.Features.Listings.Images;
@@ -309,6 +310,37 @@ public class EtsyListingsController : BaseApiController
         };
 
         var response = await _mediator.Send(new RunVariationPricingAgentCommand(enrichedRequest), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("listings/ai-suggest-variations")]
+    [EndpointSummary("Başlık, Açıklama, Etiket, Malzeme ve Kategori Analizi ile Ürüne Özel AI Varyasyon Önerisi")]
+    public async Task<IActionResult> SuggestListingVariations(
+        [FromBody] SuggestListingVariationsRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null || (string.IsNullOrWhiteSpace(request.Title) && string.IsNullOrWhiteSpace(request.Description)))
+        {
+            return BadRequest(new { success = false, message = "AI varyasyon önerisi için en az ürün başlığı veya açıklaması gereklidir." });
+        }
+
+        var isGeminiOrDefault = string.IsNullOrWhiteSpace(request.Provider)
+            || request.Provider.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+
+        var resolvedApiKey = !string.IsNullOrWhiteSpace(request.ApiKey)
+            ? request.ApiKey.Trim()
+            : isGeminiOrDefault && Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+                ? hKey.ToString().Trim()
+                : isGeminiOrDefault
+                    ? _config["Gemini:ApiKey"] ?? string.Empty
+                    : string.Empty;
+
+        var enrichedRequest = request with
+        {
+            ApiKey = resolvedApiKey
+        };
+
+        var response = await _mediator.Send(new SuggestListingVariationsCommand(enrichedRequest), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

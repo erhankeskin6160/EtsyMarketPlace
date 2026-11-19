@@ -299,6 +299,25 @@ export class AiSettingsService {
     this.clonedListing.set(listing);
   }
 
+  getActiveApiKey(providerOverride?: string): string {
+    const s = this.settings();
+    const provider = providerOverride ?? s.provider;
+    switch (provider) {
+      case 'Gemini':
+        return (s.geminiApiKey || '').trim();
+      case 'DeepSeek':
+        return (s.deepSeekApiKey || '').trim();
+      case 'OpenAI':
+        return (s.openAiApiKey || '').trim();
+      case 'Claude':
+        return (s.claudeApiKey || '').trim();
+      case 'Grok':
+        return (s.grokApiKey || '').trim();
+      default:
+        return '';
+    }
+  }
+
   async testApiConnection(
     provider: string,
     key: string,
