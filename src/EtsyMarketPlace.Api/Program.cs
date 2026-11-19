@@ -39,10 +39,16 @@ using EtsyMarketPlace.Infrastructure.Persistence;
 using EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 using EtsyMarketPlace.Application.Common.Behaviours;
 using EtsyMarketPlace.Application.Features.Commands.Financials.ImportFullFinancials;
+using EtsyMarketPlace.Api.Hosting;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
+// 0. Varsayılan dinleme adresi: --urls / ASPNETCORE_URLS / Kestrel:Endpoints verilmediyse
+// (ör. EtsyMarketPlace.Api.exe çift tıklanarak başlatıldığında) Kestrel'in localhost:5000'e
+// düşmesini engelle ve VDS'in dış erişime açık 0.0.0.0:5263 portunda dinle.
+builder.WebHost.UseApiDefaultUrlIfMissing(builder.Configuration);
 
 // 1. Controller Desteği & Global Validation Pipeline & MediatR Pipeline (FlowaErp CQRS)
 builder.Services.AddControllers(options =>
