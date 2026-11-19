@@ -3,13 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
-import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto, AgentCarrierQuoteSummaryDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto, AgentCarrierQuoteSummaryDto, CompetitorListingInventoryDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
+import { ExtensionBridgeService } from '../../core/services/extension-bridge.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, AiShippingContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
 import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard, parseInlineVariationOptionPrice, resolveVariationOptionPairPrice } from '../../core/utils/etsy-variation-parser';
+import { extractEtsyListingRef } from '../../core/utils/etsy-listing-url.util';
 import { calculateEtsyNetProfit, calculateVariationNetProfits, EtsyNetProfitBreakdown, VariationNetProfitRow, VariationNetProfitSummary } from '../../core/utils/etsy-fee-calculator';
 import { buildEtsyDescriptionTemplate } from '../../core/utils/etsy-description-template.util';
 import { Observable, of } from 'rxjs';
@@ -92,6 +94,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
+  extensionBridge = inject(ExtensionBridgeService);
   listingAiService = inject(EtsyListingAiService);
   router = inject(Router);
   route = inject(ActivatedRoute);
@@ -181,6 +184,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   enableVariations = false;
   showVariationImportBox = false;
   variationPasteInput = '';
+  extensionListingUrlInput = '';
+  isFetchingVariationsViaExtension = false;
   clonedSourceListingUrl = '';
   variationImportWarning = '';
   private readonly sanitizer = inject(DomSanitizer);
@@ -263,6 +268,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
       if (cloned.sourceListingUrl) {
         this.clonedSourceListingUrl = cloned.sourceListingUrl;
+        this.extensionListingUrlInput = cloned.sourceListingUrl;
       }
 
       if (cloned.hasVariations) {
@@ -1807,8 +1813,11 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   applyPastedVariations(rawInput?: string, silentOnMiss = false): void {
     const input = (rawInput ?? this.variationPasteInput).trim();
-    if (/^https?:\/\/(?:www\.)?etsy\.com\/listing\//i.test(input)) {
-      this.showToast('ℹ️ URL yerine Etsy sayfasında yer imini (🔖) tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C ile sayfa kaynağını yapıştırın.');
+    const urlRef = extractEtsyListingRef(input);
+    if (urlRef) {
+      this.extensionListingUrlInput = urlRef.listingUrl;
+      this.variationPasteInput = '';
+      void this.fetchVariationsViaExtension(urlRef.listingUrl);
       return;
     }
 
@@ -1836,6 +1845,70 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.onVariationRowChange();
     this.saveDraftToStorage();
     this.showToast(`✅ ${parsed.variationRows.length} varyasyon kombinasyonu (${parsed.sourceFormat.toUpperCase()}) başarıyla aktarıldı!`);
+  }
+
+  async fetchVariationsViaExtension(rawInput?: string): Promise<void> {
+    const targetInput = (rawInput ?? this.extensionListingUrlInput ?? this.clonedSourceListingUrl).trim();
+    const ref = extractEtsyListingRef(targetInput);
+    if (!ref) {
+      this.showToast('⚠️ Lütfen geçerli bir Etsy ilan linki (etsy.com/listing/...) veya Listing ID girin.');
+      return;
+    }
+
+    if (this.isFetchingVariationsViaExtension) return;
+    this.isFetchingVariationsViaExtension = true;
+    this.variationImportWarning = '';
+
+    try {
+      const bridgeReady = await this.extensionBridge.checkBridgeAvailable(600);
+      if (!bridgeReady) {
+        this.variationImportWarning =
+          'Etsy Copilot 2.7.0 Chrome eklenti köprüsü algılanamadı. Eklentinin yüklü/aktif olduğundan emin olup bu sayfayı F5 ile yenileyin veya aşağıdaki Yer İmi / Ctrl+U yöntemini kullanın.';
+        this.showToast('⚠️ Chrome eklenti köprüsü algılanamadı (sayfayı F5 ile yenileyin).');
+        return;
+      }
+
+      const inv = await this.extensionBridge.fetchListingVariationsViaExtension(ref.listingId, ref.listingUrl);
+      if (!inv || !inv.hasVariations) {
+        this.variationImportWarning =
+          'Eklenti bağlantısı kuruldu ancak bu ilanda varyasyon bulunamadı veya Etsy sayfasından okunamadı. İlanı tarayıcıda açıp Yer İmi (🔖) veya Ctrl+U ile aktarabilirsiniz.';
+        this.showToast('⚠️ Eklenti bu ilandan varyasyon okuyamadı.');
+        return;
+      }
+
+      this.applyExtensionInventoryToForm(inv);
+    } finally {
+      this.isFetchingVariationsViaExtension = false;
+    }
+  }
+
+  private applyExtensionInventoryToForm(inv: CompetitorListingInventoryDto): void {
+    this.enableVariations = true;
+    this.varType1 = inv.varType1 || this.varType1;
+    this.varValues1 = inv.varValues1 || '';
+    this.enableVar2 = Boolean(inv.enableVar2 && inv.varType2 && inv.varValues2);
+    this.varType2 = this.enableVar2 ? (inv.varType2 || 'Renk / Color') : this.varType2;
+    this.varValues2 = this.enableVar2 ? (inv.varValues2 || '') : '';
+
+    if (inv.offerings && inv.offerings.length > 0) {
+      this.variationRows = inv.offerings.map(o => ({
+        key: o.key,
+        price: Number(o.price) > 0 ? Number(o.price) : (this.priceUsd || 0),
+        quantity: Number(o.quantity) > 0 ? Number(o.quantity) : 15,
+        active: o.active !== false
+      }));
+      this.customVariationPricing = true;
+    } else {
+      this.customVariationPricing = true;
+      this.rebuildVariationGrid();
+    }
+
+    this.selectedProfitVariationKey = '__base__';
+    this.variationImportWarning = '';
+    this.showVariationImportBox = false;
+    this.onVariationRowChange();
+    this.saveDraftToStorage();
+    this.showToast(`🔌 Chrome eklentisiyle ${this.variationRows.length} varyasyon kombinasyonu başarıyla çekildi!`);
   }
 
   private parseVariationOptionGroup(raw: string) {

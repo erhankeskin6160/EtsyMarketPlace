@@ -749,13 +749,46 @@
               </button>
             </div>
 
-            <!-- Eklentisiz Etsy Sayfasından Varyasyon Aktarma Paneli -->
+            <!-- Chrome Extension & Manuel Etsy Sayfasından Varyasyon Aktarma Paneli -->
             <div *ngIf="showVariationImportBox" style="margin-bottom: 10px; padding: 10px; border-radius: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35);">
               <div *ngIf="variationImportWarning" style="font-size: 11px; color: #fbbf24; margin-bottom: 6px; line-height: 1.4;">
                 ⚠️ {{ variationImportWarning }}
               </div>
+
+              <!-- 1. Chrome Extension Bridge ile Tek Tıkla Çekme -->
+              <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed rgba(148, 163, 184, 0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; font-weight: 600; color: #e2e8f0;">
+                    🔌 Chrome Extension ile Çek (Etsy Copilot)
+                  </span>
+                  <span *ngIf="extensionBridge.isBridgeDetected()" style="font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                    ● Eklenti Bağlı
+                  </span>
+                  <span *ngIf="!extensionBridge.isBridgeDetected()" style="font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35);" title="Etsy Copilot 2.7.0 eklentisi yüklü değilse veya sayfayı henüz yenilemediyseniz görünür">
+                    ○ Eklenti Algılanamadı
+                  </span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input
+                    type="text"
+                    class="std-input"
+                    [(ngModel)]="extensionListingUrlInput"
+                    (keyup.enter)="fetchVariationsViaExtension()"
+                    placeholder="Rakip Etsy ilan linki veya Listing ID (Örn: https://www.etsy.com/listing/123456789/...)"
+                    style="flex: 1; font-size: 11px; padding: 5px 8px;"
+                  />
+                  <button
+                    type="button"
+                    (click)="fetchVariationsViaExtension()"
+                    [disabled]="isFetchingVariationsViaExtension"
+                    style="font-size: 11px; padding: 5px 10px; border-radius: 6px; background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(129, 140, 248, 0.55); color: #c7d2fe; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                    {{ isFetchingVariationsViaExtension ? '⏳ Çekiliyor...' : '🔌 Eklentiden Çek' }}
+                  </button>
+                </div>
+              </div>
+
               <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.4;">
-                <strong>1 Saniyede Aktarım:</strong> Mor <strong>🔖 Kopyalayıcıyı</strong> yer imlerine sürükleyip Etsy sayfasında tıklayın <em>(veya Etsy'de <code>Ctrl+U</code> → <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın)</em>.
+                <strong>Alternatif (Eklentisiz):</strong> Mor <strong>🔖 Kopyalayıcıyı</strong> yer imlerine sürükleyip Etsy sayfasında tıklayın <em>(veya Etsy'de <code>Ctrl+U</code> → <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın)</em>.
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
                 <a *ngIf="clonedSourceListingUrl" [href]="clonedSourceListingUrl" target="_blank" rel="noopener" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; text-decoration: none;">
