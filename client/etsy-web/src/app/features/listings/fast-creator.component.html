@@ -418,6 +418,9 @@
                 <button *ngIf="hasBackupNotes" type="button" class="btn-desc-restore" (click)="restoreOriginalNotes()" title="Yazdığınız orijinal ilk notları geri getirir">
                   ↩️ Notlarıma Dön
                 </button>
+                <button type="button" class="btn-desc-template" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="applyDescriptionTemplate()" title="Başlık, etiket ve malzeme bilgileriyle ferah Etsy paragraf şablonu uygular">
+                  <span>📐 Şablonla Paragrafla</span>
+                </button>
                 <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()" title="Ön bilgilerinizi, boyut ve renkleri koruyarak profesyonel Etsy açıklaması üretir">
                   <span *ngIf="isGeneratingDesc" class="spin-disc-inline">⏳</span>
                   <app-ai-logo *ngIf="!isGeneratingDesc" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>

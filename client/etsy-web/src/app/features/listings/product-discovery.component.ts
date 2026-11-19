@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService, MarketListingItemDto, CreateListingPayload } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { buildEtsyDescriptionTemplate } from '../../core/utils/etsy-description-template.util';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface DiscoveryItem {
@@ -283,40 +284,12 @@ export class ProductDiscoveryComponent implements OnInit {
 
   // --- ŞABLONLA PARAGRAFLA ---
   applyDescriptionTemplate(): void {
-    const title = this.draftTitle || this.selectedItem?.title || 'Handcrafted Artisan Product';
-    const primaryKeyword = this.draftTags[0] || 'Artisan Decor';
-    const materials = this.draftMaterials || 'High Quality Materials, Precision Craft';
-
-    const formatted = `✨ ${title.toUpperCase()} ✨
-
-Discover the perfect blend of craftsmanship, premium quality, and timeless design with this unique ${primaryKeyword}. Each piece is meticulously produced to bring elegance and character to your space.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-🌟 KEY HIGHLIGHTS & FEATURES
-━━━━━━━━━━━━━━━━━━━━━━━━━
-✔ Premium Craftsmanship: Made with care using top-tier ${materials}.
-✔ High Attention to Detail: Smooth finish, vivid colors, and durable structure.
-✔ Perfect Gift Idea: A thoughtful and memorable surprise for birthdays, holidays, or special celebrations.
-✔ Ready to Enjoy: Safely packed and prepped for effortless display or daily use.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📏 SPECIFICATIONS & MATERIALS
-━━━━━━━━━━━━━━━━━━━━━━━━━
-• Primary Material: ${materials}
-• Style: Modern Artisan / Handcrafted
-• Condition: Brand New, Made to Order
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📦 PACKAGING & SHIPPING
-━━━━━━━━━━━━━━━━━━━━━━━━━
-We take immense pride in securely wrapping each item in multi-layered protective packaging to ensure safe transit directly to your doorstep. Fast dispatch with tracking number provided immediately upon shipment.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━
-💬 CUSTOMER CARE & QUESTIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━
-Have custom color, sizing, or personalization requests? Feel free to reach out via Etsy Messages anytime — we are delighted to assist!`;
-
-    this.draftDescription = formatted;
+    this.draftDescription = buildEtsyDescriptionTemplate({
+      title: this.draftTitle || this.selectedItem?.title,
+      tags: this.draftTags,
+      materials: this.draftMaterials,
+      listingType: 'physical'
+    });
     this.recalculateLqsChecks();
     this.showToast('📐 Ferah Etsy paragraf şablonu açıklamaya uygulandı!');
   }

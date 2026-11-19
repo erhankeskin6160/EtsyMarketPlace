@@ -3025,6 +3025,33 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-desc-template {
+  background: rgba(79, 70, 229, 0.2);
+  border: 1px solid rgba(79, 70, 229, 0.45);
+  color: #a5b4fc;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-desc-template:hover:not(:disabled) {
+  background: rgba(79, 70, 229, 0.35);
+  border-color: rgba(129, 140, 248, 0.7);
+  color: #ffffff;
+}
+
+.btn-desc-template:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-desc-restore {

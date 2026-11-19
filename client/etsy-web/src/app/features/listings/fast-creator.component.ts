@@ -11,6 +11,7 @@ import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxon
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
 import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard, parseInlineVariationOptionPrice, resolveVariationOptionPairPrice } from '../../core/utils/etsy-variation-parser';
 import { calculateEtsyNetProfit, calculateVariationNetProfits, EtsyNetProfitBreakdown, VariationNetProfitRow, VariationNetProfitSummary } from '../../core/utils/etsy-fee-calculator';
+import { buildEtsyDescriptionTemplate } from '../../core/utils/etsy-description-template.util';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -1362,7 +1363,26 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   restoreOriginalNotes(): void {
     if (!this.originalNotesBackup) return;
     this.description = this.originalNotesBackup;
+    this.saveDraftToStorage();
     this.showToast('↩️ Orijinal ham notlarınız geri yüklendi!');
+  }
+
+  applyDescriptionTemplate(): void {
+    const currentDesc = this.description.trim();
+    if (currentDesc && !this.originalNotesBackup) {
+      this.originalNotesBackup = currentDesc;
+      this.hasBackupNotes = true;
+    }
+
+    this.description = buildEtsyDescriptionTemplate({
+      title: this.title,
+      tags: this.tags,
+      materials: this.materials,
+      listingType: this.listingType
+    });
+
+    this.saveDraftToStorage();
+    this.showToast('📐 Ferah Etsy paragraf şablonu açıklamaya uygulandı!');
   }
 
   suggestAiDescription(): void {
