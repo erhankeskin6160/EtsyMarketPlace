@@ -10,33 +10,33 @@ internal static class ProductAwareVariationHeuristic
 {
     private static readonly Regex MetricSizeRegex = new(
         @"\b(\d+(?:[.,]\d+)?)\s*(?:x\s*\d+(?:[.,]\d+)?\s*)?(cm|mm)\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex VolumeOzMlRegex = new(
         @"\b(\d+(?:[.,]\d+)?)\s*(oz|ml)\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex InchSizeRegex = new(
         @"\b(\d+(?:[.,]\d+)?(?:\s*x\s*\d+(?:[.,]\d+)?)?)\s*(?:in(?:ch|ches)?|"")\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly (string Pattern, string Label)[] ColorMappings =
     [
         (@"\b(matte\s+black|mat\s+siyah)\b", "Matte Black"),
         (@"\b(black|siyah)\b", "Matte Black"),
-        (@"\b(ivory|fildişi|ekru)\b", "Ivory White"),
-        (@"\b(white|beyaz)\b", "Warm White"),
+        (@"\b(ivory\s+white|ivory|fildişi|ekru)\b", "Ivory White"),
+        (@"(?<!ivory\s+)\b(white|beyaz)\b", "Warm White"),
         (@"\b(walnut|ceviz)\b", "Walnut"),
         (@"\b(oak|meşe)\b", "Natural Oak"),
         (@"\b(bronze|bronz)\b", "Metallic Bronze"),
-        (@"\b(gold|altın)\b", "Champagne Gold"),
         (@"\b(rose\s+gold)\b", "Rose Gold"),
+        (@"(?<!rose\s+)\b(gold|altın)\b", "Champagne Gold"),
         (@"\b(silver|gümüş)\b", "Silver"),
         (@"\b(copper|bakır)\b", "Copper"),
         (@"\b(sage\s+green|adaçayı\s+yeşil)\b", "Sage Green"),
-        (@"\b(emerald|zümrüt|green|yeşil)\b", "Forest Green"),
-        (@"\b(navy|lacivert)\b", "Navy Blue"),
-        (@"\b(ice\s+blue|buz\s+mavi|blue|mavi)\b", "Cobalt Blue"),
+        (@"(?<!sage\s+)\b(emerald|zümrüt|green|yeşil)\b", "Forest Green"),
+        (@"\b(navy\s+blue|navy|lacivert)\b", "Navy Blue"),
+        (@"(?<!navy\s+)\b(ice\s+blue|buz\s+mavi|blue|mavi)\b", "Cobalt Blue"),
         (@"\b(terracotta|kiremit)\b", "Terracotta"),
         (@"\b(pink|pembe|blush)\b", "Blush Pink"),
         (@"\b(purple|mor|lavender)\b", "Lavender"),
@@ -60,7 +60,7 @@ internal static class ProductAwareVariationHeuristic
         var matText = materials is { Count: > 0 } ? string.Join(" ", materials) : string.Empty;
         var combined = $"{cleanTitle} {cleanDesc} {cleanCat} {tagText} {matText}".ToLowerInvariant();
         var isDigital = string.Equals(listingType, "digital", StringComparison.OrdinalIgnoreCase)
-            || ContainsAny(combined, "digital download", "instant download", "printable", "stl file", "3d file", "svg bundle", "pdf pattern");
+            || MatchesAnyWord(combined, "digital download", "instant download", "printable", "stl file", "3d file", "svg bundle", "pdf pattern", "digital file");
 
         var detectedColors = ExtractColors(cleanTitle + " " + cleanDesc);
         var detectedCm = ExtractUniqueNumbers(MetricSizeRegex, cleanTitle + " " + cleanDesc, "cm");
@@ -70,9 +70,12 @@ internal static class ProductAwareVariationHeuristic
         var groups = new List<SuggestedVariationGroupDto>();
         string archetypeNote;
 
+        var isCandleHolder = MatchesAnyWord(combined, "candle holder", "candle holders", "candleholder", "candleholders")
+            || MatchesAnyTurkishStem(combined, "mumluk");
+
         if (isDigital)
         {
-            if (ContainsAny(combined, "stl", "3d model", "3d print file", "obj", "3mf"))
+            if (MatchesAnyWord(combined, "stl", "3d model", "3d print file", "obj", "3mf"))
             {
                 groups.Add(new SuggestedVariationGroupDto
                 {
@@ -95,7 +98,8 @@ internal static class ProductAwareVariationHeuristic
                 archetypeNote = "Dijital indirilebilir baskı ürünü";
             }
         }
-        else if (ContainsAny(combined, "mug", "coffee cup", "tea cup", "tumbler", "kupa", "bardak", "drinkware"))
+        else if (MatchesAnyWord(combined, "mug", "mugs", "coffee cup", "coffee cups", "tea cup", "tea cups", "tumbler", "tumblers", "drinkware")
+            || MatchesAnyTurkishStem(combined, "kupa", "bardak"))
         {
             var caps = detectedVolumes.Count >= 2
                 ? detectedVolumes.Take(4).ToList()
@@ -119,7 +123,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Kupa / içecek kabı";
         }
-        else if (ContainsAny(combined, "t-shirt", "tee", "hoodie", "sweatshirt", "dress", "shirt", "apparel", "tişört", "kapüşon"))
+        else if (MatchesAnyWord(combined, "t-shirt", "t-shirts", "tee", "tees", "hoodie", "hoodies", "sweatshirt", "sweatshirts", "dress", "dresses", "shirt", "shirts", "apparel")
+            || MatchesAnyTurkishStem(combined, "tişört", "kapüşon"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -137,7 +142,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Giyim ürünü";
         }
-        else if (ContainsAny(combined, "necklace", "pendant", "kolye", "bracelet", "bileklik"))
+        else if (MatchesAnyWord(combined, "necklace", "necklaces", "pendant", "pendants", "bracelet", "bracelets")
+            || MatchesAnyTurkishStem(combined, "kolye", "bileklik"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -155,25 +161,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Takı (kolye/bileklik)";
         }
-        else if (ContainsAny(combined, "ring", "yüzük"))
-        {
-            groups.Add(new SuggestedVariationGroupDto
-            {
-                Name = "Ring Size",
-                Values = ["US 6", "US 7", "US 8", "US 9"],
-                Reason = "Yüzük ilanlarında ABD numara seçimi satın alma kararını hızlandırır."
-            });
-            groups.Add(new SuggestedVariationGroupDto
-            {
-                Name = "Metal Finish",
-                Values = detectedColors.Count >= 2
-                    ? detectedColors.Take(3).ToList()
-                    : ["Sterling Silver", "18K Gold", "Rose Gold"],
-                Reason = "Kaplama tonu tercihi eklendi."
-            });
-            archetypeNote = "Yüzük";
-        }
-        else if (ContainsAny(combined, "earring", "küpe"))
+        else if (MatchesAnyWord(combined, "earring", "earrings")
+            || MatchesAnyTurkishStem(combined, "küpe"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -191,7 +180,27 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Küpe";
         }
-        else if (ContainsAny(combined, "candle", "wax", "mum"))
+        else if (MatchesAnyWord(combined, "ring", "rings")
+            || MatchesAnyTurkishStem(combined, "yüzük"))
+        {
+            groups.Add(new SuggestedVariationGroupDto
+            {
+                Name = "Ring Size",
+                Values = ["US 6", "US 7", "US 8", "US 9"],
+                Reason = "Yüzük ilanlarında ABD numara seçimi satın alma kararını hızlandırır."
+            });
+            groups.Add(new SuggestedVariationGroupDto
+            {
+                Name = "Metal Finish",
+                Values = detectedColors.Count >= 2
+                    ? detectedColors.Take(3).ToList()
+                    : ["Sterling Silver", "18K Gold", "Rose Gold"],
+                Reason = "Kaplama tonu tercihi eklendi."
+            });
+            archetypeNote = "Yüzük";
+        }
+        else if (!isCandleHolder && (MatchesAnyWord(combined, "candle", "candles", "soy wax", "beeswax", "wax melt", "wax melts")
+            || MatchesAnyTurkishStem(combined, "mum")))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -209,7 +218,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Mum / kokulu ev ürünü";
         }
-        else if (ContainsAny(combined, "lamp", "night light", "led", "lantern", "lamba", "abajur", "lighting"))
+        else if (MatchesAnyWord(combined, "lamp", "lamps", "night light", "night lights", "led", "lantern", "lanterns", "lighting")
+            || MatchesAnyTurkishStem(combined, "lamba", "abajur"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -227,25 +237,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Lamba / LED aydınlatma";
         }
-        else if (ContainsAny(combined, "poster", "wall art", "canvas", "painting", "wall decor", "tablo", "print"))
-        {
-            groups.Add(new SuggestedVariationGroupDto
-            {
-                Name = "Print Size",
-                Values = detectedInches.Count >= 2
-                    ? detectedInches.Take(4).ToList()
-                    : ["8x10 inches", "12x16 inches", "18x24 inches"],
-                Reason = "Duvar dekoru için standart uluslararası çerçeve ölçüleri seçildi."
-            });
-            groups.Add(new SuggestedVariationGroupDto
-            {
-                Name = "Frame Option",
-                Values = ["Unframed Print", "Matte Black Frame", "Natural Oak Frame"],
-                Reason = "Çerçeveli üst katman seçeneği kâr marjını yükseltir."
-            });
-            archetypeNote = "Duvar sanatı / tablo";
-        }
-        else if (ContainsAny(combined, "planter", "flower pot", "vase", "saksı", "vazo"))
+        else if (MatchesAnyWord(combined, "planter", "planters", "flower pot", "flower pots", "vase", "vases")
+            || MatchesAnyTurkishStem(combined, "saksı", "vazo"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -263,7 +256,8 @@ internal static class ProductAwareVariationHeuristic
             });
             archetypeNote = "Saksı / vazo";
         }
-        else if (ContainsAny(combined, "keychain", "coaster", "bookmark", "magnet", "anahtarlık", "bardak altlığı"))
+        else if (MatchesAnyWord(combined, "keychain", "keychains", "keyring", "keyrings", "coaster", "coasters", "bookmark", "bookmarks", "magnet", "magnets")
+            || MatchesAnyTurkishStem(combined, "anahtarlık", "bardak altlığı"))
         {
             groups.Add(new SuggestedVariationGroupDto
             {
@@ -282,9 +276,10 @@ internal static class ProductAwareVariationHeuristic
             }
             archetypeNote = "Küçük aksesuar / set";
         }
-        else if (ContainsAny(combined, "figurine", "sculpture", "statue", "bust", "desk", "alien", "dragon", "toy", "3d print", "pla", "resin", "heykel", "figür", "biblo"))
+        else if (MatchesAnyWord(combined, "figurine", "figurines", "sculpture", "sculptures", "statue", "statues", "bust", "busts", "alien", "aliens", "dragon", "dragons", "toy", "toys", "3d print", "3d printed", "3d printing", "pla", "resin")
+            || MatchesAnyTurkishStem(combined, "heykel", "figür", "biblo"))
         {
-            var isPlayfulRainbow = ContainsAny(combined, "dragon", "fidget", "flexi", "unicorn", "rainbow");
+            var isPlayfulRainbow = MatchesAnyWord(combined, "dragon", "dragons", "fidget", "flexi", "unicorn", "rainbow");
             groups.Add(new SuggestedVariationGroupDto
             {
                 Name = "Size",
@@ -311,6 +306,25 @@ internal static class ProductAwareVariationHeuristic
                     : "Ürünün stiline uygun mat ve metalik yüzey bitişleri oluşturuldu."
             });
             archetypeNote = "Masaüstü figür / dekoratif obje";
+        }
+        else if (MatchesAnyWord(combined, "poster", "posters", "wall art", "canvas", "painting", "paintings", "wall decor", "art print", "art prints", "wall print", "wall prints", "canvas print", "canvas prints", "fine art print", "framed print", "giclee")
+            || MatchesAnyTurkishStem(combined, "tablo"))
+        {
+            groups.Add(new SuggestedVariationGroupDto
+            {
+                Name = "Print Size",
+                Values = detectedInches.Count >= 2
+                    ? detectedInches.Take(4).ToList()
+                    : ["8x10 inches", "12x16 inches", "18x24 inches"],
+                Reason = "Duvar dekoru için standart uluslararası çerçeve ölçüleri seçildi."
+            });
+            groups.Add(new SuggestedVariationGroupDto
+            {
+                Name = "Frame Option",
+                Values = ["Unframed Print", "Matte Black Frame", "Natural Oak Frame"],
+                Reason = "Çerçeveli üst katman seçeneği kâr marjını yükseltir."
+            });
+            archetypeNote = "Duvar sanatı / tablo";
         }
         else
         {
@@ -342,7 +356,7 @@ internal static class ProductAwareVariationHeuristic
                     Reason = "Başlık ve açıklamadaki renk ifadeleri doğrudan varyasyon seçeneğine dönüştürüldü."
                 });
             }
-            else if (groups.Count == 1 && !ContainsAny(groups[0].Name, "Color", "Finish"))
+            else if (groups.Count == 1 && !MatchesAnyWord(groups[0].Name, "Color", "Finish"))
             {
                 groups.Add(new SuggestedVariationGroupDto
                 {
@@ -447,15 +461,31 @@ internal static class ProductAwareVariationHeuristic
         return whole + 0.90m;
     }
 
-    private static bool ContainsAny(string haystack, params string[] needles)
-        => needles.Any(n => haystack.Contains(n, StringComparison.OrdinalIgnoreCase));
+    private static bool MatchesAnyWord(string haystack, params string[] terms)
+    {
+        if (string.IsNullOrWhiteSpace(haystack) || terms.Length == 0)
+            return false;
+
+        var escaped = string.Join("|", terms.Select(Regex.Escape));
+        return Regex.IsMatch(haystack, $@"\b(?:{escaped})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool MatchesAnyTurkishStem(string haystack, params string[] stems)
+    {
+        if (string.IsNullOrWhiteSpace(haystack) || stems.Length == 0)
+            return false;
+
+        var escaped = string.Join("|", stems.Select(Regex.Escape));
+        return Regex.IsMatch(haystack, $@"(?<![\p{{L}}\p{{N}}])(?:{escaped})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
 
     private static List<string> ExtractColors(string text)
     {
+        var normalized = (text ?? string.Empty).Replace('İ', 'i');
         var found = new List<string>();
         foreach (var (pattern, label) in ColorMappings)
         {
-            if (Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase) &&
+            if (Regex.IsMatch(normalized, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
                 !found.Contains(label, StringComparer.OrdinalIgnoreCase))
             {
                 found.Add(label);

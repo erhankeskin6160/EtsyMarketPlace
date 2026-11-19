@@ -362,8 +362,18 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
         if (groups.Count == 0) return null;
 
-        var customPricingMap = (command.Variations ?? [])
-            .ToDictionary(v => v.Key.Trim(), v => v, StringComparer.OrdinalIgnoreCase);
+        var customPricingMap = new Dictionary<string, ListingVariationInput>(StringComparer.OrdinalIgnoreCase);
+        if (command.Variations != null)
+        {
+            foreach (var v in command.Variations)
+            {
+                var trimmedKey = v.Key?.Trim() ?? string.Empty;
+                if (!string.IsNullOrEmpty(trimmedKey) && !customPricingMap.ContainsKey(trimmedKey))
+                {
+                    customPricingMap[trimmedKey] = v;
+                }
+            }
+        }
 
         var combinations = new List<List<(string GroupName, long PropId, string Value)>>();
         if (groups.Count == 1)
@@ -390,6 +400,7 @@ public sealed class FastListingPublishService : IFastListingPublishService
         var productsList = new List<EtsyInventoryProduct>();
         var distinctPricesG1 = new HashSet<decimal>();
         var distinctPricesG2 = new HashSet<decimal>();
+        var distinctQuantities = new HashSet<int>();
         var sharedSku = $"AUTO-{listingId}";
 
         foreach (var combo in combinations.Take(FastListingDraftHelper.MaxVariationCombinations))
@@ -409,6 +420,7 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
             distinctPricesG1.Add(rowPrice);
             if (combo.Count > 1) distinctPricesG2.Add(rowPrice);
+            distinctQuantities.Add(Math.Max(1, rowQty));
 
             var offering = new EtsyInventoryOffering
             {
@@ -445,11 +457,24 @@ public sealed class FastListingPublishService : IFastListingPublishService
             priceOnProperty.Add(groups[1].PropertyId);
         }
 
+        var quantityOnProperty = new List<long>();
+        if (distinctQuantities.Count > 1)
+        {
+            if (groups.Count >= 1)
+            {
+                quantityOnProperty.Add(groups[0].PropertyId);
+            }
+            if (groups.Count >= 2 && !quantityOnProperty.Contains(groups[1].PropertyId))
+            {
+                quantityOnProperty.Add(groups[1].PropertyId);
+            }
+        }
+
         return new EtsyInventoryPayload
         {
             Products = productsList,
             PriceOnProperty = priceOnProperty.ToArray(),
-            QuantityOnProperty = [],
+            QuantityOnProperty = quantityOnProperty.ToArray(),
             SkuOnProperty = []
         };
     }

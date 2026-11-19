@@ -385,6 +385,89 @@ public sealed class SuggestListingVariationsHandlerTests
         Assert.True(descOnlyValid.IsValid);
     }
 
+    [Fact]
+    public async Task Handle_OfflineHeuristic_PreventsSubstringFalsePositivesAcrossProductTypes()
+    {
+        var stubClient = new CapturingAiClient((_, _, _, _) => (false, null, null));
+        var handler = new SuggestListingVariationsHandler(stubClient);
+
+        // "3D Printed Thinking Alien Figurine" contains "printed" — must stay Figurine, NOT Wall Art
+        var printedFigurine = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "3D Printed Thinking Alien Figurine",
+                Description: "Modern desk sculpture",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.Equal("Size", printedFigurine.SuggestedVariations[0].Name);
+        Assert.Equal("Finish", printedFigurine.SuggestedVariations[1].Name);
+
+        // "Gold Drop Earrings" contains "ring" — must stay Earrings, NOT Ring Size
+        var earrings = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Handmade Gold Drop Earrings",
+                Description: "Lightweight hypoallergenic jewelry",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.Contains(earrings.SuggestedVariations, g => g.Name == "Backing Style");
+        Assert.DoesNotContain(earrings.SuggestedVariations, g => g.Name == "Ring Size");
+
+        // "Stainless Steel Pendant Necklace" contains "tee" — must stay Necklace, NOT T-shirt S/M/L/XL
+        var steelNecklace = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Stainless Steel Minimalist Pendant Necklace",
+                Description: "Hypoallergenic waterproof chain",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.Contains(steelNecklace.SuggestedVariations, g => g.Name == "Chain Length");
+
+        // "Detailed Speckled Ceramic Vase" contains "led" twice — must stay Vase, NOT LED Lamp
+        var vase = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Detailed Speckled Ceramic Vase",
+                Description: "Wheel thrown stoneware flower vessel",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.Contains(vase.SuggestedVariations, g => g.Name == "Pot Size");
+        Assert.DoesNotContain(vase.SuggestedVariations, g => g.Name == "Light Color");
+
+        // "Museum Quality Canvas Wall Art" contains "mum" — must stay Wall Art, NOT Scented Candle
+        var wallArt = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Museum Quality Canvas Wall Art",
+                Description: "Archival fine art print",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.Contains(wallArt.SuggestedVariations, g => g.Name == "Print Size");
+        Assert.DoesNotContain(wallArt.SuggestedVariations, g => g.Name == "Scent");
+
+        // "Minimalist Wooden Candle Holder" must NOT be classified as a scented candle
+        var candleHolder = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Minimalist Walnut Candle Holder",
+                Description: "Hand-turned wooden tea light holder",
+                Provider: "Offline")), CancellationToken.None)).Data);
+        Assert.DoesNotContain(candleHolder.SuggestedVariations, g => g.Name == "Scent");
+        Assert.DoesNotContain(candleHolder.SuggestedVariations, g => g.Name == "Jar Size");
+    }
+
+    [Fact]
+    public async Task Handle_OfflineHeuristic_DoesNotDoubleExtractCompoundColorNames()
+    {
+        var stubClient = new CapturingAiClient((_, _, _, _) => (false, null, null));
+        var handler = new SuggestListingVariationsHandler(stubClient);
+
+        var mugResult = Assert.IsType<SuggestListingVariationsResultDto>((await handler.Handle(
+            new SuggestListingVariationsCommand(new SuggestListingVariationsRequestDto(
+                Title: "Ceramic Coffee Mug",
+                Description: "Available in Sage Green, Rose Gold, Ivory White and Navy Blue glazes.",
+                Provider: "Offline")), CancellationToken.None)).Data);
+
+        var colorGroup = mugResult.SuggestedVariations.First(g => g.Name == "Accent Color");
+        Assert.Contains("Sage Green", colorGroup.Values);
+        Assert.Contains("Rose Gold", colorGroup.Values);
+        Assert.Contains("Ivory White", colorGroup.Values);
+        Assert.Contains("Navy Blue", colorGroup.Values);
+        Assert.DoesNotContain("Forest Green", colorGroup.Values);
+        Assert.DoesNotContain("Champagne Gold", colorGroup.Values);
+        Assert.DoesNotContain("Warm White", colorGroup.Values);
+        Assert.DoesNotContain("Cobalt Blue", colorGroup.Values);
+    }
+
     private sealed class CapturingAiClient(
         Func<string, string, string, string, (bool Success, string? Content, string? ErrorMessage)> responder)
         : IGeminiListingApiClient
