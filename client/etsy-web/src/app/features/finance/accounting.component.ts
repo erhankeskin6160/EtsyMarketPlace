@@ -77,6 +77,8 @@ export interface OrderCostShippingRow {
   totalCostTry: number;
   invoice: string;
   title: string;
+  isCanceledOrRefunded: boolean;
+  statusLabel: string;
 }
 
 @Component({
@@ -414,34 +416,72 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return Number((this.getCostModalPreviewNetUsd() * rateToUse).toFixed(2));
   }
 
+  private isCanceledOrRefundedOrder(o: OrderFinancialRow): boolean {
+    return o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund';
+  }
+
   private get costEligibleOrders(): OrderFinancialRow[] {
-    return this.orders.filter(o =>
-      o.orderStatus !== 'refunded' &&
-      (o.costNotes !== 'cross_period_refund' || (o.productCostUsd || 0) > 0) &&
-      (o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0)
-    );
+    return this.orders.filter(o => !this.isCanceledOrRefundedOrder(o) || (o.productCostUsd || 0) > 0);
+  }
+
+  private get activeCostOrders(): OrderFinancialRow[] {
+    return this.costEligibleOrders.filter(o => !this.isCanceledOrRefundedOrder(o));
+  }
+
+  private get canceledCostOrders(): OrderFinancialRow[] {
+    return this.costEligibleOrders.filter(o => this.isCanceledOrRefundedOrder(o) && (o.productCostUsd || 0) > 0);
+  }
+
+  private sumOrderCostSplit(orders: OrderFinancialRow[], field: 'shipping' | 'production' | 'packaging' | 'total'): number {
+    return Number(orders.reduce((sum, o) => {
+      const rate = o.exchangeRate || this.liveRate;
+      const hasSplit = o.unitProductCostUsd != null || o.actualShippingCostUsd != null || o.packagingCostUsd != null;
+      let usd = 0;
+      if (field === 'shipping') {
+        usd = o.actualShippingCostUsd ?? 0;
+      } else if (field === 'production') {
+        usd = hasSplit ? (o.unitProductCostUsd ?? 0) : (o.productCostUsd ?? 0);
+      } else if (field === 'packaging') {
+        usd = o.packagingCostUsd ?? 0;
+      } else {
+        usd = hasSplit
+          ? ((o.unitProductCostUsd ?? 0) + (o.actualShippingCostUsd ?? 0) + (o.packagingCostUsd ?? 0))
+          : (o.productCostUsd ?? 0);
+      }
+      return sum + (usd * rate);
+    }, 0).toFixed(2));
   }
 
   get totalShippingCostTry(): number {
-    return Number(this.costEligibleOrders.reduce((sum, o) => {
-      const shipUsd = o.actualShippingCostUsd ?? 0;
-      return sum + (shipUsd * (o.exchangeRate || this.liveRate));
-    }, 0).toFixed(2));
+    return this.sumOrderCostSplit(this.costEligibleOrders, 'shipping');
   }
 
   get totalProductionCostTry(): number {
-    return Number(this.costEligibleOrders.reduce((sum, o) => {
-      const hasSplit = o.unitProductCostUsd != null || o.actualShippingCostUsd != null || o.packagingCostUsd != null;
-      const prodUsd = hasSplit ? (o.unitProductCostUsd ?? 0) : (o.productCostUsd ?? 0);
-      return sum + (prodUsd * (o.exchangeRate || this.liveRate));
-    }, 0).toFixed(2));
+    return this.sumOrderCostSplit(this.costEligibleOrders, 'production');
   }
 
   get totalPackagingCostTry(): number {
-    return Number(this.costEligibleOrders.reduce((sum, o) => {
-      const pkgUsd = o.packagingCostUsd ?? 0;
-      return sum + (pkgUsd * (o.exchangeRate || this.liveRate));
-    }, 0).toFixed(2));
+    return this.sumOrderCostSplit(this.costEligibleOrders, 'packaging');
+  }
+
+  get activeShippingCostTry(): number {
+    return this.sumOrderCostSplit(this.activeCostOrders, 'shipping');
+  }
+
+  get activeProductionCostTry(): number {
+    return this.sumOrderCostSplit(this.activeCostOrders, 'production');
+  }
+
+  get activePackagingCostTry(): number {
+    return this.sumOrderCostSplit(this.activeCostOrders, 'packaging');
+  }
+
+  get canceledOrderCostLossTry(): number {
+    return this.sumOrderCostSplit(this.canceledCostOrders, 'total');
+  }
+
+  get canceledCostedOrderCount(): number {
+    return this.canceledCostOrders.length;
   }
 
   get totalCostBreakdownTry(): number {
@@ -494,6 +534,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const shippingCostTry = Number((shipUsd * rate).toFixed(2));
       const productionCostTry = Number((prodUsd * rate).toFixed(2));
       const packagingCostTry = Number((pkgUsd * rate).toFixed(2));
+      const isCanceledOrRefunded = this.isCanceledOrRefundedOrder(o);
       return {
         date: (o.orderDate || '').split(' ')[0],
         receiptId: o.receiptId,
@@ -503,7 +544,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
         packagingCostTry,
         totalCostTry,
         invoice: o.hasInvoice ? 'Fatura' : '—',
-        title: o.productTitle
+        title: o.productTitle,
+        isCanceledOrRefunded,
+        statusLabel: isCanceledOrRefunded
+          ? (o.costNotes === 'cross_period_refund' ? 'İade (Önceki Dönem)' : 'İptal/İade Zararı')
+          : 'Tamamlandı'
       };
     });
 
@@ -731,13 +776,34 @@ export class AccountingComponent implements OnInit, OnDestroy {
     // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
     const isNetIncomePos = this.netIncomeTry >= 0;
     const isRealProfitPos = this.realNetProfitTry >= 0;
-    this.balanceBreakdownRecords = [
+    const hasCanceledCostLoss = this.canceledOrderCostLossTry > 0;
+    const balanceRows: any[] = [
       { type: isNetIncomePos ? 'Gelir' : 'Borç', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: isNetIncomePos ? '🟢 Net' : '🔴 Borç', isPositive: isNetIncomePos, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
-      { type: 'Kargo', name: 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.totalShippingCostTry, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
-      { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.totalProductionCostTry, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
-      { type: 'Paket', name: 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.totalPackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
-      { type: isRealProfitPos ? 'KÂR' : 'ZARAR', name: isRealProfitPos ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR', detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar', amount: this.realNetProfitTry, status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar', isPositive: isRealProfitPos, explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler ve kesintiler gelirleri aştığı için oluşan net zarar' }
+      { type: 'Kargo', name: hasCanceledCostLoss ? 'Kargo Gönderimleri (Aktif)' : 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.activeShippingCostTry, status: '', isPositive: false, explanation: 'Tamamlanan siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
+      { type: 'Üretim', name: hasCanceledCostLoss ? '3D Baskı / Hammadde (Aktif)' : '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.activeProductionCostTry, status: '', isPositive: false, explanation: 'Tamamlanan siparişlerin üretiminde harcanan hammadde ve 3D yazıcı amortismanı' },
+      { type: 'Paket', name: hasCanceledCostLoss ? 'Paketleme & Fatura (Aktif)' : 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.activePackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' }
     ];
+    if (hasCanceledCostLoss) {
+      balanceRows.push({
+        type: 'İptal Zararı',
+        name: 'İptal / İade Maliyet Zararı (Üretim + Kargo)',
+        detail: `${this.canceledCostedOrderCount} İptal/İade Sipariş`,
+        amount: -this.canceledOrderCostLossTry,
+        status: '🔴 İptal Zararı',
+        isPositive: false,
+        explanation: 'Üretilip kargolandıktan sonra iptal/iade edilen siparişlerin geri dönmeyen üretim, kargo ve paketleme maliyeti (Sipariş Maliyetine dahildir)'
+      });
+    }
+    balanceRows.push({
+      type: isRealProfitPos ? 'KÂR' : 'ZARAR',
+      name: isRealProfitPos ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR',
+      detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar',
+      amount: this.realNetProfitTry,
+      status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar',
+      isPositive: isRealProfitPos,
+      explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler, iptal maliyetleri ve kesintiler gelirleri aştığı için oluşan net zarar'
+    });
+    this.balanceBreakdownRecords = balanceRows;
 
     // 7. Etsy Net Gelir Mutabakat Tablosu (Modal 9)
     const stdFeesUsd = Number((this.etsyFeesUsd - vatUsd).toFixed(2));

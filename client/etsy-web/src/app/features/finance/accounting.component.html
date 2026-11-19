@@ -1535,6 +1535,11 @@
                 <span class="box-val text-danger">-₺{{ formatNumber(totalPackagingCostTry) }}</span>
                 <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
               </div>
+              <div class="drilldown-summary-box highlight-danger-box" *ngIf="canceledOrderCostLossTry > 0">
+                <span class="box-lbl">İptal/İade Maliyet Zararı</span>
+                <span class="box-val text-red-bold">-₺{{ formatNumber(canceledOrderCostLossTry) }}</span>
+                <span class="box-sub">{{ canceledCostedOrderCount }} Sipariş (COGS'a Dahil)</span>
+              </div>
             </div>
 
             <div class="drilldown-table-wrapper">
@@ -1543,6 +1548,7 @@
                   <tr>
                     <th>Tarih</th>
                     <th>Sipariş No</th>
+                    <th>Durum</th>
                     <th>Adet</th>
                     <th>Üretim Maliyeti</th>
                     <th>Kargo Maliyeti</th>
@@ -1556,6 +1562,10 @@
                   <tr *ngFor="let s of orderCostShippingRecords">
                     <td class="date-cell">{{ s.date }}</td>
                     <td class="ref-cell">#{{ s.receiptId }}</td>
+                    <td>
+                      <span *ngIf="s.isCanceledOrRefunded" class="badge-cancel-status cost_loss">{{ s.statusLabel }}</span>
+                      <span *ngIf="!s.isCanceledOrRefunded" class="text-emerald">{{ s.statusLabel }}</span>
+                    </td>
                     <td>{{ s.qty }}</td>
                     <td class="amount-cell text-danger">{{ s.productionCostTry > 0 ? ('-₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
                     <td class="amount-cell text-danger">{{ s.shippingCostTry > 0 ? ('-₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
@@ -1982,7 +1992,7 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. ]
+              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. Maliyeti girilen iptal/iade siparişlerinin üretim ve kargo zararı, üstteki Sipariş Maliyeti ve Gerçek Net Kâr/Zarar hesaplamasına otomatik olarak dahildir. ]
             </div>
           </div>
           <div class="modal-footer">
