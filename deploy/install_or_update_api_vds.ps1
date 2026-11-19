@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
 	[Parameter(Mandatory = $true)]
 	[string]$PackagePath,
@@ -121,13 +121,22 @@ if ($savedProdSettings) {
 		$jsonObj = $savedProdSettings | ConvertFrom-Json
 		if (-not $jsonObj.Security) { $jsonObj | Add-Member -MemberType NoteProperty -Name "Security" -Value ([PSCustomObject]@{}) }
 		$jsonObj.Security.ApiKey = "etsy-vds-sync-key-2026"
+		if ($jsonObj.Security.PSObject.Properties["AllowedShopIds"] -and $jsonObj.Security.AllowedShopIds) {
+			$healedShops = @(
+				$jsonObj.Security.AllowedShopIds |
+				ForEach-Object { if ("$_".Trim() -eq "523236321") { "53236321" } else { "$_".Trim() } } |
+				Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+				Select-Object -Unique
+			)
+			$jsonObj.Security.AllowedShopIds = @($healedShops)
+		}
 		$savedProdSettings = $jsonObj | ConvertTo-Json -Depth 5
 	} catch { }
 	Set-Content $appSettings -Value $savedProdSettings -Encoding UTF8 -ErrorAction SilentlyContinue
 } elseif (-not (Test-Path $appSettings)) {
 	@{
 		EtsyIntegration = @{ DatabasePath = "%ProgramData%\\EtsyMarketPlace\\etsy-finance.db" }
-		Security = @{ ApiKey = $ApiKey; AllowedShopIds = @("53236321") }
+		Security = @{ ApiKey = $ApiKey; AllowedShopIds = @() }
 	} | ConvertTo-Json -Depth 5 | Set-Content $appSettings -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 

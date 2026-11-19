@@ -14,10 +14,10 @@
   </header>
 
   @if (statusMessage()) {
-    <div class="alert-banner info">{{ statusMessage() }}</div>
+    <div class="alert-banner info" role="status">{{ statusMessage() }}</div>
   }
   @if (errorMessage()) {
-    <div class="alert-banner error">{{ errorMessage() }}</div>
+    <div class="alert-banner error" role="alert">{{ errorMessage() }}</div>
   }
 
   <div class="agent-grid">
@@ -91,6 +91,17 @@
             Son zamanlanmış tarama: {{ profile.lastScheduledRunAtUtc | date:'dd.MM.yyyy HH:mm' }}
           </div>
         }
+      } @else if (loadingDna()) {
+        <div class="empty-state">
+          Mağaza DNA profili yükleniyor...
+        </div>
+      } @else {
+        <div class="empty-state">
+          <p>Mağaza DNA profili henüz yüklenemedi.</p>
+          <button class="btn-secondary full-width" (click)="loadDna(false)" [disabled]="loadingDna()">
+            🔄 Tekrar Yükle
+          </button>
+        </div>
       }
     </section>
 

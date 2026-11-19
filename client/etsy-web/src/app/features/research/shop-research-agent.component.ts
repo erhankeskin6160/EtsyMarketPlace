@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
+import { Component, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,9 +9,11 @@ import {
   ResearchRunDto,
   ResearchCandidateDto,
   ResearchScheduleCadence,
+  CandidateDecisionStatus,
   CandidateRejectionReason
 } from '../../core/services/shop-research-agent.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { EtsyApiService } from '../../core/services/etsy-api.service';
 
 @Component({
   selector: 'app-shop-research-agent',
@@ -20,9 +22,10 @@ import { AiSettingsService } from '../../core/services/ai-settings.service';
   templateUrl: './shop-research-agent.component.html',
   styleUrl: './shop-research-agent.component.css'
 })
-export class ShopResearchAgentComponent implements OnInit {
+export class ShopResearchAgentComponent {
   private readonly agentService = inject(ShopResearchAgentService);
   private readonly aiSettings = inject(AiSettingsService);
+  private readonly etsyApi = inject(EtsyApiService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -46,28 +49,49 @@ export class ShopResearchAgentComponent implements OnInit {
   priceMaxUsd = 75;
   supports3DPrint = false;
 
-  ngOnInit(): void {
-    this.loadDna(false);
-    this.loadRuns();
+  constructor() {
+    effect(() => {
+      const currentShopId = this.etsyApi.activeShopId();
+      if (!currentShopId) return;
+
+      untracked(() => {
+        this.dna.set(null);
+        this.runs.set([]);
+        this.activeRun.set(null);
+        this.statusMessage.set(null);
+        this.errorMessage.set(null);
+        this.loadDna(false);
+        this.loadRuns();
+      });
+    }, { allowSignalWrites: true });
   }
 
   loadDna(refreshFromShop: boolean): void {
+    const requestedShopId = this.etsyApi.activeShopId();
     this.loadingDna.set(true);
     this.errorMessage.set(null);
+    if (refreshFromShop) {
+      this.statusMessage.set('Mağaza DNA profiliniz canlı Etsy ilanlarınızdan yenileniyor...');
+    }
+
     this.agentService.getDna(refreshFromShop)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (profile) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.dna.set(profile);
           this.syncFormFromDna(profile);
           this.loadingDna.set(false);
+          this.errorMessage.set(null);
           if (refreshFromShop) {
             this.statusMessage.set('Mağaza DNA profiliniz canlı Etsy ilanlarınızdan güncellendi.');
           }
         },
         error: (err) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.loadingDna.set(false);
-          this.errorMessage.set(err?.error?.error || 'Mağaza DNA profili yüklenemedi.');
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Mağaza DNA profili yüklenemedi.'));
         }
       });
   }
@@ -76,6 +100,7 @@ export class ShopResearchAgentComponent implements OnInit {
     const current = this.dna();
     if (!current) return;
 
+    const requestedShopId = this.etsyApi.activeShopId();
     this.savingDna.set(true);
     this.errorMessage.set(null);
     const forbidden = this.forbiddenKeywordsInput.split(',').map(s => s.trim()).filter(Boolean);
@@ -96,19 +121,24 @@ export class ShopResearchAgentComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.dna.set(updated);
           this.syncFormFromDna(updated);
           this.savingDna.set(false);
+          this.errorMessage.set(null);
           this.statusMessage.set('Mağaza DNA kısıtları ve otomatik tarama takvimi kaydedildi.');
         },
         error: (err) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.savingDna.set(false);
-          this.errorMessage.set(err?.error?.error || 'Ayarlar kaydedilemedi.');
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Ayarlar kaydedilemedi.'));
         }
       });
   }
 
   runAgentNow(): void {
+    const requestedShopId = this.etsyApi.activeShopId();
     this.runningAgent.set(true);
     this.errorMessage.set(null);
     this.statusMessage.set('Ajan mağaza DNA\'nızı analiz ediyor, pazar ve fırsat verilerini tarıyor...');
@@ -117,36 +147,64 @@ export class ShopResearchAgentComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (run) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.runningAgent.set(false);
           this.activeRun.set(run);
           this.runs.update(prev => [run, ...prev.filter(r => r.runId !== run.runId)]);
-          this.statusMessage.set(run.summary);
+          if (run.errorMessage) {
+            this.statusMessage.set(null);
+            this.errorMessage.set(run.errorMessage);
+          } else {
+            this.errorMessage.set(null);
+            this.statusMessage.set(run.summary);
+          }
         },
         error: (err) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.runningAgent.set(false);
-          this.errorMessage.set(err?.error?.error || 'Araştırma ajanı çalıştırılamadı.');
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma ajanı çalıştırılamadı.'));
         }
       });
   }
 
   loadRuns(): void {
+    const requestedShopId = this.etsyApi.activeShopId();
     this.agentService.getRuns(15)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.runs.set(list);
           if (list.length > 0 && !this.activeRun()) {
             this.activeRun.set(list[0]);
+          }
+        },
+        error: (err) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
+          this.statusMessage.set(null);
+          if (!this.errorMessage()) {
+            this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma oturumları yüklenemedi.'));
           }
         }
       });
   }
 
   selectRun(runId: string): void {
+    const requestedShopId = this.etsyApi.activeShopId();
+    this.errorMessage.set(null);
     this.agentService.getRunById(runId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (run) => this.activeRun.set(run)
+        next: (run) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
+          this.activeRun.set(run);
+        },
+        error: (err) => {
+          if (this.etsyApi.activeShopId() !== requestedShopId) return;
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma oturumu detayları yüklenemedi.'));
+        }
       });
   }
 
@@ -155,8 +213,13 @@ export class ShopResearchAgentComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          c.decisionStatus = 1;
+          this.applyCandidateDecision(c.candidateId, 1, 0);
+          this.errorMessage.set(null);
           this.statusMessage.set(`"${c.title}" onaylandı ve mağaza hafızasına eklendi.`);
+        },
+        error: (err) => {
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Aday onay kararı kaydedilemedi.'));
         }
       });
   }
@@ -166,9 +229,13 @@ export class ShopResearchAgentComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          c.decisionStatus = 2;
-          c.rejectionReason = reason;
+          this.applyCandidateDecision(c.candidateId, 2, reason);
+          this.errorMessage.set(null);
           this.statusMessage.set(`"${c.title}" reddedildi; ajan sonraki aramalarda bu desenden kaçınacak.`);
+        },
+        error: (err) => {
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Aday red kararı kaydedilemedi.'));
         }
       });
   }
@@ -178,7 +245,8 @@ export class ShopResearchAgentComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          c.decisionStatus = 3;
+          this.applyCandidateDecision(c.candidateId, 3, 0);
+          this.errorMessage.set(null);
           this.aiSettings.setClonedListing({
             id: c.candidateId,
             title: c.suggestedTitle || c.title,
@@ -189,6 +257,10 @@ export class ShopResearchAgentComponent implements OnInit {
             imageUrls: []
           });
           this.router.navigate(['/listings/fast-creator']);
+        },
+        error: (err) => {
+          this.statusMessage.set(null);
+          this.errorMessage.set(this.extractErrorMessage(err, 'Aday taslağa aktarılamadı.'));
         }
       });
   }
@@ -225,6 +297,28 @@ export class ShopResearchAgentComponent implements OnInit {
       case 2: return 'Bloklu';
       default: return 'Telif Güvenli';
     }
+  }
+
+  private applyCandidateDecision(
+    candidateId: string,
+    decisionStatus: CandidateDecisionStatus,
+    rejectionReason: CandidateRejectionReason
+  ): void {
+    const patchRun = (run: ResearchRunDto): ResearchRunDto => ({
+      ...run,
+      candidates: run.candidates.map(item =>
+        item.candidateId === candidateId
+          ? { ...item, decisionStatus, rejectionReason }
+          : item
+      )
+    });
+
+    this.activeRun.update(run => (run ? patchRun(run) : run));
+    this.runs.update(list => list.map(patchRun));
+  }
+
+  private extractErrorMessage(err: any, fallback: string): string {
+    return err?.error?.error || err?.error?.message || err?.message || fallback;
   }
 
   private syncFormFromDna(profile: ShopDnaProfileDto): void {

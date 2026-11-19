@@ -126,6 +126,21 @@ public sealed class JwtTokenService
                 claims.Add(new Claim(ClaimTypes.Role, UserRoles.Admin));
             }
 
+            if (root.TryGetProperty("shops", out var shopsEl) && shopsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var shopItem in shopsEl.EnumerateArray())
+                {
+                    if (shopItem.ValueKind == JsonValueKind.String)
+                    {
+                        var sid = shopItem.GetString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(sid))
+                        {
+                            claims.Add(new Claim("shop_id", sid));
+                        }
+                    }
+                }
+            }
+
             var identity = new ClaimsIdentity(claims, "Bearer");
             var principal = new ClaimsPrincipal(identity);
 

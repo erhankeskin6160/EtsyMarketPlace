@@ -392,6 +392,7 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         {
             runs.Add(MapRun(reader));
         }
+        await reader.CloseAsync();
 
         if (runs.Count > 0)
         {

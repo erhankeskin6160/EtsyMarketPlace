@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     VDS API Otomatik Güncelleyici ve Başlatıcı (EtsyMarketPlace API Development CD)
 .DESCRIPTION
@@ -150,7 +150,7 @@ try {
     } elseif (-not (Test-Path $prodSettings)) {
         @{
             EtsyIntegration = @{ DatabasePath = "%ProgramData%\\EtsyMarketPlace\\etsy-finance.db" }
-            Security = @{ ApiKey = ""; AllowedShopIds = @("523236321") }
+            Security = @{ ApiKey = ""; AllowedShopIds = @() }
         } | ConvertTo-Json -Depth 5 | Set-Content $prodSettings -Encoding UTF8
     }
 

@@ -116,15 +116,15 @@ export class ShopResearchAgentService {
     let model: string | null = null;
     let apiKey: string | null = null;
 
-    if (s.provider === 'DeepSeek' && s.deepSeekApiKey?.trim()) {
-      model = s.deepSeekModel || 'deepseek-chat';
-      apiKey = s.deepSeekApiKey.trim();
-    } else if (s.provider === 'OpenAI' && s.openAiApiKey?.trim()) {
-      model = s.openAiModel || 'gpt-4o-mini';
-      apiKey = s.openAiApiKey.trim();
-    } else if (s.geminiApiKey?.trim()) {
-      model = s.geminiModel || 'gemini-2.5-flash';
-      apiKey = s.geminiApiKey.trim();
+    if (s.provider !== 'Offline') {
+      const activeKey = this.aiSettings.getActiveApiKey(s.provider);
+      if (activeKey) {
+        model = this.aiSettings.activeModelName();
+        apiKey = activeKey;
+      } else if (s.provider === 'Gemini') {
+        model = this.aiSettings.activeModelName();
+        apiKey = null;
+      }
     }
 
     return this.http.post<ResearchRunDto>(`${this.baseUrl}/run${this.shopQuery()}`, {

@@ -131,11 +131,15 @@ public sealed class ShopResearchAgentOrchestrator
 
             var candidates = new List<ResearchCandidate>();
             var seenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int attemptedMarketQueries = 0;
+            int failedMarketQueries = 0;
+            string? lastMarketError = null;
 
             // Tool 1: Etsy Market Research across Exploitation + 1 Exploration query
             foreach (var q in queries.Take(4))
             {
                 ct.ThrowIfCancellationRequested();
+                attemptedMarketQueries++;
                 MarketSearchResponse marketResult;
                 try
                 {
@@ -143,8 +147,14 @@ public sealed class ShopResearchAgentOrchestrator
                         new MarketSearchQuery(q, Limit: 25, SortBy: "market_score", ShopId: shopId),
                         ct);
                 }
-                catch
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
+                    throw;
+                }
+                catch (Exception marketEx)
+                {
+                    failedMarketQueries++;
+                    lastMarketError = marketEx.Message;
                     continue;
                 }
 
@@ -203,9 +213,19 @@ public sealed class ShopResearchAgentOrchestrator
             run.Candidates = ranked;
             run.Status = ResearchRunStatus.Completed;
             run.CompletedAtUtc = DateTime.UtcNow;
-            run.Summary = ranked.Count > 0
-                ? $"V2 Tarama Tamamlandı: {queries.Count} sorgu (1 keşif dahil) tarandı; canlı defter kesinti kalibrasyonu (%{run.EffectiveShopFeeRatePct:F1}), talep doğrulaması ve 3'lü telif filtresinden geçen {ranked.Count} ürün adayı bulundu."
-                : "V2 Tarama tamamlandı ancak mevcut talep, net kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.";
+            if (ranked.Count > 0)
+            {
+                run.Summary = $"V2 Tarama Tamamlandı: {queries.Count} sorgu (1 keşif dahil) tarandı; canlı defter kesinti kalibrasyonu (%{run.EffectiveShopFeeRatePct:F1}), talep doğrulaması ve 3'lü telif filtresinden geçen {ranked.Count} ürün adayı bulundu.";
+            }
+            else if (attemptedMarketQueries > 0 && failedMarketQueries == attemptedMarketQueries)
+            {
+                run.ErrorMessage = $"Etsy pazar araması başarısız oldu: {lastMarketError}";
+                run.Summary = $"V2 Tarama tamamlandı ancak Etsy pazar araması tüm sorgularda hata verdi ({lastMarketError}). Etsy API bağlantınızı/token durumunuzu kontrol edip tekrar deneyin.";
+            }
+            else
+            {
+                run.Summary = "V2 Tarama tamamlandı ancak mevcut talep, net kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.";
+            }
 
             await _repository.SaveRunAsync(run, ct);
             if (triggerType != ResearchTriggerType.Manual)
@@ -254,8 +274,8 @@ public sealed class ShopResearchAgentOrchestrator
 
                 var sysPrompt =
                     "Sen uzman bir Etsy ürün araştırma ajanısın. Verilen Mağaza DNA'sına ve geçmiş onay/red hafızasına göre " +
-                    "3 adet mağaza nişine uyumlu (exploitation) + 1 adet komşu yüksek potansiyelli yeni niş (exploration) toplam 4 İngilizce Etsy arama sorgusu üret. " +
-                    "Yanıtı YALNIZCA geçerli JSON dizisi olarak ver: [{\"query\":\"...\",\"mode\":\"exploit|explore\",\"reason\":\"...\"}]";
+                    "3 adet mağaza nişine uyumlu (exploit) + 1 adet komşu yüksek potansiyelli yeni niş (explore) toplam 4 İngilizce Etsy arama sorgusu üret. " +
+                    "Yanıtı YALNIZCA geçerli bir JSON nesnesi olarak ver: {\"queries\":[{\"query\":\"...\",\"mode\":\"exploit|explore\",\"reason\":\"...\"}]}";
 
                 var userPrompt = JsonSerializer.Serialize(new
                 {
@@ -272,19 +292,22 @@ public sealed class ShopResearchAgentOrchestrator
                 var (ok, content, _) = await _llmClient.GenerateOptimizationJsonAsync(sysPrompt, userPrompt, model, request.ApiKey, ct);
                 if (ok && !string.IsNullOrWhiteSpace(content))
                 {
-                    using var doc = JsonDocument.Parse(content);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    var cleanedContent = StripMarkdownJsonFences(content);
+                    using var doc = JsonDocument.Parse(cleanedContent);
+                    if (TryExtractQueryArray(doc.RootElement, out var arrayElement))
                     {
                         var list = new List<string>();
                         string? exploration = null;
-                        foreach (var el in doc.RootElement.EnumerateArray())
+                        foreach (var el in arrayElement.EnumerateArray())
                         {
-                            if (el.TryGetProperty("query", out var qEl) && !string.IsNullOrWhiteSpace(qEl.GetString()))
+                            if (el.ValueKind == JsonValueKind.Object &&
+                                TryGetStringPropertyCaseInsensitive(el, "query", out var qRaw) &&
+                                !string.IsNullOrWhiteSpace(qRaw))
                             {
-                                var qStr = qEl.GetString()!.Trim();
+                                var qStr = qRaw.Trim();
                                 list.Add(qStr);
-                                if (el.TryGetProperty("mode", out var mEl) &&
-                                    string.Equals(mEl.GetString(), "explore", StringComparison.OrdinalIgnoreCase))
+                                if (TryGetStringPropertyCaseInsensitive(el, "mode", out var mRaw) &&
+                                    string.Equals(mRaw, "explore", StringComparison.OrdinalIgnoreCase))
                                 {
                                     exploration = qStr;
                                 }
@@ -292,7 +315,12 @@ public sealed class ShopResearchAgentOrchestrator
                         }
                         if (list.Count > 0)
                         {
-                            return (list.Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToList(), exploration ?? list.Last(), content);
+                            var distinct = list.Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToList();
+                            var resolvedExploration = !string.IsNullOrWhiteSpace(exploration) &&
+                                distinct.Contains(exploration, StringComparer.OrdinalIgnoreCase)
+                                ? exploration
+                                : distinct.Last();
+                            return (distinct, resolvedExploration, cleanedContent);
                         }
                     }
                 }
@@ -584,5 +612,79 @@ public sealed class ShopResearchAgentOrchestrator
     {
         var clean = (title ?? string.Empty).Trim();
         return clean.Length <= maxLength ? clean : clean[..maxLength].TrimEnd();
+    }
+
+    private static bool TryExtractQueryArray(JsonElement root, out JsonElement arrayElement)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            arrayElement = root;
+            return true;
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            string[] preferredKeys = ["queries", "items", "hypotheses", "results"];
+            foreach (var key in preferredKeys)
+            {
+                foreach (var prop in root.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, key, StringComparison.OrdinalIgnoreCase) &&
+                        prop.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        arrayElement = prop.Value;
+                        return true;
+                    }
+                }
+            }
+
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Array)
+                {
+                    arrayElement = prop.Value;
+                    return true;
+                }
+            }
+        }
+
+        arrayElement = default;
+        return false;
+    }
+
+    private static bool TryGetStringPropertyCaseInsensitive(JsonElement obj, string propertyName, out string? value)
+    {
+        foreach (var prop in obj.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase) &&
+                prop.Value.ValueKind == JsonValueKind.String)
+            {
+                value = prop.Value.GetString();
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static string StripMarkdownJsonFences(string raw)
+    {
+        var clean = raw.Trim();
+        if (clean.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+        {
+            clean = clean.Substring(7);
+        }
+        else if (clean.StartsWith("```", StringComparison.Ordinal))
+        {
+            clean = clean.Substring(3);
+        }
+
+        if (clean.EndsWith("```", StringComparison.Ordinal))
+        {
+            clean = clean.Substring(0, clean.Length - 3);
+        }
+
+        return clean.Trim();
     }
 }

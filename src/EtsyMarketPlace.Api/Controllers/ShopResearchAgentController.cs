@@ -144,7 +144,7 @@ public sealed class ShopResearchAgentController : BaseApiController
             return false;
         }
 
-        if (!_shopAccessPolicy.IsAllowed(resolvedShopId))
+        if (!_shopAccessPolicy.IsAllowed(resolvedShopId, User))
         {
             errorResult = StatusCode(403, new { error = "Bu mağaza için erişim yetkiniz bulunmuyor." });
             return false;
@@ -156,17 +156,23 @@ public sealed class ShopResearchAgentController : BaseApiController
 
     private RunShopResearchRequest EnrichAiCredentials(RunShopResearchRequest? request)
     {
+        var model = request?.Model?.Trim();
+        var isGeminiOrDefault = string.IsNullOrWhiteSpace(model)
+            || model.Contains("gemini", StringComparison.OrdinalIgnoreCase);
+
         var headerKey = Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) ? hKey.ToString().Trim() : null;
         var apiKey = !string.IsNullOrWhiteSpace(request?.ApiKey)
             ? request.ApiKey!.Trim()
-            : !string.IsNullOrWhiteSpace(headerKey)
+            : isGeminiOrDefault && !string.IsNullOrWhiteSpace(headerKey)
                 ? headerKey
-                : _config["Gemini:ApiKey"];
+                : isGeminiOrDefault
+                    ? _config["Gemini:ApiKey"]
+                    : null;
 
         return new RunShopResearchRequest(
             request?.FocusHint,
             request?.MaxCandidates ?? 10,
-            request?.Model,
+            model,
             apiKey);
     }
 }

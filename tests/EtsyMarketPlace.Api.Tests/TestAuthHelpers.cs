@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Api.Tests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -84,7 +85,9 @@ public static class TestAuthHelper
     public static HttpClient CreateAuthenticatedClient(
         WebApplicationFactory<Program> factory,
         string userId = InMemoryTestIdentityAuthService.DefaultTestUserId,
-        string securityStamp = InMemoryTestIdentityAuthService.DefaultTestSecurityStamp)
+        string securityStamp = InMemoryTestIdentityAuthService.DefaultTestSecurityStamp,
+        string role = UserRoles.Admin,
+        IReadOnlyList<string>? assignedShopIds = null)
     {
         var client = factory.CreateClient();
         var jwt = factory.Services.GetRequiredService<JwtTokenService>();
@@ -93,6 +96,10 @@ public static class TestAuthHelper
         {
             apiFactory.TestIdentityService.RegisterStamp(userId, securityStamp);
         }
+        else if (factory.Services.GetService<IIdentityAuthService>() is InMemoryTestIdentityAuthService inMemAuth)
+        {
+            inMemAuth.RegisterStamp(userId, securityStamp);
+        }
 
         var user = new AppUser(
             userId,
@@ -100,8 +107,8 @@ public static class TestAuthHelper
             "testadmin@local",
             "hash",
             "salt",
-            UserRoles.Admin,
-            new List<string> { "53236321" },
+            role,
+            assignedShopIds?.ToList() ?? new List<string> { "53236321" },
             1_000_000,
             0,
             true,
