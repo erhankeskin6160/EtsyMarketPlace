@@ -41,9 +41,14 @@ public static class JwtSecretProvider
 
             if (File.Exists(path))
             {
-                var unprotect = TryUnprotect(File.ReadAllText(path).Trim());
+                var rawStored = File.ReadAllText(path).Trim();
+                var unprotect = TryUnprotect(rawStored);
                 if (IsUsable(unprotect))
                 {
+                    if (OperatingSystem.IsWindows() && rawStored.StartsWith("DPAPI:", StringComparison.Ordinal))
+                    {
+                        try { File.WriteAllText(path, TryProtect(unprotect!)); } catch { }
+                    }
                     return unprotect!;
                 }
 
@@ -70,8 +75,8 @@ public static class JwtSecretProvider
             try
             {
                 var protectedBytes = ProtectedData.Protect(
-                    Encoding.UTF8.GetBytes(secret), null, DataProtectionScope.CurrentUser);
-                return "DPAPI:" + Convert.ToBase64String(protectedBytes);
+                    Encoding.UTF8.GetBytes(secret), null, DataProtectionScope.LocalMachine);
+                return "DPAPI_LM:" + Convert.ToBase64String(protectedBytes);
             }
             catch
             {
@@ -86,7 +91,7 @@ public static class JwtSecretProvider
     {
         try
         {
-            if (stored.StartsWith("DPAPI:", StringComparison.Ordinal))
+            if (stored.StartsWith("DPAPI_LM:", StringComparison.Ordinal))
             {
                 if (!OperatingSystem.IsWindows())
                 {
@@ -94,8 +99,28 @@ public static class JwtSecretProvider
                 }
 
                 var bytes = ProtectedData.Unprotect(
-                    Convert.FromBase64String(stored["DPAPI:".Length..]), null, DataProtectionScope.CurrentUser);
+                    Convert.FromBase64String(stored["DPAPI_LM:".Length..]), null, DataProtectionScope.LocalMachine);
                 return Encoding.UTF8.GetString(bytes);
+            }
+
+            if (stored.StartsWith("DPAPI:", StringComparison.Ordinal))
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    return null;
+                }
+
+                var cipher = Convert.FromBase64String(stored["DPAPI:".Length..]);
+                try
+                {
+                    var lmBytes = ProtectedData.Unprotect(cipher, null, DataProtectionScope.LocalMachine);
+                    return Encoding.UTF8.GetString(lmBytes);
+                }
+                catch
+                {
+                    var cuBytes = ProtectedData.Unprotect(cipher, null, DataProtectionScope.CurrentUser);
+                    return Encoding.UTF8.GetString(cuBytes);
+                }
             }
 
             if (stored.StartsWith("RAW:", StringComparison.Ordinal))

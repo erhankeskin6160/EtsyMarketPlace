@@ -1,5 +1,6 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
 
@@ -28,15 +29,25 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
                         req.url.includes('localhost:5263');
 
   if (isInternalApi) {
+    const authService = inject(AuthService);
     const token = localStorage.getItem('etsy_web_jwt_token');
-    if (token) {
-      const cloned = req.clone({
-        setHeaders: {
-          Authorization: `Bearer ${token}`
+    const isAuthEndpoint = req.url.includes('/api/auth/login') || req.url.includes('/api/auth/register');
+
+    const outgoing = token
+      ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+      : req;
+
+    return next(outgoing).pipe(
+      catchError((err: unknown) => {
+        if (err instanceof HttpErrorResponse && err.status === 401 && !isAuthEndpoint) {
+          const msg = typeof err.error?.error === 'string' ? err.error.error : '';
+          if (msg.includes('Bearer token') || msg.includes('Yetkisiz erişim')) {
+            authService.logout();
+          }
         }
-      });
-      return next(cloned);
-    }
+        return throwError(() => err);
+      })
+    );
   }
 
   return next(req);
