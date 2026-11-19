@@ -245,6 +245,7 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketKey
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddHostedService<EtsyDeltaSyncBackgroundService>();
+builder.Services.AddSingleton<ShopAccessPolicy>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchRepository>(sp =>
 {
     var repo = new EtsyMarketPlace.Infrastructure.ShopResearchAgent.SqliteShopResearchRepository(dbPath);
