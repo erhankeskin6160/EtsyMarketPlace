@@ -15,8 +15,10 @@ using EtsyMarketPlace.Domain.ShopResearchAgent;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 
 /// <summary>
-/// Personalized autonomous/on-demand product research agent scoped strictly to a single user's Etsy shop.
-/// Pipeline: Inspect Shop DNA -> Load Decision Memory -> Plan Search Queries -> Tool Calling -> Profit/Risk/Cannibalization Guard -> Persist.
+/// V2 Personalized autonomous/on-demand product research agent scoped strictly to a single user's Etsy shop.
+/// Integrates: Live Ledger Economics (3-scenario Offsite Ads), Multi-Signal Demand Validation,
+/// 3-Tier IP Risk Policy (Allow/Review/Block), Hybrid Cannibalization Guard, Closed-Loop Learning (%80 Exploit / %20 Explore),
+/// and Scheduled Run Notifications.
 /// </summary>
 public sealed class ShopResearchAgentOrchestrator
 {
@@ -26,8 +28,12 @@ public sealed class ShopResearchAgentOrchestrator
     private readonly ShopDnaBuilderService _dnaBuilder;
     private readonly CannibalizationGuardService _cannibalizationGuard;
     private readonly ProductOpportunityScorer _opportunityScorer;
+    private readonly ShopEconomicsSimulatorService _economicsSimulator;
+    private readonly DemandValidationService _demandValidator;
+    private readonly IpRiskPolicyService _ipRiskPolicy;
     private readonly IGeminiListingApiClient? _llmClient;
     private readonly IViral3DModelLakeRepository? _viral3DLake;
+    private readonly IShopResearchNotifier? _notifier;
 
     public ShopResearchAgentOrchestrator(
         IShopResearchRepository repository,
@@ -36,8 +42,12 @@ public sealed class ShopResearchAgentOrchestrator
         ShopDnaBuilderService dnaBuilder,
         CannibalizationGuardService cannibalizationGuard,
         ProductOpportunityScorer opportunityScorer,
+        ShopEconomicsSimulatorService? economicsSimulator = null,
+        DemandValidationService? demandValidator = null,
+        IpRiskPolicyService? ipRiskPolicy = null,
         IGeminiListingApiClient? llmClient = null,
-        IViral3DModelLakeRepository? viral3DLake = null)
+        IViral3DModelLakeRepository? viral3DLake = null,
+        IShopResearchNotifier? notifier = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _listingService = listingService ?? throw new ArgumentNullException(nameof(listingService));
@@ -45,8 +55,12 @@ public sealed class ShopResearchAgentOrchestrator
         _dnaBuilder = dnaBuilder ?? throw new ArgumentNullException(nameof(dnaBuilder));
         _cannibalizationGuard = cannibalizationGuard ?? throw new ArgumentNullException(nameof(cannibalizationGuard));
         _opportunityScorer = opportunityScorer ?? throw new ArgumentNullException(nameof(opportunityScorer));
+        _economicsSimulator = economicsSimulator ?? new ShopEconomicsSimulatorService();
+        _demandValidator = demandValidator ?? new DemandValidationService();
+        _ipRiskPolicy = ipRiskPolicy ?? new IpRiskPolicyService();
         _llmClient = llmClient;
         _viral3DLake = viral3DLake;
+        _notifier = notifier;
     }
 
     public async Task<ShopDnaProfile> GetOrBuildDnaAsync(
@@ -68,7 +82,6 @@ public sealed class ShopResearchAgentOrchestrator
         }
         catch
         {
-            // Keep existing profile if Etsy API is temporarily unavailable
             if (existing != null) return existing;
         }
 
@@ -104,18 +117,22 @@ public sealed class ShopResearchAgentOrchestrator
             }
             catch
             {
-                // Continue even if live listing fetch fails; cannibalization guard handles empty list gracefully.
+                // Continue gracefully when live listing snapshot is temporarily unreachable
             }
 
-            var recentDecisions = await _repository.GetRecentDecisionEventsAsync(ownerUserId, shopId, 25, ct);
-            var (queries, hypothesesJson) = await PlanQueriesAsync(dna, recentDecisions, request, ct);
+            var (shopVariableFeeRate, feeSource) = await _economicsSimulator.ResolveShopVariableFeeRateAsync(shopId, ct);
+            run.EffectiveShopFeeRatePct = Math.Round(shopVariableFeeRate * 100m, 1);
+
+            var recentDecisions = await _repository.GetRecentDecisionEventsAsync(ownerUserId, shopId, 40, ct);
+            var (queries, explorationQuery, hypothesesJson) = await PlanQueriesAsync(dna, recentDecisions, request, ct);
             run.SearchQueriesUsed = queries;
+            run.ExplorationQueryUsed = explorationQuery;
             run.HypothesesJson = hypothesesJson;
 
             var candidates = new List<ResearchCandidate>();
             var seenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Tool 1: Etsy Market Research per planned query
+            // Tool 1: Etsy Market Research across Exploitation + 1 Exploration query
             foreach (var q in queries.Take(4))
             {
                 ct.ThrowIfCancellationRequested();
@@ -131,13 +148,17 @@ public sealed class ShopResearchAgentOrchestrator
                     continue;
                 }
 
+                var isExploration = !string.IsNullOrWhiteSpace(explorationQuery)
+                    && string.Equals(q, explorationQuery, StringComparison.OrdinalIgnoreCase);
+
                 foreach (var item in marketResult.Listings.OrderByDescending(l => l.MarketScore).Take(10))
                 {
                     if (string.IsNullOrWhiteSpace(item.Title) || !seenTitles.Add(item.Title.Trim()))
                         continue;
 
                     var candidate = EvaluateMarketCandidate(
-                        run.RunId, ownerUserId, shopId, dna, ownListings, recentDecisions, q, marketResult.Kpis, item);
+                        run.RunId, ownerUserId, shopId, dna, ownListings, recentDecisions,
+                        q, isExploration, shopVariableFeeRate, feeSource, marketResult.Kpis, item);
                     if (candidate != null)
                     {
                         candidates.Add(candidate);
@@ -157,7 +178,8 @@ public sealed class ShopResearchAgentOrchestrator
                             continue;
 
                         var candidate = Evaluate3DCandidate(
-                            run.RunId, ownerUserId, shopId, dna, ownListings, recentDecisions, model);
+                            run.RunId, ownerUserId, shopId, dna, ownListings, recentDecisions,
+                            shopVariableFeeRate, feeSource, model);
                         if (candidate != null)
                         {
                             candidates.Add(candidate);
@@ -166,13 +188,14 @@ public sealed class ShopResearchAgentOrchestrator
                 }
                 catch
                 {
-                    // Optional enrichment; do not fail run if lake is empty
+                    // Optional enrichment
                 }
             }
 
             var maxCount = Math.Clamp(request?.MaxCandidates ?? 10, 3, 25);
             var ranked = candidates
                 .OrderByDescending(c => c.OpportunityScore)
+                .ThenByDescending(c => c.DemandScore)
                 .ThenByDescending(c => c.EstimatedNetProfitUsd)
                 .Take(maxCount)
                 .ToList();
@@ -181,13 +204,17 @@ public sealed class ShopResearchAgentOrchestrator
             run.Status = ResearchRunStatus.Completed;
             run.CompletedAtUtc = DateTime.UtcNow;
             run.Summary = ranked.Count > 0
-                ? $"{queries.Count} niş hipotezi tarandı; mağaza DNA'sına uygun, net kâr ve telif/yamyamlaşma filtresinden geçen {ranked.Count} ürün adayı bulundu."
-                : "Tarama tamamlandı ancak mevcut kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.";
+                ? $"V2 Tarama Tamamlandı: {queries.Count} sorgu (1 keşif dahil) tarandı; canlı defter kesinti kalibrasyonu (%{run.EffectiveShopFeeRatePct:F1}), talep doğrulaması ve 3'lü telif filtresinden geçen {ranked.Count} ürün adayı bulundu."
+                : "V2 Tarama tamamlandı ancak mevcut talep, net kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.";
 
             await _repository.SaveRunAsync(run, ct);
             if (triggerType != ResearchTriggerType.Manual)
             {
                 await _repository.UpdateLastScheduledRunAsync(ownerUserId, shopId, DateTime.UtcNow, ct);
+                if (_notifier != null && ranked.Count > 0)
+                {
+                    try { await _notifier.NotifyRunCompletedAsync(run, ct); } catch { /* Best-effort notification */ }
+                }
             }
 
             return run;
@@ -203,7 +230,7 @@ public sealed class ShopResearchAgentOrchestrator
         }
     }
 
-    private async Task<(IReadOnlyList<string> Queries, string HypothesesJson)> PlanQueriesAsync(
+    private async Task<(IReadOnlyList<string> Queries, string? ExplorationQuery, string HypothesesJson)> PlanQueriesAsync(
         ShopDnaProfile dna,
         IReadOnlyList<CandidateDecisionEvent> recentDecisions,
         RunShopResearchRequest? request,
@@ -212,8 +239,8 @@ public sealed class ShopResearchAgentOrchestrator
         if (!string.IsNullOrWhiteSpace(request?.FocusHint))
         {
             var hint = request.FocusHint.Trim();
-            var fallback = BuildDeterministicQueries(dna, hint);
-            return (fallback, JsonSerializer.Serialize(new[] { new { query = hint, reason = "Kullanıcı odak ipucu" } }));
+            var (fallback, exp) = BuildBanditDeterministicQueries(dna, recentDecisions, hint);
+            return (fallback, exp, JsonSerializer.Serialize(new[] { new { query = hint, reason = "Kullanıcı odak ipucu" } }));
         }
 
         if (_llmClient != null && !string.IsNullOrWhiteSpace(request?.ApiKey))
@@ -221,14 +248,14 @@ public sealed class ShopResearchAgentOrchestrator
             try
             {
                 var accepted = recentDecisions.Where(d => d.Decision == CandidateDecisionStatus.Accepted || d.Decision == CandidateDecisionStatus.SentToDraft)
-                    .Select(d => d.CandidateTitle).Take(5).ToList();
+                    .Select(d => d.CandidateTitle).Take(6).ToList();
                 var rejected = recentDecisions.Where(d => d.Decision == CandidateDecisionStatus.Rejected)
-                    .Select(d => $"{d.CandidateTitle} ({d.Reason})").Take(5).ToList();
+                    .Select(d => $"{d.CandidateTitle} ({d.Reason})").Take(6).ToList();
 
                 var sysPrompt =
-                    "Sen uzman bir Etsy ürün araştırma ajanısın. Verilen Mağaza DNA'sına ve geçmiş kabul/red kararlarına göre " +
-                    "mağazanın mevcut ürünleriyle çakışmayan ama aynı kitleye satabilecek 4 adet yüksek potansiyelli İngilizce Etsy arama sorgusu üret. " +
-                    "Yanıtı YALNIZCA geçerli JSON dizisi olarak ver: [{\"query\":\"...\",\"reason\":\"...\"}]";
+                    "Sen uzman bir Etsy ürün araştırma ajanısın. Verilen Mağaza DNA'sına ve geçmiş onay/red hafızasına göre " +
+                    "3 adet mağaza nişine uyumlu (exploitation) + 1 adet komşu yüksek potansiyelli yeni niş (exploration) toplam 4 İngilizce Etsy arama sorgusu üret. " +
+                    "Yanıtı YALNIZCA geçerli JSON dizisi olarak ver: [{\"query\":\"...\",\"mode\":\"exploit|explore\",\"reason\":\"...\"}]";
 
                 var userPrompt = JsonSerializer.Serialize(new
                 {
@@ -249,40 +276,63 @@ public sealed class ShopResearchAgentOrchestrator
                     if (doc.RootElement.ValueKind == JsonValueKind.Array)
                     {
                         var list = new List<string>();
+                        string? exploration = null;
                         foreach (var el in doc.RootElement.EnumerateArray())
                         {
                             if (el.TryGetProperty("query", out var qEl) && !string.IsNullOrWhiteSpace(qEl.GetString()))
                             {
-                                list.Add(qEl.GetString()!.Trim());
+                                var qStr = qEl.GetString()!.Trim();
+                                list.Add(qStr);
+                                if (el.TryGetProperty("mode", out var mEl) &&
+                                    string.Equals(mEl.GetString(), "explore", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    exploration = qStr;
+                                }
                             }
                         }
                         if (list.Count > 0)
                         {
-                            return (list.Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToList(), content);
+                            return (list.Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToList(), exploration ?? list.Last(), content);
                         }
                     }
                 }
             }
             catch
             {
-                // Fallback to deterministic query planner
+                // Fallback to bandit deterministic planner
             }
         }
 
-        var deterministic = BuildDeterministicQueries(dna, null);
-        var json = JsonSerializer.Serialize(deterministic.Select(q => new { query = q, reason = "Mağaza DNA anahtar kelimesi" }));
-        return (deterministic, json);
+        var (deterministic, expQuery) = BuildBanditDeterministicQueries(dna, recentDecisions, null);
+        var json = JsonSerializer.Serialize(deterministic.Select(q => new
+        {
+            query = q,
+            mode = string.Equals(q, expQuery, StringComparison.OrdinalIgnoreCase) ? "explore" : "exploit",
+            reason = string.Equals(q, expQuery, StringComparison.OrdinalIgnoreCase) ? "Keşif (%20 Exploration)" : "Mağaza DNA + Onay Geçmişi"
+        }));
+        return (deterministic, expQuery, json);
     }
 
-    private static IReadOnlyList<string> BuildDeterministicQueries(ShopDnaProfile dna, string? focusHint)
+    private static (IReadOnlyList<string> Queries, string? ExplorationQuery) BuildBanditDeterministicQueries(
+        ShopDnaProfile dna,
+        IReadOnlyList<CandidateDecisionEvent> recentDecisions,
+        string? focusHint)
     {
         var queries = new List<string>();
         if (!string.IsNullOrWhiteSpace(focusHint))
             queries.Add(focusHint.Trim());
 
-        foreach (var tag in dna.TopPerformingTags.Concat(dna.CategoryKeywords))
+        // Boost categories/tags that historically received Accepted/SentToDraft decisions
+        var approvedCategories = recentDecisions
+            .Where(d => d.Decision == CandidateDecisionStatus.Accepted || d.Decision == CandidateDecisionStatus.SentToDraft)
+            .GroupBy(d => d.Category, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .Where(k => !string.IsNullOrWhiteSpace(k));
+
+        foreach (var seed in approvedCategories.Concat(dna.TopPerformingTags).Concat(dna.CategoryKeywords))
         {
-            var clean = tag?.Trim();
+            var clean = seed?.Trim();
             if (string.IsNullOrWhiteSpace(clean)) continue;
             if (dna.ForbiddenKeywords.Any(f => clean.Contains(f, StringComparison.OrdinalIgnoreCase))) continue;
 
@@ -293,13 +343,19 @@ public sealed class ShopResearchAgentOrchestrator
             if (!queries.Contains(candidateQuery, StringComparer.OrdinalIgnoreCase))
                 queries.Add(candidateQuery);
 
-            if (queries.Count >= 4) break;
+            if (queries.Count >= 3) break;
         }
 
-        if (queries.Count == 0)
-            queries.Add(dna.Supports3DPrint ? "3d printed desk decor" : "personalized handmade gift");
+        // 4th slot: %20 Exploration query (adjacent high-demand gift/desk/home niche)
+        var explorationSeed = dna.Supports3DPrint
+            ? "modern desk organizer 3d printed gift"
+            : "minimalist handmade home gift";
+        if (!queries.Contains(explorationSeed, StringComparer.OrdinalIgnoreCase))
+        {
+            queries.Add(explorationSeed);
+        }
 
-        return queries;
+        return (queries, explorationSeed);
     }
 
     private ResearchCandidate? EvaluateMarketCandidate(
@@ -310,28 +366,44 @@ public sealed class ShopResearchAgentOrchestrator
         IReadOnlyList<ShopListingItemDto> ownListings,
         IReadOnlyList<CandidateDecisionEvent> recentDecisions,
         string query,
+        bool isExploration,
+        decimal shopVariableFeeRate,
+        string feeSource,
         MarketSummaryKpisDto kpis,
         MarketListingItemDto item)
     {
-        if (ContainsForbiddenOrRejected(item.Title, item.Tags, dna, recentDecisions))
+        // 1. 3-Tier IP & Trademark Risk Policy (Block -> reject immediately; Review -> keep with warning)
+        var ipRisk = _ipRiskPolicy.Evaluate(item.Title, item.Description, item.Tags, dna.ForbiddenKeywords);
+        if (ipRisk.Decision == IpRiskDecision.Block)
+            return null;
+
+        // 2. Closed-Loop Negative Learning: reject candidates semantically too close to previously rejected items
+        if (MatchesRejectedMemory(item.Title, recentDecisions))
             return null;
 
         var price = item.PriceUsd > 0 ? item.PriceUsd : kpis.MedianPrice;
         if (price <= 0) price = dna.TargetPriceMinUsd;
 
-        // Filter out items far outside store's target price band
         if (price < dna.TargetPriceMinUsd * 0.6m || price > dna.TargetPriceMaxUsd * 1.6m)
             return null;
 
-        var (netProfit, netMarginPct) = SimulateEtsyNetProfit(price, dna.EstimatedCogsRatio);
-        if (netMarginPct < dna.MinAcceptableNetMarginPct)
+        // 3. V2 Realistic Multi-Scenario Unit Economics
+        var econ = _economicsSimulator.Simulate(price, dna.EstimatedCogsRatio, dna.Supports3DPrint, shopVariableFeeRate, feeSource);
+        if (econ.NetMarginStandardPct < dna.MinAcceptableNetMarginPct)
             return null;
 
-        var cannibalization = _cannibalizationGuard.Check(item.Title, item.Tags, ownListings);
+        // 4. V2 Multi-Signal Demand Validation (blocks dead niches)
+        var demand = _demandValidator.EvaluateMarketListing(item, kpis);
+        if (demand.IsDeadNiche)
+            return null;
+
+        // 5. V2 Hybrid Cannibalization Guard (Trigram Cosine + Token Jaccard + Price Band)
+        var cannibalization = _cannibalizationGuard.Check(item.Title, item.Tags, ownListings, price);
         if (cannibalization.IsBlocked)
             return null;
 
-        var score = _opportunityScorer.Score(new ProductOpportunityInput(
+        // 6. Composite V2 Opportunity Score
+        var legacyScore = _opportunityScorer.Score(new ProductOpportunityInput(
             Title: item.Title,
             Description: item.Description ?? string.Empty,
             Tags: item.Tags,
@@ -344,8 +416,11 @@ public sealed class ShopResearchAgentOrchestrator
             TargetKeyword: query,
             Category: query));
 
-        if (score.Risk >= 18)
-            return null;
+        var effectiveRisk = Math.Max(ipRisk.RiskScore, legacyScore.Risk);
+        var marginScore = Math.Clamp((int)Math.Round(econ.NetMarginStandardPct * 1.6m), 0, 100);
+        var compositeOpportunity = Math.Clamp(
+            (int)Math.Round((demand.DemandScore * 0.42) + (demand.CompetitionAdvantage * 0.23) + (marginScore * 0.25) + ((100 - effectiveRisk) * 0.10)),
+            0, 100);
 
         var suggestedTags = Build13Tags(item.Tags, dna.TopPerformingTags);
         var suggestedTitle = TruncateTitle(item.Title, 140);
@@ -362,16 +437,24 @@ public sealed class ShopResearchAgentOrchestrator
             SourcePlatform = "EtsyMarket",
             SourceUrl = item.ListingUrl,
             Category = query,
-            EstimatedSellPriceUsd = Math.Round(price, 2),
-            EstimatedNetProfitUsd = netProfit,
-            EstimatedNetMarginPct = netMarginPct,
+            EstimatedSellPriceUsd = econ.SellPriceUsd,
+            EstimatedNetProfitUsd = econ.NetProfitStandardUsd,
+            EstimatedNetMarginPct = econ.NetMarginStandardPct,
+            NetProfitOffsiteAds12Usd = econ.NetProfitOffsiteAds12Usd,
+            NetProfitOffsiteAds15Usd = econ.NetProfitOffsiteAds15Usd,
+            EffectiveFeeRatePct = econ.EffectiveFeeRatePct,
             CompetitionCount = kpis.TotalListings,
             DemandSignalScore = item.Favorites + (item.EstimatedMonthlySales * 10),
-            OpportunityScore = score.Opportunity,
-            RiskScore = score.Risk,
+            DemandScore = demand.DemandScore,
+            DemandConfidence = demand.Confidence,
+            OpportunityScore = compositeOpportunity,
+            RiskScore = effectiveRisk,
+            RiskDecision = ipRisk.Decision,
+            RiskReasons = ipRisk.Reasons,
             CannibalizationScore = cannibalization.Score,
             CannibalizationWarning = cannibalization.WarningMessage,
-            Rationale = $"'{query}' aramasında ${price:F2} fiyat bandında güçlü talep (Tahmini aylık {item.EstimatedMonthlySales} satış, {item.Favorites} favori). Net kâr marjı %{netMarginPct:F1}.",
+            IsExplorationCandidate = isExploration,
+            Rationale = $"{demand.Summary} Normal Net: ${econ.NetProfitStandardUsd:F2} (%{econ.NetMarginStandardPct:F1}) | Offsite %12: ${econ.NetProfitOffsiteAds12Usd:F2} | Offsite %15: ${econ.NetProfitOffsiteAds15Usd:F2}.",
             EvidenceJson = JsonSerializer.Serialize(new
             {
                 etsyListingId = item.Id,
@@ -380,7 +463,10 @@ public sealed class ShopResearchAgentOrchestrator
                 medianMarketPrice = kpis.MedianPrice,
                 favorites = item.Favorites,
                 views = item.Views,
-                estimatedMonthlySales = item.EstimatedMonthlySales
+                reviewCount = item.ReviewCount,
+                isBestseller = item.IsBestseller,
+                estimatedMonthlySales = item.EstimatedMonthlySales,
+                feeCalibration = econ.CalibrationSource
             })
         };
     }
@@ -392,36 +478,35 @@ public sealed class ShopResearchAgentOrchestrator
         ShopDnaProfile dna,
         IReadOnlyList<ShopListingItemDto> ownListings,
         IReadOnlyList<CandidateDecisionEvent> recentDecisions,
+        decimal shopVariableFeeRate,
+        string feeSource,
         EtsyMarketPlace.Domain.Viral3DModels.Entities.Trending3DModel model)
     {
         var tags = model.Tags?.ToList() ?? [];
-        if (ContainsForbiddenOrRejected(model.Title, tags, dna, recentDecisions))
+        var ipRisk = _ipRiskPolicy.Evaluate(model.Title, model.Description, tags, dna.ForbiddenKeywords);
+        if (ipRisk.Decision == IpRiskDecision.Block)
+            return null;
+
+        if (MatchesRejectedMemory(model.Title, recentDecisions))
             return null;
 
         var price = Math.Clamp((dna.TargetPriceMinUsd + dna.TargetPriceMaxUsd) / 2m, 14.99m, 89.99m);
-        var (netProfit, netMarginPct) = SimulateEtsyNetProfit(price, dna.EstimatedCogsRatio);
-        if (netMarginPct < dna.MinAcceptableNetMarginPct)
+        var econ = _economicsSimulator.Simulate(price, dna.EstimatedCogsRatio, is3DPrinted: true, shopVariableFeeRate, feeSource);
+        if (econ.NetMarginStandardPct < dna.MinAcceptableNetMarginPct)
             return null;
 
-        var cannibalization = _cannibalizationGuard.Check(model.Title, tags, ownListings);
+        var demand = _demandValidator.Evaluate3DModel(model.TotalDownloads, model.LikesCount, model.EtsyCompetitionCount);
+        if (demand.IsDeadNiche)
+            return null;
+
+        var cannibalization = _cannibalizationGuard.Check(model.Title, tags, ownListings, price);
         if (cannibalization.IsBlocked)
             return null;
 
-        var score = _opportunityScorer.Score(new ProductOpportunityInput(
-            Title: model.Title,
-            Description: model.Description ?? string.Empty,
-            Tags: tags,
-            Price: price,
-            Favorites: model.LikesCount,
-            Views: model.TotalDownloads,
-            ShopSales: model.PrintsCount,
-            SeoScore: 65,
-            Quantity: 10,
-            TargetKeyword: model.Title,
-            Category: model.Category ?? "3D Print"));
-
-        if (score.Risk >= 18)
-            return null;
+        var marginScore = Math.Clamp((int)Math.Round(econ.NetMarginStandardPct * 1.6m), 0, 100);
+        var compositeOpportunity = Math.Clamp(
+            (int)Math.Round((demand.DemandScore * 0.42) + (demand.CompetitionAdvantage * 0.25) + (marginScore * 0.23) + ((100 - ipRisk.RiskScore) * 0.10)),
+            0, 100);
 
         return new ResearchCandidate
         {
@@ -435,54 +520,47 @@ public sealed class ShopResearchAgentOrchestrator
             SourcePlatform = model.Platform.ToString(),
             SourceUrl = model.SafeModelUrl,
             Category = model.Category ?? "3D Print",
-            EstimatedSellPriceUsd = Math.Round(price, 2),
-            EstimatedNetProfitUsd = netProfit,
-            EstimatedNetMarginPct = netMarginPct,
+            EstimatedSellPriceUsd = econ.SellPriceUsd,
+            EstimatedNetProfitUsd = econ.NetProfitStandardUsd,
+            EstimatedNetMarginPct = econ.NetMarginStandardPct,
+            NetProfitOffsiteAds12Usd = econ.NetProfitOffsiteAds12Usd,
+            NetProfitOffsiteAds15Usd = econ.NetProfitOffsiteAds15Usd,
+            EffectiveFeeRatePct = econ.EffectiveFeeRatePct,
             CompetitionCount = Math.Max(0, model.EtsyCompetitionCount),
             DemandSignalScore = model.TotalDownloads + model.LikesCount,
-            OpportunityScore = Math.Max(score.Opportunity, model.OpportunityScore),
-            RiskScore = score.Risk,
+            DemandScore = demand.DemandScore,
+            DemandConfidence = demand.Confidence,
+            OpportunityScore = Math.Max(compositeOpportunity, model.OpportunityScore),
+            RiskScore = ipRisk.RiskScore,
+            RiskDecision = ipRisk.Decision,
+            RiskReasons = ipRisk.Reasons,
             CannibalizationScore = cannibalization.Score,
             CannibalizationWarning = cannibalization.WarningMessage,
-            Rationale = $"{model.Platform} üzerinde {model.TotalDownloads} indirme & ticari lisanslı 3D model. Mağaza 3D baskı DNA'nızla uyumlu.",
+            IsExplorationCandidate = false,
+            Rationale = $"{demand.Summary} Ticari lisanslı 3D model. Normal Net: ${econ.NetProfitStandardUsd:F2} (%{econ.NetMarginStandardPct:F1}) | Offsite %12: ${econ.NetProfitOffsiteAds12Usd:F2}.",
             EvidenceJson = JsonSerializer.Serialize(new
             {
                 externalId = model.ExternalId,
                 platform = model.Platform.ToString(),
                 downloads = model.TotalDownloads,
                 likes = model.LikesCount,
-                license = model.License.LicenseName
+                license = model.License.LicenseName,
+                feeCalibration = econ.CalibrationSource
             })
         };
     }
 
-    public static (decimal NetProfitUsd, decimal NetMarginPct) SimulateEtsyNetProfit(decimal sellPriceUsd, decimal cogsRatio)
+    private bool MatchesRejectedMemory(string candidateTitle, IReadOnlyList<CandidateDecisionEvent> recentDecisions)
     {
-        if (sellPriceUsd <= 0) return (0m, 0m);
+        foreach (var decision in recentDecisions.Where(d => d.Decision == CandidateDecisionStatus.Rejected))
+        {
+            if (string.Equals(decision.CandidateTitle, candidateTitle, StringComparison.OrdinalIgnoreCase))
+                return true;
 
-        // Etsy standard fee stack: 6.5% transaction + 3% + $0.25 payment + $0.20 listing + 2.5% currency
-        var etsyFees = (sellPriceUsd * 0.12m) + 0.45m;
-        var cogs = sellPriceUsd * Math.Clamp(cogsRatio, 0.05m, 0.85m);
-        var net = Math.Round(sellPriceUsd - etsyFees - cogs, 2);
-        var marginPct = Math.Round((net / sellPriceUsd) * 100m, 1);
-        return (net, marginPct);
-    }
-
-    private static bool ContainsForbiddenOrRejected(
-        string title,
-        IReadOnlyList<string> tags,
-        ShopDnaProfile dna,
-        IReadOnlyList<CandidateDecisionEvent> recentDecisions)
-    {
-        var corpus = $"{title} {string.Join(" ", tags ?? Array.Empty<string>())}";
-        if (dna.ForbiddenKeywords.Any(k => !string.IsNullOrWhiteSpace(k) && corpus.Contains(k.Trim(), StringComparison.OrdinalIgnoreCase)))
-            return true;
-
-        var rejectedTitles = recentDecisions
-            .Where(d => d.Decision == CandidateDecisionStatus.Rejected)
-            .Select(d => d.CandidateTitle);
-
-        return rejectedTitles.Any(rt => string.Equals(rt, title, StringComparison.OrdinalIgnoreCase));
+            if (_cannibalizationGuard.ComputeTitleSimilarity(candidateTitle, decision.CandidateTitle) >= 0.65)
+                return true;
+        }
+        return false;
     }
 
     private static IReadOnlyList<string> Build13Tags(IReadOnlyList<string>? primary, IReadOnlyList<string> fallback)

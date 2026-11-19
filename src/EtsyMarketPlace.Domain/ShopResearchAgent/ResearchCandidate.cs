@@ -23,12 +23,20 @@ public sealed class ResearchCandidate
     public decimal EstimatedSellPriceUsd { get; init; }
     public decimal EstimatedNetProfitUsd { get; init; }
     public decimal EstimatedNetMarginPct { get; init; }
+    public decimal NetProfitOffsiteAds12Usd { get; init; }
+    public decimal NetProfitOffsiteAds15Usd { get; init; }
+    public decimal EffectiveFeeRatePct { get; init; }
     public int CompetitionCount { get; init; }
     public double DemandSignalScore { get; init; }
+    public int DemandScore { get; init; }
+    public DemandConfidenceLevel DemandConfidence { get; init; } = DemandConfidenceLevel.Medium;
     public int OpportunityScore { get; init; }
     public int RiskScore { get; init; }
+    public IpRiskDecision RiskDecision { get; init; } = IpRiskDecision.Allow;
+    public IReadOnlyList<string> RiskReasons { get; init; } = Array.Empty<string>();
     public int CannibalizationScore { get; init; }
     public string? CannibalizationWarning { get; init; }
+    public bool IsExplorationCandidate { get; init; }
 
     public string Rationale { get; init; } = string.Empty;
     public string EvidenceJson { get; init; } = "{}";

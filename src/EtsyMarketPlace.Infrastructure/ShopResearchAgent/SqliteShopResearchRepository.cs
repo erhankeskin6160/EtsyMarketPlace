@@ -64,7 +64,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 search_queries_json TEXT NOT NULL,
                 hypotheses_json TEXT NOT NULL,
                 summary TEXT NOT NULL,
-                error_message TEXT NULL
+                error_message TEXT NULL,
+                exploration_query_used TEXT NULL,
+                effective_shop_fee_rate_pct REAL NOT NULL DEFAULT 13.1
             );
             CREATE INDEX IF NOT EXISTS ix_research_runs_owner_shop ON research_runs (owner_user_id, shop_id, started_at_utc DESC);
 
@@ -92,7 +94,15 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 evidence_json TEXT NOT NULL,
                 decision_status INTEGER NOT NULL,
                 rejection_reason INTEGER NOT NULL,
-                decided_at_utc TEXT NULL
+                decided_at_utc TEXT NULL,
+                net_profit_offsite12_usd REAL NOT NULL DEFAULT 0,
+                net_profit_offsite15_usd REAL NOT NULL DEFAULT 0,
+                effective_fee_rate_pct REAL NOT NULL DEFAULT 13.1,
+                demand_score INTEGER NOT NULL DEFAULT 50,
+                demand_confidence INTEGER NOT NULL DEFAULT 1,
+                risk_decision INTEGER NOT NULL DEFAULT 0,
+                risk_reasons_json TEXT NOT NULL DEFAULT '[]',
+                is_exploration_candidate INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS ix_research_candidates_run ON research_candidates (run_id);
             CREATE INDEX IF NOT EXISTS ix_research_candidates_owner_shop ON research_candidates (owner_user_id, shop_id);
@@ -112,6 +122,31 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             CREATE INDEX IF NOT EXISTS ix_decision_events_owner_shop ON candidate_decision_events (owner_user_id, shop_id, created_at_utc DESC);
             """;
         await cmd.ExecuteNonQueryAsync(ct);
+
+        await EnsureColumnAsync(conn, "research_runs", "exploration_query_used", "TEXT NULL", ct);
+        await EnsureColumnAsync(conn, "research_runs", "effective_shop_fee_rate_pct", "REAL NOT NULL DEFAULT 13.1", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "net_profit_offsite12_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "net_profit_offsite15_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "effective_fee_rate_pct", "REAL NOT NULL DEFAULT 13.1", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "demand_score", "INTEGER NOT NULL DEFAULT 50", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "demand_confidence", "INTEGER NOT NULL DEFAULT 1", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "risk_decision", "INTEGER NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "risk_reasons_json", "TEXT NOT NULL DEFAULT '[]'", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "is_exploration_candidate", "INTEGER NOT NULL DEFAULT 0", ct);
+    }
+
+    private static async Task EnsureColumnAsync(SqliteConnection conn, string table, string column, string definition, CancellationToken ct)
+    {
+        try
+        {
+            await using var alter = conn.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition};";
+            await alter.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException)
+        {
+            // Column already exists
+        }
     }
 
     public async Task<ShopDnaProfile?> GetDnaProfileAsync(string ownerUserId, string shopId, CancellationToken ct = default)
@@ -240,10 +275,12 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             cmd.CommandText = """
                 INSERT INTO research_runs (
                     run_id, owner_user_id, shop_id, trigger_type, status,
-                    started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message
+                    started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
+                    exploration_query_used, effective_shop_fee_rate_pct
                 ) VALUES (
                     @id, @owner, @shop, @trigger, @status,
-                    @started, @completed, @queries, @hypotheses, @summary, @err
+                    @started, @completed, @queries, @hypotheses, @summary, @err,
+                    @expq, @feerate
                 )
                 ON CONFLICT(run_id) DO UPDATE SET
                     status = excluded.status,
@@ -251,7 +288,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                     search_queries_json = excluded.search_queries_json,
                     hypotheses_json = excluded.hypotheses_json,
                     summary = excluded.summary,
-                    error_message = excluded.error_message;
+                    error_message = excluded.error_message,
+                    exploration_query_used = excluded.exploration_query_used,
+                    effective_shop_fee_rate_pct = excluded.effective_shop_fee_rate_pct;
                 """;
             cmd.Parameters.AddWithValue("@id", run.RunId.ToString());
             cmd.Parameters.AddWithValue("@owner", run.OwnerUserId);
@@ -264,6 +303,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             cmd.Parameters.AddWithValue("@hypotheses", run.HypothesesJson);
             cmd.Parameters.AddWithValue("@summary", run.Summary);
             cmd.Parameters.AddWithValue("@err", (object?)run.ErrorMessage ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@expq", (object?)run.ExplorationQueryUsed ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@feerate", (double)run.EffectiveShopFeeRatePct);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -277,13 +318,17 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                     source_platform, source_url, category, estimated_sell_price_usd, estimated_net_profit_usd,
                     estimated_net_margin_pct, competition_count, demand_signal_score, opportunity_score,
                     risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
-                    decision_status, rejection_reason, decided_at_utc
+                    decision_status, rejection_reason, decided_at_utc,
+                    net_profit_offsite12_usd, net_profit_offsite15_usd, effective_fee_rate_pct,
+                    demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate
                 ) VALUES (
                     @cid, @rid, @owner, @shop, @title, @stitle, @stags,
                     @plat, @url, @cat, @price, @net,
                     @margin, @comp, @demand, @opp,
                     @risk, @cann, @cannw, @rat, @ev,
-                    @dec, @rej, @dectime
+                    @dec, @rej, @dectime,
+                    @off12, @off15, @feepct,
+                    @dscore, @dconf, @rdec, @rreasons, @isexp
                 );
                 """;
             cCmd.Parameters.AddWithValue("@cid", c.CandidateId.ToString());
@@ -310,6 +355,14 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             cCmd.Parameters.AddWithValue("@dec", (int)c.DecisionStatus);
             cCmd.Parameters.AddWithValue("@rej", (int)c.RejectionReason);
             cCmd.Parameters.AddWithValue("@dectime", (object?)c.DecidedAtUtc?.ToString("O") ?? DBNull.Value);
+            cCmd.Parameters.AddWithValue("@off12", (double)c.NetProfitOffsiteAds12Usd);
+            cCmd.Parameters.AddWithValue("@off15", (double)c.NetProfitOffsiteAds15Usd);
+            cCmd.Parameters.AddWithValue("@feepct", (double)c.EffectiveFeeRatePct);
+            cCmd.Parameters.AddWithValue("@dscore", c.DemandScore);
+            cCmd.Parameters.AddWithValue("@dconf", (int)c.DemandConfidence);
+            cCmd.Parameters.AddWithValue("@rdec", (int)c.RiskDecision);
+            cCmd.Parameters.AddWithValue("@rreasons", JsonSerializer.Serialize(c.RiskReasons));
+            cCmd.Parameters.AddWithValue("@isexp", c.IsExplorationCandidate ? 1 : 0);
             await cCmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -322,7 +375,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT run_id, owner_user_id, shop_id, trigger_type, status,
-                   started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message
+                   started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
+                   exploration_query_used, effective_shop_fee_rate_pct
             FROM research_runs
             WHERE owner_user_id = @owner AND shop_id = @shop
             ORDER BY started_at_utc DESC
@@ -341,7 +395,6 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
 
         if (runs.Count > 0)
         {
-            // Load candidates for the latest run so the UI immediately has them
             runs[0].Candidates = await LoadCandidatesForRunAsync(conn, ownerUserId, shopId, runs[0].RunId, ct);
         }
 
@@ -354,7 +407,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT run_id, owner_user_id, shop_id, trigger_type, status,
-                   started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message
+                   started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
+                   exploration_query_used, effective_shop_fee_rate_pct
             FROM research_runs
             WHERE run_id = @id AND owner_user_id = @owner AND shop_id = @shop;
             """;
@@ -375,15 +429,7 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
     {
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT candidate_id, run_id, owner_user_id, shop_id, title, suggested_title, suggested_tags_json,
-                   source_platform, source_url, category, estimated_sell_price_usd, estimated_net_profit_usd,
-                   estimated_net_margin_pct, competition_count, demand_signal_score, opportunity_score,
-                   risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
-                   decision_status, rejection_reason, decided_at_utc
-            FROM research_candidates
-            WHERE candidate_id = @cid AND owner_user_id = @owner AND shop_id = @shop;
-            """;
+        cmd.CommandText = CandidateSelectSql + " WHERE candidate_id = @cid AND owner_user_id = @owner AND shop_id = @shop;";
         cmd.Parameters.AddWithValue("@cid", candidateId.ToString());
         cmd.Parameters.AddWithValue("@owner", ownerUserId);
         cmd.Parameters.AddWithValue("@shop", shopId);
@@ -476,20 +522,22 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         return list;
     }
 
+    private const string CandidateSelectSql = """
+        SELECT candidate_id, run_id, owner_user_id, shop_id, title, suggested_title, suggested_tags_json,
+               source_platform, source_url, category, estimated_sell_price_usd, estimated_net_profit_usd,
+               estimated_net_margin_pct, competition_count, demand_signal_score, opportunity_score,
+               risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
+               decision_status, rejection_reason, decided_at_utc,
+               net_profit_offsite12_usd, net_profit_offsite15_usd, effective_fee_rate_pct,
+               demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate
+        FROM research_candidates
+        """;
+
     private async Task<IReadOnlyList<ResearchCandidate>> LoadCandidatesForRunAsync(
         SqliteConnection conn, string ownerUserId, string shopId, Guid runId, CancellationToken ct)
     {
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT candidate_id, run_id, owner_user_id, shop_id, title, suggested_title, suggested_tags_json,
-                   source_platform, source_url, category, estimated_sell_price_usd, estimated_net_profit_usd,
-                   estimated_net_margin_pct, competition_count, demand_signal_score, opportunity_score,
-                   risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
-                   decision_status, rejection_reason, decided_at_utc
-            FROM research_candidates
-            WHERE run_id = @rid AND owner_user_id = @owner AND shop_id = @shop
-            ORDER BY opportunity_score DESC;
-            """;
+        cmd.CommandText = CandidateSelectSql + " WHERE run_id = @rid AND owner_user_id = @owner AND shop_id = @shop ORDER BY opportunity_score DESC;";
         cmd.Parameters.AddWithValue("@rid", runId.ToString());
         cmd.Parameters.AddWithValue("@owner", ownerUserId);
         cmd.Parameters.AddWithValue("@shop", shopId);
@@ -546,7 +594,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         SearchQueriesUsed = DeserializeStrings(r.GetString(7)),
         HypothesesJson = r.GetString(8),
         Summary = r.GetString(9),
-        ErrorMessage = r.IsDBNull(10) ? null : r.GetString(10)
+        ErrorMessage = r.IsDBNull(10) ? null : r.GetString(10),
+        ExplorationQueryUsed = r.IsDBNull(11) ? null : r.GetString(11),
+        EffectiveShopFeeRatePct = (decimal)r.GetDouble(12)
     };
 
     private static ResearchCandidate MapCandidate(SqliteDataReader r) => new()
@@ -574,7 +624,15 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         EvidenceJson = r.GetString(20),
         DecisionStatus = (CandidateDecisionStatus)r.GetInt32(21),
         RejectionReason = (CandidateRejectionReason)r.GetInt32(22),
-        DecidedAtUtc = r.IsDBNull(23) ? null : DateTime.Parse(r.GetString(23), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+        DecidedAtUtc = r.IsDBNull(23) ? null : DateTime.Parse(r.GetString(23), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+        NetProfitOffsiteAds12Usd = (decimal)r.GetDouble(24),
+        NetProfitOffsiteAds15Usd = (decimal)r.GetDouble(25),
+        EffectiveFeeRatePct = (decimal)r.GetDouble(26),
+        DemandScore = r.GetInt32(27),
+        DemandConfidence = (DemandConfidenceLevel)r.GetInt32(28),
+        RiskDecision = (IpRiskDecision)r.GetInt32(29),
+        RiskReasons = DeserializeStrings(r.GetString(30)),
+        IsExplorationCandidate = r.GetInt32(31) == 1
     };
 
     private static IReadOnlyList<string> DeserializeStrings(string json)

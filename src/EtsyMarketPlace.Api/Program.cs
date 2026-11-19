@@ -254,6 +254,10 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Inte
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopDnaBuilderService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.CannibalizationGuardService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ProductOpportunity.ProductOpportunityScorer>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopEconomicsSimulatorService>();
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.DemandValidationService>();
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.IpRiskPolicyService>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchNotifier, EtsyMarketPlace.Infrastructure.ShopResearchAgent.TelegramShopResearchNotifier>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopResearchAgentOrchestrator>();
 builder.Services.AddHostedService<EtsyMarketPlace.Infrastructure.ShopResearchAgent.ShopResearchSchedulerBackgroundService>();
 builder.Services.AddScoped<McpToolHandler>();

@@ -40,12 +40,20 @@ export interface ResearchCandidateDto {
   estimatedSellPriceUsd: number;
   estimatedNetProfitUsd: number;
   estimatedNetMarginPct: number;
+  netProfitOffsiteAds12Usd: number;
+  netProfitOffsiteAds15Usd: number;
+  effectiveFeeRatePct: number;
   competitionCount: number;
   demandSignalScore: number;
+  demandScore: number;
+  demandConfidence: number; // 0=Low, 1=Medium, 2=High
   opportunityScore: number;
   riskScore: number;
+  riskDecision: number; // 0=Allow, 1=Review, 2=Block
+  riskReasons: string[];
   cannibalizationScore: number;
   cannibalizationWarning: string | null;
+  isExplorationCandidate: boolean;
   rationale: string;
   evidenceJson: string;
   decisionStatus: CandidateDecisionStatus;
@@ -62,6 +70,8 @@ export interface ResearchRunDto {
   startedAtUtc: string;
   completedAtUtc: string | null;
   searchQueriesUsed: string[];
+  explorationQueryUsed: string | null;
+  effectiveShopFeeRatePct: number;
   summary: string;
   errorMessage: string | null;
   candidates: ResearchCandidateDto[];

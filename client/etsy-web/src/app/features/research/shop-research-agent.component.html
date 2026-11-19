@@ -145,16 +145,28 @@
                 <div>
                   <span class="source-badge">{{ c.sourcePlatform }}</span>
                   <span class="status-badge">{{ decisionLabel(c.decisionStatus) }}</span>
+                  @if (c.isExplorationCandidate) {
+                    <span class="explore-badge">🧭 Keşif (%20)</span>
+                  }
                 </div>
                 <div class="scores">
                   <span class="score-pill opp">Fırsat: {{ c.opportunityScore }}/100</span>
-                  <span class="score-pill risk" [class.high]="c.riskScore >= 40">Risk: {{ c.riskScore }}</span>
+                  <span class="score-pill demand" [class.high]="c.demandConfidence === 2">
+                    Talep: {{ c.demandScore }} ({{ demandConfidenceLabel(c.demandConfidence) }})
+                  </span>
+                  <span class="score-pill risk" [class.high]="c.riskDecision === 1">
+                    {{ riskDecisionLabel(c.riskDecision) }}
+                  </span>
                 </div>
               </div>
 
               <h3>{{ c.title }}</h3>
               <p class="suggested-title"><strong>Önerilen Başlık ({{ c.suggestedTitle.length }}/140):</strong> {{ c.suggestedTitle }}</p>
               <p class="rationale">{{ c.rationale }}</p>
+
+              @if (c.riskReasons && c.riskReasons.length > 0) {
+                <div class="risk-warn">🛡️ {{ c.riskReasons.join(' • ') }}</div>
+              }
 
               @if (c.cannibalizationWarning) {
                 <div class="cannibal-warn">⚠️ {{ c.cannibalizationWarning }}</div>
@@ -166,16 +178,16 @@
                   <span class="value">${{ c.estimatedSellPriceUsd | number:'1.2-2' }}</span>
                 </div>
                 <div class="metric profit">
-                  <span class="label">Tahmini Net Kâr</span>
+                  <span class="label">Normal Net Kâr</span>
                   <span class="value">${{ c.estimatedNetProfitUsd | number:'1.2-2' }} (%{{ c.estimatedNetMarginPct | number:'1.1-1' }})</span>
                 </div>
-                <div class="metric">
-                  <span class="label">Rakip Sayısı</span>
-                  <span class="value">{{ c.competitionCount }}</span>
+                <div class="metric" [class.loss]="c.netProfitOffsiteAds12Usd < 0">
+                  <span class="label">Offsite Ads %12</span>
+                  <span class="value">${{ c.netProfitOffsiteAds12Usd | number:'1.2-2' }}</span>
                 </div>
-                <div class="metric">
-                  <span class="label">Çakışma</span>
-                  <span class="value">%{{ c.cannibalizationScore }}</span>
+                <div class="metric" [class.loss]="c.netProfitOffsiteAds15Usd < 0">
+                  <span class="label">Offsite Ads %15</span>
+                  <span class="value">${{ c.netProfitOffsiteAds15Usd | number:'1.2-2' }}</span>
                 </div>
               </div>
 

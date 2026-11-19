@@ -16,6 +16,8 @@ public sealed class ResearchRun
     public DateTime StartedAtUtc { get; init; } = DateTime.UtcNow;
     public DateTime? CompletedAtUtc { get; set; }
     public IReadOnlyList<string> SearchQueriesUsed { get; set; } = Array.Empty<string>();
+    public string? ExplorationQueryUsed { get; set; }
+    public decimal EffectiveShopFeeRatePct { get; set; }
     public string HypothesesJson { get; set; } = "[]";
     public string Summary { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }

@@ -40,3 +40,17 @@ public enum CandidateRejectionReason
     AlreadySelling = 4,
     Other = 5
 }
+
+public enum DemandConfidenceLevel
+{
+    Low = 0,
+    Medium = 1,
+    High = 2
+}
+
+public enum IpRiskDecision
+{
+    Allow = 0,
+    Review = 1,
+    Block = 2
+}

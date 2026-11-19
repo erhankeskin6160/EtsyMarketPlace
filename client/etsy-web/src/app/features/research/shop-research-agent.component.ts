@@ -211,6 +211,22 @@ export class ShopResearchAgentComponent implements OnInit {
     }
   }
 
+  demandConfidenceLabel(conf: number): string {
+    switch (conf) {
+      case 2: return 'Yüksek Talep';
+      case 1: return 'Orta Talep';
+      default: return 'Düşük Talep';
+    }
+  }
+
+  riskDecisionLabel(dec: number): string {
+    switch (dec) {
+      case 1: return 'İncele (Review)';
+      case 2: return 'Bloklu';
+      default: return 'Telif Güvenli';
+    }
+  }
+
   private syncFormFromDna(profile: ShopDnaProfileDto): void {
     this.scheduleCadence = profile.scheduleCadence;
     this.minMarginPct = profile.minAcceptableNetMarginPct;
