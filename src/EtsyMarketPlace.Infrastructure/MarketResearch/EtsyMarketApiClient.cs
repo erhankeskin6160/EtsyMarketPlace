@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Infrastructure.MarketResearch;
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -44,25 +45,11 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         var encodedKeyword = Uri.EscapeDataString(keyword.Trim());
         var url = $"https://api.etsy.com/v3/application/listings/active?keywords={encodedKeyword}&limit={clampedLimit}&sort_on=score&sort_order=desc&includes=Shop,Images";
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("x-api-key", apiKeyHeader);
-        if (!string.IsNullOrWhiteSpace(bearerToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        }
-
-        using var response = await _httpClient.SendAsync(request, ct);
+        using var response = await SendWithAuthRetryAsync(shopId, url, apiKeyHeader, bearerToken, ct);
         if (!response.IsSuccessStatusCode)
         {
             var fallbackUrl = $"https://api.etsy.com/v3/application/listings/active?keywords={encodedKeyword}&limit={clampedLimit}&sort_on=score&sort_order=desc";
-            using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
-            fbReq.Headers.Add("x-api-key", apiKeyHeader);
-            if (!string.IsNullOrWhiteSpace(bearerToken))
-            {
-                fbReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-            }
-
-            using var fbResp = await _httpClient.SendAsync(fbReq, ct);
+            using var fbResp = await SendWithAuthRetryAsync(shopId, fallbackUrl, apiKeyHeader, bearerToken, ct);
             if (!fbResp.IsSuccessStatusCode)
             {
                 var err = await response.Content.ReadAsStringAsync(ct);
@@ -93,14 +80,7 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         var ids = string.Join(",", listingIds);
         var url = $"https://api.etsy.com/v3/application/listings/batch?listing_ids={ids}&includes=Images,Shop";
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("x-api-key", apiKeyHeader);
-        if (!string.IsNullOrWhiteSpace(bearerToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        }
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var response = await SendWithAuthRetryAsync(shopId, url, apiKeyHeader, bearerToken, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -119,14 +99,7 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         var encoded = Uri.EscapeDataString(targetShopName.Trim());
         var url = $"https://api.etsy.com/v3/application/shops?shop_name={encoded}";
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("x-api-key", apiKeyHeader);
-        if (!string.IsNullOrWhiteSpace(bearerToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        }
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var response = await SendWithAuthRetryAsync(authShopId, url, apiKeyHeader, bearerToken, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -351,19 +324,92 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
 
         var token = await _tokenStore.GetAsync(shopId, ct);
-        if (token != null && token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1) && !string.IsNullOrWhiteSpace(token.RefreshToken))
+        if (token != null && token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
         {
-            try
+            if (!string.IsNullOrWhiteSpace(token.RefreshToken))
             {
-                token = await _oauthService.RefreshTokenAsync(shopId, token.RefreshToken, ct);
-                await _tokenStore.SaveAsync(shopId, token, ct);
+                try
+                {
+                    token = await _oauthService.RefreshTokenAsync(shopId, token.RefreshToken, ct);
+                    await _tokenStore.SaveAsync(shopId, token, ct);
+                }
+                catch
+                {
+                    // Süresi dolmuş token'ı asla Bearer olarak gönderme; halka açık pazar uçları x-api-key ile devam eder
+                    token = null;
+                }
             }
-            catch
+            else
             {
-                // Canlı pazar araması için token yenilenemezse x-api-key ile genel arama sürdürülür
+                token = null;
             }
         }
 
         return (apiKeyHeader, token?.AccessToken);
+    }
+
+    /// <summary>
+    /// Etsy'ye GET isteği gönderir. HTTP 401 (süresi dolmuş/geçersiz token — örn. sunucu saati kayması sonrası)
+    /// alınırsa önce RefreshTokenAsync ile zorunlu yenileme dener; yenileme başarısız olursa veya yine 401 alırsa
+    /// halka açık uçları yalnızca x-api-key başlığıyla (Authorization olmadan) yeniden dener.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendWithAuthRetryAsync(
+        string shopId,
+        string url,
+        string apiKeyHeader,
+        string? bearerToken,
+        CancellationToken ct)
+    {
+        var response = await SendGetAsync(url, apiKeyHeader, bearerToken, ct);
+        if (response.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrWhiteSpace(bearerToken))
+        {
+            return response;
+        }
+
+        // 1. Zorunlu OAuth token yenileme dene
+        string? refreshedAccessToken = null;
+        try
+        {
+            var stored = await _tokenStore.GetAsync(shopId, ct);
+            if (stored != null && !string.IsNullOrWhiteSpace(stored.RefreshToken))
+            {
+                var refreshed = await _oauthService.RefreshTokenAsync(shopId, stored.RefreshToken, ct);
+                await _tokenStore.SaveAsync(shopId, refreshed, ct);
+                refreshedAccessToken = refreshed.AccessToken;
+            }
+        }
+        catch
+        {
+            refreshedAccessToken = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(refreshedAccessToken))
+        {
+            response.Dispose();
+            response = await SendGetAsync(url, apiKeyHeader, refreshedAccessToken, ct);
+            if (response.StatusCode != HttpStatusCode.Unauthorized)
+            {
+                return response;
+            }
+        }
+
+        // 2. Halka açık pazar araması için süresi dolmuş Bearer başlığını kaldırıp yalnızca x-api-key ile dene
+        response.Dispose();
+        return await SendGetAsync(url, apiKeyHeader, bearerToken: null, ct);
+    }
+
+    private Task<HttpResponseMessage> SendGetAsync(
+        string url,
+        string apiKeyHeader,
+        string? bearerToken,
+        CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+        return _httpClient.SendAsync(request, ct);
     }
 }
