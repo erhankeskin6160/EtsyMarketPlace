@@ -50,6 +50,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 schedule_cadence INTEGER NOT NULL,
                 last_scheduled_run_at_utc TEXT NULL,
                 updated_at_utc TEXT NOT NULL,
+                default_shipping_cost_usd REAL NOT NULL DEFAULT 0,
+                default_packaging_cost_usd REAL NOT NULL DEFAULT 1.0,
+                return_reserve_rate_pct REAL NOT NULL DEFAULT 4.0,
                 PRIMARY KEY (owner_user_id, shop_id)
             );
 
@@ -66,7 +69,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 summary TEXT NOT NULL,
                 error_message TEXT NULL,
                 exploration_query_used TEXT NULL,
-                effective_shop_fee_rate_pct REAL NOT NULL DEFAULT 13.1
+                effective_shop_fee_rate_pct REAL NOT NULL DEFAULT 13.1,
+                funnel_telemetry_json TEXT NOT NULL DEFAULT '{}',
+                critic_iterations INTEGER NOT NULL DEFAULT 1
             );
             CREATE INDEX IF NOT EXISTS ix_research_runs_owner_shop ON research_runs (owner_user_id, shop_id, started_at_utc DESC);
 
@@ -102,7 +107,19 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 demand_confidence INTEGER NOT NULL DEFAULT 1,
                 risk_decision INTEGER NOT NULL DEFAULT 0,
                 risk_reasons_json TEXT NOT NULL DEFAULT '[]',
-                is_exploration_candidate INTEGER NOT NULL DEFAULT 0
+                is_exploration_candidate INTEGER NOT NULL DEFAULT 0,
+                image_url TEXT NOT NULL DEFAULT '',
+                estimated_shipping_usd REAL NOT NULL DEFAULT 0,
+                estimated_packaging_usd REAL NOT NULL DEFAULT 1.0,
+                estimated_return_reserve_usd REAL NOT NULL DEFAULT 0,
+                estimated_cogs_usd REAL NOT NULL DEFAULT 0,
+                top_shop_concentration_pct REAL NOT NULL DEFAULT 0,
+                free_shipping_ratio_pct REAL NOT NULL DEFAULT 0,
+                seasonal_boost_pct INTEGER NOT NULL DEFAULT 0,
+                momentum_score INTEGER NOT NULL DEFAULT 50,
+                warning_flags_json TEXT NOT NULL DEFAULT '[]',
+                mobile_title_55 TEXT NOT NULL DEFAULT '',
+                blueprint_json TEXT NOT NULL DEFAULT '{}'
             );
             CREATE INDEX IF NOT EXISTS ix_research_candidates_run ON research_candidates (run_id);
             CREATE INDEX IF NOT EXISTS ix_research_candidates_owner_shop ON research_candidates (owner_user_id, shop_id);
@@ -120,11 +137,29 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 created_at_utc TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_decision_events_owner_shop ON candidate_decision_events (owner_user_id, shop_id, created_at_utc DESC);
+
+            CREATE TABLE IF NOT EXISTS bandit_arm_states (
+                owner_user_id TEXT NOT NULL,
+                shop_id TEXT NOT NULL,
+                arm_key TEXT NOT NULL,
+                alpha REAL NOT NULL DEFAULT 1.0,
+                beta REAL NOT NULL DEFAULT 1.0,
+                total_trials INTEGER NOT NULL DEFAULT 0,
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY (owner_user_id, shop_id, arm_key)
+            );
             """;
         await cmd.ExecuteNonQueryAsync(ct);
 
+        await EnsureColumnAsync(conn, "shop_dna_profiles", "default_shipping_cost_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "shop_dna_profiles", "default_packaging_cost_usd", "REAL NOT NULL DEFAULT 1.0", ct);
+        await EnsureColumnAsync(conn, "shop_dna_profiles", "return_reserve_rate_pct", "REAL NOT NULL DEFAULT 4.0", ct);
+
         await EnsureColumnAsync(conn, "research_runs", "exploration_query_used", "TEXT NULL", ct);
         await EnsureColumnAsync(conn, "research_runs", "effective_shop_fee_rate_pct", "REAL NOT NULL DEFAULT 13.1", ct);
+        await EnsureColumnAsync(conn, "research_runs", "funnel_telemetry_json", "TEXT NOT NULL DEFAULT '{}'", ct);
+        await EnsureColumnAsync(conn, "research_runs", "critic_iterations", "INTEGER NOT NULL DEFAULT 1", ct);
+
         await EnsureColumnAsync(conn, "research_candidates", "net_profit_offsite12_usd", "REAL NOT NULL DEFAULT 0", ct);
         await EnsureColumnAsync(conn, "research_candidates", "net_profit_offsite15_usd", "REAL NOT NULL DEFAULT 0", ct);
         await EnsureColumnAsync(conn, "research_candidates", "effective_fee_rate_pct", "REAL NOT NULL DEFAULT 13.1", ct);
@@ -133,6 +168,18 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         await EnsureColumnAsync(conn, "research_candidates", "risk_decision", "INTEGER NOT NULL DEFAULT 0", ct);
         await EnsureColumnAsync(conn, "research_candidates", "risk_reasons_json", "TEXT NOT NULL DEFAULT '[]'", ct);
         await EnsureColumnAsync(conn, "research_candidates", "is_exploration_candidate", "INTEGER NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "image_url", "TEXT NOT NULL DEFAULT ''", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "estimated_shipping_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "estimated_packaging_usd", "REAL NOT NULL DEFAULT 1.0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "estimated_return_reserve_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "estimated_cogs_usd", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "top_shop_concentration_pct", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "free_shipping_ratio_pct", "REAL NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "seasonal_boost_pct", "INTEGER NOT NULL DEFAULT 0", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "momentum_score", "INTEGER NOT NULL DEFAULT 50", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "warning_flags_json", "TEXT NOT NULL DEFAULT '[]'", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "mobile_title_55", "TEXT NOT NULL DEFAULT ''", ct);
+        await EnsureColumnAsync(conn, "research_candidates", "blueprint_json", "TEXT NOT NULL DEFAULT '{}'", ct);
     }
 
     private static async Task EnsureColumnAsync(SqliteConnection conn, string table, string column, string definition, CancellationToken ct)
@@ -158,7 +205,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                    target_price_min_usd, target_price_max_usd, min_net_margin_pct, estimated_cogs_ratio,
                    supports_3d_print, preferred_materials_json, top_performing_tags_json,
                    category_keywords_json, forbidden_keywords_json, schedule_cadence,
-                   last_scheduled_run_at_utc, updated_at_utc
+                   last_scheduled_run_at_utc, updated_at_utc,
+                   default_shipping_cost_usd, default_packaging_cost_usd, return_reserve_rate_pct
             FROM shop_dna_profiles
             WHERE owner_user_id = @owner AND shop_id = @shop;
             """;
@@ -179,13 +227,15 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 target_price_min_usd, target_price_max_usd, min_net_margin_pct, estimated_cogs_ratio,
                 supports_3d_print, preferred_materials_json, top_performing_tags_json,
                 category_keywords_json, forbidden_keywords_json, schedule_cadence,
-                last_scheduled_run_at_utc, updated_at_utc
+                last_scheduled_run_at_utc, updated_at_utc,
+                default_shipping_cost_usd, default_packaging_cost_usd, return_reserve_rate_pct
             ) VALUES (
                 @owner, @shop, @ver, @niche, @audience,
                 @pmin, @pmax, @margin, @cogs,
                 @s3d, @materials, @tags,
                 @catkw, @forbidden, @cadence,
-                @lastrun, @updated
+                @lastrun, @updated,
+                @defship, @defpack, @retpct
             )
             ON CONFLICT(owner_user_id, shop_id) DO UPDATE SET
                 dna_version = excluded.dna_version,
@@ -202,7 +252,10 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 forbidden_keywords_json = excluded.forbidden_keywords_json,
                 schedule_cadence = excluded.schedule_cadence,
                 last_scheduled_run_at_utc = COALESCE(excluded.last_scheduled_run_at_utc, shop_dna_profiles.last_scheduled_run_at_utc),
-                updated_at_utc = excluded.updated_at_utc;
+                updated_at_utc = excluded.updated_at_utc,
+                default_shipping_cost_usd = excluded.default_shipping_cost_usd,
+                default_packaging_cost_usd = excluded.default_packaging_cost_usd,
+                return_reserve_rate_pct = excluded.return_reserve_rate_pct;
             """;
 
         cmd.Parameters.AddWithValue("@owner", profile.OwnerUserId);
@@ -222,6 +275,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         cmd.Parameters.AddWithValue("@cadence", (int)profile.ScheduleCadence);
         cmd.Parameters.AddWithValue("@lastrun", (object?)profile.LastScheduledRunAtUtc?.ToString("O") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@updated", profile.UpdatedAtUtc.ToString("O"));
+        cmd.Parameters.AddWithValue("@defship", (double)profile.DefaultShippingCostUsd);
+        cmd.Parameters.AddWithValue("@defpack", (double)profile.DefaultPackagingCostUsd);
+        cmd.Parameters.AddWithValue("@retpct", (double)profile.ReturnReserveRatePct);
 
         await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -235,7 +291,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                    target_price_min_usd, target_price_max_usd, min_net_margin_pct, estimated_cogs_ratio,
                    supports_3d_print, preferred_materials_json, top_performing_tags_json,
                    category_keywords_json, forbidden_keywords_json, schedule_cadence,
-                   last_scheduled_run_at_utc, updated_at_utc
+                   last_scheduled_run_at_utc, updated_at_utc,
+                   default_shipping_cost_usd, default_packaging_cost_usd, return_reserve_rate_pct
             FROM shop_dna_profiles
             WHERE schedule_cadence > 0;
             """;
@@ -276,11 +333,11 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                 INSERT INTO research_runs (
                     run_id, owner_user_id, shop_id, trigger_type, status,
                     started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
-                    exploration_query_used, effective_shop_fee_rate_pct
+                    exploration_query_used, effective_shop_fee_rate_pct, funnel_telemetry_json, critic_iterations
                 ) VALUES (
                     @id, @owner, @shop, @trigger, @status,
                     @started, @completed, @queries, @hypotheses, @summary, @err,
-                    @expq, @feerate
+                    @expq, @feerate, @telemetry, @critic
                 )
                 ON CONFLICT(run_id) DO UPDATE SET
                     status = excluded.status,
@@ -290,7 +347,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                     summary = excluded.summary,
                     error_message = excluded.error_message,
                     exploration_query_used = excluded.exploration_query_used,
-                    effective_shop_fee_rate_pct = excluded.effective_shop_fee_rate_pct;
+                    effective_shop_fee_rate_pct = excluded.effective_shop_fee_rate_pct,
+                    funnel_telemetry_json = excluded.funnel_telemetry_json,
+                    critic_iterations = excluded.critic_iterations;
                 """;
             cmd.Parameters.AddWithValue("@id", run.RunId.ToString());
             cmd.Parameters.AddWithValue("@owner", run.OwnerUserId);
@@ -305,6 +364,8 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             cmd.Parameters.AddWithValue("@err", (object?)run.ErrorMessage ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@expq", (object?)run.ExplorationQueryUsed ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@feerate", (double)run.EffectiveShopFeeRatePct);
+            cmd.Parameters.AddWithValue("@telemetry", run.FunnelTelemetryJson ?? "{}");
+            cmd.Parameters.AddWithValue("@critic", run.CriticIterations);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -320,7 +381,10 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                     risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
                     decision_status, rejection_reason, decided_at_utc,
                     net_profit_offsite12_usd, net_profit_offsite15_usd, effective_fee_rate_pct,
-                    demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate
+                    demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate,
+                    image_url, estimated_shipping_usd, estimated_packaging_usd, estimated_return_reserve_usd,
+                    estimated_cogs_usd, top_shop_concentration_pct, free_shipping_ratio_pct,
+                    seasonal_boost_pct, momentum_score, warning_flags_json, mobile_title_55, blueprint_json
                 ) VALUES (
                     @cid, @rid, @owner, @shop, @title, @stitle, @stags,
                     @plat, @url, @cat, @price, @net,
@@ -328,7 +392,10 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                     @risk, @cann, @cannw, @rat, @ev,
                     @dec, @rej, @dectime,
                     @off12, @off15, @feepct,
-                    @dscore, @dconf, @rdec, @rreasons, @isexp
+                    @dscore, @dconf, @rdec, @rreasons, @isexp,
+                    @img, @ship, @pack, @retres,
+                    @cogsusd, @topconc, @freeship,
+                    @sboost, @mom, @wflags, @mtitle, @bpjson
                 );
                 """;
             cCmd.Parameters.AddWithValue("@cid", c.CandidateId.ToString());
@@ -363,6 +430,18 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
             cCmd.Parameters.AddWithValue("@rdec", (int)c.RiskDecision);
             cCmd.Parameters.AddWithValue("@rreasons", JsonSerializer.Serialize(c.RiskReasons));
             cCmd.Parameters.AddWithValue("@isexp", c.IsExplorationCandidate ? 1 : 0);
+            cCmd.Parameters.AddWithValue("@img", c.ImageUrl ?? string.Empty);
+            cCmd.Parameters.AddWithValue("@ship", (double)c.EstimatedShippingUsd);
+            cCmd.Parameters.AddWithValue("@pack", (double)c.EstimatedPackagingUsd);
+            cCmd.Parameters.AddWithValue("@retres", (double)c.EstimatedReturnReserveUsd);
+            cCmd.Parameters.AddWithValue("@cogsusd", (double)c.EstimatedCogsUsd);
+            cCmd.Parameters.AddWithValue("@topconc", (double)c.TopShopConcentrationPct);
+            cCmd.Parameters.AddWithValue("@freeship", (double)c.FreeShippingRatioPct);
+            cCmd.Parameters.AddWithValue("@sboost", c.SeasonalBoostPct);
+            cCmd.Parameters.AddWithValue("@mom", c.MomentumScore);
+            cCmd.Parameters.AddWithValue("@wflags", JsonSerializer.Serialize(c.WarningFlags));
+            cCmd.Parameters.AddWithValue("@mtitle", c.MobileTitle55 ?? string.Empty);
+            cCmd.Parameters.AddWithValue("@bpjson", c.BlueprintJson ?? "{}");
             await cCmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -376,7 +455,7 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         cmd.CommandText = """
             SELECT run_id, owner_user_id, shop_id, trigger_type, status,
                    started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
-                   exploration_query_used, effective_shop_fee_rate_pct
+                   exploration_query_used, effective_shop_fee_rate_pct, funnel_telemetry_json, critic_iterations
             FROM research_runs
             WHERE owner_user_id = @owner AND shop_id = @shop
             ORDER BY started_at_utc DESC
@@ -409,7 +488,7 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         cmd.CommandText = """
             SELECT run_id, owner_user_id, shop_id, trigger_type, status,
                    started_at_utc, completed_at_utc, search_queries_json, hypotheses_json, summary, error_message,
-                   exploration_query_used, effective_shop_fee_rate_pct
+                   exploration_query_used, effective_shop_fee_rate_pct, funnel_telemetry_json, critic_iterations
             FROM research_runs
             WHERE run_id = @id AND owner_user_id = @owner AND shop_id = @shop;
             """;
@@ -523,6 +602,63 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         return list;
     }
 
+    public async Task<IReadOnlyList<BanditArmState>> GetBanditArmsAsync(string ownerUserId, string shopId, CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT owner_user_id, shop_id, arm_key, alpha, beta, total_trials, updated_at_utc
+            FROM bandit_arm_states
+            WHERE owner_user_id = @owner AND shop_id = @shop
+            ORDER BY updated_at_utc DESC;
+            """;
+        cmd.Parameters.AddWithValue("@owner", ownerUserId);
+        cmd.Parameters.AddWithValue("@shop", shopId);
+
+        var list = new List<BanditArmState>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new BanditArmState
+            {
+                OwnerUserId = reader.GetString(0),
+                ShopId = reader.GetString(1),
+                ArmKey = reader.GetString(2),
+                Alpha = reader.GetDouble(3),
+                Beta = reader.GetDouble(4),
+                TotalTrials = reader.GetInt32(5),
+                UpdatedAtUtc = DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            });
+        }
+        return list;
+    }
+
+    public async Task UpsertBanditArmAsync(BanditArmState arm, CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO bandit_arm_states (
+                owner_user_id, shop_id, arm_key, alpha, beta, total_trials, updated_at_utc
+            ) VALUES (
+                @owner, @shop, @key, @alpha, @beta, @trials, @updated
+            )
+            ON CONFLICT(owner_user_id, shop_id, arm_key) DO UPDATE SET
+                alpha = excluded.alpha,
+                beta = excluded.beta,
+                total_trials = excluded.total_trials,
+                updated_at_utc = excluded.updated_at_utc;
+            """;
+        cmd.Parameters.AddWithValue("@owner", arm.OwnerUserId);
+        cmd.Parameters.AddWithValue("@shop", arm.ShopId);
+        cmd.Parameters.AddWithValue("@key", arm.ArmKey);
+        cmd.Parameters.AddWithValue("@alpha", arm.Alpha);
+        cmd.Parameters.AddWithValue("@beta", arm.Beta);
+        cmd.Parameters.AddWithValue("@trials", arm.TotalTrials);
+        cmd.Parameters.AddWithValue("@updated", arm.UpdatedAtUtc.ToString("O"));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private const string CandidateSelectSql = """
         SELECT candidate_id, run_id, owner_user_id, shop_id, title, suggested_title, suggested_tags_json,
                source_platform, source_url, category, estimated_sell_price_usd, estimated_net_profit_usd,
@@ -530,7 +666,10 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
                risk_score, cannibalization_score, cannibalization_warning, rationale, evidence_json,
                decision_status, rejection_reason, decided_at_utc,
                net_profit_offsite12_usd, net_profit_offsite15_usd, effective_fee_rate_pct,
-               demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate
+               demand_score, demand_confidence, risk_decision, risk_reasons_json, is_exploration_candidate,
+               image_url, estimated_shipping_usd, estimated_packaging_usd, estimated_return_reserve_usd,
+               estimated_cogs_usd, top_shop_concentration_pct, free_shipping_ratio_pct,
+               seasonal_boost_pct, momentum_score, warning_flags_json, mobile_title_55, blueprint_json
         FROM research_candidates
         """;
 
@@ -580,7 +719,10 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         ForbiddenKeywords = DeserializeStrings(r.GetString(13)),
         ScheduleCadence = (ResearchScheduleCadence)r.GetInt32(14),
         LastScheduledRunAtUtc = r.IsDBNull(15) ? null : DateTime.Parse(r.GetString(15), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-        UpdatedAtUtc = DateTime.Parse(r.GetString(16), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+        UpdatedAtUtc = DateTime.Parse(r.GetString(16), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+        DefaultShippingCostUsd = (decimal)r.GetDouble(17),
+        DefaultPackagingCostUsd = (decimal)r.GetDouble(18),
+        ReturnReserveRatePct = (decimal)r.GetDouble(19)
     };
 
     private static ResearchRun MapRun(SqliteDataReader r) => new()
@@ -597,7 +739,9 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         Summary = r.GetString(9),
         ErrorMessage = r.IsDBNull(10) ? null : r.GetString(10),
         ExplorationQueryUsed = r.IsDBNull(11) ? null : r.GetString(11),
-        EffectiveShopFeeRatePct = (decimal)r.GetDouble(12)
+        EffectiveShopFeeRatePct = (decimal)r.GetDouble(12),
+        FunnelTelemetryJson = r.IsDBNull(13) ? "{}" : r.GetString(13),
+        CriticIterations = r.IsDBNull(14) ? 1 : r.GetInt32(14)
     };
 
     private static ResearchCandidate MapCandidate(SqliteDataReader r) => new()
@@ -633,7 +777,19 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         DemandConfidence = (DemandConfidenceLevel)r.GetInt32(28),
         RiskDecision = (IpRiskDecision)r.GetInt32(29),
         RiskReasons = DeserializeStrings(r.GetString(30)),
-        IsExplorationCandidate = r.GetInt32(31) == 1
+        IsExplorationCandidate = r.GetInt32(31) == 1,
+        ImageUrl = r.IsDBNull(32) ? string.Empty : r.GetString(32),
+        EstimatedShippingUsd = (decimal)r.GetDouble(33),
+        EstimatedPackagingUsd = (decimal)r.GetDouble(34),
+        EstimatedReturnReserveUsd = (decimal)r.GetDouble(35),
+        EstimatedCogsUsd = (decimal)r.GetDouble(36),
+        TopShopConcentrationPct = (decimal)r.GetDouble(37),
+        FreeShippingRatioPct = (decimal)r.GetDouble(38),
+        SeasonalBoostPct = r.GetInt32(39),
+        MomentumScore = r.GetInt32(40),
+        WarningFlags = DeserializeStrings(r.GetString(41)),
+        MobileTitle55 = r.IsDBNull(42) ? string.Empty : r.GetString(42),
+        BlueprintJson = r.IsDBNull(43) ? "{}" : r.GetString(43)
     };
 
     private static IReadOnlyList<string> DeserializeStrings(string json)

@@ -19,6 +19,8 @@ public sealed class ResearchRun
     public string? ExplorationQueryUsed { get; set; }
     public decimal EffectiveShopFeeRatePct { get; set; }
     public string HypothesesJson { get; set; } = "[]";
+    public string FunnelTelemetryJson { get; set; } = "{}";
+    public int CriticIterations { get; set; } = 1;
     public string Summary { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }
     public IReadOnlyList<ResearchCandidate> Candidates { get; set; } = Array.Empty<ResearchCandidate>();

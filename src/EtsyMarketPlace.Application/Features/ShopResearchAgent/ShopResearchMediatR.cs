@@ -73,7 +73,10 @@ public sealed class UpdateShopDnaHandler(IShopResearchRepository repository)
             ForbiddenKeywords = dto.ForbiddenKeywords ?? Array.Empty<string>(),
             ScheduleCadence = dto.ScheduleCadence,
             LastScheduledRunAtUtc = existing?.LastScheduledRunAtUtc,
-            UpdatedAtUtc = DateTime.UtcNow
+            UpdatedAtUtc = DateTime.UtcNow,
+            DefaultShippingCostUsd = Math.Clamp(dto.DefaultShippingCostUsd ?? existing?.DefaultShippingCostUsd ?? 0m, 0m, 100m),
+            DefaultPackagingCostUsd = Math.Clamp(dto.DefaultPackagingCostUsd ?? existing?.DefaultPackagingCostUsd ?? 1.00m, 0m, 25m),
+            ReturnReserveRatePct = Math.Clamp(dto.ReturnReserveRatePct ?? existing?.ReturnReserveRatePct ?? 4.0m, 0m, 20m)
         };
 
         await repository.UpsertDnaProfileAsync(updated, cancellationToken);
@@ -120,7 +123,9 @@ public sealed class GetResearchRunByIdHandler(IShopResearchRepository repository
     }
 }
 
-public sealed class RecordCandidateDecisionHandler(IShopResearchRepository repository)
+public sealed class RecordCandidateDecisionHandler(
+    IShopResearchRepository repository,
+    BanditLearningService? banditLearning = null)
     : IRequestHandler<RecordCandidateDecisionCommand, ServiceResponse>
 {
     public async Task<ServiceResponse> Handle(RecordCandidateDecisionCommand request, CancellationToken cancellationToken)
@@ -154,6 +159,16 @@ public sealed class RecordCandidateDecisionHandler(IShopResearchRepository repos
             Reason = request.Request.Reason,
             CreatedAtUtc = DateTime.UtcNow
         }, cancellationToken);
+
+        if (banditLearning != null)
+        {
+            await banditLearning.RecordOutcomeAsync(
+                request.OwnerUserId,
+                request.ShopId,
+                candidate.Category,
+                request.Request.Decision,
+                cancellationToken);
+        }
 
         return ServiceResponse.CreateSuccess(ResponseMessage.Succeed, new { candidateId = request.CandidateId, decision = request.Request.Decision });
     }

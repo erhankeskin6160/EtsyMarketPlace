@@ -2,14 +2,17 @@ namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.Features.ShopResearchAgent;
+using EtsyMarketPlace.Application.ShopResearchAgent.Interfaces;
 using EtsyMarketPlace.Application.ShopResearchAgent.Models;
 using EtsyMarketPlace.Domain.ShopResearchAgent;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
@@ -19,18 +22,23 @@ using Microsoft.Extensions.Configuration;
 [Route("api/etsy/research-agent")]
 public sealed class ShopResearchAgentController : BaseApiController
 {
+    private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IMediator _mediator;
     private readonly IConfiguration _config;
     private readonly ShopAccessPolicy _shopAccessPolicy;
+    private readonly IResearchProgressHub? _progressHub;
 
     public ShopResearchAgentController(
         IMediator mediator,
         IConfiguration config,
-        ShopAccessPolicy shopAccessPolicy)
+        ShopAccessPolicy shopAccessPolicy,
+        IResearchProgressHub? progressHub = null)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _shopAccessPolicy = shopAccessPolicy ?? throw new ArgumentNullException(nameof(shopAccessPolicy));
+        _progressHub = progressHub;
     }
 
     [HttpGet("dna")]
@@ -77,6 +85,44 @@ public sealed class ShopResearchAgentController : BaseApiController
             cancellationToken);
 
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("stream")]
+    [EndpointSummary("Mağaza araştırma ajanı canlı huni ilerleme akışı (SSE)")]
+    public async Task StreamProgress(
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryResolveIdentity(shopId, out var ownerUserId, out var resolvedShopId, out var errorResult))
+        {
+            await errorResult!.ExecuteResultAsync(ControllerContext);
+            return;
+        }
+
+        Response.StatusCode = StatusCodes.Status200OK;
+        Response.Headers.ContentType = "text/event-stream; charset=utf-8";
+        Response.Headers.CacheControl = "no-cache";
+        Response.Headers.Append("X-Accel-Buffering", "no");
+
+        await Response.WriteAsync("event: ready\ndata: {\"connected\":true}\n\n", cancellationToken);
+        await Response.Body.FlushAsync(cancellationToken);
+
+        if (_progressHub == null)
+            return;
+
+        try
+        {
+            await foreach (var evt in _progressHub.SubscribeAsync(ownerUserId, resolvedShopId, cancellationToken))
+            {
+                var json = JsonSerializer.Serialize(evt, SseJsonOptions);
+                await Response.WriteAsync($"event: progress\ndata: {json}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Normal client SSE disconnect
+        }
     }
 
     [HttpGet("runs")]

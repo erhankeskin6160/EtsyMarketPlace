@@ -57,7 +57,10 @@ public sealed class ShopDnaBuilderService
             ForbiddenKeywords = existingProfile?.ForbiddenKeywords ?? Array.Empty<string>(),
             ScheduleCadence = existingProfile?.ScheduleCadence ?? ResearchScheduleCadence.Daily,
             LastScheduledRunAtUtc = existingProfile?.LastScheduledRunAtUtc,
-            UpdatedAtUtc = DateTime.UtcNow
+            UpdatedAtUtc = DateTime.UtcNow,
+            DefaultShippingCostUsd = existingProfile?.DefaultShippingCostUsd ?? 0m,
+            DefaultPackagingCostUsd = existingProfile?.DefaultPackagingCostUsd ?? 1.00m,
+            ReturnReserveRatePct = existingProfile?.ReturnReserveRatePct ?? 4.0m
         };
     }
 

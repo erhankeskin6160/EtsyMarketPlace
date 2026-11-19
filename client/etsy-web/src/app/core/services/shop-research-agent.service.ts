@@ -27,6 +27,54 @@ export interface ShopDnaProfileDto {
   scheduleCadence: ResearchScheduleCadence;
   lastScheduledRunAtUtc: string | null;
   updatedAtUtc: string;
+  defaultShippingCostUsd?: number;
+  defaultPackagingCostUsd?: number;
+  returnReserveRatePct?: number;
+}
+
+export interface ResearchFunnelTelemetryDto {
+  scannedCount: number;
+  blockedByIpCount: number;
+  rejectedByMemoryCount: number;
+  rejectedByPriceCount: number;
+  rejectedByMarginCount: number;
+  rejectedByDeadNicheCount: number;
+  rejectedByCannibalizationCount: number;
+  winningCount: number;
+  criticIterations: number;
+  etsyCallsUsed: number;
+  etsyCallBudget: number;
+  activeSeasonName: string | null;
+}
+
+export interface VariationTierDto {
+  tierName: string;
+  label: string;
+  priceUsd: number;
+  valueProp: string;
+}
+
+export interface ProductBlueprintDto {
+  mobileTitle55: string;
+  fullTitle140: string;
+  longTailTags: string[];
+  variationLadder: VariationTierDto[];
+  differentiationAngle: string;
+  competitorGap: string;
+  aiMockupBrief: string;
+  recommendedMaterials: string[];
+}
+
+export interface ResearchProgressEventDto {
+  runId: string;
+  stageKey: string;
+  stageLabel: string;
+  stageIndex: number;
+  totalStages: number;
+  scannedCount: number;
+  remainingCount: number;
+  detail: string;
+  timestampUtc: string;
 }
 
 export interface ResearchCandidateDto {
@@ -37,14 +85,23 @@ export interface ResearchCandidateDto {
   suggestedTags: string[];
   sourcePlatform: string;
   sourceUrl: string;
+  imageUrl?: string;
   category: string;
   estimatedSellPriceUsd: number;
   estimatedNetProfitUsd: number;
   estimatedNetMarginPct: number;
+  estimatedShippingUsd?: number;
+  estimatedPackagingUsd?: number;
+  estimatedReturnReserveUsd?: number;
+  estimatedCogsUsd?: number;
   netProfitOffsiteAds12Usd: number;
   netProfitOffsiteAds15Usd: number;
   effectiveFeeRatePct: number;
   competitionCount: number;
+  topShopConcentrationPct?: number;
+  freeShippingRatioPct?: number;
+  seasonalBoostPct?: number;
+  momentumScore?: number;
   demandSignalScore: number;
   demandScore: number;
   demandConfidence: number; // 0=Low, 1=Medium, 2=High
@@ -52,11 +109,14 @@ export interface ResearchCandidateDto {
   riskScore: number;
   riskDecision: number; // 0=Allow, 1=Review, 2=Block
   riskReasons: string[];
+  warningFlags?: string[];
   cannibalizationScore: number;
   cannibalizationWarning: string | null;
   isExplorationCandidate: boolean;
   rationale: string;
   evidenceJson: string;
+  mobileTitle55?: string;
+  blueprintJson?: string;
   decisionStatus: CandidateDecisionStatus;
   rejectionReason: CandidateRejectionReason;
   decidedAtUtc: string | null;
@@ -73,6 +133,8 @@ export interface ResearchRunDto {
   searchQueriesUsed: string[];
   explorationQueryUsed: string | null;
   effectiveShopFeeRatePct: number;
+  funnelTelemetryJson?: string;
+  criticIterations?: number;
   summary: string;
   errorMessage: string | null;
   candidates: ResearchCandidateDto[];
@@ -89,6 +151,9 @@ export interface UpdateShopDnaPayload {
   preferredMaterials: string[];
   forbiddenKeywords: string[];
   scheduleCadence: ResearchScheduleCadence;
+  defaultShippingCostUsd?: number;
+  defaultPackagingCostUsd?: number;
+  returnReserveRatePct?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -132,6 +197,70 @@ export class ShopResearchAgentService {
       maxCandidates,
       model,
       apiKey
+    });
+  }
+
+  streamProgress(): Observable<ResearchProgressEventDto> {
+    return new Observable<ResearchProgressEventDto>((subscriber) => {
+      const controller = new AbortController();
+      const token = localStorage.getItem('etsy_web_jwt_token');
+      const url = `${this.baseUrl}/stream${this.shopQuery()}`;
+
+      fetch(url, {
+        method: 'GET',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: controller.signal
+      })
+        .then(async (response) => {
+          if (!response.ok || !response.body) {
+            subscriber.complete();
+            return;
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const blocks = buffer.split(/\r?\n\r?\n/);
+            buffer = blocks.pop() ?? '';
+
+            for (const block of blocks) {
+              const lines = block.split(/\r?\n/);
+              let eventName = 'message';
+              let dataPayload = '';
+              for (const line of lines) {
+                if (line.startsWith('event:')) {
+                  eventName = line.slice(6).trim();
+                } else if (line.startsWith('data:')) {
+                  dataPayload += line.slice(5).trim();
+                }
+              }
+
+              if (eventName === 'progress' && dataPayload) {
+                try {
+                  const parsed = JSON.parse(dataPayload) as ResearchProgressEventDto;
+                  subscriber.next(parsed);
+                } catch {
+                  // Ignore malformed event chunk
+                }
+              }
+            }
+          }
+
+          subscriber.complete();
+        })
+        .catch(() => {
+          subscriber.complete();
+        });
+
+      return () => {
+        controller.abort();
+      };
     });
   }
 

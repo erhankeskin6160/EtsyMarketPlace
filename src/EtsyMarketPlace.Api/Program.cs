@@ -274,18 +274,24 @@ builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceSer
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddHostedService<EtsyDeltaSyncBackgroundService>();
 builder.Services.AddSingleton<ShopAccessPolicy>();
+builder.Services.AddSingleton<EtsyMarketPlace.Domain.Viral3DModels.Interfaces.IViral3DModelLakeRepository>(_ =>
+    new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(
+        Path.Combine(dataDir, "3d_model_lake.db")));
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchRepository>(sp =>
 {
     var repo = new EtsyMarketPlace.Infrastructure.ShopResearchAgent.SqliteShopResearchRepository(dbPath);
     repo.InitializeAsync().GetAwaiter().GetResult();
     return repo;
 });
+builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IResearchProgressHub, EtsyMarketPlace.Infrastructure.ShopResearchAgent.InMemoryResearchProgressHub>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopDnaBuilderService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.CannibalizationGuardService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ProductOpportunity.ProductOpportunityScorer>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopEconomicsSimulatorService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.DemandValidationService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.IpRiskPolicyService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.BanditLearningService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ProductBlueprintGeneratorService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchNotifier, EtsyMarketPlace.Infrastructure.ShopResearchAgent.TelegramShopResearchNotifier>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopResearchAgentOrchestrator>();
 builder.Services.AddHostedService<EtsyMarketPlace.Infrastructure.ShopResearchAgent.ShopResearchSchedulerBackgroundService>();

@@ -32,4 +32,7 @@ public interface IShopResearchRepository
 
     Task AppendDecisionEventAsync(CandidateDecisionEvent decisionEvent, CancellationToken ct = default);
     Task<IReadOnlyList<CandidateDecisionEvent>> GetRecentDecisionEventsAsync(string ownerUserId, string shopId, int limit = 25, CancellationToken ct = default);
+
+    Task<IReadOnlyList<BanditArmState>> GetBanditArmsAsync(string ownerUserId, string shopId, CancellationToken ct = default);
+    Task UpsertBanditArmAsync(BanditArmState arm, CancellationToken ct = default);
 }

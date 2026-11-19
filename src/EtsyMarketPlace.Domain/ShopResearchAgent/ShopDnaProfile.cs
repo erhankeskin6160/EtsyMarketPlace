@@ -26,6 +26,9 @@ public sealed class ShopDnaProfile
     public ResearchScheduleCadence ScheduleCadence { get; set; } = ResearchScheduleCadence.Daily;
     public DateTime? LastScheduledRunAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public decimal DefaultShippingCostUsd { get; set; } = 0m;
+    public decimal DefaultPackagingCostUsd { get; set; } = 1.00m;
+    public decimal ReturnReserveRatePct { get; set; } = 4.0m;
 
     public bool IsScheduleDue(DateTime utcNow)
     {

@@ -1,9 +1,14 @@
 namespace EtsyMarketPlace.Api.Tests;
 
+using System;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Auth;
+using EtsyMarketPlace.Application.ShopResearchAgent.Models;
+using EtsyMarketPlace.Domain.ShopResearchAgent;
 using Xunit;
 
 public sealed class ShopResearchAgentApiTests : IClassFixture<ApiTestFactory>
@@ -92,5 +97,66 @@ public sealed class ShopResearchAgentApiTests : IClassFixture<ApiTestFactory>
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
         var body = await forbiddenResponse.Content.ReadAsStringAsync();
         Assert.Contains("Bu mağaza için erişim yetkiniz bulunmuyor.", body);
+    }
+
+    [Fact]
+    public async Task PutDna_PersistsV3LandedCostFields_AndReturnsUpdatedProfile()
+    {
+        var client = TestAuthHelper.CreateAuthenticatedClient(
+            _factory,
+            userId: "v3-dna-test-user",
+            securityStamp: "v3-dna-stamp-1");
+
+        var updatePayload = new UpdateShopDnaRequest(
+            PrimaryNiche: "3D Baskı & Masaüstü Dekor",
+            TargetAudience: "Tasarım ve hediye alıcıları",
+            TargetPriceMinUsd: 18m,
+            TargetPriceMaxUsd: 68m,
+            MinAcceptableNetMarginPct: 28m,
+            EstimatedCogsRatio: 0.32m,
+            Supports3DPrint: true,
+            PreferredMaterials: ["PLA", "PETG"],
+            ForbiddenKeywords: ["disney", "marvel"],
+            ScheduleCadence: ResearchScheduleCadence.Daily,
+            DefaultShippingCostUsd: 11.5m,
+            DefaultPackagingCostUsd: 1.25m,
+            ReturnReserveRatePct: 5.5m);
+
+        var putResponse = await client.PutAsJsonAsync("/api/etsy/research-agent/dna?shopId=53236321", updatePayload);
+        Assert.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        var getResponse = await client.GetAsync("/api/etsy/research-agent/dna?shopId=53236321");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var body = await getResponse.Content.ReadAsStringAsync();
+        Assert.Contains("11.5", body);
+        Assert.Contains("1.25", body);
+        Assert.Contains("5.5", body);
+    }
+
+    [Fact]
+    public async Task StreamEndpoint_Unauthenticated_Returns401_AndStoreOwnerUnassignedShop_Returns403()
+    {
+        var anonClient = _factory.CreateClient();
+        var unauth = await anonClient.GetAsync("/api/etsy/research-agent/stream?shopId=53236321");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauth.StatusCode);
+
+        var storeOwner = TestAuthHelper.CreateAuthenticatedClient(
+            _factory,
+            userId: "store-owner-sse-1",
+            securityStamp: "store-owner-sse-stamp-1",
+            role: UserRoles.StoreOwner,
+            assignedShopIds: ["53236321"]);
+
+        var forbidden = await storeOwner.GetAsync("/api/etsy/research-agent/stream?shopId=99999999");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        var admin = TestAuthHelper.CreateAuthenticatedClient(_factory);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var streamResp = await admin.GetAsync(
+            "/api/etsy/research-agent/stream?shopId=53236321",
+            HttpCompletionOption.ResponseHeadersRead,
+            cts.Token);
+        Assert.Equal(HttpStatusCode.OK, streamResp.StatusCode);
+        Assert.Equal("text/event-stream", streamResp.Content.Headers.ContentType?.MediaType);
     }
 }

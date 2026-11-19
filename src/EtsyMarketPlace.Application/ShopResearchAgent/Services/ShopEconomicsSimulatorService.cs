@@ -15,8 +15,24 @@ public sealed record EconomicsSimulationResult(
     decimal EffectiveCogsUsd,
     string CalibrationSource);
 
+public sealed record LandedEconomicsResult(
+    decimal SellPriceUsd,
+    decimal EffectiveFeeRatePct,
+    decimal EffectiveCogsUsd,
+    decimal EstimatedShippingUsd,
+    decimal PackagingUsd,
+    decimal ReturnReserveUsd,
+    decimal NetProfitStandardUsd,
+    decimal NetMarginStandardPct,
+    decimal NetProfitLandedUsd,
+    decimal NetMarginLandedPct,
+    decimal NetProfitOffsiteAds12Usd,
+    decimal NetProfitOffsiteAds15Usd,
+    string CalibrationSource);
+
 /// <summary>
-/// Simulates realistic Etsy unit economics across Standard (0% Offsite Ads), 12% Offsite Ads, and 15% Offsite Ads scenarios.
+/// Simulates realistic Etsy unit economics across Standard (0% Offsite Ads), 12% Offsite Ads, and 15% Offsite Ads scenarios,
+/// plus TR->US/EU international landed unit economics (shipping, packaging, return/defect reserve).
 /// Calibrates effective platform fee rate from the shop's live Etsy ledger when available.
 /// </summary>
 public sealed class ShopEconomicsSimulatorService
@@ -97,6 +113,60 @@ public sealed class ShopEconomicsSimulatorService
             netOffsite12,
             netOffsite15,
             effectiveCogs,
+            calibrationSource);
+    }
+
+    public static decimal EstimateInternationalShippingUsd(decimal sellPriceUsd, bool is3DPrinted)
+    {
+        if (sellPriceUsd <= 0m) return 0m;
+        if (sellPriceUsd < 25m) return is3DPrinted ? 9.00m : 8.50m;
+        if (sellPriceUsd <= 55m) return is3DPrinted ? 10.50m : 9.50m;
+        return is3DPrinted ? 14.50m : 13.50m;
+    }
+
+    public LandedEconomicsResult SimulateLanded(
+        decimal sellPriceUsd,
+        decimal cogsRatio,
+        bool is3DPrinted,
+        decimal variableFeeRate,
+        string calibrationSource,
+        decimal configuredShippingUsd = 0m,
+        decimal packagingUsd = 1.00m,
+        decimal returnReserveRatePct = 4.0m)
+    {
+        if (sellPriceUsd <= 0m)
+        {
+            return new LandedEconomicsResult(0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, calibrationSource);
+        }
+
+        var baseSim = Simulate(sellPriceUsd, cogsRatio, is3DPrinted, variableFeeRate, calibrationSource);
+        var shippingUsd = configuredShippingUsd > 0m
+            ? Math.Round(configuredShippingUsd, 2)
+            : EstimateInternationalShippingUsd(sellPriceUsd, is3DPrinted);
+        var cleanPack = Math.Max(0m, Math.Round(packagingUsd, 2));
+        var clampedReturnPct = Math.Clamp(returnReserveRatePct, 0m, 20m);
+        var returnReserveUsd = Math.Round((sellPriceUsd + shippingUsd + baseSim.EffectiveCogsUsd) * (clampedReturnPct / 100m), 2);
+
+        var netLanded = Math.Round(baseSim.NetProfitStandardUsd - shippingUsd - cleanPack - returnReserveUsd, 2);
+        var marginLandedPct = Math.Round((netLanded / sellPriceUsd) * 100m, 1);
+
+        var activeBaseProfit = configuredShippingUsd > 0m ? netLanded : baseSim.NetProfitStandardUsd;
+        var netOffsite12 = Math.Round(activeBaseProfit - (sellPriceUsd * 0.12m), 2);
+        var netOffsite15 = Math.Round(activeBaseProfit - (sellPriceUsd * 0.15m), 2);
+
+        return new LandedEconomicsResult(
+            baseSim.SellPriceUsd,
+            baseSim.EffectiveFeeRatePct,
+            baseSim.EffectiveCogsUsd,
+            shippingUsd,
+            cleanPack,
+            returnReserveUsd,
+            baseSim.NetProfitStandardUsd,
+            baseSim.NetMarginStandardPct,
+            netLanded,
+            marginLandedPct,
+            netOffsite12,
+            netOffsite15,
             calibrationSource);
     }
 }

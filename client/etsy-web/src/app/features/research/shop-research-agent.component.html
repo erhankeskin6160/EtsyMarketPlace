@@ -1,14 +1,17 @@
 <div class="agent-page">
   <header class="agent-header">
     <div>
-      <h1>🤖 Mağazaya Özel Ürün Araştırma Ajanı</h1>
+      <h1>🤖 Mağaza Araştırma Ajanı V3 • Komuta Merkezi</h1>
       <p class="subtitle">
-        Yalnızca sizin hesabınıza ve mağaza DNA'nıza göre ürün araştıran, kâr & telif/yamyamlaşma doğrulaması yapan otonom araştırma kokpiti.
+        Etsy pazarı, rakip mağaza boşlukları, sezon sinyalleri ve 3D model gölünü TR→ABD navlun gerçekçiliğiyle birleştiren otonom ajan kokpiti.
       </p>
     </div>
     <div class="header-actions">
+      <button class="btn-secondary" (click)="toggleDnaSettings()">
+        {{ dnaSettingsExpanded() ? '▲ DNA Ayarlarını Gizle' : '⚙️ DNA & Maliyet Ayarları' }}
+      </button>
       <button class="btn-secondary" (click)="loadDna(true)" [disabled]="loadingDna()">
-        {{ loadingDna() ? 'Analiz Ediliyor...' : '🧬 Mağaza DNA’sını Yenile' }}
+        {{ loadingDna() ? 'Analiz Ediliyor...' : '🧬 DNA Yenile' }}
       </button>
     </div>
   </header>
@@ -20,215 +23,400 @@
     <div class="alert-banner error" role="alert">{{ errorMessage() }}</div>
   }
 
-  <div class="agent-grid">
-    <!-- Sol Panel: Mağaza DNA'sı & Zamanlayıcı -->
-    <section class="panel dna-panel">
-      <div class="panel-header">
-        <h2>🧬 Mağaza DNA Profili</h2>
-        @if (dna(); as profile) {
-          <span class="badge-version">v{{ profile.dnaVersion }} • Shop #{{ profile.shopId }}</span>
+  <!-- Compact Shop DNA Bar -->
+  <section class="dna-compact-bar">
+    @if (dna(); as profile) {
+      <div class="dna-pills-row">
+        <span class="dna-chip primary">🏪 Shop #{{ profile.shopId }} (v{{ profile.dnaVersion }})</span>
+        <span class="dna-chip">{{ profile.primaryNiche }}</span>
+        <span class="dna-chip">💲 ${{ profile.targetPriceMinUsd }}–${{ profile.targetPriceMaxUsd }}</span>
+        <span class="dna-chip">📈 Min. Marj %{{ profile.minAcceptableNetMarginPct }}</span>
+        <span class="dna-chip">🚚 Navlun: {{ (profile.defaultShippingCostUsd ?? 0) > 0 ? '$' + profile.defaultShippingCostUsd : 'Otomatik Tahmin' }}</span>
+        <span class="dna-chip">{{ profile.supports3DPrint ? '🖨️ 3D Gölü Aktif' : '🎨 El Yapımı / Tasarım' }}</span>
+      </div>
+    } @else if (loadingDna()) {
+      <div class="dna-loading-inline">Mağaza DNA profili yükleniyor...</div>
+    } @else {
+      <div class="dna-loading-inline">
+        <span>Mağaza DNA profili henüz yüklenemedi.</span>
+        <button class="btn-mini" (click)="loadDna(false)">🔄 Tekrar Yükle</button>
+      </div>
+    }
+  </section>
+
+  <!-- Collapsible DNA & Landed Cost Settings Panel -->
+  @if (dnaSettingsExpanded() && dna(); as profile) {
+    <section class="panel dna-drawer">
+      <div class="dna-tags">
+        @for (tag of profile.topPerformingTags.slice(0, 10); track tag) {
+          <span class="tag-pill">#{{ tag }}</span>
         }
       </div>
-
-      @if (dna(); as profile) {
-        <div class="dna-summary">
-          <div class="dna-niche">{{ profile.primaryNiche }}</div>
-          <div class="dna-tags">
-            @for (tag of profile.topPerformingTags.slice(0, 8); track tag) {
-              <span class="tag-pill">#{{ tag }}</span>
-            }
-          </div>
-        </div>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>Otomatik Çalışma Takvimi</span>
-            <select [(ngModel)]="scheduleCadence">
-              <option [ngValue]="0">Kapalı (Sadece Manuel)</option>
-              <option [ngValue]="1">Her Gün (Günlük Tarama)</option>
-              <option [ngValue]="2">Haftalık (7 Günde Bir)</option>
-              <option [ngValue]="3">Aylık (30 Günde Bir)</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Min. Net Kâr Marjı (%)</span>
-            <input type="number" [(ngModel)]="minMarginPct" min="5" max="85" />
-          </label>
-
-          <label class="field">
-            <span>Hedef Min. Fiyat ($)</span>
-            <input type="number" [(ngModel)]="priceMinUsd" min="1" />
-          </label>
-
-          <label class="field">
-            <span>Hedef Maks. Fiyat ($)</span>
-            <input type="number" [(ngModel)]="priceMaxUsd" min="5" />
-          </label>
-
-          <label class="field full">
-            <span>Yasaklı Kelimeler (Telif / İstenmeyen, virgülle ayırın)</span>
-            <input type="text" [(ngModel)]="forbiddenKeywordsInput" placeholder="disney, marvel, nike..." />
-          </label>
-
-          <label class="field full">
-            <span>Tercih Edilen Materyaller</span>
-            <input type="text" [(ngModel)]="materialsInput" placeholder="PLA, Ahşap, Seramik..." />
-          </label>
-
-          <label class="checkbox-field full">
-            <input type="checkbox" [(ngModel)]="supports3DPrint" />
-            <span>Mağazam 3D Baskı / STL platformlarını (MakerWorld, Printables vb.) da tarasın</span>
-          </label>
-        </div>
-
-        <button class="btn-primary full-width" (click)="saveDnaSettings()" [disabled]="savingDna()">
-          {{ savingDna() ? 'Kaydediliyor...' : '💾 DNA Kısıtlarını & Takvimi Kaydet' }}
-        </button>
-
-        @if (profile.lastScheduledRunAtUtc) {
-          <div class="last-run-note">
-            Son zamanlanmış tarama: {{ profile.lastScheduledRunAtUtc | date:'dd.MM.yyyy HH:mm' }}
-          </div>
-        }
-      } @else if (loadingDna()) {
-        <div class="empty-state">
-          Mağaza DNA profili yükleniyor...
-        </div>
-      } @else {
-        <div class="empty-state">
-          <p>Mağaza DNA profili henüz yüklenemedi.</p>
-          <button class="btn-secondary full-width" (click)="loadDna(false)" [disabled]="loadingDna()">
-            🔄 Tekrar Yükle
-          </button>
-        </div>
-      }
+      <div class="form-grid-v3">
+        <label class="field">
+          <span>Otomatik Tarama</span>
+          <select [(ngModel)]="scheduleCadence">
+            <option [ngValue]="0">Kapalı (Manuel)</option>
+            <option [ngValue]="1">Her Gün</option>
+            <option [ngValue]="2">Haftalık</option>
+            <option [ngValue]="3">Aylık</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Min. Net Marj (%)</span>
+          <input type="number" [(ngModel)]="minMarginPct" min="5" max="85" />
+        </label>
+        <label class="field">
+          <span>Hedef Min. ($)</span>
+          <input type="number" [(ngModel)]="priceMinUsd" min="1" />
+        </label>
+        <label class="field">
+          <span>Hedef Maks. ($)</span>
+          <input type="number" [(ngModel)]="priceMaxUsd" min="5" />
+        </label>
+        <label class="field">
+          <span>Varsayılan Navlun ($) (0=Otomatik)</span>
+          <input type="number" [(ngModel)]="defaultShippingCostUsd" min="0" max="100" step="0.5" />
+        </label>
+        <label class="field">
+          <span>Ambalaj Maliyeti ($)</span>
+          <input type="number" [(ngModel)]="defaultPackagingCostUsd" min="0" max="25" step="0.25" />
+        </label>
+        <label class="field">
+          <span>İade / Fire Tamponu (%)</span>
+          <input type="number" [(ngModel)]="returnReserveRatePct" min="0" max="20" step="0.5" />
+        </label>
+        <label class="field">
+          <span>Tercih Edilen Materyaller</span>
+          <input type="text" [(ngModel)]="materialsInput" placeholder="PLA, Ahşap, Seramik..." />
+        </label>
+        <label class="field span-2">
+          <span>Yasaklı Kelimeler (Telif / İstenmeyen)</span>
+          <input type="text" [(ngModel)]="forbiddenKeywordsInput" placeholder="disney, marvel, nike..." />
+        </label>
+        <label class="checkbox-field span-2">
+          <input type="checkbox" [(ngModel)]="supports3DPrint" />
+          <span>3D Baskı / STL model gölünü (MakerWorld, Printables vb.) da tara</span>
+        </label>
+      </div>
+      <button class="btn-primary" (click)="saveDnaSettings()" [disabled]="savingDna()">
+        {{ savingDna() ? 'Kaydediliyor...' : '💾 DNA Kısıtlarını & Landed Maliyet Ayarlarını Kaydet' }}
+      </button>
     </section>
+  }
 
-    <!-- Sağ Panel: Ajan Çalıştırıcı & Kanıtlı Aday Ürünler -->
-    <section class="panel runner-panel">
-      <div class="runner-bar">
-        <input
-          type="text"
-          class="focus-input"
-          [(ngModel)]="focusHint"
-          placeholder="İsteğe bağlı odak ipucu (boş bırakırsanız ajan mağazanızı inceleyip kendisi hipotez üretir)..."
-        />
-        <button class="btn-run" (click)="runAgentNow()" [disabled]="runningAgent()">
-          {{ runningAgent() ? '⏳ Ajan Araştırıyor...' : '🚀 Mağazam İçin Araştır' }}
-        </button>
+  <!-- Runner Command Bar -->
+  <section class="panel runner-bar-panel">
+    <div class="runner-bar">
+      <input
+        type="text"
+        class="focus-input"
+        [(ngModel)]="focusHint"
+        placeholder="İsteğe bağlı odak ipucu (boş bırakırsanız Thompson Bandit + sezon sinyalleriyle hipotez üretir)..."
+      />
+      <button class="btn-run" (click)="runAgentNow()" [disabled]="runningAgent()">
+        {{ runningAgent() ? '⏳ Ajan Araştırıyor...' : '🚀 Mağazam İçin Araştır' }}
+      </button>
+    </div>
+
+    <!-- 6-Stage SSE Data Refinery Funnel -->
+    @if (liveProgress(); as prog) {
+      <div class="sse-funnel">
+        <div class="funnel-step" [class.active]="prog.stageIndex === 1" [class.done]="prog.stageIndex > 1">1. DNA &amp; Sezon</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 2" [class.done]="prog.stageIndex > 2">2. Bandit Hipotez</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 3" [class.done]="prog.stageIndex > 3">3. Çoklu Keşif</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 4" [class.done]="prog.stageIndex > 4">4. Eleme ({{ prog.scannedCount }})</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 5" [class.done]="prog.stageIndex > 5">5. Critic Denetim</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 6">6. Blueprint ({{ prog.remainingCount }})</div>
       </div>
+      <div class="sse-detail">{{ prog.detail }}</div>
+    } @else {
+      @if (activeTelemetry(); as tel) {
+        <div class="sse-funnel completed">
+          <div class="funnel-stat"><span>1. Taranan</span><strong>{{ tel.scannedCount }}</strong></div>
+          <div class="funnel-stat warn"><span>2. Telif/Hafıza</span><strong>-{{ tel.blockedByIpCount + tel.rejectedByMemoryCount }}</strong></div>
+          <div class="funnel-stat warn"><span>3. Fiyat/Ölü Niş</span><strong>-{{ tel.rejectedByPriceCount + tel.rejectedByDeadNicheCount }}</strong></div>
+          <div class="funnel-stat warn"><span>4. Marj/Navlun</span><strong>-{{ tel.rejectedByMarginCount }}</strong></div>
+          <div class="funnel-stat warn"><span>5. Yamyamlaşma</span><strong>-{{ tel.rejectedByCannibalizationCount }}</strong></div>
+          <div class="funnel-stat win"><span>6. Kazanan ({{ tel.criticIterations }} tur)</span><strong>{{ tel.winningCount }}</strong></div>
+        </div>
+      }
+    }
 
-      @if (runs().length > 0) {
-        <div class="runs-strip">
-          @for (r of runs().slice(0, 6); track r.runId) {
-            <button
-              class="run-chip"
-              [class.active]="activeRun()?.runId === r.runId"
-              (click)="selectRun(r.runId)"
-            >
-              <span class="trigger-badge">{{ triggerLabel(r.triggerType) }}</span>
-              <span>{{ r.startedAtUtc | date:'dd.MM HH:mm' }}</span>
-            </button>
+    @if (runs().length > 0) {
+      <div class="runs-strip">
+        @for (r of runs().slice(0, 6); track r.runId) {
+          <button
+            class="run-chip"
+            [class.active]="activeRun()?.runId === r.runId"
+            (click)="selectRun(r.runId)"
+          >
+            <span class="trigger-badge">{{ triggerLabel(r.triggerType) }}</span>
+            <span>{{ r.startedAtUtc | date:'dd.MM HH:mm' }}</span>
+          </button>
+        }
+      </div>
+    }
+  </section>
+
+  <!-- Main V3 Split Workspace: Candidate Grid + Slide-Over Evidence/Simulator Drawer -->
+  @if (activeRun(); as run) {
+    <div class="run-summary-box">
+      <div><strong>Oturum Özeti:</strong> {{ run.summary }}</div>
+      @if (run.searchQueriesUsed.length > 0) {
+        <div class="queries-used">
+          <span>Kullanılan Sorgular:</span>
+          @for (q of run.searchQueriesUsed; track q) {
+            <span class="query-pill">{{ q }}</span>
           }
         </div>
       }
+    </div>
 
-      @if (activeRun(); as run) {
-        <div class="run-summary-box">
-          <div>
-            <strong>Oturum Özeti:</strong> {{ run.summary }}
-          </div>
-          @if (run.searchQueriesUsed.length > 0) {
-            <div class="queries-used">
-              <span>Kullanılan Sorgular:</span>
-              @for (q of run.searchQueriesUsed; track q) {
-                <span class="query-pill">{{ q }}</span>
-              }
-            </div>
-          }
-        </div>
+    <div class="filter-toolbar">
+      <div class="filter-chips">
+        <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="filterMode.set('all')">Tümü ({{ run.candidates.length }})</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'safe'" (click)="filterMode.set('safe')">🛡️ Telif Güvenli</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'explore'" (click)="filterMode.set('explore')">🧭 Keşif (%20)</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'low_monopoly'" (click)="filterMode.set('low_monopoly')">⚖️ Düşük Tekel (&lt;%30)</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'high_demand'" (click)="filterMode.set('high_demand')">🔥 Yüksek Talep</button>
+      </div>
+      <div class="sort-box">
+        <span>Sırala:</span>
+        <select [ngModel]="sortMode()" (ngModelChange)="sortMode.set($event)">
+          <option value="opportunity">Fırsat Puanı</option>
+          <option value="profit">Net Kâr</option>
+          <option value="momentum">Talep İvmesi</option>
+        </select>
+      </div>
+    </div>
 
-        <div class="candidates-list">
-          @for (c of run.candidates; track c.candidateId) {
-            <article class="candidate-card" [class.rejected]="c.decisionStatus === 2" [class.accepted]="c.decisionStatus === 1 || c.decisionStatus === 3">
-              <div class="card-top">
-                <div>
-                  <span class="source-badge">{{ c.sourcePlatform }}</span>
-                  <span class="status-badge">{{ decisionLabel(c.decisionStatus) }}</span>
-                  @if (c.isExplorationCandidate) {
-                    <span class="explore-badge">🧭 Keşif (%20)</span>
+    <div class="v3-workspace">
+      <!-- Left/Center Candidate Cards -->
+      <div class="candidates-column">
+        @for (c of filteredCandidates(); track c.candidateId) {
+          <article
+            class="candidate-card"
+            [class.selected]="selectedCandidate()?.candidateId === c.candidateId"
+            [class.rejected]="c.decisionStatus === 2"
+            [class.accepted]="c.decisionStatus === 1 || c.decisionStatus === 3"
+            (click)="selectCandidate(c)"
+          >
+            <div class="card-main-row">
+              <div class="thumb-box">
+                @if (c.imageUrl) {
+                  <img [src]="c.imageUrl" [alt]="c.title" loading="lazy" />
+                } @else {
+                  <div class="thumb-fallback">{{ c.sourcePlatform === 'EtsyMarket' ? '🛍️' : '🖨️' }}</div>
+                }
+              </div>
+
+              <div class="card-content">
+                <div class="card-top">
+                  <div class="badges-left">
+                    <span class="source-badge">{{ c.sourcePlatform }}</span>
+                    <span class="status-badge">{{ decisionLabel(c.decisionStatus) }}</span>
+                    @if (c.isExplorationCandidate) {
+                      <span class="explore-badge">🧭 Keşif</span>
+                    }
+                    @if ((c.seasonalBoostPct ?? 0) > 0) {
+                      <span class="season-badge">📅 +{{ c.seasonalBoostPct }}% Sezon</span>
+                    }
+                  </div>
+                  <div class="scores">
+                    <span class="score-pill opp">Fırsat: {{ c.opportunityScore }}/100</span>
+                    <span class="score-pill demand" [class.high]="c.demandConfidence === 2">Talep: {{ c.demandScore }}</span>
+                    <span class="score-pill risk" [class.high]="c.riskDecision === 1">{{ riskDecisionLabel(c.riskDecision) }}</span>
+                  </div>
+                </div>
+
+                <h3>{{ c.title }}</h3>
+                @if (c.mobileTitle55) {
+                  <p class="mobile-title"><strong>📱 Mobil Başlık ({{ c.mobileTitle55.length }}/55):</strong> {{ c.mobileTitle55 }}</p>
+                }
+                <p class="suggested-title"><strong>SEO Başlık ({{ c.suggestedTitle.length }}/140):</strong> {{ c.suggestedTitle }}</p>
+
+                @if (c.warningFlags && c.warningFlags.length > 0) {
+                  <div class="warning-pills">
+                    @for (wf of c.warningFlags; track wf) {
+                      <span class="warn-chip">{{ warningFlagLabel(wf) }}</span>
+                    }
+                  </div>
+                }
+
+                @if (c.cannibalizationWarning) {
+                  <div class="cannibal-warn">⚠️ {{ c.cannibalizationWarning }}</div>
+                }
+
+                <div class="metrics-row">
+                  <div class="metric">
+                    <span class="label">Satış</span>
+                    <span class="value">${{ c.estimatedSellPriceUsd | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="metric profit">
+                    <span class="label">Net Kâr</span>
+                    <span class="value">${{ c.estimatedNetProfitUsd | number:'1.2-2' }} (%{{ c.estimatedNetMarginPct | number:'1.1-1' }})</span>
+                  </div>
+                  <div class="metric">
+                    <span class="label">TR→ABD Navlun</span>
+                    <span class="value">~${{ (c.estimatedShippingUsd ?? 9.5) | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="label">Tekel / Ücr.Kargo</span>
+                    <span class="value">%{{ c.topShopConcentrationPct ?? 0 }} / %{{ c.freeShippingRatioPct ?? 0 }}</span>
+                  </div>
+                </div>
+
+                <div class="card-actions" (click)="$event.stopPropagation()">
+                  <button class="btn-draft" (click)="sendToFastCreator(c)">⚡ Taslağa Aktar</button>
+                  <button class="btn-accept" (click)="acceptCandidate(c)" [disabled]="c.decisionStatus === 1">✅ Onayla</button>
+                  <button class="btn-reject" (click)="rejectCandidate(c, 3)" [disabled]="c.decisionStatus === 2">❌ Tarz Dışı</button>
+                  <button class="btn-reject" (click)="rejectCandidate(c, 2)" [disabled]="c.decisionStatus === 2">💸 Kâr Düşük</button>
+                  <button
+                    class="btn-compare"
+                    [class.pinned]="isPinnedForCompare(c.candidateId)"
+                    (click)="toggleCompare(c.candidateId, $event)"
+                  >
+                    {{ isPinnedForCompare(c.candidateId) ? '✓ Kıyasla' : '+ Kıyasla' }}
+                  </button>
+                  @if (c.sourceUrl) {
+                    <a class="btn-link" [href]="c.sourceUrl" target="_blank" rel="noopener">🔗 Kaynak</a>
                   }
                 </div>
-                <div class="scores">
-                  <span class="score-pill opp">Fırsat: {{ c.opportunityScore }}/100</span>
-                  <span class="score-pill demand" [class.high]="c.demandConfidence === 2">
-                    Talep: {{ c.demandScore }} ({{ demandConfidenceLabel(c.demandConfidence) }})
-                  </span>
-                  <span class="score-pill risk" [class.high]="c.riskDecision === 1">
-                    {{ riskDecisionLabel(c.riskDecision) }}
-                  </span>
+              </div>
+            </div>
+          </article>
+        } @empty {
+          <div class="empty-state">
+            Bu filtrede veya oturumda kriterlere uyan aday ürün bulunamadı. Filtreleri sıfırlayın veya fiyat/marj aralığını esnetip tekrar deneyin.
+          </div>
+        }
+      </div>
+
+      <!-- Right Evidence, Product Blueprint & Interactive Profit Simulator Drawer -->
+      @if (selectedCandidate(); as sel) {
+        <aside class="panel evidence-drawer">
+          <div class="drawer-tabs">
+            <button [class.active]="drawerTab() === 'evidence'" (click)="drawerTab.set('evidence')">🔬 Kanıt &amp; Simülatör</button>
+            <button [class.active]="drawerTab() === 'compare'" (click)="drawerTab.set('compare')">📊 Kıyasla ({{ comparedCandidates().length }})</button>
+          </div>
+
+          @if (drawerTab() === 'evidence') {
+            <div class="drawer-section">
+              <div class="drawer-hero">
+                @if (sel.imageUrl) {
+                  <img [src]="sel.imageUrl" [alt]="sel.title" class="drawer-thumb" />
+                }
+                <div>
+                  <div class="drawer-title">{{ sel.title }}</div>
+                  <div class="drawer-sub">Fırsat {{ sel.opportunityScore }}/100 • İvme {{ sel.momentumScore ?? 50 }}/100 • Tekel %{{ sel.topShopConcentrationPct ?? 0 }}</div>
                 </div>
               </div>
 
-              <h3>{{ c.title }}</h3>
-              <p class="suggested-title"><strong>Önerilen Başlık ({{ c.suggestedTitle.length }}/140):</strong> {{ c.suggestedTitle }}</p>
-              <p class="rationale">{{ c.rationale }}</p>
+              <!-- Interactive TR->ABD Simulator -->
+              <div class="simulator-box">
+                <div class="sim-header">
+                  <span>🧮 TR → ABD Canlı Kâr &amp; Navlun Simülatörü</span>
+                  <div class="ads-toggle">
+                    <button [class.active]="simAdsPct() === 0" (click)="simAdsPct.set(0)">%0 Ads</button>
+                    <button [class.active]="simAdsPct() === 12" (click)="simAdsPct.set(12)">%12 Ads</button>
+                    <button [class.active]="simAdsPct() === 15" (click)="simAdsPct.set(15)">%15 Ads</button>
+                  </div>
+                </div>
 
-              @if (c.riskReasons && c.riskReasons.length > 0) {
-                <div class="risk-warn">🛡️ {{ c.riskReasons.join(' • ') }}</div>
-              }
+                <label class="sim-slider">
+                  <div><span>Satış Fiyatı</span><strong>${{ simPriceUsd() | number:'1.2-2' }}</strong></div>
+                  <input type="range" min="10" max="150" step="0.5" [ngModel]="simPriceUsd()" (ngModelChange)="simPriceUsd.set(+$event)" />
+                </label>
 
-              @if (c.cannibalizationWarning) {
-                <div class="cannibal-warn">⚠️ {{ c.cannibalizationWarning }}</div>
-              }
+                <label class="sim-slider">
+                  <div><span>TR → ABD Navlun</span><strong>${{ simShippingUsd() | number:'1.2-2' }}</strong></div>
+                  <input type="range" min="0" max="35" step="0.5" [ngModel]="simShippingUsd()" (ngModelChange)="simShippingUsd.set(+$event)" />
+                </label>
 
-              <div class="metrics-row">
-                <div class="metric">
-                  <span class="label">Tahmini Satış</span>
-                  <span class="value">${{ c.estimatedSellPriceUsd | number:'1.2-2' }}</span>
-                </div>
-                <div class="metric profit">
-                  <span class="label">Normal Net Kâr</span>
-                  <span class="value">${{ c.estimatedNetProfitUsd | number:'1.2-2' }} (%{{ c.estimatedNetMarginPct | number:'1.1-1' }})</span>
-                </div>
-                <div class="metric" [class.loss]="c.netProfitOffsiteAds12Usd < 0">
-                  <span class="label">Offsite Ads %12</span>
-                  <span class="value">${{ c.netProfitOffsiteAds12Usd | number:'1.2-2' }}</span>
-                </div>
-                <div class="metric" [class.loss]="c.netProfitOffsiteAds15Usd < 0">
-                  <span class="label">Offsite Ads %15</span>
-                  <span class="value">${{ c.netProfitOffsiteAds15Usd | number:'1.2-2' }}</span>
-                </div>
+                <label class="sim-slider">
+                  <div><span>Üretim / Filament (COGS)</span><strong>${{ simCogsUsd() | number:'1.2-2' }}</strong></div>
+                  <input type="range" min="1" max="60" step="0.5" [ngModel]="simCogsUsd()" (ngModelChange)="simCogsUsd.set(+$event)" />
+                </label>
+
+                @if (simCalculation(); as calc) {
+                  <div class="sim-result" [class]="calc.status">
+                    <div>
+                      <span class="sim-label">Gerçek Landed Net Kâr</span>
+                      <div class="sim-big">${{ calc.netUsd | number:'1.2-2' }} <small>(₺{{ calc.netTry }})</small></div>
+                    </div>
+                    <div class="sim-right">
+                      <span class="sim-margin">%{{ calc.marginPct | number:'1.1-1' }}</span>
+                      <span class="sim-meta">Kesinti ${{ calc.feesUsd }} • İade Payı ${{ calc.returnReserveUsd }}</span>
+                    </div>
+                  </div>
+                }
               </div>
+
+              <!-- Product Blueprint -->
+              @if (selectedBlueprint(); as bp) {
+                <div class="blueprint-box">
+                  <h4>📐 Ürün Farklılaştırma Blueprint'i</h4>
+                  <p><strong>Farklılaşma Açısı:</strong> {{ bp.differentiationAngle }}</p>
+                  <p><strong>Rakip Boşluğu:</strong> {{ bp.competitorGap }}</p>
+                  <p><strong>AI Mockup Brifi:</strong> {{ bp.aiMockupBrief }}</p>
+
+                  @if (bp.variationLadder.length > 0) {
+                    <div class="ladder-grid">
+                      @for (tier of bp.variationLadder; track tier.tierName) {
+                        <div class="ladder-card">
+                          <span class="tier-name">{{ tier.tierName }}</span>
+                          <strong>${{ tier.priceUsd | number:'1.2-2' }}</strong>
+                          <span class="tier-label">{{ tier.label }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
 
               <div class="tags-row">
-                @for (t of c.suggestedTags; track t) {
-                  <span class="etsy-tag">{{ t }}</span>
+                @for (t of sel.suggestedTags; track t) {
+                  <span class="etsy-tag">#{{ t }}</span>
                 }
               </div>
 
-              <div class="card-actions">
-                <button class="btn-draft" (click)="sendToFastCreator(c)">⚡ Taslağa Aktar</button>
-                <button class="btn-accept" (click)="acceptCandidate(c)" [disabled]="c.decisionStatus === 1">✅ Onayla</button>
-                <button class="btn-reject" (click)="rejectCandidate(c, 3)" [disabled]="c.decisionStatus === 2">❌ Tarz Dışı</button>
-                <button class="btn-reject" (click)="rejectCandidate(c, 2)" [disabled]="c.decisionStatus === 2">💸 Kâr Düşük</button>
-                @if (c.sourceUrl) {
-                  <a class="btn-link" [href]="c.sourceUrl" target="_blank" rel="noopener">🔗 Kaynağı Gör</a>
-                }
-              </div>
-            </article>
-          } @empty {
-            <div class="empty-state">
-              Bu oturumda kriterlere uyan aday ürün bulunamadı. Fiyat bandı veya minimum kâr marjını esnetip tekrar deneyebilirsiniz.
+              <button class="btn-primary full-width" (click)="sendToFastCreator(sel)">
+                ⚡ Tek Tıkla Fast Creator + Varyasyon + Mockup Brifi Aktar
+              </button>
+            </div>
+          } @else {
+            <div class="compare-table-wrap">
+              <table class="compare-table">
+                <thead>
+                  <tr>
+                    <th>Aday</th>
+                    <th>Fırsat</th>
+                    <th>Tekel</th>
+                    <th>Navlun</th>
+                    <th>Net Kâr</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of comparedCandidates(); track row.candidateId) {
+                    <tr (click)="selectCandidate(row)" [class.active]="selectedCandidate()?.candidateId === row.candidateId">
+                      <td class="cmp-title">{{ row.title }}</td>
+                      <td><strong>{{ row.opportunityScore }}</strong></td>
+                      <td>%{{ row.topShopConcentrationPct ?? 0 }}</td>
+                      <td>${{ (row.estimatedShippingUsd ?? 9.5) | number:'1.2-2' }}</td>
+                      <td class="cmp-profit">${{ row.estimatedNetProfitUsd | number:'1.2-2' }} (%{{ row.estimatedNetMarginPct | number:'1.0-0' }})</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           }
-        </div>
-      } @else {
-        <div class="empty-state">
-          Henüz araştırma oturumu yok. Yukarıdan <strong>"🚀 Mağazam İçin Araştır"</strong> butonuna basarak ilk mağazaya özel taramayı başlatabilirsiniz.
-        </div>
+        </aside>
       }
-    </section>
-  </div>
+    </div>
+  } @else {
+    <div class="panel empty-state">
+      Henüz araştırma oturumu yok. Yukarıdan <strong>"🚀 Mağazam İçin Araştır"</strong> butonuna basarak ilk V3 mağazaya özel taramayı başlatabilirsiniz.
+    </div>
+  }
 </div>
