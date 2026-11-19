@@ -69,6 +69,7 @@ jobs:
     needs: build-and-test
     runs-on: [self-hosted, Windows, vds]
     environment: production
+    timeout-minutes: 15
     steps:
       - name: Checkout deployment scripts
         uses: actions/checkout@v4
