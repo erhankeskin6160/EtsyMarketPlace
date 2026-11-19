@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { EtsyApiService } from './etsy-api.service';
+import { AiSettingsService } from './ai-settings.service';
 
 export type ResearchScheduleCadence = 0 | 1 | 2 | 3; // 0=Off, 1=Daily, 2=Weekly, 3=Monthly
 export type CandidateDecisionStatus = 0 | 1 | 2 | 3; // 0=Pending, 1=Accepted, 2=Rejected, 3=SentToDraft
@@ -94,7 +95,8 @@ export interface UpdateShopDnaPayload {
 export class ShopResearchAgentService {
   private readonly http = inject(HttpClient);
   private readonly etsyApi = inject(EtsyApiService);
-  private readonly baseUrl = `${environment.apiBaseUrl}/etsy/research-agent`;
+  private readonly aiSettings = inject(AiSettingsService);
+  private readonly baseUrl = `${environment.apiBaseUrl}/api/etsy/research-agent`;
 
   private shopQuery(refresh = false): string {
     const shopId = encodeURIComponent(this.etsyApi.activeShopId());
@@ -110,9 +112,26 @@ export class ShopResearchAgentService {
   }
 
   runResearch(focusHint?: string, maxCandidates = 10): Observable<ResearchRunDto> {
+    const s = this.aiSettings.settings();
+    let model: string | null = null;
+    let apiKey: string | null = null;
+
+    if (s.provider === 'DeepSeek' && s.deepSeekApiKey?.trim()) {
+      model = s.deepSeekModel || 'deepseek-chat';
+      apiKey = s.deepSeekApiKey.trim();
+    } else if (s.provider === 'OpenAI' && s.openAiApiKey?.trim()) {
+      model = s.openAiModel || 'gpt-4o-mini';
+      apiKey = s.openAiApiKey.trim();
+    } else if (s.geminiApiKey?.trim()) {
+      model = s.geminiModel || 'gemini-2.5-flash';
+      apiKey = s.geminiApiKey.trim();
+    }
+
     return this.http.post<ResearchRunDto>(`${this.baseUrl}/run${this.shopQuery()}`, {
       focusHint: focusHint?.trim() || null,
-      maxCandidates
+      maxCandidates,
+      model,
+      apiKey
     });
   }
 
