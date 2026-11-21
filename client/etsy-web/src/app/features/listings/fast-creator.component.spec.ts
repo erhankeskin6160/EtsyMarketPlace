@@ -1,8 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { provideTransloco, Translation, TranslocoLoader } from '@jsverse/transloco';
+import { Observable, of } from 'rxjs';
 import { FastCreatorComponent } from './fast-creator.component';
+
+@Injectable()
+class StubTranslocoLoader implements TranslocoLoader {
+  getTranslation(): Observable<Translation> {
+    return of({});
+  }
+}
 import {
   CreateListingPayload,
   EtsyApiService,
@@ -183,6 +191,15 @@ describe('FastCreatorComponent (Pricing Agent, AI Variations & Removal Regressio
     await TestBed.configureTestingModule({
       imports: [FastCreatorComponent],
       providers: [
+        provideTransloco({
+          config: {
+            availableLangs: ['en', 'tr'],
+            defaultLang: 'en',
+            reRenderOnLangChange: true,
+            missingHandler: { logMissingKey: false }
+          },
+          loader: StubTranslocoLoader
+        }),
         { provide: EtsyApiService, useValue: etsyApiStub },
         { provide: AiSettingsService, useValue: aiServiceStub },
         { provide: ExtensionBridgeService, useValue: extensionBridgeStub },

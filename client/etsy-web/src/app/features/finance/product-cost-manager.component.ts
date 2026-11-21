@@ -2,6 +2,7 @@ import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -21,29 +22,31 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
 @Component({
   selector: 'app-product-cost-manager',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('finance')],
   template: `
+    <ng-container *transloco="let t">
     <div class="cost-mgr-container">
       <!-- HEADER -->
       <div class="cost-header">
         <div class="header-left">
           <div class="icon-box">🏷️</div>
           <div>
-            <h1 class="page-title">Ürün Maliyetleri & Kârlılık Yöneticisi</h1>
-            <p class="page-subtitle">İlan bazında hammadde, ambalaj ve kargo maliyetlerini yöneterek gerçek net kârı ve bilançoyu hesaplayın</p>
+            <h1 class="page-title">{{ t('finance.costManager.title') }}</h1>
+            <p class="page-subtitle">{{ t('finance.costManager.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-actions">
           <button type="button" class="btn-back" (click)="returnToAccounting()">
-            ← Muhasebeye Dön
+            {{ t('finance.costManager.backToAccountingBtn') }}
           </button>
           <button type="button" class="btn-sync" [disabled]="isLoading" (click)="syncWithShopListings()">
-            <span *ngIf="isLoading">⏳ Çekiliyor...</span>
-            <span *ngIf="!isLoading">🔄 Mağazadan İlanları Çek</span>
+            <span *ngIf="isLoading">{{ t('finance.costManager.syncingBtn') }}</span>
+            <span *ngIf="!isLoading">{{ t('finance.costManager.syncBtn') }}</span>
           </button>
           <button type="button" class="btn-save-all" (click)="saveAll()">
-            💾 Tüm Maliyetleri Kaydet
+            {{ t('finance.costManager.saveAllBtn') }}
           </button>
         </div>
       </div>
@@ -51,26 +54,26 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
       <!-- KPI METRIC CARDS -->
       <div class="kpi-grid">
         <div class="glass-card kpi-card">
-          <span class="kpi-lbl">TOPLAM KAYITLI İLAN</span>
-          <span class="kpi-val">{{ items.length }} İlan</span>
-          <span class="kpi-sub">{{ completedCount }} ilanın maliyeti tam</span>
+          <span class="kpi-lbl">{{ t('finance.costManager.kpiTotalListings') }}</span>
+          <span class="kpi-val">{{ t('finance.costManager.listingsUnit', { count: items.length }) }}</span>
+          <span class="kpi-sub">{{ t('finance.costManager.completedListingsSub', { count: completedCount }) }}</span>
         </div>
         <div class="glass-card kpi-card">
-          <span class="kpi-lbl">ORTALAMA HAMMADDE MALİYETİ</span>
+          <span class="kpi-lbl">{{ t('finance.costManager.kpiAvgMaterial') }}</span>
           <span class="kpi-val text-amber">&#36;{{ avgMaterialCost.toFixed(2) }}</span>
           <span class="kpi-sub">≈ ₺{{ (avgMaterialCost * usdTryRate).toFixed(2) }}</span>
         </div>
         <div class="glass-card kpi-card">
-          <span class="kpi-lbl">ORTALAMA NET KÂR MARJI</span>
+          <span class="kpi-lbl">{{ t('finance.costManager.kpiAvgMargin') }}</span>
           <span class="kpi-val text-emerald">%{{ avgMargin.toFixed(1) }}</span>
-          <span class="kpi-sub">Komisyon ve kargo sonrası</span>
+          <span class="kpi-sub">{{ t('finance.costManager.kpiAvgMarginSub') }}</span>
         </div>
         <div class="glass-card kpi-card">
-          <span class="kpi-lbl">EKSİK MALİYET ALARMI</span>
+          <span class="kpi-lbl">{{ t('finance.costManager.kpiMissingAlert') }}</span>
           <span class="kpi-val" [class.text-rose]="missingCount > 0" [class.text-emerald]="missingCount === 0">
-            {{ missingCount }} İlan
+            {{ t('finance.costManager.listingsUnit', { count: missingCount }) }}
           </span>
-          <span class="kpi-sub">{{ missingCount > 0 ? 'Kırmızı alarm: kâr hesaplanamıyor' : 'Tüm maliyetler girilmiş' }}</span>
+          <span class="kpi-sub">{{ missingCount > 0 ? t('finance.costManager.missingAlertWarn') : t('finance.costManager.missingAlertOk') }}</span>
         </div>
       </div>
 
@@ -82,7 +85,7 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
             type="text" 
             class="std-input" 
             [(ngModel)]="searchQuery" 
-            placeholder="İlan başlığı veya SKU kodu ile ara..." />
+            [placeholder]="t('finance.costManager.searchPlaceholder')" />
         </div>
 
         <div class="filter-wrap">
@@ -91,21 +94,21 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
             class="filter-pill" 
             [class.active]="filterMode === 'all'" 
             (click)="filterMode = 'all'">
-            Tümü ({{ items.length }})
+            {{ t('finance.costManager.filterAll', { count: items.length }) }}
           </button>
           <button 
             type="button" 
             class="filter-pill" 
             [class.active]="filterMode === 'missing'" 
             (click)="filterMode = 'missing'">
-            ⚠️ Sadece Eksikler ({{ missingCount }})
+            {{ t('finance.costManager.filterMissing', { count: missingCount }) }}
           </button>
           <button 
             type="button" 
             class="filter-pill" 
             [class.active]="filterMode === 'completed'" 
             (click)="filterMode = 'completed'">
-            ✓ Tamamlananlar ({{ completedCount }})
+            {{ t('finance.costManager.filterCompleted', { count: completedCount }) }}
           </button>
         </div>
       </div>
@@ -116,13 +119,13 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
           <table class="cost-table">
             <thead>
               <tr>
-                <th style="width: 32%;">İlan Başlığı & SKU</th>
-                <th style="width: 10%;">Etsy Satış ($)</th>
-                <th style="width: 14%;">Hammadde ($)</th>
-                <th style="width: 12%;">Ambalaj ($)</th>
-                <th style="width: 14%;">Kargo Maliyeti ($)</th>
-                <th style="width: 10%;">Tahmini Kâr ($)</th>
-                <th style="width: 8%;">Durum</th>
+                <th style="width: 32%;">{{ t('finance.costManager.colTitleSku') }}</th>
+                <th style="width: 10%;">{{ t('finance.costManager.colSalePrice') }}</th>
+                <th style="width: 14%;">{{ t('finance.costManager.colMaterial') }}</th>
+                <th style="width: 12%;">{{ t('finance.costManager.colPackaging') }}</th>
+                <th style="width: 14%;">{{ t('finance.costManager.colShipping') }}</th>
+                <th style="width: 10%;">{{ t('finance.costManager.colEstProfit') }}</th>
+                <th style="width: 8%;">{{ t('finance.costManager.colStatus') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -130,7 +133,7 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
                 <td>
                   <div class="title-cell">
                     <span class="prod-title" title="{{ item.title }}">{{ item.title }}</span>
-                    <span class="sku-tag">SKU: {{ item.sku || 'SKU-YOK' }} | #{{ item.listingId }}</span>
+                    <span class="sku-tag">SKU: {{ item.sku || t('finance.costManager.noSku') }} | #{{ item.listingId }}</span>
                   </div>
                 </td>
                 <td>
@@ -184,7 +187,7 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
                 </td>
                 <td>
                   <span class="status-badge" [class.badge-ok]="!isItemCostMissing(item)" [class.badge-warn]="isItemCostMissing(item)">
-                    {{ isItemCostMissing(item) ? 'Eksik' : 'Kayıtlı' }}
+                    {{ isItemCostMissing(item) ? t('finance.costManager.statusMissing') : t('finance.costManager.statusSaved') }}
                   </span>
                 </td>
               </tr>
@@ -198,6 +201,7 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
         {{ toastMessage }}
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .cost-mgr-container {
@@ -564,6 +568,7 @@ export class ProductCostManagerComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private apiService = inject(EtsyApiService);
   private router = inject(Router);
+  private transloco = inject(TranslocoService);
 
   searchQuery = '';
   filterMode: 'all' | 'missing' | 'completed' = 'all';
@@ -589,7 +594,7 @@ export class ProductCostManagerComponent implements OnInit {
         parsed.forEach(p => {
           const normalized: ListingProductCost = {
             listingId: String(p.listingId),
-            title: p.title || p.productName || `İlan #${p.listingId}`,
+            title: p.title || p.productName || this.transloco.translate('finance.costManager.fallbackListingTitle', { id: p.listingId }),
             sku: p.sku || `SKU-${String(p.listingId).slice(-4)}`,
             salePriceUsd: Number(p.salePriceUsd ?? 0),
             materialCostUsd: Number(p.materialCostUsd ?? p.productCostUsd ?? p.costUsd ?? 0),
@@ -624,7 +629,7 @@ export class ProductCostManagerComponent implements OnInit {
             };
           });
           if (showSyncToast) {
-            this.toastMessage = `✓ Mağazadan ${this.items.length} adet aktif ilan çekildi ve maliyetlerle senkronize edildi!`;
+            this.toastMessage = this.transloco.translate('finance.costManager.syncSuccessToast', { count: this.items.length });
             setTimeout(() => this.toastMessage = '', 4000);
           }
           return;
@@ -635,7 +640,7 @@ export class ProductCostManagerComponent implements OnInit {
         this.isLoading = false;
         this.loadSavedOnly(savedMap);
         if (showSyncToast) {
-          this.toastMessage = `⚠️ Canlı mağaza ilanlarına erişilemedi, yalnızca kayıtlı veriler gösteriliyor.`;
+          this.toastMessage = this.transloco.translate('finance.costManager.syncErrorToast');
           setTimeout(() => this.toastMessage = '', 4000);
         }
       }
@@ -702,10 +707,10 @@ export class ProductCostManagerComponent implements OnInit {
         productCostUsd: i.materialCostUsd
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      this.toastMessage = '✅ Tüm ürün maliyetleri başarıyla kaydedildi!';
+      this.toastMessage = this.transloco.translate('finance.costManager.saveSuccessToast');
       setTimeout(() => this.toastMessage = '', 3500);
     } catch (e) {
-      alert('Maliyetler kaydedilirken hata oluştu.');
+      alert(this.transloco.translate('finance.costManager.saveErrorAlert'));
     }
   }
 

@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
 <div class="creator-container">
 
   <!-- ========================================== -->
@@ -6,20 +7,20 @@
   <div class="top-command-bar">
     <!-- Left: Title & AI Studio Button -->
     <div class="bar-left">
-      <button type="button" class="btn-ai-studio" (click)="router.navigate(['/ai-studio'])" title="AI Görsel Stüdyosu'na Geç">
+      <button type="button" class="btn-ai-studio" (click)="router.navigate(['/ai-studio'])" [title]="t('listings.fastCreator.topBar.aiStudioTooltip')">
         <span class="studio-sparkle">🎨</span>
         <span>AI STUDIO</span>
       </button>
       <div class="title-wrap">
-        <h1 class="main-title">Hızlı Ürün Ekle</h1>
-        <span class="sub-title">Etsy Listeleme & AI Görsel Stüdyosu</span>
+        <h1 class="main-title">{{ t('listings.fastCreator.topBar.mainTitle') }}</h1>
+        <span class="sub-title">{{ t('listings.fastCreator.topBar.subTitle') }}</span>
       </div>
     </div>
 
     <!-- Center: Model Selector Chip & Templates Cluster -->
     <div class="bar-center">
       <!-- Active AI Model Hub Badge -->
-      <button type="button" class="btn-model-badge" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
+      <button type="button" class="btn-model-badge" (click)="aiService.openAiSettingsModal()" [title]="t('listings.fastCreator.topBar.modelBadgeTooltip')">
         <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
         <span class="model-name">{{ aiService.activeBadgeTextClean() }}</span>
         <span class="gear-icon">⚙️</span>
@@ -27,17 +28,17 @@
 
       <!-- Template Selector -->
       <div class="template-cluster" *ngIf="templates.length > 0">
-        <span class="cluster-label">Şablon:</span>
+        <span class="cluster-label">{{ t('listings.fastCreator.topBar.templateLabel') }}</span>
         <select class="template-select" [(ngModel)]="selectedTemplateId" (change)="applyTemplateById(selectedTemplateId)">
-          <option *ngFor="let t of templates" [value]="t.id">{{ t.name }}</option>
+          <option *ngFor="let tmpl of templates" [value]="tmpl.id">{{ tmpl.name }}</option>
         </select>
-        <button type="button" class="btn-template-action apply" (click)="applyTemplateById(selectedTemplateId)" title="Seçili Şablonu Uygula">
-          ⚡ Uygula
+        <button type="button" class="btn-template-action apply" (click)="applyTemplateById(selectedTemplateId)" [title]="t('listings.fastCreator.topBar.applyTemplateTooltip')">
+          {{ t('listings.fastCreator.topBar.applyTemplateBtn') }}
         </button>
-        <button type="button" class="btn-template-action save" (click)="saveCurrentAsTemplate()" title="Mevcut Bilgileri Yeni Şablon Olarak Kaydet">
-          💾 Kaydet
+        <button type="button" class="btn-template-action save" (click)="saveCurrentAsTemplate()" [title]="t('listings.fastCreator.topBar.saveTemplateTooltip')">
+          {{ t('listings.fastCreator.topBar.saveTemplateBtn') }}
         </button>
-        <button type="button" class="btn-template-action delete" (click)="deleteCurrentTemplate()" title="Şablonu Sil">
+        <button type="button" class="btn-template-action delete" (click)="deleteCurrentTemplate()" [title]="t('listings.fastCreator.topBar.deleteTemplateTooltip')">
           🗑️
         </button>
       </div>
@@ -45,35 +46,35 @@
 
     <!-- Right: Primary Actions Cluster -->
     <div class="bar-right">
-      <button type="button" class="btn-action-tool clean" (click)="resetForm()" title="Formu Sıfırla">
-        🔄 Temizle
+      <button type="button" class="btn-action-tool clean" (click)="resetForm()" [title]="t('listings.fastCreator.topBar.resetTooltip')">
+        {{ t('listings.fastCreator.topBar.resetBtn') }}
       </button>
-      <button type="button" class="btn-action-tool preview" (click)="openPreviewModal()" title="Etsy Önizleme Aç">
-        👁️ Önizleme
+      <button type="button" class="btn-action-tool preview" (click)="openPreviewModal()" [title]="t('listings.fastCreator.topBar.previewTooltip')">
+        {{ t('listings.fastCreator.topBar.previewBtn') }}
       </button>
       <button 
         type="button" 
         class="btn-action-primary publish" 
         [disabled]="isSavingDraft || !isTitleReady" 
         (click)="publishListingToEtsy()"
-        [title]="isLivePublish ? 'Etsy\'de Hemen Canlı Satışa Aç' : 'Etsy Mağazanıza Güvenli Taslak Olarak Gönder'">
-        <span>{{ isSavingDraft ? '⏳ Aktarılıyor...' : (isLivePublish ? '🚀 Etsy’ye Gönder (Canlı)' : '💾 Etsy’ye Gönder (Taslak)') }}</span>
+        [title]="isLivePublish ? t('listings.fastCreator.topBar.publishLiveTooltip') : t('listings.fastCreator.topBar.publishDraftTooltip')">
+        <span>{{ isSavingDraft ? t('listings.fastCreator.topBar.publishingBtn') : (isLivePublish ? t('listings.fastCreator.topBar.publishLiveBtn') : t('listings.fastCreator.topBar.publishDraftBtn')) }}</span>
       </button>
     </div>
   </div>
 
   <!-- CLONED NOTICE BANNER -->
   <div *ngIf="clonedNotice" class="cloned-banner">
-    <div class="cloned-badge">🚀 PAZAR ARAŞTIRMASINDAN KLONLANDI</div>
+    <div class="cloned-badge">{{ t('listings.fastCreator.banners.clonedBadge') }}</div>
     <div class="cloned-info">{{ clonedNotice }}</div>
-    <button type="button" class="btn-dismiss-cloned" (click)="clearCloned()">Temizle</button>
+    <button type="button" class="btn-dismiss-cloned" (click)="clearCloned()">{{ t('listings.fastCreator.banners.clearBtn') }}</button>
   </div>
 
   <!-- DRAFT RESTORED BANNER -->
   <div *ngIf="hasRestoredDraft && !clonedNotice" class="draft-restored-banner">
-    <div class="draft-badge">💾 KAYDEDİLMİŞ TASLAK YÜKLENDİ</div>
-    <div class="draft-info">Önceki oturumunuzdaki ürün bilgileri kurtarıldı. (Son Kayıt: {{ draftSavedAt || 'Şimdi' }})</div>
-    <button type="button" class="btn-dismiss-draft" (click)="resetForm()" title="Taslağı Sil ve Formu Sıfırla">Temizle</button>
+    <div class="draft-badge">{{ t('listings.fastCreator.banners.draftRestoredBadge') }}</div>
+    <div class="draft-info">{{ t('listings.fastCreator.banners.draftRestoredInfo', { savedAt: draftSavedAt || t('listings.fastCreator.banners.now') }) }}</div>
+    <button type="button" class="btn-dismiss-draft" (click)="resetForm()" [title]="t('listings.fastCreator.banners.dismissDraftTooltip')">{{ t('listings.fastCreator.banners.clearBtn') }}</button>
   </div>
 
   <!-- SUCCESS TOAST BANNER -->
@@ -86,9 +87,9 @@
     <div class="validation-error-header">
       <div class="validation-error-title">
         <span>⚠️</span>
-        <span>{{ validationErrorSummary || 'Lütfen formdaki doğrulama uyarılarını düzeltin.' }}</span>
+        <span>{{ validationErrorSummary || t('listings.fastCreator.banners.validationDefault') }}</span>
       </div>
-      <button type="button" class="btn-dismiss-validation" (click)="clearValidationErrors()" aria-label="Uyarıyı kapat">✕</button>
+      <button type="button" class="btn-dismiss-validation" (click)="clearValidationErrors()" [attr.aria-label]="t('listings.fastCreator.banners.dismissValidationAria')">✕</button>
     </div>
     <ul *ngIf="validationFieldErrors.length > 0" class="validation-error-list">
       <li *ngFor="let item of validationFieldErrors">
@@ -111,43 +112,43 @@
         <!-- Col Header -->
         <div class="col-header-row">
           <div class="col-title">
-            <span class="sec-num">1.</span> Ürün & SEO Bilgileri
+            <span class="sec-num">1.</span> {{ t('listings.fastCreator.colSeo.title') }}
           </div>
-          <button type="button" class="btn-ai-mini-boost" [class.btn-loading]="isGeneratingAll" [disabled]="isGeneratingAll" (click)="generateWithAi()" title="Tüm SEO Verilerini AI ile Üret">
+          <button type="button" class="btn-ai-mini-boost" [class.btn-loading]="isGeneratingAll" [disabled]="isGeneratingAll" (click)="generateWithAi()" [title]="t('listings.fastCreator.colSeo.aiBoostTooltip')">
             <span *ngIf="isGeneratingAll" class="spin-disc-inline">⏳</span>
             <app-ai-logo *ngIf="!isGeneratingAll" [provider]="aiService.activeProvider()" [size]="14"></app-ai-logo>
-            <span>{{ isGeneratingAll ? 'AI Hazırlıyor...' : 'AI Destekli' }}</span>
+            <span>{{ isGeneratingAll ? t('listings.fastCreator.colSeo.aiBoostLoading') : t('listings.fastCreator.colSeo.aiBoostBtn') }}</span>
           </button>
         </div>
 
         <div class="col-scrollable-body">
           <!-- 1. Temel Satış Bilgileri -->
           <div class="form-block">
-            <span class="block-label">📦 Temel Satış Bilgileri</span>
+            <span class="block-label">{{ t('listings.fastCreator.colSeo.basicSalesLabel') }}</span>
             <div class="sales-input-grid">
               <div class="field-wrap">
-                <label>Ürün Tipi:</label>
+                <label>{{ t('listings.fastCreator.colSeo.listingTypeLabel') }}</label>
                 <select class="std-select" [(ngModel)]="listingType">
-                  <option value="physical">Fiziksel Ürün</option>
-                  <option value="digital">Dijital İndirme (STL/PDF)</option>
+                  <option value="physical">{{ t('listings.fastCreator.colSeo.typePhysical') }}</option>
+                  <option value="digital">{{ t('listings.fastCreator.colSeo.typeDigital') }}</option>
                 </select>
               </div>
               <div class="field-wrap">
                 <div class="field-label-row">
-                  <label>Fiyat ($ USD):</label>
-                  <span *ngIf="isVariationPricingActive" class="lock-badge" title="Fiyat varyasyon tablosundaki taban fiyata kilitlendi">🔒 Varyasyona Göre</span>
+                  <label>{{ t('listings.fastCreator.colSeo.priceLabel') }}</label>
+                  <span *ngIf="isVariationPricingActive" class="lock-badge" [title]="t('listings.fastCreator.colSeo.priceLockedTooltip')">{{ t('listings.fastCreator.colSeo.priceLockedBadge') }}</span>
                 </div>
                 <input type="number" step="0.5" class="std-input" [class.input-locked]="isVariationPricingActive" [disabled]="isVariationPricingActive" [ngModel]="isVariationPricingActive ? minVariationPrice : priceUsd" (ngModelChange)="priceUsd = $event; onPriceChange()" placeholder="0.00" />
                 <span class="currency-hint notranslate" translate="no" *ngIf="!isVariationPricingActive">≈ ₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }}</span>
-                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">Taban varyasyon fiyatı: ${{ minVariationPrice.toFixed(2) }} <span class="currency-hint-green">(≈ ₺{{ (minVariationPrice * usdTryRate).toFixed(2) }})</span></span>
+                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">{{ t('listings.fastCreator.colSeo.baseVariationPriceHint', { price: minVariationPrice.toFixed(2) }) }} <span class="currency-hint-green">(≈ ₺{{ (minVariationPrice * usdTryRate).toFixed(2) }})</span></span>
               </div>
               <div class="field-wrap">
                 <div class="field-label-row">
-                  <label>Stok Adedi:</label>
-                  <span *ngIf="isVariationPricingActive" class="lock-badge" title="Stok adedi varyasyonların toplam stoğuna kilitlendi">🔒 Otomatik Toplam</span>
+                  <label>{{ t('listings.fastCreator.colSeo.stockLabel') }}</label>
+                  <span *ngIf="isVariationPricingActive" class="lock-badge" [title]="t('listings.fastCreator.colSeo.stockLockedTooltip')">{{ t('listings.fastCreator.colSeo.stockLockedBadge') }}</span>
                 </div>
                 <input type="number" min="1" class="std-input" [class.input-locked]="isVariationPricingActive" [disabled]="isVariationPricingActive" [ngModel]="isVariationPricingActive ? totalVariationStock : quantity" (ngModelChange)="quantity = $event" placeholder="0" />
-                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">Varyasyon toplam stoğu: {{ totalVariationStock }} adet</span>
+                <span class="currency-hint locked-hint notranslate" translate="no" *ngIf="isVariationPricingActive">{{ t('listings.fastCreator.colSeo.totalVariationStockHint', { qty: totalVariationStock }) }}</span>
               </div>
             </div>
           </div>
@@ -155,17 +156,17 @@
           <!-- 2. Ürün Başlığı (SEO 140 Karakter) -->
           <div class="form-block" [class.ai-field-pulse]="isGeneratingTitle || isGeneratingAll">
             <div class="block-header-flex">
-              <label class="block-label">✍️ Ürün Başlığı (SEO) ({{ title.length }}/140)</label>
+              <label class="block-label">{{ t('listings.fastCreator.colSeo.seoTitleLabel', { count: title.length }) }}</label>
               <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingTitle || isGeneratingAll" [disabled]="isGeneratingTitle || isGeneratingAll" (click)="suggestAiTitle()">
                 <span *ngIf="isGeneratingTitle" class="spin-disc-inline">⏳</span>
                 <app-ai-logo *ngIf="!isGeneratingTitle" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                <span>{{ (isGeneratingTitle || isGeneratingAll) ? 'Optimize Ediliyor...' : 'AI Başlık Öner' }}</span>
+                <span>{{ (isGeneratingTitle || isGeneratingAll) ? t('listings.fastCreator.colSeo.aiTitleLoading') : t('listings.fastCreator.colSeo.aiTitleBtn') }}</span>
               </button>
             </div>
             <div class="ai-input-wrap">
               <div *ngIf="isGeneratingTitle || isGeneratingAll" class="ai-field-loading-overlay">
                 <span class="spin-disc">✨</span>
-                <span class="ai-overlay-text">{{ aiService.activeProvider() }} İngilizce SEO Başlığı Optimize Ediyor...</span>
+                <span class="ai-overlay-text">{{ t('listings.fastCreator.colSeo.aiTitleOverlay', { provider: aiService.activeProvider() }) }}</span>
                 <div class="ai-shimmer-bar"></div>
               </div>
               <textarea 
@@ -173,23 +174,23 @@
                 rows="3" 
                 maxlength="140" 
                 [(ngModel)]="title" 
-                placeholder="Etsy algoritmasına uyumlu 140 karakter anahtar kelimeli başlık (Türkçe yazabilirsiniz, AI doğrudan İngilizceye çevirir)...">
+                [placeholder]="t('listings.fastCreator.colSeo.seoTitlePlaceholder')">
               </textarea>
             </div>
             <div class="mobile-snippet-strip" [class.ready]="title.length > 0">
-              <span class="snippet-tag">📱 Mobilde İlk 55 Karakter:</span>
-              <p class="snippet-val">"{{ title.slice(0, 55) || 'Başlık bekleniyor...' }}{{ title.length > 55 ? '...' : '' }}"</p>
+              <span class="snippet-tag">{{ t('listings.fastCreator.colSeo.mobileSnippetLabel') }}</span>
+              <p class="snippet-val">"{{ title.slice(0, 55) || t('listings.fastCreator.colSeo.mobileSnippetEmpty') }}{{ title.length > 55 ? '...' : '' }}"</p>
             </div>
           </div>
 
           <!-- 3. Kategori & Lojistik -->
           <div class="form-block" [class.ai-field-pulse]="isGeneratingCategory || isGeneratingAll">
             <div class="block-header-flex">
-              <span class="block-label">📁 Kategori & Lojistik</span>
+              <span class="block-label">{{ t('listings.fastCreator.colSeo.categoryLogisticsLabel') }}</span>
               <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingCategory || isGeneratingAll" [disabled]="isGeneratingCategory || isGeneratingAll" (click)="suggestAiCategory()">
                 <span *ngIf="isGeneratingCategory" class="spin-disc-inline">⏳</span>
                 <app-ai-logo *ngIf="!isGeneratingCategory" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                <span>{{ (isGeneratingCategory || isGeneratingAll) ? 'Belirleniyor...' : 'AI Kategori Belirle' }}</span>
+                <span>{{ (isGeneratingCategory || isGeneratingAll) ? t('listings.fastCreator.colSeo.aiCategoryLoading') : t('listings.fastCreator.colSeo.aiCategoryBtn') }}</span>
               </button>
             </div>
 
@@ -197,17 +198,17 @@
             <div class="tax-command-card ai-input-wrap">
               <div *ngIf="isGeneratingCategory || isGeneratingAll" class="ai-field-loading-overlay">
                 <span class="spin-disc">✨</span>
-                <span class="ai-overlay-text">{{ aiService.activeProvider() }} Etsy Resmi Taxonomy Dökümanını İnceliyor...</span>
+                <span class="ai-overlay-text">{{ t('listings.fastCreator.colSeo.aiCategoryOverlay', { provider: aiService.activeProvider() }) }}</span>
                 <div class="ai-shimmer-bar"></div>
               </div>
               <!-- Active Selection Ribbon -->
               <div class="tax-ribbon-row">
                 <div class="tax-tag-pill" [class.has-selection]="selectedTaxonomyId > 0">
                   <span class="tax-num" *ngIf="selectedTaxonomyId > 0">#{{ selectedTaxonomyId }}</span>
-                  <span class="tax-path">{{ selectedCategory || 'Henüz kategori seçilmedi (AI ile belirleyebilir veya aşağıdan arayabilirsiniz)' }}</span>
+                  <span class="tax-path">{{ selectedCategory || t('listings.fastCreator.colSeo.noCategorySelected') }}</span>
                 </div>
                 <div *ngIf="categoryAiResult" class="tax-conf-badge" [class.badge-live]="categoryAiResult.isLive">
-                  <span class="dot">●</span> %{{ categoryAiResult.confidenceScore }} Doğruluk
+                  <span class="dot">●</span> {{ t('listings.fastCreator.colSeo.confidenceScore', { score: categoryAiResult.confidenceScore }) }}
                 </div>
               </div>
 
@@ -217,9 +218,9 @@
                   <span class="sparkle">✨</span>
                   <span class="engine-tag">{{ categoryAiResult?.providerUsed }}</span>
                   <span class="input-indicators">
-                    <span *ngIf="categoryAiResult?.inputSources?.hasTitle" class="src-pill">✍️ Başlık</span>
-                    <span *ngIf="categoryAiResult?.inputSources?.hasImage" class="src-pill">📷 Görsel</span>
-                    <span *ngIf="categoryAiResult?.inputSources?.hasDescription" class="src-pill">📝 Açıklama</span>
+                    <span *ngIf="categoryAiResult?.inputSources?.hasTitle" class="src-pill">{{ t('listings.fastCreator.colSeo.srcTitle') }}</span>
+                    <span *ngIf="categoryAiResult?.inputSources?.hasImage" class="src-pill">{{ t('listings.fastCreator.colSeo.srcImage') }}</span>
+                    <span *ngIf="categoryAiResult?.inputSources?.hasDescription" class="src-pill">{{ t('listings.fastCreator.colSeo.srcDesc') }}</span>
                   </span>
                 </div>
                 <p class="reasoning-body">{{ categoryAiResult?.reasoning }}</p>
@@ -229,9 +230,9 @@
               <div class="tax-filter-grid">
                 <!-- 1. Ana Bölüm Seçici -->
                 <div class="field-wrap">
-                  <label class="sub-label">📂 Ana Bölüm (15 Kategori):</label>
+                  <label class="sub-label">{{ t('listings.fastCreator.colSeo.departmentLabel') }}</label>
                   <select class="std-select dept-select" [(ngModel)]="selectedDepartment" (ngModelChange)="filterCategories()">
-                    <option value="">📁 Tüm Bölümler ({{ categoriesList.length }} Kategori)</option>
+                    <option value="">{{ t('listings.fastCreator.colSeo.allDepartments', { count: categoriesList.length }) }}</option>
                     <option *ngFor="let dept of departmentsList" [value]="dept.name">
                       {{ dept.icon }} {{ dept.name }} ({{ dept.count }})
                     </option>
@@ -240,16 +241,16 @@
 
                 <!-- 2. Akıllı Canlı Arama (TR / EN) -->
                 <div class="field-wrap">
-                  <label class="sub-label">🔍 Canlı Arama (TR / EN):</label>
+                  <label class="sub-label">{{ t('listings.fastCreator.colSeo.liveSearchLabel') }}</label>
                   <div class="search-input-inner">
                     <input
                       type="text"
                       [(ngModel)]="categorySearchTerm"
                       (ngModelChange)="filterCategories()"
-                      placeholder="Örn: lamba, ejderha, yüzük, çanta, lamp, figurine, mug..."
+                      [placeholder]="t('listings.fastCreator.colSeo.liveSearchPlaceholder')"
                       class="std-input search-input"
                     />
-                    <button *ngIf="categorySearchTerm" type="button" class="btn-clear-search" (click)="clearCategorySearch()" title="Aramayı Temizle">✕</button>
+                    <button *ngIf="categorySearchTerm" type="button" class="btn-clear-search" (click)="clearCategorySearch()" [title]="t('listings.fastCreator.colSeo.clearSearchTooltip')">✕</button>
                   </div>
                 </div>
               </div>
@@ -257,12 +258,12 @@
               <!-- Kategori Sayacı & Durum Çubuğu -->
               <div class="tax-status-strip">
                 <span class="status-count">
-                  🌿 <strong>{{ filteredCategories.length }}</strong> kategori listeleniyor
-                  <span *ngIf="selectedDepartment">({{ selectedDepartment }} bölümünde)</span>
-                  <span *ngIf="categorySearchTerm">("{{ categorySearchTerm }}" araması için)</span>
+                  🌿 <strong>{{ filteredCategories.length }}</strong> {{ t('listings.fastCreator.colSeo.categoriesListed') }}
+                  <span *ngIf="selectedDepartment">{{ t('listings.fastCreator.colSeo.inDepartment', { dept: selectedDepartment }) }}</span>
+                  <span *ngIf="categorySearchTerm">{{ t('listings.fastCreator.colSeo.forSearch', { term: categorySearchTerm }) }}</span>
                 </span>
                 <span *ngIf="selectedTaxonomyId > 0" class="status-selected">
-                  ⭐ Seçili: <strong>#{{ selectedTaxonomyId }}</strong> {{ selectedCategory.split('>').pop()?.trim() }}
+                  {{ t('listings.fastCreator.colSeo.selectedCategoryPrefix') }} <strong>#{{ selectedTaxonomyId }}</strong> {{ selectedCategory.split('>').pop()?.trim() }}
                 </span>
               </div>
 
@@ -270,7 +271,7 @@
               <div class="field-wrap full tax-select-wrap">
                 <select class="std-select main-category-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
                   <option *ngIf="!selectedTaxonomyId" value="" disabled selected>
-                    -- Lütfen bir kategori seçin (veya AI Kategori Belirle butonunu kullanın) --
+                    {{ t('listings.fastCreator.colSeo.selectCategoryPlaceholder') }}
                   </option>
                   <!-- Seçili (AI veya kullanıcı) kategori listede kendi konumunda vurgulanır; ayrı yapışkan satır yok -->
                   <option
@@ -281,23 +282,23 @@
                   </option>
                 </select>
                 <div *ngIf="filteredCategories.length === 0 && !isLoadingCategories" class="tax-no-results">
-                  ⚠️ "{{ categorySearchTerm }}" aramasına veya seçili bölüme uygun kategori bulunamadı. Lütfen aramayı temizleyin veya başka bir kelime deneyin.
+                  {{ t('listings.fastCreator.colSeo.noCategoriesFound', { term: categorySearchTerm }) }}
                 </div>
               </div>
 
               <!-- Alternatives Pill Strip -->
               <div *ngIf="categoryAlternatives && categoryAlternatives.length > 0" class="tax-alt-strip">
-                <span class="alt-title">⚡ 1-Tık Alternatif Öneriler:</span>
+                <span class="alt-title">{{ t('listings.fastCreator.colSeo.alternativesLabel') }}</span>
                 <div class="alt-btn-group">
                   <button
                     type="button"
                     *ngFor="let alt of categoryAlternatives"
                     class="btn-tax-alt"
                     (click)="selectAlternativeCategory(alt)"
-                    title="Bu kategoriyi seçmek için tıklayın">
+                    [title]="t('listings.fastCreator.colSeo.selectAltTooltip')">
                     <span class="tax-alt-id">#{{ alt.taxonomyId }}</span>
                     <span class="tax-alt-name">{{ alt.categoryPath.split('>').pop()?.trim() || alt.categoryPath }}</span>
-                    <span class="tax-alt-score">%{{ alt.confidenceScore }}</span>
+                    <span class="tax-alt-score">{{ alt.confidenceScore }}%</span>
                   </button>
                 </div>
               </div>
@@ -306,14 +307,14 @@
             <div class="logistics-row" *ngIf="listingType === 'physical'">
               <div class="field-wrap half">
                 <div class="field-label-row">
-                  <label>🚚 Kargo Profili:</label>
-                  <button type="button" class="btn-refresh-logistics" (click)="refreshLogistics()" [disabled]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies" title="Kargo, Hazırlık Durumu ve İade Politikalarını Yenile">
-                    <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies">🔄</span> Yenile
+                  <label>{{ t('listings.fastCreator.colSeo.shippingProfileLabel') }}</label>
+                  <button type="button" class="btn-refresh-logistics" (click)="refreshLogistics()" [disabled]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies" [title]="t('listings.fastCreator.colSeo.refreshLogisticsTooltip')">
+                    <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies">🔄</span> {{ t('listings.fastCreator.colSeo.refreshBtn') }}
                   </button>
                 </div>
                 <select class="std-select" [(ngModel)]="selectedShippingProfileId" (ngModelChange)="saveDraftToStorage()">
-                  <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">⏳ Etsy kargo profilleri yükleniyor...</option>
-                  <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">⚠️ Mağazada kargo profili bulunamadı</option>
+                  <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">{{ t('listings.fastCreator.colSeo.loadingShippingProfiles') }}</option>
+                  <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">{{ t('listings.fastCreator.colSeo.emptyShippingProfiles') }}</option>
                   <option *ngFor="let prof of shippingProfilesList" [ngValue]="prof.id">
                     📦 {{ prof.title }} (ID: {{ prof.id }}){{ prof.deliveryDaysDisplay ? ' — ' + prof.deliveryDaysDisplay : (prof.processingDaysDisplay ? ' — ' + prof.processingDaysDisplay : '') }}
                   </option>
@@ -321,10 +322,10 @@
               </div>
 
               <div class="field-wrap half">
-                <label>⏱️ Hazırlık Durumu:</label>
+                <label>{{ t('listings.fastCreator.colSeo.readinessStateLabel') }}</label>
                 <select class="std-select" [(ngModel)]="selectedReadinessStateId" (ngModelChange)="saveDraftToStorage()">
-                  <option *ngIf="isLoadingReadinessStates" [ngValue]="null">⏳ Etsy hazırlık durumları yükleniyor...</option>
-                  <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">⚠️ Hazırlık durumu bulunamadı</option>
+                  <option *ngIf="isLoadingReadinessStates" [ngValue]="null">{{ t('listings.fastCreator.colSeo.loadingReadinessStates') }}</option>
+                  <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">{{ t('listings.fastCreator.colSeo.emptyReadinessStates') }}</option>
                   <option *ngFor="let rState of readinessStatesList" [ngValue]="rState.id">
                     ⏱️ {{ rState.title }}
                   </option>
@@ -336,19 +337,19 @@
             <div class="logistics-row return-policy-row" *ngIf="listingType === 'physical'">
               <div class="field-wrap full">
                 <div class="field-label-row">
-                  <label>↩️ İade Politikası (Return Policy):</label>
+                  <label>{{ t('listings.fastCreator.colSeo.returnPolicyLabel') }}</label>
                   <div class="logistics-btn-group">
-                    <button type="button" class="btn-refresh-logistics" (click)="loadReturnPolicies()" [disabled]="isLoadingReturnPolicies" title="İade Politikalarını Yenile">
+                    <button type="button" class="btn-refresh-logistics" (click)="loadReturnPolicies()" [disabled]="isLoadingReturnPolicies" [title]="t('listings.fastCreator.colSeo.refreshReturnPoliciesTooltip')">
                       <span [class.spin-disc-inline]="isLoadingReturnPolicies">🔄</span>
                     </button>
-                    <button type="button" class="btn-new-return-policy" (click)="openReturnPolicyModal()" title="Etsy Mağazasında Yeni İade Politikası Oluştur">
-                      + Yeni İade Politikası Oluştur
+                    <button type="button" class="btn-new-return-policy" (click)="openReturnPolicyModal()" [title]="t('listings.fastCreator.colSeo.newReturnPolicyTooltip')">
+                      {{ t('listings.fastCreator.colSeo.newReturnPolicyBtn') }}
                     </button>
                   </div>
                 </div>
                 <select class="std-select" [(ngModel)]="selectedReturnPolicyId" (ngModelChange)="saveDraftToStorage()">
-                  <option *ngIf="isLoadingReturnPolicies" [ngValue]="null">⏳ Etsy iade politikaları yükleniyor...</option>
-                  <option *ngIf="!isLoadingReturnPolicies && returnPoliciesList.length === 0" [ngValue]="null">⚠️ İade politikası bulunamadı (+ Yeni Oluştur ile ekleyebilirsiniz)</option>
+                  <option *ngIf="isLoadingReturnPolicies" [ngValue]="null">{{ t('listings.fastCreator.colSeo.loadingReturnPolicies') }}</option>
+                  <option *ngIf="!isLoadingReturnPolicies && returnPoliciesList.length === 0" [ngValue]="null">{{ t('listings.fastCreator.colSeo.emptyReturnPolicies') }}</option>
                   <option *ngFor="let rp of returnPoliciesList" [ngValue]="rp.returnPolicyId">
                     ↩️ {{ rp.title }} (ID: {{ rp.returnPolicyId }})
                   </option>
@@ -361,19 +362,19 @@
           <div class="form-block" [class.ai-field-pulse]="isGeneratingTags || isGeneratingAll">
             <div class="block-header-flex">
               <div class="tags-count-label">
-                <span class="block-label">🏷️ Etiketler (Tags)</span>
+                <span class="block-label">{{ t('listings.fastCreator.colSeo.tagsLabel') }}</span>
                 <span class="tag-counter-pill" [class.complete]="tags.length === 13">
-                  {{ tags.length }} / 13 Etiket
+                  {{ t('listings.fastCreator.colSeo.tagsCount', { count: tags.length }) }}
                 </span>
               </div>
               <div class="tag-actions-box">
-                <button type="button" class="btn-tool-mini" (click)="trimTags()" title="Tüm etiketleri 20 karaktere kırp">
-                  🧹 Kırp
+                <button type="button" class="btn-tool-mini" (click)="trimTags()" [title]="t('listings.fastCreator.colSeo.trimTagsTooltip')">
+                  {{ t('listings.fastCreator.colSeo.trimTagsBtn') }}
                 </button>
                 <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingTags || isGeneratingAll" [disabled]="isGeneratingTags || isGeneratingAll" (click)="suggestAiTags()">
                   <span *ngIf="isGeneratingTags" class="spin-disc-inline">⏳</span>
                   <app-ai-logo *ngIf="!isGeneratingTags" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                  <span>{{ (isGeneratingTags || isGeneratingAll) ? 'Üretiliyor...' : '13 AI Tag' }}</span>
+                  <span>{{ (isGeneratingTags || isGeneratingAll) ? t('listings.fastCreator.colSeo.aiTagsLoading') : t('listings.fastCreator.colSeo.aiTagsBtn') }}</span>
                 </button>
               </div>
             </div>
@@ -385,9 +386,9 @@
                 maxlength="20" 
                 [(ngModel)]="newTagInput" 
                 (keyup.enter)="addTag()" 
-                placeholder="Yeni etiket (maks 20 karakter)..." />
+                [placeholder]="t('listings.fastCreator.colSeo.newTagPlaceholder')" />
               <button type="button" class="btn-add-tag" [disabled]="tags.length >= 13 || !newTagInput.trim()" (click)="addTag()">
-                + Ekle
+                {{ t('listings.fastCreator.colSeo.addTagBtn') }}
               </button>
             </div>
 
@@ -395,16 +396,16 @@
             <div class="ai-input-wrap">
               <div *ngIf="isGeneratingTags || isGeneratingAll" class="ai-field-loading-overlay">
                 <span class="spin-disc">✨</span>
-                <span class="ai-overlay-text">{{ aiService.activeProvider() }} 13 Adet İngilizce Etsy SEO Etiketi Üretiyor...</span>
+                <span class="ai-overlay-text">{{ t('listings.fastCreator.colSeo.aiTagsOverlay', { provider: aiService.activeProvider() }) }}</span>
                 <div class="ai-shimmer-bar"></div>
               </div>
               <div class="tag-chips-wrap">
-                <span *ngFor="let t of tags; let i = index" class="tag-chip">
-                  {{ t }}
+                <span *ngFor="let tag of tags; let i = index" class="tag-chip">
+                  {{ tag }}
                   <button type="button" class="btn-remove-tag" (click)="removeTag(i)">×</button>
                 </span>
                 <span *ngIf="tags.length === 0" class="empty-tags-hint">
-                  Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.
+                  {{ t('listings.fastCreator.colSeo.emptyTagsHint') }}
                 </span>
               </div>
             </div>
@@ -413,32 +414,32 @@
           <!-- 5. Ürün Açıklaması -->
           <div class="form-block" [class.ai-field-pulse]="isGeneratingDesc || isGeneratingAll">
             <div class="block-header-flex">
-              <span class="block-label">📄 Ürün Açıklaması</span>
+              <span class="block-label">{{ t('listings.fastCreator.colSeo.descLabel') }}</span>
               <div class="desc-header-actions">
-                <button *ngIf="hasBackupNotes" type="button" class="btn-desc-restore" (click)="restoreOriginalNotes()" title="Yazdığınız orijinal ilk notları geri getirir">
-                  ↩️ Notlarıma Dön
+                <button *ngIf="hasBackupNotes" type="button" class="btn-desc-restore" (click)="restoreOriginalNotes()" [title]="t('listings.fastCreator.colSeo.restoreNotesTooltip')">
+                  {{ t('listings.fastCreator.colSeo.restoreNotesBtn') }}
                 </button>
-                <button type="button" class="btn-desc-template" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="applyDescriptionTemplate()" title="Başlık, etiket ve malzeme bilgileriyle ferah Etsy paragraf şablonu uygular">
-                  <span>📐 Şablonla Paragrafla</span>
+                <button type="button" class="btn-desc-template" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="applyDescriptionTemplate()" [title]="t('listings.fastCreator.colSeo.descTemplateTooltip')">
+                  <span>{{ t('listings.fastCreator.colSeo.descTemplateBtn') }}</span>
                 </button>
-                <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()" title="Ön bilgilerinizi, boyut ve renkleri koruyarak profesyonel Etsy açıklaması üretir">
+                <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()" [title]="t('listings.fastCreator.colSeo.aiDescTooltip')">
                   <span *ngIf="isGeneratingDesc" class="spin-disc-inline">⏳</span>
                   <app-ai-logo *ngIf="!isGeneratingDesc" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                  <span>{{ (isGeneratingDesc || isGeneratingAll) ? 'Yazılıyor...' : 'AI Açıklama Üret' }}</span>
+                  <span>{{ (isGeneratingDesc || isGeneratingAll) ? t('listings.fastCreator.colSeo.aiDescLoading') : t('listings.fastCreator.colSeo.aiDescBtn') }}</span>
                 </button>
               </div>
             </div>
             <div class="ai-input-wrap">
               <div *ngIf="isGeneratingDesc || isGeneratingAll" class="ai-field-loading-overlay">
                 <span class="spin-disc">✨</span>
-                <span class="ai-overlay-text">{{ aiService.activeProvider() }} Boyut, Renk ve Ön Bilgilerinizi Koruyarak Açıklama Yazıyor...</span>
+                <span class="ai-overlay-text">{{ t('listings.fastCreator.colSeo.aiDescOverlay', { provider: aiService.activeProvider() }) }}</span>
                 <div class="ai-shimmer-bar"></div>
               </div>
               <textarea 
                 class="std-textarea desc-area" 
                 rows="6" 
                 [(ngModel)]="description" 
-                placeholder="Ön bilgi veya taslak yazabilirsiniz (Örn: Boyut: 25cm x 15cm, Renk: Buz Mavisi LED ışıklı, Meşe taban... Yapay zeka bu ölçü ve renkleri harfiyen korur)">
+                [placeholder]="t('listings.fastCreator.colSeo.descPlaceholder')">
               </textarea>
             </div>
           </div>
@@ -446,14 +447,14 @@
           <!-- 6. Kullanılan Malzemeler -->
           <div class="form-block">
             <div class="block-header-flex">
-              <label class="block-label">🧵 Kullanılan Malzemeler (Materials)</label>
-              <span style="font-size: 0.72rem; color: #94a3b8;">(Max 13 adet, &amp; ve özel karakterler otomatik temizlenir)</span>
+              <label class="block-label">{{ t('listings.fastCreator.colSeo.materialsLabel') }}</label>
+              <span style="font-size: 0.72rem; color: #94a3b8;">{{ t('listings.fastCreator.colSeo.materialsHint') }}</span>
             </div>
             <input 
               type="text" 
               class="std-input" 
               [(ngModel)]="materials" 
-              placeholder="Virgülle ayırın: Resin, PLA, Ahşap, Seramik, Deri, Gümüş..." />
+              [placeholder]="t('listings.fastCreator.colSeo.materialsPlaceholder')" />
           </div>
 
         </div>
@@ -468,7 +469,7 @@
         <!-- Col Header -->
         <div class="col-header-row">
           <div class="col-title">
-            <span class="sec-num">2.</span> Görseller & AI Motoru
+            <span class="sec-num">2.</span> {{ t('listings.fastCreator.colGallery.title') }}
           </div>
           <div class="gallery-count-badge" [class.has-images]="galleryImages.length > 0">
             {{ galleryImages.length }}/10
@@ -480,10 +481,10 @@
           <div class="gallery-toolbar-grid">
             <input type="file" multiple accept="image/*" #fileInput style="display: none" (change)="onFilesSelected($event)" />
             <button type="button" class="btn-gallery-tool browse" (click)="fileInput.click()">
-              📁 Bilgisayardan Seç
+              {{ t('listings.fastCreator.colGallery.browseBtn') }}
             </button>
-            <button type="button" class="btn-gallery-tool studio" (click)="router.navigate(['/ai-studio'])" title="AI Görsel Stüdyosuna Git">
-              🎨 AI Görsel Stüdyosu
+            <button type="button" class="btn-gallery-tool studio" (click)="router.navigate(['/ai-studio'])" [title]="t('listings.fastCreator.colGallery.studioBtnTooltip')">
+              {{ t('listings.fastCreator.colGallery.studioBtn') }}
             </button>
           </div>
 
@@ -492,8 +493,8 @@
             <!-- Empty State -->
             <div *ngIf="galleryImages.length === 0" class="empty-gallery-state" (click)="fileInput.click()">
               <span class="empty-camera-icon">📷</span>
-              <p class="empty-title">Henüz görsel eklenmedi</p>
-              <p class="empty-sub">Yalnızca bu cihaza ait gerçek ürün görsellerini yükleyin. Stok örnek görseller eklenmez.</p>
+              <p class="empty-title">{{ t('listings.fastCreator.colGallery.emptyTitle') }}</p>
+              <p class="empty-sub">{{ t('listings.fastCreator.colGallery.emptySub') }}</p>
             </div>
 
             <!-- Image Cards -->
@@ -501,7 +502,7 @@
               <div *ngFor="let img of galleryImages; let i = index" class="img-card" [class.is-cover]="i === 0">
                 <!-- Cover Badge -->
                 <div class="img-badge" [class.cover-badge]="i === 0">
-                  {{ i === 0 ? '⭐ #1 Kapak' : ('#' + (i + 1)) }}
+                  {{ i === 0 ? t('listings.fastCreator.colGallery.coverBadge') : ('#' + (i + 1)) }}
                 </div>
 
                 <!-- Image Frame -->
@@ -516,7 +517,7 @@
                     class="btn-sort" 
                     [disabled]="i === 0" 
                     (click)="moveImageLeft(i)" 
-                    title="Görseli Öne / Sola Taşı (◀)">
+                    [title]="t('listings.fastCreator.colGallery.moveLeftTooltip')">
                     ◀
                   </button>
                   <button 
@@ -524,7 +525,7 @@
                     class="btn-sort star" 
                     [disabled]="i === 0" 
                     (click)="setAsCover(i)" 
-                    title="Kapak Görseli Yap (#1)">
+                    [title]="t('listings.fastCreator.colGallery.setCoverTooltip')">
                     ⭐
                   </button>
                   <button 
@@ -532,14 +533,14 @@
                     class="btn-sort" 
                     [disabled]="i === galleryImages.length - 1" 
                     (click)="moveImageRight(i)" 
-                    title="Görseli Arkaya / Sağa Taşı (▶)">
+                    [title]="t('listings.fastCreator.colGallery.moveRightTooltip')">
                     ▶
                   </button>
                   <button 
                     type="button" 
                     class="btn-sort delete" 
                     (click)="removeImage(i)" 
-                    title="Görseli Sil">
+                    [title]="t('listings.fastCreator.colGallery.deleteTooltip')">
                     🗑️
                   </button>
                 </div>
@@ -555,14 +556,14 @@
             <div class="ai-studio-header-flex">
               <div class="ai-studio-title">
                 <span class="sparkle">✨</span>
-                <span>AI Görsel Stüdyosu</span>
+                <span>{{ t('listings.fastCreator.colGallery.studioCardTitle') }}</span>
               </div>
-              <button type="button" class="btn-goto-studio" (click)="router.navigate(['/ai-studio'])" title="Görsel Stüdyosunu Aç">
-                📸 Stüdyoyu Aç →
+              <button type="button" class="btn-goto-studio" (click)="router.navigate(['/ai-studio'])" [title]="t('listings.fastCreator.colGallery.openStudioTooltip')">
+                {{ t('listings.fastCreator.colGallery.openStudioBtn') }}
               </button>
             </div>
             <p class="ai-studio-desc">
-              Etsy 2000x2000px kare ürün fotoğrafları, anti-ban EXIF temizleme ve profesyonel arka plan oluşturma için <b>AI Görsel Stüdyosu</b>'nu kullanabilirsiniz.
+              {{ t('listings.fastCreator.colGallery.studioCardDescPrefix') }} <b>{{ t('listings.fastCreator.colGallery.studioCardDescBold') }}</b>{{ t('listings.fastCreator.colGallery.studioCardDescSuffix') }}
             </p>
           </div>
 
@@ -571,31 +572,31 @@
             <div class="np-header-flex">
               <div class="np-title">
                 <span>💰</span>
-                <span>Etsy Kesinti &amp; Net Kalan</span>
+                <span>{{ t('listings.fastCreator.netProfit.title') }}</span>
               </div>
-              <label class="np-offsite-toggle" title="Offsite Ads (%15) dış reklam kesintisini dahil et">
+              <label class="np-offsite-toggle" [title]="t('listings.fastCreator.netProfit.offsiteTooltip')">
                 <input type="checkbox" [(ngModel)]="includeOffsiteAdsFee" (ngModelChange)="saveDraftToStorage()" />
-                <span>Offsite Ads (%15)</span>
+                <span>{{ t('listings.fastCreator.netProfit.offsiteLabel') }}</span>
               </label>
             </div>
 
             <div class="np-shipping-row">
               <div class="np-shipping-head-row">
-                <label class="np-shipping-label" for="fastCreatorShippingInput">Kargo Maliyeti ($ USD)</label>
+                <label class="np-shipping-label" for="fastCreatorShippingInput">{{ t('listings.fastCreator.netProfit.shippingCostLabel') }}</label>
                 <div class="np-shipping-head-actions">
                   <button type="button"
                           class="btn-open-shipping-drawer"
                           (click)="openShippingDrawer()"
-                          title="4 taşıyıcılı kargo karşılaştırması ve paket ölçü panelini aç">
-                    <span>🚚 Kargo Paneli</span>
+                          [title]="t('listings.fastCreator.netProfit.shippingDrawerTooltip')">
+                    <span>{{ t('listings.fastCreator.netProfit.shippingDrawerBtn') }}</span>
                   </button>
                   <button type="button"
                           class="btn-agent-mini"
                           [disabled]="isRunningPricingAgent"
                           (click)="runAiPricingAgent()"
-                          title="4 taşıyıcılı kargo modülü + Etsy rakipleri + LLM ile kargo ve varyasyon fiyatlarını hesapla">
+                          [title]="t('listings.fastCreator.netProfit.agentMiniTooltip')">
                     <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
-                    <span>{{ isRunningPricingAgent ? 'Hesaplanıyor...' : 'Kargo + Fiyat Öner' }}</span>
+                    <span>{{ isRunningPricingAgent ? t('listings.fastCreator.netProfit.agentMiniLoading') : t('listings.fastCreator.netProfit.agentMiniBtn') }}</span>
                   </button>
                 </div>
               </div>
@@ -614,39 +615,39 @@
             </div>
 
             <div class="np-var-selector-row notranslate" *ngIf="hasActiveVariations" translate="no">
-              <label class="np-shipping-label" for="npVariationSelect">🎨 Hesaplanan Varyasyon Seçeneği</label>
+              <label class="np-shipping-label" for="npVariationSelect">{{ t('listings.fastCreator.netProfit.selectedVariationLabel') }}</label>
               <select
                 id="npVariationSelect"
                 class="np-var-select notranslate"
                 [(ngModel)]="selectedProfitVariationKey">
                 <option value="__base__">
-                  📊 Taban / Genel ({{ minVariationPrice === maxVariationPrice ? ('$' + minVariationPrice.toFixed(2)) : ('$' + minVariationPrice.toFixed(2) + ' – $' + maxVariationPrice.toFixed(2)) }})
+                  {{ t('listings.fastCreator.netProfit.baseOptionLabel', { range: minVariationPrice === maxVariationPrice ? ('$' + minVariationPrice.toFixed(2)) : ('$' + minVariationPrice.toFixed(2) + ' – $' + maxVariationPrice.toFixed(2)) }) }}
                 </option>
                 <option *ngFor="let vr of variationProfitRows" [value]="vr.key">
-                  {{ vr.key }} — Satış: ${{ vr.priceUsd.toFixed(2) }} → Net: ${{ vr.breakdown.netRemainingUsd.toFixed(2) }} (%{{ vr.breakdown.netMarginPercent.toFixed(1) }})
+                  {{ t('listings.fastCreator.netProfit.variationOptionFormat', { key: vr.key, price: vr.priceUsd.toFixed(2), net: vr.breakdown.netRemainingUsd.toFixed(2), margin: vr.breakdown.netMarginPercent.toFixed(1) }) }}
                 </option>
               </select>
             </div>
 
             <div class="np-breakdown-list">
               <div class="np-row">
-                <span>Satış Fiyatı{{ hasActiveVariations ? (selectedProfitVariationKey !== '__base__' ? ' (' + selectedProfitVariationKey + ')' : ' (Taban)') : '' }}</span>
+                <span>{{ t('listings.fastCreator.netProfit.salePriceLabel') }}{{ hasActiveVariations ? (selectedProfitVariationKey !== '__base__' ? ' (' + selectedProfitVariationKey + ')' : ' ' + t('listings.fastCreator.netProfit.baseTag')) : '' }}</span>
                 <span class="np-val notranslate" translate="no">${{ np.salePriceUsd.toFixed(2) }}</span>
               </div>
               <div class="np-row np-deduct">
-                <span>Etsy Kesintileri (İşlem %6.5 + Ödeme %6.5+₺3 + Düz. %1.1 + $0.20 + KDV %20{{ includeOffsiteAdsFee ? ' + Offsite %15' : '' }})</span>
+                <span>{{ t('listings.fastCreator.netProfit.etsyFeesLabel', { offsite: includeOffsiteAdsFee ? t('listings.fastCreator.netProfit.etsyFeesOffsitePart') : '' }) }}</span>
                 <span class="np-val notranslate" translate="no">-${{ np.totalEtsyFeesUsd.toFixed(2) }}</span>
               </div>
               <div class="np-row np-deduct">
-                <span>Kargo Maliyeti</span>
+                <span>{{ t('listings.fastCreator.netProfit.shippingCostRow') }}</span>
                 <span class="np-val notranslate" translate="no">-${{ np.shippingCostUsd.toFixed(2) }}</span>
               </div>
             </div>
 
             <div class="np-result-banner" [class.positive]="np.netRemainingUsd >= 0" [class.negative]="np.netRemainingUsd < 0">
               <div class="np-result-left">
-                <span class="np-result-label">Bize Kalan Net</span>
-                <span class="np-result-margin notranslate" translate="no" *ngIf="np.salePriceUsd > 0">Net Marj: %{{ np.netMarginPercent.toFixed(1) }}</span>
+                <span class="np-result-label">{{ t('listings.fastCreator.netProfit.netRemainingLabel') }}</span>
+                <span class="np-result-margin notranslate" translate="no" *ngIf="np.salePriceUsd > 0">{{ t('listings.fastCreator.netProfit.netMarginLabel', { pct: np.netMarginPercent.toFixed(1) }) }}</span>
               </div>
               <div class="np-result-right notranslate" translate="no">
                 <strong class="np-result-usd">${{ np.netRemainingUsd.toFixed(2) }}</strong>
@@ -656,20 +657,20 @@
 
             <div class="np-variations-box notranslate" *ngIf="hasActiveVariations" translate="no">
               <div class="np-var-box-header">
-                <span>🎨 Varyasyon Seçenekleri Net Kâr Hesaplaması ({{ variationProfitRows.length }} Seçenek)</span>
+                <span>{{ t('listings.fastCreator.netProfit.variationsTableTitle', { count: variationProfitRows.length }) }}</span>
                 <span *ngIf="variationProfitSummary.hasPriceSpread" class="np-var-range-pill">
-                  Net: ${{ variationProfitSummary.minNetRemainingUsd.toFixed(2) }} – ${{ variationProfitSummary.maxNetRemainingUsd.toFixed(2) }}
+                  {{ t('listings.fastCreator.netProfit.netRange', { min: variationProfitSummary.minNetRemainingUsd.toFixed(2), max: variationProfitSummary.maxNetRemainingUsd.toFixed(2) }) }}
                 </span>
               </div>
               <div class="np-var-table-wrap">
                 <table class="np-var-table">
                   <thead>
                     <tr>
-                      <th>Seçenek</th>
-                      <th>Satış</th>
-                      <th>Kesinti</th>
-                      <th>Bize Kalan Net</th>
-                      <th>Marj</th>
+                      <th>{{ t('listings.fastCreator.netProfit.colOption') }}</th>
+                      <th>{{ t('listings.fastCreator.netProfit.colSale') }}</th>
+                      <th>{{ t('listings.fastCreator.netProfit.colFees') }}</th>
+                      <th>{{ t('listings.fastCreator.netProfit.colNet') }}</th>
+                      <th>{{ t('listings.fastCreator.netProfit.colMargin') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -679,7 +680,7 @@
                       [class.selected]="selectedProfitVariationKey === vr.key"
                       [class.inactive]="!vr.active"
                       (click)="selectProfitVariation(vr.key)"
-                      title="Detaylı kesinti kırılımını görmek için tıklayın">
+                      [title]="t('listings.fastCreator.netProfit.rowTooltip')">
                       <td class="np-var-key">{{ vr.key }}</td>
                       <td>${{ vr.priceUsd.toFixed(2) }}</td>
                       <td class="np-var-fee">-${{ vr.breakdown.totalEtsyFeesUsd.toFixed(2) }}</td>
@@ -687,7 +688,7 @@
                         <strong>${{ vr.breakdown.netRemainingUsd.toFixed(2) }}</strong>
                         <span class="np-var-try">₺{{ vr.breakdown.netRemainingTry.toFixed(0) }}</span>
                       </td>
-                      <td class="np-var-margin">%{{ vr.breakdown.netMarginPercent.toFixed(1) }}</td>
+                      <td class="np-var-margin">{{ vr.breakdown.netMarginPercent.toFixed(1) }}%</td>
                     </tr>
                   </tbody>
                 </table>
@@ -707,7 +708,7 @@
         <!-- Col Header -->
         <div class="col-header-row">
           <div class="col-title">
-            <span class="sec-num">3.</span> Varyasyonlar & Kontrol
+            <span class="sec-num">3.</span> {{ t('listings.fastCreator.colControl.title') }}
           </div>
         </div>
 
@@ -717,15 +718,15 @@
             <div class="var-header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
               <label class="checkbox-label var-main-toggle" style="margin-bottom: 0;">
                 <input type="checkbox" [(ngModel)]="enableVariations" (change)="onVariationsToggled()" />
-                <span>🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)</span>
+                <span>{{ t('listings.fastCreator.colControl.enableVariationsLabel') }}</span>
               </label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <button type="button" (click)="showVariationImportBox = !showVariationImportBox" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                  📋 Etsy'den Aktar
+                  {{ t('listings.fastCreator.colControl.importEtsyBtn') }}
                 </button>
                 <button type="button" class="btn-ai-mini" (click)="suggestAiVariations()" [disabled]="isGeneratingVariations" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                  <span *ngIf="!isGeneratingVariations">✨ AI Varyasyon Öner</span>
-                  <span *ngIf="isGeneratingVariations">⏳ Üretiliyor...</span>
+                  <span *ngIf="!isGeneratingVariations">{{ t('listings.fastCreator.colControl.suggestAiVariationsBtn') }}</span>
+                  <span *ngIf="isGeneratingVariations">{{ t('listings.fastCreator.colControl.suggestAiVariationsLoading') }}</span>
                 </button>
               </div>
             </div>
@@ -733,19 +734,19 @@
             <!-- COMPACT SHIPPING & AI PRICING TRIGGER STRIP -->
             <div class="agent-compact-strip notranslate" translate="no">
               <div class="agent-compact-info">
-                <span class="agent-compact-title">🚚 Kargo &amp; AI Fiyatlandırma</span>
+                <span class="agent-compact-title">{{ t('listings.fastCreator.colControl.compactShippingTitle') }}</span>
                 <span class="agent-compact-sub" *ngIf="pricingAgentResult as agent">
-                  {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} · Ort. Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}
+                  {{ t('listings.fastCreator.colControl.compactAgentSub', { carrier: agent.shippingBenchmark.selectedCarrierName, cost: agent.shippingBenchmark.baseShippingCostUsd.toFixed(2), margin: agent.averageNetMarginPercent.toFixed(1) }) }}
                 </span>
                 <span class="agent-compact-sub" *ngIf="!pricingAgentResult && estimatedShippingCostUsd">
-                  {{ selectedCarrierName || 'Kargo' }}: ${{ (estimatedShippingCostUsd || 0).toFixed(2) }} · {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g
+                  {{ selectedCarrierName || t('listings.fastCreator.colControl.compactShippingFallback') }}: ${{ (estimatedShippingCostUsd || 0).toFixed(2) }} · {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g
                 </span>
                 <span class="agent-compact-sub" *ngIf="!pricingAgentResult && !estimatedShippingCostUsd">
-                  {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g · {{ agentLengthCm }}×{{ agentWidthCm }}×{{ agentHeightCm }} cm ({{ computedDesi }} desi)
+                  {{ t('listings.fastCreator.colControl.compactDesiSub', { country: agentTargetCountry, weight: agentBaseWeightGrams, l: agentLengthCm, w: agentWidthCm, h: agentHeightCm, desi: computedDesi }) }}
                 </span>
               </div>
               <button type="button" class="btn-open-drawer-compact" (click)="openShippingDrawer()">
-                Paneli Aç →
+                {{ t('listings.fastCreator.colControl.openPanelBtn') }}
               </button>
             </div>
 
@@ -759,13 +760,13 @@
               <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed rgba(148, 163, 184, 0.25);">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap;">
                   <span style="font-size: 11px; font-weight: 600; color: #e2e8f0;">
-                    🔌 Chrome Extension ile Çek (Etsy Copilot)
+                    {{ t('listings.fastCreator.colControl.extTitle') }}
                   </span>
                   <span *ngIf="extensionBridge.isBridgeDetected()" style="font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
-                    ● Eklenti Bağlı
+                    {{ t('listings.fastCreator.colControl.extConnected') }}
                   </span>
-                  <span *ngIf="!extensionBridge.isBridgeDetected()" style="font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35);" title="Etsy Copilot 2.7.0 eklentisi yüklü değilse veya sayfayı henüz yenilemediyseniz görünür">
-                    ○ Eklenti Algılanamadı
+                  <span *ngIf="!extensionBridge.isBridgeDetected()" style="font-size: 10px; padding: 2px 6px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35);" [title]="t('listings.fastCreator.colControl.extNotDetectedTooltip')">
+                    {{ t('listings.fastCreator.colControl.extNotDetected') }}
                   </span>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
@@ -774,7 +775,7 @@
                     class="std-input"
                     [(ngModel)]="extensionListingUrlInput"
                     (keyup.enter)="fetchVariationsViaExtension()"
-                    placeholder="Rakip Etsy ilan linki veya Listing ID (Örn: https://www.etsy.com/listing/123456789/...)"
+                    [placeholder]="t('listings.fastCreator.colControl.extUrlPlaceholder')"
                     style="flex: 1; font-size: 11px; padding: 5px 8px;"
                   />
                   <button
@@ -782,20 +783,20 @@
                     (click)="fetchVariationsViaExtension()"
                     [disabled]="isFetchingVariationsViaExtension"
                     style="font-size: 11px; padding: 5px 10px; border-radius: 6px; background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(129, 140, 248, 0.55); color: #c7d2fe; font-weight: 600; cursor: pointer; white-space: nowrap;">
-                    {{ isFetchingVariationsViaExtension ? '⏳ Çekiliyor...' : '🔌 Eklentiden Çek' }}
+                    {{ isFetchingVariationsViaExtension ? t('listings.fastCreator.colControl.extFetchingBtn') : t('listings.fastCreator.colControl.extFetchBtn') }}
                   </button>
                 </div>
               </div>
 
               <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.4;">
-                <strong>Alternatif (Eklentisiz):</strong> Mor <strong>🔖 Kopyalayıcıyı</strong> yer imlerine sürükleyip Etsy sayfasında tıklayın <em>(veya Etsy'de <code>Ctrl+U</code> → <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın)</em>.
+                <strong>{{ t('listings.fastCreator.colControl.altInstructionsPrefix') }}</strong> {{ t('listings.fastCreator.colControl.altInstructionsBody') }} <strong>{{ t('listings.fastCreator.colControl.altInstructionsBookmarklet') }}</strong> {{ t('listings.fastCreator.colControl.altInstructionsMid') }} <em>{{ t('listings.fastCreator.colControl.altInstructionsParen') }}</em>.
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
                 <a *ngIf="clonedSourceListingUrl" [href]="clonedSourceListingUrl" target="_blank" rel="noopener" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; text-decoration: none;">
-                  🌐 Etsy İlanını Aç ↗
+                  {{ t('listings.fastCreator.colControl.openEtsyListingBtn') }}
                 </a>
-                <a [href]="bookmarkletSafeUrl" title="Bu butonu tarayıcınızın yer imleri çubuğuna sürükleyin. Etsy ilan sayfasında tıkladığınızda tüm varyasyonları kopyalar." style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(168, 85, 247, 0.18); border: 1px dashed rgba(168, 85, 247, 0.55); color: #c084fc; text-decoration: none; cursor: grab;">
-                  🔖 Etsy Varyasyon Kopyalayıcı (Yer İmine Sürükle)
+                <a [href]="bookmarkletSafeUrl" [title]="t('listings.fastCreator.colControl.bookmarkletTooltip')" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(168, 85, 247, 0.18); border: 1px dashed rgba(168, 85, 247, 0.55); color: #c084fc; text-decoration: none; cursor: grab;">
+                  {{ t('listings.fastCreator.colControl.bookmarkletBtn') }}
                 </a>
               </div>
               <textarea
@@ -803,15 +804,15 @@
                 class="std-input"
                 [(ngModel)]="variationPasteInput"
                 (paste)="onVariationPaste($event)"
-                placeholder="Yer imi çıktısını veya Etsy sayfa kaynağını (Ctrl+U -> Ctrl+A -> Ctrl+C) buraya Ctrl+V ile yapıştırın..."
+                [placeholder]="t('listings.fastCreator.colControl.pastePlaceholder')"
                 style="width: 100%; font-size: 11px; resize: vertical; margin-bottom: 6px;"
               ></textarea>
               <div style="display: flex; justify-content: flex-end; gap: 6px;">
                 <button type="button" (click)="showVariationImportBox = false" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: transparent; border: 1px solid rgba(148, 163, 184, 0.35); color: #94a3b8; cursor: pointer;">
-                  Kapat
+                  {{ t('listings.fastCreator.colControl.closeBtn') }}
                 </button>
                 <button type="button" (click)="applyPastedVariations()" style="font-size: 11px; padding: 4px 10px; border-radius: 6px; background: #10b981; border: none; color: #022c22; font-weight: 600; cursor: pointer;">
-                  ⚡ Çözümle & Aktar
+                  {{ t('listings.fastCreator.colControl.parseImportBtn') }}
                 </button>
               </div>
             </div>
@@ -820,9 +821,9 @@
             <div *ngIf="variationAiAnalysis as va" class="var-ai-analysis-box" [class.has-warning]="!!va.warning">
               <div class="var-ai-analysis-head">
                 <div class="var-ai-analysis-badges">
-                  <span class="var-ai-provider-pill">{{ va.usedAi ? '✨ Canlı AI' : '⚡ Ürün Motoru' }} · {{ va.provider }}{{ va.model ? (' (' + va.model + ')') : '' }}</span>
+                  <span class="var-ai-provider-pill">{{ va.usedAi ? t('listings.fastCreator.colControl.aiLiveBadge') : t('listings.fastCreator.colControl.aiEngineBadge') }} · {{ va.provider }}{{ va.model ? (' (' + va.model + ')') : '' }}</span>
                 </div>
-                <button type="button" class="btn-dismiss-var-analysis" (click)="dismissVariationAiAnalysis()" aria-label="Analiz özetini kapat" title="Özeti kapat">×</button>
+                <button type="button" class="btn-dismiss-var-analysis" (click)="dismissVariationAiAnalysis()" [attr.aria-label]="t('listings.fastCreator.colControl.dismissAnalysisAria')" [title]="t('listings.fastCreator.colControl.dismissAnalysisTooltip')">×</button>
               </div>
               <p *ngIf="va.summary" class="var-ai-analysis-text">{{ va.summary }}</p>
               <p *ngIf="va.warning" class="var-ai-analysis-warn">⚠️ {{ va.warning }}</p>
@@ -831,21 +832,21 @@
             <div *ngIf="enableVariations" class="var-options-box">
               <div class="field-wrap">
                 <div class="field-header-row">
-                  <label>1. Varyasyon Tipi:</label>
+                  <label>{{ t('listings.fastCreator.colControl.varType1Label') }}</label>
                   <div class="var-group-header-right">
                     <div class="quick-preset-chips">
-                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Renk / Color'" (click)="setVarType(1, 'Renk / Color')">🎨 Renk</button>
-                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Boyut / Size'" (click)="setVarType(1, 'Boyut / Size')">📏 Boyut</button>
-                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Materyal / Material'" (click)="setVarType(1, 'Materyal / Material')">🪵 Materyal</button>
-                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Stil / Style'" (click)="setVarType(1, 'Stil / Style')">✨ Stil</button>
-                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Desen / Pattern'" (click)="setVarType(1, 'Desen / Pattern')">📐 Desen</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Renk / Color'" (click)="setVarType(1, 'Renk / Color')">{{ t('listings.fastCreator.colControl.presetColor') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Boyut / Size'" (click)="setVarType(1, 'Boyut / Size')">{{ t('listings.fastCreator.colControl.presetSize') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Materyal / Material'" (click)="setVarType(1, 'Materyal / Material')">{{ t('listings.fastCreator.colControl.presetMaterial') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Stil / Style'" (click)="setVarType(1, 'Stil / Style')">{{ t('listings.fastCreator.colControl.presetStyle') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType1 === 'Desen / Pattern'" (click)="setVarType(1, 'Desen / Pattern')">{{ t('listings.fastCreator.colControl.presetPattern') }}</button>
                     </div>
                     <button
                       type="button"
                       class="btn-remove-var-group"
                       (click)="removeVariationGroup(1)"
-                      aria-label="1. varyasyon grubunu kaldır"
-                      title="1. varyasyon grubunu kaldır (2. grup varsa 1. sıraya taşınır)">
+                      [attr.aria-label]="t('listings.fastCreator.colControl.removeGroup1Aria')"
+                      [title]="t('listings.fastCreator.colControl.removeGroup1Tooltip')">
                       ×
                     </button>
                   </div>
@@ -858,7 +859,7 @@
                     [(ngModel)]="varType1"
                     (input)="rebuildVariationGrid()"
                     (blur)="rebuildVariationGrid()"
-                    placeholder="Varyasyon tipi yazın veya seçin (Örn: Renk, Boyut, Desen, Finish...)"
+                    [placeholder]="t('listings.fastCreator.colControl.varType1Placeholder')"
                   />
                   <datalist id="varType1Presets">
                     <option value="Renk / Color"></option>
@@ -873,7 +874,7 @@
                     <option value="Seçenek / Option"></option>
                   </datalist>
                 </div>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large (Virgülle ayırın)" />
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" [placeholder]="t('listings.fastCreator.colControl.varValues1Placeholder')" />
                 <div *ngIf="varOptions1.length > 0" class="var-value-chips">
                   <span *ngFor="let opt of varOptions1; let optIdx = index" class="var-value-chip">
                     <span>{{ opt }}</span>
@@ -881,8 +882,8 @@
                       type="button"
                       class="btn-remove-var-chip"
                       (click)="removeVariationOption(1, optIdx)"
-                      [attr.aria-label]="opt + ' seçeneğini kaldır'"
-                      title="Seçeneği kaldır">
+                      [attr.aria-label]="t('listings.fastCreator.colControl.removeOptionAria', { option: opt })"
+                      [title]="t('listings.fastCreator.colControl.removeOptionTooltip')">
                       ×
                     </button>
                   </span>
@@ -892,26 +893,26 @@
               <!-- 2. Varyasyon Grubu -->
               <label class="checkbox-label sub-var">
                 <input type="checkbox" [(ngModel)]="enableVar2" (change)="rebuildVariationGrid()" />
-                <span>➕ İkinci varyasyon grubu ekle</span>
+                <span>{{ t('listings.fastCreator.colControl.enableVar2Label') }}</span>
               </label>
 
               <div *ngIf="enableVar2" class="field-wrap">
                 <div class="field-header-row">
-                  <label>2. Varyasyon Tipi:</label>
+                  <label>{{ t('listings.fastCreator.colControl.varType2Label') }}</label>
                   <div class="var-group-header-right">
                     <div class="quick-preset-chips">
-                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Renk / Color'" (click)="setVarType(2, 'Renk / Color')">🎨 Renk</button>
-                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Paketleme / Packaging'" (click)="setVarType(2, 'Paketleme / Packaging')">📦 Paketleme</button>
-                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Stil / Style'" (click)="setVarType(2, 'Stil / Style')">✨ Stil</button>
-                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Desen / Pattern'" (click)="setVarType(2, 'Desen / Pattern')">📐 Desen</button>
-                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Bitiş / Finish'" (click)="setVarType(2, 'Bitiş / Finish')">✨ Finish</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Renk / Color'" (click)="setVarType(2, 'Renk / Color')">{{ t('listings.fastCreator.colControl.presetColor') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Paketleme / Packaging'" (click)="setVarType(2, 'Paketleme / Packaging')">{{ t('listings.fastCreator.colControl.presetPackaging') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Stil / Style'" (click)="setVarType(2, 'Stil / Style')">{{ t('listings.fastCreator.colControl.presetStyle') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Desen / Pattern'" (click)="setVarType(2, 'Desen / Pattern')">{{ t('listings.fastCreator.colControl.presetPattern') }}</button>
+                      <button type="button" class="preset-chip" [class.active]="varType2 === 'Bitiş / Finish'" (click)="setVarType(2, 'Bitiş / Finish')">{{ t('listings.fastCreator.colControl.presetFinish') }}</button>
                     </div>
                     <button
                       type="button"
                       class="btn-remove-var-group"
                       (click)="removeVariationGroup(2)"
-                      aria-label="2. varyasyon grubunu kaldır"
-                      title="2. varyasyon grubunu kaldır">
+                      [attr.aria-label]="t('listings.fastCreator.colControl.removeGroup2Aria')"
+                      [title]="t('listings.fastCreator.colControl.removeGroup2Tooltip')">
                       ×
                     </button>
                   </div>
@@ -924,7 +925,7 @@
                     [(ngModel)]="varType2"
                     (input)="rebuildVariationGrid()"
                     (blur)="rebuildVariationGrid()"
-                    placeholder="2. Varyasyon tipi yazın veya seçin (Örn: Paketleme, Stil, Renk...)"
+                    [placeholder]="t('listings.fastCreator.colControl.varType2Placeholder')"
                   />
                   <datalist id="varType2Presets">
                     <option value="Renk / Color"></option>
@@ -939,7 +940,7 @@
                     <option value="Seçenek / Option"></option>
                   </datalist>
                 </div>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın (Virgülle ayırın)" />
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" [placeholder]="t('listings.fastCreator.colControl.varValues2Placeholder')" />
                 <div *ngIf="varOptions2.length > 0" class="var-value-chips">
                   <span *ngFor="let opt of varOptions2; let optIdx = index" class="var-value-chip">
                     <span>{{ opt }}</span>
@@ -947,8 +948,8 @@
                       type="button"
                       class="btn-remove-var-chip"
                       (click)="removeVariationOption(2, optIdx)"
-                      [attr.aria-label]="opt + ' seçeneğini kaldır'"
-                      title="Seçeneği kaldır">
+                      [attr.aria-label]="t('listings.fastCreator.colControl.removeOptionAria', { option: opt })"
+                      [title]="t('listings.fastCreator.colControl.removeOptionTooltip')">
                       ×
                     </button>
                   </span>
@@ -959,20 +960,20 @@
               <div class="custom-pricing-wrap">
                 <label class="checkbox-label sub-var">
                   <input type="checkbox" [(ngModel)]="customVariationPricing" (change)="onVariationPricingToggle()" />
-                  <span>💲 Her varyasyona özel farklı fiyat & stok belirle</span>
+                  <span>{{ t('listings.fastCreator.colControl.customPricingLabel') }}</span>
                 </label>
 
                 <div *ngIf="customVariationPricing" class="pricing-matrix-box notranslate" translate="no">
                   <div class="matrix-toolbar">
                     <button type="button" class="btn-sync-price notranslate" translate="no" (click)="syncBasePriceToVariations()">
-                      ⚡ Fiyatı Eşitle (${{ effectivePrice.toFixed(2) }})
+                      {{ t('listings.fastCreator.colControl.syncPriceBtn', { price: effectivePrice.toFixed(2) }) }}
                     </button>
                     <div class="toolbar-right-actions">
-                      <button type="button" class="btn-auto-img" (click)="autoAssignVariationImages()" title="Galerideki görselleri sırasıyla varyasyonlara bağlar">
-                        🎨 Görselleri Eşleştir
+                      <button type="button" class="btn-auto-img" (click)="autoAssignVariationImages()" [title]="t('listings.fastCreator.colControl.autoAssignImgTooltip')">
+                        {{ t('listings.fastCreator.colControl.autoAssignImgBtn') }}
                       </button>
-                      <button type="button" class="btn-clear-img" (click)="clearVariationImages()" title="Görsel bağlantılarını temizler">
-                        ✕ Temizle
+                      <button type="button" class="btn-clear-img" (click)="clearVariationImages()" [title]="t('listings.fastCreator.colControl.clearImgTooltip')">
+                        {{ t('listings.fastCreator.colControl.clearImgBtn') }}
                       </button>
                     </div>
                   </div>
@@ -980,12 +981,12 @@
                     <table class="matrix-table">
                       <thead>
                         <tr>
-                          <th>Varyasyon</th>
-                          <th style="width: 92px;">Görsel</th>
-                          <th style="width: 60px;">Fiyat ($)</th>
-                          <th style="width: 50px;">Stok</th>
-                          <th style="width: 72px;">Net Kalan</th>
-                          <th style="width: 28px;" aria-label="Kaldır"></th>
+                          <th>{{ t('listings.fastCreator.colControl.colVariation') }}</th>
+                          <th style="width: 92px;">{{ t('listings.fastCreator.colControl.colImage') }}</th>
+                          <th style="width: 60px;">{{ t('listings.fastCreator.colControl.colPriceUsd') }}</th>
+                          <th style="width: 50px;">{{ t('listings.fastCreator.colControl.colStock') }}</th>
+                          <th style="width: 72px;">{{ t('listings.fastCreator.colControl.colNetRemaining') }}</th>
+                          <th style="width: 28px;" [attr.aria-label]="t('listings.fastCreator.colControl.colRemoveAria')"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -995,7 +996,7 @@
                             <div class="var-img-selector">
                               <img *ngIf="getSelectedImageForRank(r.imageRank) as selImg" [src]="selImg.url" class="var-img-thumb" alt="Thumb" />
                               <select class="grid-img-select" [(ngModel)]="r.imageRank" (ngModelChange)="saveDraftToStorage()">
-                                <option [ngValue]="undefined">- Yok -</option>
+                                <option [ngValue]="undefined">{{ t('listings.fastCreator.colControl.noImageOption') }}</option>
                                 <option *ngFor="let img of galleryImages; let i = index" [ngValue]="i + 1">
                                   #{{ i + 1 }} {{ img.isCover ? '⭐' : '' }}
                                 </option>
@@ -1008,8 +1009,8 @@
                             <span *ngIf="r.agentNetMarginPct !== undefined"
                                   class="var-net-badge"
                                   [class.negative]="(r.agentNetProfitUsd || 0) < 0"
-                                  [title]="r.agentTierLabel || 'Tahmini Net Kâr'">
-                              {{ (r.agentNetProfitUsd || 0) >= 0 ? '+$' + (r.agentNetProfitUsd || 0).toFixed(2) : '-$' + (-(r.agentNetProfitUsd || 0)).toFixed(2) }} (%{{ (r.agentNetMarginPct || 0).toFixed(0) }})
+                                  [title]="r.agentTierLabel || t('listings.fastCreator.colControl.estNetProfitTooltip')">
+                              {{ (r.agentNetProfitUsd || 0) >= 0 ? '+$' + (r.agentNetProfitUsd || 0).toFixed(2) : '-$' + (-(r.agentNetProfitUsd || 0)).toFixed(2) }} ({{ (r.agentNetMarginPct || 0).toFixed(0) }}%)
                             </span>
                           </td>
                           <td>
@@ -1017,15 +1018,15 @@
                           </td>
                           <td class="var-net-cell notranslate" translate="no" *ngIf="getRowNetProfit(r) as rnp" [class.pos]="rnp.netRemainingUsd >= 0" [class.neg]="rnp.netRemainingUsd < 0">
                             <span class="var-net-usd">${{ rnp.netRemainingUsd.toFixed(2) }}</span>
-                            <span class="var-net-pct">%{{ rnp.netMarginPercent.toFixed(0) }}</span>
+                            <span class="var-net-pct">{{ rnp.netMarginPercent.toFixed(0) }}%</span>
                           </td>
                           <td class="var-remove-cell">
                             <button
                               type="button"
                               class="btn-remove-var-row"
                               (click)="removeVariationRow(rowIdx)"
-                              [attr.aria-label]="r.key + ' varyasyonunu kaldır'"
-                              title="Bu varyasyon satırını kaldır">
+                              [attr.aria-label]="t('listings.fastCreator.colControl.removeRowAria', { key: r.key })"
+                              [title]="t('listings.fastCreator.colControl.removeRowTooltip')">
                               ×
                             </button>
                           </td>
@@ -1040,44 +1041,44 @@
 
           <!-- 2. Dağıtım & Kontrol (Canlı Kontrol Listesi) -->
           <div class="form-block checklist-block">
-            <span class="block-label">📋 Dağıtım & Kontrol</span>
+            <span class="block-label">{{ t('listings.fastCreator.checklist.title') }}</span>
             <div class="checklist-box">
               <div class="check-item" [class.done]="isTitleReady">
                 <span class="icon">{{ isTitleReady ? '✅' : '⚪' }}</span>
-                <span>Ürün başlığı hazır ({{ title.length }}/140)</span>
+                <span>{{ t('listings.fastCreator.checklist.titleReady', { count: title.length }) }}</span>
               </div>
               <div class="check-item notranslate" [class.done]="isPriceReady" translate="no">
                 <span class="icon">{{ isPriceReady ? '✅' : '⚪' }}</span>
                 <span *ngIf="!hasActiveVariations || minVariationPrice === maxVariationPrice">
-                  Fiyat ${{ effectivePrice.toFixed(2) }} | Stok: {{ effectiveQuantity }}
+                  {{ t('listings.fastCreator.checklist.priceSingle', { price: effectivePrice.toFixed(2), qty: effectiveQuantity }) }}
                 </span>
                 <span *ngIf="hasActiveVariations && minVariationPrice !== maxVariationPrice">
-                  Varyasyon Fiyatı ${{ minVariationPrice.toFixed(2) }} – ${{ maxVariationPrice.toFixed(2) }} | Toplam Stok: {{ effectiveQuantity }}
+                  {{ t('listings.fastCreator.checklist.priceRange', { min: minVariationPrice.toFixed(2), max: maxVariationPrice.toFixed(2), qty: effectiveQuantity }) }}
                 </span>
               </div>
               <div class="check-item" [class.done]="isImagesReady">
                 <span class="icon">{{ isImagesReady ? '✅' : '⚪' }}</span>
-                <span>Görseller: {{ galleryImages.length }}/10 adet</span>
+                <span>{{ t('listings.fastCreator.checklist.imagesCount', { count: galleryImages.length }) }}</span>
               </div>
               <div class="check-item" [class.done]="isShippingReady">
                 <span class="icon">{{ isShippingReady ? '✅' : '⚪' }}</span>
-                <span>{{ listingType === 'digital' ? 'Dijital Ürün (Kargo gerekmez)' : 'Kargo profili seçildi' }}</span>
+                <span>{{ listingType === 'digital' ? t('listings.fastCreator.checklist.shippingDigital') : t('listings.fastCreator.checklist.shippingPhysical') }}</span>
               </div>
               <div class="check-item" [class.done]="isReadinessReady">
                 <span class="icon">{{ isReadinessReady ? '✅' : '⚪' }}</span>
-                <span>{{ listingType === 'digital' ? 'Dijital (Hazırlık durumu gerekmez)' : 'Hazırlık durumu seçildi' }}</span>
+                <span>{{ listingType === 'digital' ? t('listings.fastCreator.checklist.readinessDigital') : t('listings.fastCreator.checklist.readinessPhysical') }}</span>
               </div>
               <div class="check-item" [class.done]="isReturnPolicyReady">
                 <span class="icon">{{ isReturnPolicyReady ? '✅' : '⚪' }}</span>
-                <span>{{ listingType === 'digital' ? 'Dijital (İade politikası gerekmez)' : 'İade politikası seçildi' }}</span>
+                <span>{{ listingType === 'digital' ? t('listings.fastCreator.checklist.returnPolicyDigital') : t('listings.fastCreator.checklist.returnPolicyPhysical') }}</span>
               </div>
               <div class="check-item" [class.done]="isDescReady">
                 <span class="icon">{{ isDescReady ? '✅' : '⚪' }}</span>
-                <span>Açıklama dolduruldu</span>
+                <span>{{ t('listings.fastCreator.checklist.descFilled') }}</span>
               </div>
               <div class="check-item" [class.done]="isTagsReady">
                 <span class="icon">{{ isTagsReady ? '✅' : '⚪' }}</span>
-                <span>Etiketler ({{ tags.length }}/13)</span>
+                <span>{{ t('listings.fastCreator.checklist.tagsCount', { count: tags.length }) }}</span>
               </div>
             </div>
           </div>
@@ -1086,12 +1087,12 @@
           <div class="form-block publish-mode-block">
             <div class="publish-toggle-wrap">
               <div class="toggle-text">
-                <span class="toggle-title">Hemen Canlı Yayına Al</span>
+                <span class="toggle-title">{{ t('listings.fastCreator.publishBox.title') }}</span>
                 <span class="toggle-badge" [class.is-live]="isLivePublish">
-                  {{ isLivePublish ? '● CANLI' : '● TASLAK' }}
+                  {{ isLivePublish ? t('listings.fastCreator.publishBox.badgeLive') : t('listings.fastCreator.publishBox.badgeDraft') }}
                 </span>
                 <p class="toggle-desc">
-                  {{ isLivePublish ? 'Ürün onaylandığı an Etsy\'de hemen satışa açılır.' : 'Güvenli mod: Ürün taslak olarak saklanır, panelden kontrol edilebilir.' }}
+                  {{ isLivePublish ? t('listings.fastCreator.publishBox.descLive') : t('listings.fastCreator.publishBox.descDraft') }}
                 </p>
               </div>
               <label class="switch">
@@ -1107,31 +1108,31 @@
               [class.is-live-btn]="isLivePublish"
               [disabled]="isSavingDraft || !isTitleReady" 
               (click)="publishListingToEtsy()">
-              {{ isSavingDraft ? 'Etsy\'ye Aktarılıyor...' : (isLivePublish ? '🚀 Etsy\'ye Gönder (Canlı)' : '💾 Etsy\'ye Gönder (Taslak)') }}
+              {{ isSavingDraft ? t('listings.fastCreator.publishBox.sendingBtn') : (isLivePublish ? t('listings.fastCreator.publishBox.sendLiveBtn') : t('listings.fastCreator.publishBox.sendDraftBtn')) }}
             </button>
 
             <!-- Secondary Preview Button -->
             <button type="button" class="btn-secondary-preview" (click)="openPreviewModal()">
-              👁️ Yerel form önizlemesi
+              {{ t('listings.fastCreator.publishBox.localPreviewBtn') }}
             </button>
 
             <p class="safety-note">
-              🛡️ Güvenli Gönderim: Taslak listelemeler mağazanızda doğrudan görünmez, Etsy panelinizden onaylayabilirsiniz.
+              {{ t('listings.fastCreator.publishBox.safetyNote') }}
             </p>
           </div>
 
           <!-- 4. Etsy Algoritma Kalite Özeti -->
           <div class="form-block quality-card-block">
             <div class="quality-title">
-              <span>✨ Etsy Algoritma & Kalite Özeti</span>
+              <span>{{ t('listings.fastCreator.qualityCard.title') }}</span>
             </div>
             <div class="quality-score-row">
-              <span class="star-badge">Listeleme kalite skoru API tarafından sunulmuyor.</span>
+              <span class="star-badge">{{ t('listings.fastCreator.qualityCard.scoreUnavailable') }}</span>
             </div>
             <ul class="quality-tips-list">
-              <li>• 📸 En az 5 görsel eklemek dönüşüm oranını %35 artırır.</li>
-              <li>• 🏷️ 13 etiket ve 100+ karakter SEO başlığı Etsy aramasında öne çıkarır.</li>
-              <li>• ⚡ Taslak gönderimler Etsy panelinizden onaylanmadan müşterilere görünmez.</li>
+              <li>{{ t('listings.fastCreator.qualityCard.tip1') }}</li>
+              <li>{{ t('listings.fastCreator.qualityCard.tip2') }}</li>
+              <li>{{ t('listings.fastCreator.qualityCard.tip3') }}</li>
             </ul>
           </div>
 
@@ -1149,16 +1150,16 @@
 <div class="modal-backdrop-creator" *ngIf="isStudioPickerOpen" (click)="closeStudioGalleryPicker()">
   <div class="modal-dialog-picker" (click)="$event.stopPropagation()">
     <div class="modal-head">
-      <h3>🎨 Stüdyo Galerisinden Görsel Seç</h3>
+      <h3>{{ t('listings.fastCreator.modals.studioPickerTitle') }}</h3>
       <button type="button" class="btn-close-dlg" (click)="closeStudioGalleryPicker()">✕</button>
     </div>
     <div class="modal-body-pool">
       <div class="pool-grid" *ngIf="studioPool.length > 0">
         <div *ngFor="let url of studioPool" class="pool-item" (click)="pickFromStudio(url)">
           <img [src]="url" alt="Pool Image" class="pool-img" />
-          <span class="pool-overlay-btn">+ Galeriye Al</span>
+          <span class="pool-overlay-btn">{{ t('listings.fastCreator.modals.addToGallery') }}</span>
         </div>
-      <p *ngIf="studioPool.length === 0">Stüdyo galerisi API’si bağlı değil.</p>
+      <p *ngIf="studioPool.length === 0">{{ t('listings.fastCreator.modals.studioApiDisconnected') }}</p>
       </div>
     </div>
   </div>
@@ -1170,26 +1171,26 @@
 <div class="modal-backdrop-creator" *ngIf="isPreviewModalOpen" (click)="closePreviewModal()">
   <div class="modal-dialog-preview" (click)="$event.stopPropagation()">
     <div class="modal-head">
-      <h3>👁️ Canlı Etsy İlan Kartı Önizlemesi</h3>
+      <h3>{{ t('listings.fastCreator.modals.previewTitle') }}</h3>
       <button type="button" class="btn-close-dlg" (click)="closePreviewModal()">✕</button>
     </div>
     <div class="modal-body-preview">
       <div class="etsy-mock-card">
         <div class="mock-img-wrap">
           <img *ngIf="galleryImages.length > 0" [src]="galleryImages[0].url" alt="Listing preview" class="mock-cover" />
-          <div *ngIf="galleryImages.length === 0" class="mock-cover">Görsel yüklenmedi</div>
+          <div *ngIf="galleryImages.length === 0" class="mock-cover">{{ t('listings.fastCreator.modals.noImageUploaded') }}</div>
         </div>
         <div class="mock-details">
-          <h4 class="mock-title">{{ title || 'Örnek Başlık Girilmedi' }}</h4>
-          <span class="mock-shop">Etsy mağaza/yorum bilgisi API tarafından sunulmuyor.</span>
+          <h4 class="mock-title">{{ title || t('listings.fastCreator.modals.sampleTitleEmpty') }}</h4>
+          <span class="mock-shop">{{ t('listings.fastCreator.modals.shopInfoUnavailable') }}</span>
           <div class="mock-price-row notranslate" translate="no">
             <span class="mock-price">${{ effectivePrice.toFixed(2) }}</span>
             <span class="mock-try">₺{{ (effectivePrice * usdTryRate).toFixed(2) }}</span>
-            <span class="mock-shipping-tag">Kargo bilgisi girilmedi</span>
+            <span class="mock-shipping-tag">{{ t('listings.fastCreator.modals.noShippingInfo') }}</span>
           </div>
           <p class="mock-desc">{{ description.slice(0, 200) }}...</p>
           <div class="mock-tags-row">
-            <span *ngFor="let t of tags" class="mock-tag-chip">#{{ t }}</span>
+            <span *ngFor="let tag of tags" class="mock-tag-chip">#{{ tag }}</span>
           </div>
         </div>
       </div>
@@ -1205,7 +1206,7 @@
     <div class="modal-head success-head">
       <div class="head-title-wrap">
         <span class="head-celebrate-emoji">🎉</span>
-        <h3>İlan Resmi Etsy Mağazanıza Aktarıldı!</h3>
+        <h3>{{ t('listings.fastCreator.modals.successTitle') }}</h3>
       </div>
       <button type="button" class="btn-close-dlg" (click)="closeSuccessModal()">✕</button>
     </div>
@@ -1213,32 +1214,32 @@
       <div class="success-status-banner" [class.is-live-banner]="createdListingResult?.state === 'active'">
         <span class="status-indicator-dot"></span>
         <span>
-          Durum: <strong>{{ createdListingResult?.state === 'active' ? 'CANLI SATIŞTA' : 'GÜVENLİ TASLAK (DRAFT)' }}</strong>
+          {{ t('listings.fastCreator.modals.statusLabel') }} <strong>{{ createdListingResult?.state === 'active' ? t('listings.fastCreator.modals.statusLive') : t('listings.fastCreator.modals.statusDraft') }}</strong>
         </span>
-        <span class="status-badge-id">Listing ID: #{{ createdListingResult?.listingId }}</span>
+        <span class="status-badge-id">{{ t('listings.fastCreator.modals.listingIdLabel', { id: createdListingResult?.listingId }) }}</span>
       </div>
 
       <div class="success-info-grid">
         <div class="info-card">
-          <span class="info-card-label">Ürün Başlığı</span>
+          <span class="info-card-label">{{ t('listings.fastCreator.modals.infoTitle') }}</span>
           <span class="info-card-val">{{ createdListingResult?.title || title }}</span>
         </div>
         <div class="info-card-split">
           <div class="info-card">
-            <span class="info-card-label">Fiyat</span>
+            <span class="info-card-label">{{ t('listings.fastCreator.modals.infoPrice') }}</span>
             <span class="info-card-val highlight-green notranslate" translate="no">${{ (createdListingResult?.price || effectivePrice || 0).toFixed(2) }} (₺{{ (((createdListingResult?.price || effectivePrice || 0)) * usdTryRate).toFixed(2) }})</span>
           </div>
           <div class="info-card">
-            <span class="info-card-label">Stok</span>
-            <span class="info-card-val notranslate" translate="no">{{ createdListingResult?.quantity || effectiveQuantity || 15 }} Adet</span>
+            <span class="info-card-label">{{ t('listings.fastCreator.modals.infoStock') }}</span>
+            <span class="info-card-val notranslate" translate="no">{{ t('listings.fastCreator.modals.pcsUnit', { count: createdListingResult?.quantity || effectiveQuantity || 15 }) }}</span>
           </div>
           <div class="info-card">
-            <span class="info-card-label">Yüklenen Görseller</span>
-            <span class="info-card-val">{{ createdListingResult?.uploadedImages || galleryImages.length }} Adet</span>
+            <span class="info-card-label">{{ t('listings.fastCreator.modals.infoUploadedImages') }}</span>
+            <span class="info-card-val">{{ t('listings.fastCreator.modals.pcsUnit', { count: createdListingResult?.uploadedImages || galleryImages.length }) }}</span>
           </div>
           <div class="info-card" *ngIf="createdListingResult?.variationImagesCount">
-            <span class="info-card-label">Varyasyon Görselleri</span>
-            <span class="info-card-val highlight-purple">🎨 {{ createdListingResult?.variationImagesCount }} Bağlandı</span>
+            <span class="info-card-label">{{ t('listings.fastCreator.modals.infoVariationImages') }}</span>
+            <span class="info-card-val highlight-purple">{{ t('listings.fastCreator.modals.linkedCount', { count: createdListingResult?.variationImagesCount }) }}</span>
           </div>
         </div>
       </div>
@@ -1251,14 +1252,14 @@
           style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16,185,129,0.35);"
           [disabled]="isActivatingListing"
           (click)="activateListingNow(createdListingResult?.listingId)">
-          <span *ngIf="isActivatingListing">⏳ Aktifleştiriliyor...</span>
-          <span *ngIf="!isActivatingListing">🚀 Şimdi Canlıya Al (Satışa Aç)</span>
+          <span *ngIf="isActivatingListing">{{ t('listings.fastCreator.modals.activatingBtn') }}</span>
+          <span *ngIf="!isActivatingListing">{{ t('listings.fastCreator.modals.activateNowBtn') }}</span>
         </button>
         <a [href]="createdListingResult?.url" target="_blank" rel="noopener noreferrer" class="btn-etsy-direct-link">
-          🛍️ Etsy Listing Editor'de Aç & İncele ↗
+          {{ t('listings.fastCreator.modals.openEtsyEditorBtn') }}
         </a>
         <button type="button" class="btn-modal-dismiss" (click)="closeSuccessModal()">
-          ➕ Yeni Ürün Ekle (Kapat)
+          {{ t('listings.fastCreator.modals.addNewCloseBtn') }}
         </button>
       </div>
     </div>
@@ -1272,38 +1273,38 @@
 <div class="modal-backdrop-creator" *ngIf="isReturnPolicyModalOpen" (click)="closeReturnPolicyModal()">
   <div class="modal-dialog-return-policy" (click)="$event.stopPropagation()">
     <div class="modal-head">
-      <h3>↩️ Yeni Etsy İade Politikası Oluştur</h3>
+      <h3>{{ t('listings.fastCreator.modals.rpTitle') }}</h3>
       <button type="button" class="btn-close-dlg" (click)="closeReturnPolicyModal()" [disabled]="isCreatingReturnPolicy">✕</button>
     </div>
 
     <div class="return-policy-modal-body">
       <div class="rp-hint-box">
-        Etsy Open API v3 üzerinden mağazanız için yeni bir iade politikası oluşturur. Aynı kural kombinasyonu mağazada zaten varsa mevcut politikayı otomatik seçer.
+        {{ t('listings.fastCreator.modals.rpHint') }}
       </div>
 
       <div class="rp-toggle-card">
         <label class="rp-check-row">
           <input type="checkbox" [(ngModel)]="newPolicyAcceptsReturns" [disabled]="isCreatingReturnPolicy" />
-          <span>✅ İade Kabul Edilir (Accepts Returns)</span>
+          <span>{{ t('listings.fastCreator.modals.rpAcceptsReturns') }}</span>
         </label>
 
         <label class="rp-check-row">
           <input type="checkbox" [(ngModel)]="newPolicyAcceptsExchanges" [disabled]="isCreatingReturnPolicy" />
-          <span>🔄 Değişim Kabul Edilir (Accepts Exchanges)</span>
+          <span>{{ t('listings.fastCreator.modals.rpAcceptsExchanges') }}</span>
         </label>
       </div>
 
       <div class="field-wrap full" *ngIf="newPolicyAcceptsReturns || newPolicyAcceptsExchanges">
-        <label>📅 İade / Değişim Süresi (Return Deadline):</label>
+        <label>{{ t('listings.fastCreator.modals.rpDeadlineLabel') }}</label>
         <select class="std-select" [(ngModel)]="newPolicyDeadline" [disabled]="isCreatingReturnPolicy">
           <option *ngFor="let days of returnPolicyDeadlineOptions" [ngValue]="days">
-            {{ days }} Gün
+            {{ t('listings.fastCreator.modals.rpDaysUnit', { days }) }}
           </option>
         </select>
       </div>
 
       <div class="rp-preview-badge">
-        <span>Önizleme Başlığı:</span>
+        <span>{{ t('listings.fastCreator.modals.rpPreviewLabel') }}</span>
         <strong>{{ newPolicyPreviewTitle }}</strong>
       </div>
 
@@ -1314,10 +1315,10 @@
 
     <div class="rp-modal-footer">
       <button type="button" class="btn-rp-cancel" (click)="closeReturnPolicyModal()" [disabled]="isCreatingReturnPolicy">
-        İptal
+        {{ t('listings.fastCreator.modals.rpCancelBtn') }}
       </button>
       <button type="button" class="btn-rp-submit" (click)="submitCreateReturnPolicy()" [disabled]="isCreatingReturnPolicy">
-        {{ isCreatingReturnPolicy ? '⏳ Oluşturuluyor...' : '💾 Oluştur ve Seç' }}
+        {{ isCreatingReturnPolicy ? t('listings.fastCreator.modals.rpCreatingBtn') : t('listings.fastCreator.modals.rpSubmitBtn') }}
       </button>
     </div>
   </div>
@@ -1334,9 +1335,9 @@
   translate="no"
   (click)="toggleShippingDrawer()"
   [attr.aria-expanded]="isShippingDrawerOpen"
-  title="Kargo & AI Fiyatlandırma Panelini Aç / Kapat">
+  [title]="t('listings.fastCreator.shippingDrawer.edgeTooltip')">
   <span class="edge-icon">🚚</span>
-  <span class="edge-label">KARGO</span>
+  <span class="edge-label">{{ t('listings.fastCreator.shippingDrawer.edgeLabel') }}</span>
   <span class="edge-price-badge" *ngIf="(estimatedShippingCostUsd || 0) > 0">
     ${{ (estimatedShippingCostUsd || 0).toFixed(2) }}
   </span>
@@ -1355,59 +1356,59 @@
   class="shipping-drawer-panel notranslate"
   [class.open]="isShippingDrawerOpen"
   translate="no"
-  aria-label="Kargo ve AI Fiyatlandırma Paneli"
+  [attr.aria-label]="t('listings.fastCreator.shippingDrawer.panelAria')"
   (click)="$event.stopPropagation()">
   <div class="shipping-drawer-header">
     <div class="drawer-head-title-wrap">
       <span class="drawer-head-icon">🚚</span>
       <div>
-        <h3>Kargo &amp; AI Fiyatlandırma Paneli</h3>
+        <h3>{{ t('listings.fastCreator.shippingDrawer.panelTitle') }}</h3>
         <p class="drawer-head-sub">
-          Hedef: {{ agentTargetCountry }} · {{ agentBaseWeightGrams }}g · {{ agentLengthCm }}×{{ agentWidthCm }}×{{ agentHeightCm }} cm ({{ computedDesi }} desi)
+          {{ t('listings.fastCreator.shippingDrawer.panelSub', { country: agentTargetCountry, weight: agentBaseWeightGrams, l: agentLengthCm, w: agentWidthCm, h: agentHeightCm, desi: computedDesi }) }}
         </p>
       </div>
     </div>
-    <button type="button" class="btn-close-dlg" (click)="closeShippingDrawer()" aria-label="Paneli kapat">✕</button>
+    <button type="button" class="btn-close-dlg" (click)="closeShippingDrawer()" [attr.aria-label]="t('listings.fastCreator.shippingDrawer.closeAria')">✕</button>
   </div>
 
   <div class="shipping-drawer-body">
     <!-- 1. PAKET & MARJ PARAMETRELERİ -->
     <section class="drawer-section">
-      <div class="drawer-sec-title">📦 Paket &amp; Marj Parametreleri</div>
+      <div class="drawer-sec-title">{{ t('listings.fastCreator.shippingDrawer.paramsTitle') }}</div>
       <div class="agent-params-grid">
         <div class="agent-param-field">
-          <label for="drawerCountrySelect">Hedef Ülke</label>
+          <label for="drawerCountrySelect">{{ t('listings.fastCreator.shippingDrawer.targetCountry') }}</label>
           <select id="drawerCountrySelect" class="agent-param-input" [(ngModel)]="agentTargetCountry">
-            <option value="US">ABD (US)</option>
-            <option value="DE">Almanya (DE)</option>
-            <option value="GB">İngiltere (GB)</option>
-            <option value="CA">Kanada (CA)</option>
-            <option value="AU">Avustralya (AU)</option>
+            <option value="US">{{ t('listings.fastCreator.shippingDrawer.countryUS') }}</option>
+            <option value="DE">{{ t('listings.fastCreator.shippingDrawer.countryDE') }}</option>
+            <option value="GB">{{ t('listings.fastCreator.shippingDrawer.countryGB') }}</option>
+            <option value="CA">{{ t('listings.fastCreator.shippingDrawer.countryCA') }}</option>
+            <option value="AU">{{ t('listings.fastCreator.shippingDrawer.countryAU') }}</option>
           </select>
         </div>
         <div class="agent-param-field">
-          <label for="drawerWeightInput">Ağırlık (g)</label>
+          <label for="drawerWeightInput">{{ t('listings.fastCreator.shippingDrawer.weightGrams') }}</label>
           <input id="drawerWeightInput" type="number" min="50" step="50" class="agent-param-input" [(ngModel)]="agentBaseWeightGrams" />
         </div>
         <div class="agent-param-field">
-          <label for="drawerLengthInput">Uzunluk (cm)</label>
+          <label for="drawerLengthInput">{{ t('listings.fastCreator.shippingDrawer.lengthCm') }}</label>
           <input id="drawerLengthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentLengthCm" />
         </div>
         <div class="agent-param-field">
-          <label for="drawerWidthInput">Genişlik (cm)</label>
+          <label for="drawerWidthInput">{{ t('listings.fastCreator.shippingDrawer.widthCm') }}</label>
           <input id="drawerWidthInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentWidthCm" />
         </div>
         <div class="agent-param-field">
-          <label for="drawerHeightInput">Yükseklik (cm)</label>
+          <label for="drawerHeightInput">{{ t('listings.fastCreator.shippingDrawer.heightCm') }}</label>
           <input id="drawerHeightInput" type="number" min="1" class="agent-param-input" [(ngModel)]="agentHeightCm" />
         </div>
         <div class="agent-param-field">
-          <label for="drawerCostInput">Maliyet ($)</label>
+          <label for="drawerCostInput">{{ t('listings.fastCreator.shippingDrawer.costUsd') }}</label>
           <input id="drawerCostInput" type="number" min="0" step="0.5" class="agent-param-input" [(ngModel)]="agentProductionCostUsd" />
           <span class="currency-hint notranslate" translate="no">≈ ₺{{ ((agentProductionCostUsd || 0) * usdTryRate).toFixed(2) }}</span>
         </div>
         <div class="agent-param-field">
-          <label for="drawerMarginInput">Hedef Marj (%)</label>
+          <label for="drawerMarginInput">{{ t('listings.fastCreator.shippingDrawer.targetMarginPct') }}</label>
           <input id="drawerMarginInput" type="number" min="5" max="65" step="5" class="agent-param-input" [(ngModel)]="agentTargetMarginPct" />
         </div>
       </div>
@@ -1416,14 +1417,14 @@
     <!-- 2. 4 TAŞIYICI CANLI KARGO TEKLİFLERİ -->
     <section class="drawer-section">
       <div class="drawer-sec-head-row">
-        <span class="drawer-sec-title">🚚 4 Taşıyıcı Canlı Kargo Teklifleri</span>
+        <span class="drawer-sec-title">{{ t('listings.fastCreator.shippingDrawer.quotesTitle') }}</span>
         <button
           type="button"
           class="btn-drawer-quotes"
           [disabled]="isLoadingCarrierQuotes"
           (click)="fetchDrawerCarrierQuotes()">
           <i class="fa-solid" [ngClass]="isLoadingCarrierQuotes ? 'fa-spinner fa-spin' : 'fa-rotate'" aria-hidden="true"></i>
-          <span>{{ isLoadingCarrierQuotes ? 'Çekiliyor...' : 'Fiyatları Çek' }}</span>
+          <span>{{ isLoadingCarrierQuotes ? t('listings.fastCreator.shippingDrawer.fetchingQuotes') : t('listings.fastCreator.shippingDrawer.fetchQuotesBtn') }}</span>
         </button>
       </div>
 
@@ -1432,7 +1433,7 @@
       </div>
 
       <div *ngIf="!isLoadingCarrierQuotes && drawerCarrierQuotes.length === 0 && !carrierQuotesError" class="drawer-empty-quotes">
-        Taşıyıcı tekliflerini görmek için <strong>Fiyatları Çek</strong> butonuna tıklayın.
+        {{ t('listings.fastCreator.shippingDrawer.emptyQuotesPrefix') }} <strong>{{ t('listings.fastCreator.shippingDrawer.emptyQuotesBold') }}</strong> {{ t('listings.fastCreator.shippingDrawer.emptyQuotesSuffix') }}
       </div>
 
       <div *ngIf="drawerCarrierQuotes.length > 0" class="drawer-carrier-list">
@@ -1454,7 +1455,7 @@
           <div class="carrier-card-right">
             <strong class="carrier-usd">${{ q.priceUsd.toFixed(2) }}</strong>
             <span class="carrier-apply-pill">
-              {{ selectedCarrierKey === q.carrierKey ? '✓ Seçili' : 'Uygula' }}
+              {{ selectedCarrierKey === q.carrierKey ? t('listings.fastCreator.shippingDrawer.selectedPill') : t('listings.fastCreator.shippingDrawer.applyPill') }}
             </span>
           </div>
         </div>
@@ -1463,10 +1464,10 @@
 
     <!-- 3. AI FİYAT & RAKİP AJANI -->
     <section class="drawer-section">
-      <div class="drawer-sec-title">🤖 AI Fiyat, Rakip &amp; Varyasyon Ajanı</div>
+      <div class="drawer-sec-title">{{ t('listings.fastCreator.shippingDrawer.agentTitle') }}</div>
       <div class="agent-mode-pill" [class.is-variations]="hasPricingVariations">
-        <span *ngIf="!hasPricingVariations">📦 Tekil Ürün Modu (Varyasyon eklenmez)</span>
-        <span *ngIf="hasPricingVariations">🎨 Varyasyonlu Mod ({{ variationRows.length }} kombinasyon fiyatlanır)</span>
+        <span *ngIf="!hasPricingVariations">{{ t('listings.fastCreator.shippingDrawer.singleModePill') }}</span>
+        <span *ngIf="hasPricingVariations">{{ t('listings.fastCreator.shippingDrawer.variationModePill', { count: variationRows.length }) }}</span>
       </div>
       <button
         type="button"
@@ -1475,7 +1476,7 @@
         [disabled]="isRunningPricingAgent"
         (click)="runAiPricingAgent()">
         <i class="fa-solid" [ngClass]="isRunningPricingAgent ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
-        <span>{{ isRunningPricingAgent ? 'Rakip + Kargo + LLM Çalışıyor...' : 'AI Fiyat & Kargo Ajanını Çalıştır' }}</span>
+        <span>{{ isRunningPricingAgent ? t('listings.fastCreator.shippingDrawer.agentRunningBtn') : t('listings.fastCreator.shippingDrawer.agentRunBtn') }}</span>
       </button>
 
       <div *ngIf="pricingAgentError" class="agent-error-alert" role="alert">
@@ -1485,16 +1486,16 @@
       <div *ngIf="pricingAgentResult as agent" class="agent-result-panel">
         <div class="agent-metrics-strip">
           <span class="agent-metric-chip">
-            {{ agent.marketBenchmark.competitorCount > 0 ? ('Rakip: ' + agent.marketBenchmark.competitorCount + ' ilan · Ort $' + agent.marketBenchmark.averagePriceUsd.toFixed(2)) : 'Rakip: Maliyet + Marj Modu' }}
+            {{ agent.marketBenchmark.competitorCount > 0 ? t('listings.fastCreator.shippingDrawer.competitorMetric', { count: agent.marketBenchmark.competitorCount, avg: agent.marketBenchmark.averagePriceUsd.toFixed(2) }) : t('listings.fastCreator.shippingDrawer.costPlusMarginMetric') }}
           </span>
           <span class="agent-metric-chip accent">
             {{ agent.shippingBenchmark.selectedCarrierName }}: ${{ agent.shippingBenchmark.baseShippingCostUsd.toFixed(2) }} ({{ agent.shippingBenchmark.estimatedDays }})
           </span>
           <span class="agent-metric-chip profit" *ngIf="agent.isSingleProductPricing">
-            Önerilen: ${{ agent.recommendedBasePriceUsd.toFixed(2) }} · Net: ${{ (agent.recommendedNetProfitUsd || 0).toFixed(2) }}
+            {{ t('listings.fastCreator.shippingDrawer.recommendedMetric', { price: agent.recommendedBasePriceUsd.toFixed(2), net: (agent.recommendedNetProfitUsd || 0).toFixed(2) }) }}
           </span>
           <span class="agent-metric-chip profit">
-            Ort. Net Marj: %{{ agent.averageNetMarginPercent.toFixed(1) }}
+            {{ t('listings.fastCreator.shippingDrawer.avgNetMarginMetric', { pct: agent.averageNetMarginPercent.toFixed(1) }) }}
           </span>
         </div>
 
@@ -1511,34 +1512,34 @@
 
         <div class="agent-market-detail" *ngIf="agent.marketBenchmark.competitorCount > 0">
           <div class="agent-market-detail-head">
-            <span>Piyasa Özeti: <code>{{ agent.searchKeywordUsed }}</code></span>
-            <span>Ücretsiz Kargo: %{{ agent.marketBenchmark.freeShippingRatioPct.toFixed(0) }}</span>
+            <span>{{ t('listings.fastCreator.shippingDrawer.marketSummaryLabel') }} <code>{{ agent.searchKeywordUsed }}</code></span>
+            <span>{{ t('listings.fastCreator.shippingDrawer.freeShippingRatio', { pct: agent.marketBenchmark.freeShippingRatioPct.toFixed(0) }) }}</span>
           </div>
           <div class="agent-source-module-tag">
-            <span>📡 {{ agent.marketBenchmark.sourceModule || 'Pazar Araştırması Modülü (Etsy API v3)' }}</span>
+            <span>📡 {{ agent.marketBenchmark.sourceModule || t('listings.fastCreator.shippingDrawer.defaultSourceModule') }}</span>
           </div>
           <div class="agent-market-bands">
-            <span>Min ${{ agent.marketBenchmark.minPriceUsd.toFixed(2) }}</span>
-            <span>Medyan ${{ agent.marketBenchmark.medianPriceUsd.toFixed(2) }}</span>
-            <span>P75 ${{ agent.marketBenchmark.p75PriceUsd.toFixed(2) }}</span>
-            <span>Max ${{ agent.marketBenchmark.maxPriceUsd.toFixed(2) }}</span>
+            <span>{{ t('listings.competitorsDrawer.kpiMin') }} ${{ agent.marketBenchmark.minPriceUsd.toFixed(2) }}</span>
+            <span>{{ t('listings.competitorsDrawer.kpiMedian') }} ${{ agent.marketBenchmark.medianPriceUsd.toFixed(2) }}</span>
+            <span>{{ t('listings.competitorsDrawer.kpiP75') }} ${{ agent.marketBenchmark.p75PriceUsd.toFixed(2) }}</span>
+            <span>{{ t('listings.competitorsDrawer.kpiMax') }} ${{ agent.marketBenchmark.maxPriceUsd.toFixed(2) }}</span>
           </div>
           <div class="agent-shipping-split" *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0 || (agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">
-            <span *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0">Ücretsiz Kargolu Medyan: ${{ (agent.marketBenchmark.freeShippingMedianUsd || 0).toFixed(2) }}</span>
-            <span *ngIf="(agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">Kargo Hariç Medyan: ${{ (agent.marketBenchmark.paidShippingMedianUsd || 0).toFixed(2) }}</span>
+            <span *ngIf="(agent.marketBenchmark.freeShippingMedianUsd || 0) > 0">{{ t('listings.fastCreator.shippingDrawer.freeShipMedian', { price: (agent.marketBenchmark.freeShippingMedianUsd || 0).toFixed(2) }) }}</span>
+            <span *ngIf="(agent.marketBenchmark.paidShippingMedianUsd || 0) > 0">{{ t('listings.fastCreator.shippingDrawer.paidShipMedian', { price: (agent.marketBenchmark.paidShippingMedianUsd || 0).toFixed(2) }) }}</span>
           </div>
           <button
             type="button"
             class="btn-open-competitors-flyout"
             [class.active]="isCompetitorPanelOpen"
             (click)="toggleCompetitorPanel()">
-            <span>🔍 Taranan {{ scannedCompetitorsCount }} Rakip Ürünü {{ isCompetitorPanelOpen ? 'Gizle' : 'Yan Panelde Gör' }}</span>
+            <span>{{ isCompetitorPanelOpen ? t('listings.fastCreator.shippingDrawer.toggleCompetitorsHide', { count: scannedCompetitorsCount }) : t('listings.fastCreator.shippingDrawer.toggleCompetitorsShow', { count: scannedCompetitorsCount }) }}</span>
             <span class="flyout-arrow">{{ isCompetitorPanelOpen ? '▸' : '◂' }}</span>
           </button>
           <ul class="agent-competitor-list" *ngIf="agent.marketBenchmark.topCompetitors?.length">
-            <li *ngFor="let comp of agent.marketBenchmark.topCompetitors.slice(0, 4)" (click)="openCompetitorPanel()" title="Tüm taranan rakip ürünleri yan panelde gör">
+            <li *ngFor="let comp of agent.marketBenchmark.topCompetitors.slice(0, 4)" (click)="openCompetitorPanel()" [title]="t('listings.fastCreator.shippingDrawer.openCompetitorsTooltip')">
               <span class="comp-title" [title]="comp.title">{{ comp.title }}</span>
-              <span class="comp-price">${{ comp.priceUsd.toFixed(2) }}{{ comp.hasFreeShipping ? ' · Ücr. Kargo' : '' }}</span>
+              <span class="comp-price">${{ comp.priceUsd.toFixed(2) }}{{ comp.hasFreeShipping ? t('listings.fastCreator.shippingDrawer.freeShipShort') : '' }}</span>
             </li>
           </ul>
         </div>
@@ -1555,3 +1556,4 @@
   (closed)="closeCompetitorPanel()"
   (rescanWithKeyword)="rescanPricingWithKeyword($event)">
 </app-pricing-competitors-drawer>
+</ng-container>

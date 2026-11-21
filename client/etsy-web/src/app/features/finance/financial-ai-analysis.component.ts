@@ -2,6 +2,7 @@ import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -27,21 +28,23 @@ interface PayoutForecastRow {
 @Component({
   selector: 'app-financial-ai-analysis',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('finance')],
   template: `
+    <ng-container *transloco="let t">
     <div class="fin-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">🧠</div>
           <div>
-            <h1 class="page-title">Finansal AI Analiz & Nakit Akış Projeksiyonu</h1>
-            <p class="page-subtitle">Kural tabanlı finansal yapay zeka motoru, marj sıkışması uyarıları ve 30-60 günlük banka giriş tahminleri</p>
+            <h1 class="page-title">{{ t('finance.aiAnalysis.title') }}</h1>
+            <p class="page-subtitle">{{ t('finance.aiAnalysis.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-run-audit" (click)="runFinancialAudit()">
-            ⚡ Finansal AI Taramasını Başlat
+            {{ t('finance.aiAnalysis.runAuditBtn') }}
           </button>
         </div>
       </div>
@@ -49,24 +52,24 @@ interface PayoutForecastRow {
       <!-- METRIC STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">30 GÜNLÜK TAHMİNİ CİRO</span>
+          <span class="kpi-label">{{ t('finance.aiAnalysis.kpiRevenue30d') }}</span>
           <span class="kpi-val text-green">\${{ projectedRevenue | number:'1.2-2' }}</span>
           <span class="kpi-sub">{{ growthSubtitle }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">BEKLENEN NET KÂR</span>
+          <span class="kpi-label">{{ t('finance.aiAnalysis.kpiNetProfit') }}</span>
           <span class="kpi-val text-blue">\${{ projectedNetProfit | number:'1.2-2' }}</span>
-          <span class="kpi-sub">Ortalama Marj: %{{ netMarginPercent }}</span>
+          <span class="kpi-sub">{{ t('finance.aiAnalysis.avgMarginSub', { pct: netMarginPercent }) }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ETSY KOMİSYON YÜKÜ</span>
+          <span class="kpi-label">{{ t('finance.aiAnalysis.kpiFeeLoad') }}</span>
           <span class="kpi-val text-orange">-%{{ feePercentage }}</span>
-          <span class="kpi-sub">İşlem, İlan & Ödeme Ücreti</span>
+          <span class="kpi-sub">{{ t('finance.aiAnalysis.kpiFeeLoadSub') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">REKLAM GETİRİSİ (MER / ROAS)</span>
+          <span class="kpi-label">{{ t('finance.aiAnalysis.kpiRoas') }}</span>
           <span class="kpi-val text-purple">{{ roasScore }}x</span>
-          <span class="kpi-sub">{{ roasScore > 0 ? ('Her $1 Reklama $' + roasScore + ' Mağaza Cirosu') : 'Dönem içi reklam harcaması yok' }}</span>
+          <span class="kpi-sub">{{ roasScore > 0 ? t('finance.aiAnalysis.roasSubActive', { score: roasScore }) : t('finance.aiAnalysis.roasSubEmpty') }}</span>
         </div>
       </div>
 
@@ -79,24 +82,24 @@ interface PayoutForecastRow {
       <div *ngIf="etsyApi.tokenStatus() !== 'connected'" class="alert-banner">
         <div class="alert-icon">⚠️</div>
         <div class="alert-body">
-          <span class="alert-title">Etsy v3 API Bağlantısı Aktif Değil</span>
+          <span class="alert-title">{{ t('finance.aiAnalysis.apiDisconnectedTitle') }}</span>
           <p class="alert-desc">
-            Finansal yapay zeka analizlerinin mağazanıza özel çalışabilmesi için Etsy API yetkilendirmesi gereklidir. Asla sahte veri üretilmez.
+            {{ t('finance.aiAnalysis.apiDisconnectedDesc') }}
           </p>
         </div>
       </div>
 
       <!-- AI RECOMMENDATIONS GRID -->
       <div class="insights-section">
-        <h2 class="section-title">Yapay Zeka Tarafından Üretilen Finansal İyileştirmeler</h2>
+        <h2 class="section-title">{{ t('finance.aiAnalysis.insightsSectionTitle') }}</h2>
         <div *ngIf="insights.length > 0" class="insights-grid">
           <div *ngFor="let item of insights" class="insight-card glass-card" [ngClass]="item.type">
             <div class="card-head">
               <span class="type-badge" [ngClass]="item.type">
-                {{ item.type === 'warning' ? '⚠️ Marj Uyarısı' : (item.type === 'opportunity' ? '💡 Fırsat' : '✓ Güçlü Yön') }}
+                {{ item.type === 'warning' ? t('finance.aiAnalysis.badgeWarning') : (item.type === 'opportunity' ? t('finance.aiAnalysis.badgeOpportunity') : t('finance.aiAnalysis.badgeSuccess')) }}
               </span>
               <span class="impact-val" [class.text-green]="item.impactUsd > 0" [class.text-red]="item.impactUsd < 0">
-                {{ item.impactUsd > 0 ? '+' : '' }}\${{ item.impactUsd }} / ay
+                {{ t('finance.aiAnalysis.impactPerMonth', { sign: item.impactUsd > 0 ? '+' : '', amount: item.impactUsd }) }}
               </span>
             </div>
             <h3 class="insight-title">{{ item.title }}</h3>
@@ -111,33 +114,33 @@ interface PayoutForecastRow {
 
         <div *ngIf="insights.length === 0" class="empty-state-box glass-card">
           <span class="empty-icon">🧠</span>
-          <span class="empty-title">Canlı Finansal Analiz Verisi Bulunamadı</span>
+          <span class="empty-title">{{ t('finance.aiAnalysis.emptyTitle') }}</span>
           <p class="empty-desc">
-            Bu mağaza için henüz senkronize edilmiş bir sipariş ve komisyon verisi bulunamadı. Etsy API bağlantısı sağlandığında mağazanızın gerçek kâr marjları ve komisyon yükleri otomatik analiz edilecektir.
+            {{ t('finance.aiAnalysis.emptyDesc') }}
           </p>
         </div>
       </div>
 
       <!-- CASH FLOW PROJECTION TABLE -->
       <div class="projection-card glass-card">
-        <h2 class="section-title">Çok Ufuklu Tahmini Ciro & Banka Ödeme Takvimi (Canlı Defter Projeksiyonu)</h2>
+        <h2 class="section-title">{{ t('finance.aiAnalysis.projectionTitle') }}</h2>
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Dönem</th>
-                <th>Tahmini Sipariş</th>
-                <th>Beklenen Brüt Ciro</th>
-                <th>Etsy Kesinti & Reklam</th>
-                <th>Üretim & Kargo</th>
-                <th>Tahmini Net Kâr</th>
-                <th>Tahmini Banka Ödemesi</th>
+                <th>{{ t('finance.aiAnalysis.colPeriod') }}</th>
+                <th>{{ t('finance.aiAnalysis.colEstOrders') }}</th>
+                <th>{{ t('finance.aiAnalysis.colGrossRevenue') }}</th>
+                <th>{{ t('finance.aiAnalysis.colFeesAndAds') }}</th>
+                <th>{{ t('finance.aiAnalysis.colProductionShipping') }}</th>
+                <th>{{ t('finance.aiAnalysis.colEstNetProfit') }}</th>
+                <th>{{ t('finance.aiAnalysis.colEstBankPayout') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let row of payoutForecastRows">
                 <td><b>{{ row.periodLabel }}</b></td>
-                <td>{{ row.estimatedOrders }} Adet</td>
+                <td>{{ t('finance.aiAnalysis.ordersUnit', { count: row.estimatedOrders }) }}</td>
                 <td>\${{ row.grossUsd | number:'1.2-2' }}</td>
                 <td class="text-orange">-\${{ row.feesAndAdsUsd | number:'1.2-2' }}</td>
                 <td class="text-orange">-\${{ row.costsUsd | number:'1.2-2' }}</td>
@@ -146,7 +149,7 @@ interface PayoutForecastRow {
               </tr>
               <tr *ngIf="payoutForecastRows.length === 0">
                 <td colspan="7" style="text-align: center; color: #94a3b8; padding: 20px;">
-                  Canlı defter projeksiyonu henüz yüklenmedi veya seçili dönem için yeterli sipariş verisi bulunmuyor.
+                  {{ t('finance.aiAnalysis.projectionEmpty') }}
                 </td>
               </tr>
             </tbody>
@@ -154,6 +157,7 @@ interface PayoutForecastRow {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .fin-container {
@@ -316,6 +320,7 @@ interface PayoutForecastRow {
 export class FinancialAiAnalysisComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private router = inject(Router);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   // Initialized to 0 - Zero fake data policy!
@@ -324,80 +329,98 @@ export class FinancialAiAnalysisComponent implements OnInit {
   netMarginPercent = 0;
   feePercentage = 0;
   roasScore = 0;
-  growthSubtitle = 'Canlı defter verisi bekleniyor';
+  growthSubtitle = '';
+  private lastPerf: any = null;
 
   toastMessage = '';
   insights: FinancialInsight[] = [];
   payoutForecastRows: PayoutForecastRow[] = [];
 
   ngOnInit(): void {
+    this.growthSubtitle = this.transloco.translate('finance.aiAnalysis.waitingLedger');
     this.loadFinancials();
+    this.transloco.selectTranslation('finance').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this.lastPerf) {
+        this.applyPerformanceMetrics(this.lastPerf);
+      } else {
+        this.growthSubtitle = this.transloco.translate('finance.aiAnalysis.waitingLedger');
+      }
+    });
+  }
+
+  private applyPerformanceMetrics(perf: any): void {
+    const gross = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
+    const net = Number(perf.netProfitUsd ?? perf.netProfit ?? 0);
+    const margin = Number(perf.profitMarginPercent ?? perf.netMarginPercent ?? perf.netProfitMargin ?? 0);
+    const fees = Number(perf.platformFees ?? 0);
+    const ads = Number(perf.internalAdsCost ?? 0) + Number(perf.externalAdsCost ?? 0);
+
+    if (gross > 0) {
+      this.projectedRevenue = Number((gross * 1.12).toFixed(2));
+      this.projectedNetProfit = Number((net * 1.12).toFixed(2));
+      this.netMarginPercent = Number(margin.toFixed(1));
+      this.feePercentage = Number(((fees / gross) * 100).toFixed(1));
+      this.roasScore = ads > 0 ? Number((gross / ads).toFixed(1)) : 0;
+      this.growthSubtitle = this.transloco.translate('finance.aiAnalysis.baseGrossProjection', { gross: gross.toFixed(2) });
+
+      const realInsights: FinancialInsight[] = [];
+      if (this.feePercentage > 15) {
+        realInsights.push({
+          type: 'warning',
+          title: this.transloco.translate('finance.aiAnalysis.feeWarningTitle'),
+          description: this.transloco.translate('finance.aiAnalysis.feeWarningDesc', { pct: this.feePercentage }),
+          impactUsd: Math.round(gross * 0.05),
+          actionText: this.transloco.translate('finance.aiAnalysis.feeWarningAction')
+        });
+      }
+      if (this.netMarginPercent > 35) {
+        realInsights.push({
+          type: 'success',
+          title: this.transloco.translate('finance.aiAnalysis.healthyMarginTitle'),
+          description: this.transloco.translate('finance.aiAnalysis.healthyMarginDesc', { pct: this.netMarginPercent }),
+          impactUsd: Math.max(0, Math.round(net * 0.1)),
+          actionText: this.transloco.translate('finance.aiAnalysis.healthyMarginAction')
+        });
+      } else if (net < 0) {
+        realInsights.push({
+          type: 'warning',
+          title: this.transloco.translate('finance.aiAnalysis.netLossTitle'),
+          description: this.transloco.translate('finance.aiAnalysis.netLossDesc', { amount: Math.abs(net).toFixed(2) }),
+          impactUsd: Math.round(net),
+          actionText: this.transloco.translate('finance.aiAnalysis.netLossAction')
+        });
+      }
+      if (this.roasScore > 0) {
+        realInsights.push({
+          type: 'opportunity',
+          title: this.transloco.translate('finance.aiAnalysis.adEfficiencyTitle', { score: this.roasScore }),
+          description: this.transloco.translate('finance.aiAnalysis.adEfficiencyDesc', { score: this.roasScore }),
+          impactUsd: Math.round(gross * 0.12),
+          actionText: this.transloco.translate('finance.aiAnalysis.adEfficiencyAction')
+        });
+      }
+      this.insights = realInsights;
+    } else {
+      this.projectedRevenue = 0;
+      this.projectedNetProfit = Number(net.toFixed(2));
+      this.netMarginPercent = 0;
+      this.feePercentage = 0;
+      this.roasScore = 0;
+      this.growthSubtitle = this.transloco.translate('finance.aiAnalysis.noCompletedSales');
+    }
   }
 
   loadFinancials(): void {
     this.etsyApi.getFinancialPerformance('this_month').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
+          this.lastPerf = perf;
           const gross = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
           const net = Number(perf.netProfitUsd ?? perf.netProfit ?? 0);
-          const margin = Number(perf.profitMarginPercent ?? perf.netMarginPercent ?? perf.netProfitMargin ?? 0);
           const fees = Number(perf.platformFees ?? 0);
-          const ads = Number(perf.internalAdsCost ?? 0) + Number(perf.externalAdsCost ?? 0);
           const rate = Number(perf.exchangeRateUsed ?? this.etsyApi.exchangeRate() ?? 49.5);
 
-          if (gross > 0) {
-            this.projectedRevenue = Number((gross * 1.12).toFixed(2));
-            this.projectedNetProfit = Number((net * 1.12).toFixed(2));
-            this.netMarginPercent = Number(margin.toFixed(1));
-            this.feePercentage = Number(((fees / gross) * 100).toFixed(1));
-            this.roasScore = ads > 0 ? Number((gross / ads).toFixed(1)) : 0;
-            this.growthSubtitle = `Baz Brüt Ciro: $${gross.toFixed(2)} (+%12 projeksiyon)`;
-
-            const realInsights: FinancialInsight[] = [];
-            if (this.feePercentage > 15) {
-              realInsights.push({
-                type: 'warning',
-                title: 'Etsy Kesinti Yükü Analizi',
-                description: `Mağazanızın brüt cirosunun %${this.feePercentage}'i Etsy işlem, ilan ve ödeme komisyonlarına ayrılıyor. Fiyatları %5 artırmak komisyon etkisini telafi edebilir.`,
-                impactUsd: Math.round(gross * 0.05),
-                actionText: 'Fiyatlandırma Stratejisini İncele'
-              });
-            }
-            if (this.netMarginPercent > 35) {
-              realInsights.push({
-                type: 'success',
-                title: 'Sağlıklı Kâr Marjı',
-                description: `Net kâr marjınız %${this.netMarginPercent} seviyesinde. Bu marj reklam hacmini artırarak ölçeklenmek için alan sağlıyor.`,
-                impactUsd: Math.max(0, Math.round(net * 0.1)),
-                actionText: 'Büyüme Fırsatlarını Gör'
-              });
-            } else if (net < 0) {
-              realInsights.push({
-                type: 'warning',
-                title: 'Dönem Net Zarar Uyarısı',
-                description: `Bu dönem net sonucu -$${Math.abs(net).toFixed(2)} seviyesindedir. İade, reklam ve sipariş maliyetlerini muhasebe panelinden inceleyin.`,
-                impactUsd: Math.round(net),
-                actionText: 'Muhasebe Paneline Git'
-              });
-            }
-            if (this.roasScore > 0) {
-              realInsights.push({
-                type: 'opportunity',
-                title: `Reklam Verimliliği (${this.roasScore}x MER)`,
-                description: `Harcanan her 1$ reklam maliyeti karşılığında mağazada ${this.roasScore}$ toplam ciro oluştu.`,
-                impactUsd: Math.round(gross * 0.12),
-                actionText: 'Reklam Bütçesini Optimize Et'
-              });
-            }
-            this.insights = realInsights;
-          } else {
-            this.projectedRevenue = 0;
-            this.projectedNetProfit = Number(net.toFixed(2));
-            this.netMarginPercent = 0;
-            this.feePercentage = 0;
-            this.roasScore = 0;
-            this.growthSubtitle = 'Bu ay henüz tamamlanmış satış yok';
-          }
+          this.applyPerformanceMetrics(perf);
 
           const end = new Date();
           const start = new Date();
@@ -438,26 +461,26 @@ export class FinancialAiAnalysisComponent implements OnInit {
   }
 
   runFinancialAudit(): void {
-    this.toastMessage = '⚡ VDS Akıllı Finansal Analiz motoru çalıştırılıyor...';
+    this.toastMessage = this.transloco.translate('finance.aiAnalysis.auditRunning');
     this.etsyApi.getFinancialAnalysis().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         if (res && res.recommendations && res.recommendations.length > 0) {
           this.insights = res.recommendations.map((rec: any, idx: number) => ({
             type: idx === 0 ? 'warning' : (idx === 1 ? 'opportunity' : 'success'),
-            title: rec.title || rec.category || 'Finansal Tavsiye',
-            description: rec.description || rec.message || 'Kâr marjını korumak için önerilen aksiyon.',
+            title: rec.title || rec.category || this.transloco.translate('finance.aiAnalysis.auditFallbackTitle'),
+            description: rec.description || rec.message || this.transloco.translate('finance.aiAnalysis.auditFallbackDesc'),
             impactUsd: Number(rec.potentialGainUsd ?? 0),
-            actionText: rec.actionTitle || 'Detayları Gör'
+            actionText: rec.actionTitle || this.transloco.translate('finance.aiAnalysis.auditFallbackAction')
           }));
-          this.toastMessage = '⚡ Canlı VDS Finansal AI analizi tamamlandı ve öneriler güncellendi!';
+          this.toastMessage = this.transloco.translate('finance.aiAnalysis.auditCompletedUpdated');
           setTimeout(() => this.toastMessage = '', 4000);
         } else {
-          this.toastMessage = '⚡ Finansal denetim tamamlandı.';
+          this.toastMessage = this.transloco.translate('finance.aiAnalysis.auditCompleted');
           setTimeout(() => this.toastMessage = '', 4000);
         }
       },
       error: () => {
-        this.toastMessage = '⚠️ VDS finansal analiz servisine şu anda ulaşılamıyor.';
+        this.toastMessage = this.transloco.translate('finance.aiAnalysis.auditError');
         setTimeout(() => this.toastMessage = '', 4000);
       }
     });

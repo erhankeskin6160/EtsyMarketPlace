@@ -1,14 +1,17 @@
 import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, ShopListingItemDto } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-profit-calculator',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('finance')],
   template: `
+    <ng-container *transloco="let t">
     <div class="calc-view">
       <!-- HEADER -->
       <div class="calc-header">
@@ -28,86 +31,86 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Etsy Kâr Hesaplayıcı & Maliyet Simülatörü</h1>
-            <p class="page-subtitle">Komisyonlar, işlem ücretleri, kargo navlunu ve offsite reklamlar dahil net kâr analizi</p>
+            <h1 class="page-title">{{ t('finance.profitCalculator.title') }}</h1>
+            <p class="page-subtitle">{{ t('finance.profitCalculator.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-rate-pill">
           <span class="live-dot"></span>
-          <span>Canlı Kur: 1 USD = {{ usdTryRate }} ₺</span>
+          <span>{{ t('finance.profitCalculator.liveRate', { rate: usdTryRate }) }}</span>
         </div>
       </div>
 
       <!-- KPI METRIC CARDS -->
       <div class="kpi-grid">
         <div class="kpi-card profit-card" [class.loss-card]="netProfitUsd < 0">
-          <span class="kpi-label">{{ netProfitUsd >= 0 ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR' }}</span>
+          <span class="kpi-label">{{ netProfitUsd >= 0 ? t('finance.profitCalculator.netProfitLabel') : t('finance.profitCalculator.netLossLabel') }}</span>
           <div class="kpi-value-row">
             <span class="kpi-val" [class.text-danger]="netProfitUsd < 0">&#36;{{ netProfitUsd.toFixed(2) }}</span>
             <span class="kpi-try">₺{{ netProfitTry.toFixed(2) }}</span>
           </div>
           <span class="kpi-sub" [class.success]="marginPercent >= 30" [class.danger]="marginPercent < 0">
-            {{ netProfitUsd >= 0 ? 'Kâr Marjı:' : 'Zarar Marjı:' }} <strong>%{{ marginPercent.toFixed(1) }}</strong>
+            {{ netProfitUsd >= 0 ? t('finance.profitCalculator.profitMarginPrefix') : t('finance.profitCalculator.lossMarginPrefix') }} <strong>%{{ marginPercent.toFixed(1) }}</strong>
           </span>
         </div>
 
         <div class="kpi-card">
-          <span class="kpi-label">YATIRIM GETİRİSİ (ROI)</span>
+          <span class="kpi-label">{{ t('finance.profitCalculator.roiLabel') }}</span>
           <span class="kpi-val roi-val">%{{ roiPercent.toFixed(1) }}</span>
-          <span class="kpi-sub">Maliyet başına kâr oranı</span>
+          <span class="kpi-sub">{{ t('finance.profitCalculator.roiSub') }}</span>
         </div>
 
         <div class="kpi-card">
-          <span class="kpi-label">TOPLAM MALİYET & GİDER</span>
+          <span class="kpi-label">{{ t('finance.profitCalculator.totalCostLabel') }}</span>
           <div class="kpi-value-row">
             <span class="kpi-val expense-val">&#36;{{ totalExpensesUsd.toFixed(2) }}</span>
             <span class="kpi-try">₺{{ (totalExpensesUsd * usdTryRate).toFixed(2) }}</span>
           </div>
-          <span class="kpi-sub">Üretim + Kargo + Kesintiler</span>
+          <span class="kpi-sub">{{ t('finance.profitCalculator.totalCostSub') }}</span>
         </div>
 
         <div class="kpi-card">
-          <span class="kpi-label">ETSY TOPLAM KESİNTİSİ</span>
+          <span class="kpi-label">{{ t('finance.profitCalculator.totalEtsyFeesLabel') }}</span>
           <div class="kpi-value-row">
             <span class="kpi-val fee-val">&#36;{{ totalEtsyFeesUsd.toFixed(2) }}</span>
             <span class="kpi-try">₺{{ (totalEtsyFeesUsd * usdTryRate).toFixed(2) }}</span>
           </div>
-          <span class="kpi-sub">TR Komisyon (%14.1) + KDV (%20) + İlan</span>
+          <span class="kpi-sub">{{ t('finance.profitCalculator.totalEtsyFeesSub') }}</span>
         </div>
       </div>
 
       <!-- VISUAL SPLIT BAR -->
       <div class="split-bar-card">
         <div class="split-bar-header">
-          <span class="card-label">Ciro Dağılım Çubuğu (Gelirin Nereye Gittiği)</span>
-          <span class="total-revenue-label">Toplam Gelir: &#36;{{ totalRevenueUsd.toFixed(2) }}</span>
+          <span class="card-label">{{ t('finance.profitCalculator.splitBarTitle') }}</span>
+          <span class="total-revenue-label">{{ t('finance.profitCalculator.totalRevenue', { amount: totalRevenueUsd.toFixed(2) }) }}</span>
         </div>
 
         <div class="split-bar-wrapper">
-          <div class="bar-segment profit-seg" [style.width.%]="profitRatio" title="Net Kâr: %{{ profitRatio.toFixed(1) }}">
-            <span *ngIf="profitRatio > 12">Net Kâr (%{{ profitRatio.toFixed(0) }})</span>
+          <div class="bar-segment profit-seg" [style.width.%]="profitRatio" [title]="t('finance.profitCalculator.segProfitTitle', { pct: profitRatio.toFixed(1) })">
+            <span *ngIf="profitRatio > 12">{{ t('finance.profitCalculator.segProfitLabel', { pct: profitRatio.toFixed(0) }) }}</span>
           </div>
-          <div class="bar-segment fee-seg" [style.width.%]="feeRatio" title="Etsy Kesintileri: %{{ feeRatio.toFixed(1) }}">
-            <span *ngIf="feeRatio > 10">Etsy (%{{ feeRatio.toFixed(0) }})</span>
+          <div class="bar-segment fee-seg" [style.width.%]="feeRatio" [title]="t('finance.profitCalculator.segFeeTitle', { pct: feeRatio.toFixed(1) })">
+            <span *ngIf="feeRatio > 10">{{ t('finance.profitCalculator.segFeeLabel', { pct: feeRatio.toFixed(0) }) }}</span>
           </div>
-          <div class="bar-segment material-seg" [style.width.%]="materialRatio" title="Üretim/Malzeme: %{{ materialRatio.toFixed(1) }}">
-            <span *ngIf="materialRatio > 10">Üretim (%{{ materialRatio.toFixed(0) }})</span>
+          <div class="bar-segment material-seg" [style.width.%]="materialRatio" [title]="t('finance.profitCalculator.segMaterialTitle', { pct: materialRatio.toFixed(1) })">
+            <span *ngIf="materialRatio > 10">{{ t('finance.profitCalculator.segMaterialLabel', { pct: materialRatio.toFixed(0) }) }}</span>
           </div>
-          <div class="bar-segment shipping-seg" [style.width.%]="shippingRatio" title="Kargo Navlunu: %{{ shippingRatio.toFixed(1) }}">
-            <span *ngIf="shippingRatio > 10">Kargo (%{{ shippingRatio.toFixed(0) }})</span>
+          <div class="bar-segment shipping-seg" [style.width.%]="shippingRatio" [title]="t('finance.profitCalculator.segShippingTitle', { pct: shippingRatio.toFixed(1) })">
+            <span *ngIf="shippingRatio > 10">{{ t('finance.profitCalculator.segShippingLabel', { pct: shippingRatio.toFixed(0) }) }}</span>
           </div>
-          <div class="bar-segment ad-seg" [style.width.%]="adRatio" title="Reklam: %{{ adRatio.toFixed(1) }}">
-            <span *ngIf="adRatio > 8">Reklam</span>
+          <div class="bar-segment ad-seg" [style.width.%]="adRatio" [title]="t('finance.profitCalculator.segAdTitle', { pct: adRatio.toFixed(1) })">
+            <span *ngIf="adRatio > 8">{{ t('finance.profitCalculator.segAdLabel') }}</span>
           </div>
         </div>
 
         <div class="split-legend">
-          <div class="legend-item"><span class="dot profit-dot"></span> Net Kâr (&#36;{{ netProfitUsd.toFixed(2) }})</div>
-          <div class="legend-item"><span class="dot fee-dot"></span> Etsy Komisyonları (&#36;{{ totalEtsyFeesUsd.toFixed(2) }})</div>
-          <div class="legend-item"><span class="dot mat-dot"></span> Üretim Maliyeti (&#36;{{ materialCostUsd.toFixed(2) }})</div>
-          <div class="legend-item"><span class="dot ship-dot"></span> Kargo Navlunu (&#36;{{ shippingCostUsd.toFixed(2) }})</div>
-          <div class="legend-item" *ngIf="adRatio > 0"><span class="dot ad-dot"></span> Reklam Gideri (&#36;{{ adCostUsd.toFixed(2) }})</div>
+          <div class="legend-item"><span class="dot profit-dot"></span> {{ t('finance.profitCalculator.legendProfit', { amount: netProfitUsd.toFixed(2) }) }}</div>
+          <div class="legend-item"><span class="dot fee-dot"></span> {{ t('finance.profitCalculator.legendFees', { amount: totalEtsyFeesUsd.toFixed(2) }) }}</div>
+          <div class="legend-item"><span class="dot mat-dot"></span> {{ t('finance.profitCalculator.legendMaterial', { amount: materialCostUsd.toFixed(2) }) }}</div>
+          <div class="legend-item"><span class="dot ship-dot"></span> {{ t('finance.profitCalculator.legendShipping', { amount: shippingCostUsd.toFixed(2) }) }}</div>
+          <div class="legend-item" *ngIf="adRatio > 0"><span class="dot ad-dot"></span> {{ t('finance.profitCalculator.legendAds', { amount: adCostUsd.toFixed(2) }) }}</div>
         </div>
       </div>
 
@@ -116,12 +119,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         
         <!-- COLUMN 1: SALE PRICE & REVENUE -->
         <div class="glass-card">
-          <span class="card-label">1. Satış & Gelir Kalemleri</span>
+          <span class="card-label">{{ t('finance.profitCalculator.col1Title') }}</span>
 
           <div class="form-group" *ngIf="activeListings.length > 0">
-            <label>🛍️ Canlı Mağaza İlanından Seç</label>
+            <label>{{ t('finance.profitCalculator.selectListingLabel') }}</label>
             <select [(ngModel)]="selectedListingId" (change)="onListingSelect()" class="form-select highlight-select">
-              <option [ngValue]="null">-- Canlı İlan İçe Aktar (Opsiyonel) --</option>
+              <option [ngValue]="null">{{ t('finance.profitCalculator.selectListingPlaceholder') }}</option>
               <option *ngFor="let l of activeListings" [ngValue]="l.listingId">
                 {{ l.title | slice:0:45 }}... (&#36;{{ l.price }})
               </option>
@@ -129,28 +132,28 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           </div>
 
           <div class="form-group">
-            <label>Ürün Adı / Başlık</label>
-            <input type="text" [(ngModel)]="productName" placeholder="Örn: 3D Kristal Ejderha" class="form-input" />
+            <label>{{ t('finance.profitCalculator.productNameLabel') }}</label>
+            <input type="text" [(ngModel)]="productName" [placeholder]="t('finance.profitCalculator.productNamePlaceholder')" class="form-input" />
           </div>
 
           <div class="form-row-2">
             <div class="form-group">
-              <label>Satış Fiyatı (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.salePriceLabel') }}</label>
               <input type="number" step="0.5" [(ngModel)]="salePriceUsd" (ngModelChange)="recalc()" class="form-input highlight" />
             </div>
             <div class="form-group">
-              <label>TL Karşılığı (₺ TRY)</label>
+              <label>{{ t('finance.profitCalculator.tryEquivalentLabel') }}</label>
               <input type="text" [value]="'₺' + (salePriceUsd * usdTryRate).toFixed(2)" readonly class="form-input readonly" />
             </div>
           </div>
 
           <div class="form-row-2">
             <div class="form-group">
-              <label>Alıcıdan Alınan Kargo (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.buyerShippingLabel') }}</label>
               <input type="number" step="0.5" [(ngModel)]="buyerShippingUsd" (ngModelChange)="recalc()" class="form-input" />
             </div>
             <div class="form-group">
-              <label>Hediye Paketi Ücreti (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.giftWrapLabel') }}</label>
               <input type="number" step="0.5" [(ngModel)]="giftWrapUsd" (ngModelChange)="recalc()" class="form-input" />
             </div>
           </div>
@@ -158,33 +161,33 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
         <!-- COLUMN 2: COSTS & PRODUCTION -->
         <div class="glass-card">
-          <span class="card-label">2. Üretim & Kargo Maliyetleri</span>
+          <span class="card-label">{{ t('finance.profitCalculator.col2Title') }}</span>
 
           <div class="form-row-2">
             <div class="form-group">
-              <label>Ürün / Filament / Malzeme (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.materialCostLabel') }}</label>
               <input type="number" step="0.5" [(ngModel)]="materialCostUsd" (ngModelChange)="recalc()" class="form-input highlight-cost" />
             </div>
             <div class="form-group">
-              <label>TL Karşılığı (₺ TRY)</label>
+              <label>{{ t('finance.profitCalculator.tryEquivalentLabel') }}</label>
               <input type="text" [value]="'₺' + (materialCostUsd * usdTryRate).toFixed(2)" readonly class="form-input readonly" />
             </div>
           </div>
 
           <div class="form-row-2">
             <div class="form-group">
-              <label>Kargo Gönderim Maliyeti (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.shippingCostLabel') }}</label>
               <input type="number" step="0.5" [(ngModel)]="shippingCostUsd" (ngModelChange)="recalc()" class="form-input highlight-cost" />
             </div>
             <div class="form-group">
-              <label>Paketleme & Koli (&#36; USD)</label>
+              <label>{{ t('finance.profitCalculator.packagingCostLabel') }}</label>
               <input type="number" step="0.2" [(ngModel)]="packagingCostUsd" (ngModelChange)="recalc()" class="form-input" />
             </div>
           </div>
 
           <!-- QUICK CARRIER CARDS -->
           <div class="carrier-pills">
-            <span class="carrier-pill-hint">Hızlı Kargo Seçimi:</span>
+            <span class="carrier-pill-hint">{{ t('finance.profitCalculator.quickCarrierHint') }}</span>
             <button class="c-pill" (click)="setCarrierCost(9.95, 'Shiptomore')">Shiptomore (&#36;9.95)</button>
             <button class="c-pill" (click)="setCarrierCost(10.90, 'ShipEntegra')">ShipEntegra (&#36;10.90)</button>
             <button class="c-pill" (click)="setCarrierCost(11.50, 'Aras Global')">Aras Global (&#36;11.50)</button>
@@ -194,35 +197,35 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
         <!-- COLUMN 3: ETSY FEES & ADVERTISING -->
         <div class="glass-card">
-          <span class="card-label">3. Etsy Komisyonları & Reklam</span>
+          <span class="card-label">{{ t('finance.profitCalculator.col3Title') }}</span>
 
           <div class="fee-detail-list">
             <div class="fee-row">
-              <span>Etsy İşlem Komisyonu (%6.5)</span>
+              <span>{{ t('finance.profitCalculator.feeTransaction') }}</span>
               <span>-&#36;{{ (totalRevenueUsd * 0.065).toFixed(2) }}</span>
             </div>
             <div class="fee-row">
-              <span>TR Ödeme İşleme Ücreti (%6.5 + 3₺)</span>
+              <span>{{ t('finance.profitCalculator.feeProcessing') }}</span>
               <span>-&#36;{{ paymentProcessingFeeUsd.toFixed(2) }}</span>
             </div>
             <div class="fee-row">
-              <span>Düzenleyici İşletme Ücreti (TR %1.1)</span>
+              <span>{{ t('finance.profitCalculator.feeRegulatory') }}</span>
               <span>-&#36;{{ (totalRevenueUsd * 0.011).toFixed(2) }}</span>
             </div>
             <div class="fee-row">
-              <span>İlan Listeleme Ücreti (Listing Fee)</span>
+              <span>{{ t('finance.profitCalculator.feeListing') }}</span>
               <span>-&#36;0.20</span>
             </div>
             <div class="fee-row">
-              <span>Etsy Kesinti KDV Tevkifatı (TR %20)</span>
+              <span>{{ t('finance.profitCalculator.feeVat') }}</span>
               <span>-&#36;{{ vatOnFeesUsd.toFixed(2) }}</span>
             </div>
             <div class="fee-row" *ngIf="useCurrencyConversion">
-              <span>Döviz Çevrim Farkı (%2.5)</span>
+              <span>{{ t('finance.profitCalculator.feeCurrencyConv') }}</span>
               <span>-&#36;{{ (totalRevenueUsd * 0.025).toFixed(2) }}</span>
             </div>
             <div class="fee-row" *ngIf="offsiteAdsPercent > 0">
-              <span>Dış Reklam (Offsite Ads %{{ offsiteAdsPercent }})</span>
+              <span>{{ t('finance.profitCalculator.feeOffsiteAds', { pct: offsiteAdsPercent }) }}</span>
               <span>-&#36;{{ (totalRevenueUsd * (offsiteAdsPercent / 100)).toFixed(2) }}</span>
             </div>
           </div>
@@ -230,21 +233,21 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           <div class="form-group checkbox-group">
             <label class="custom-chk">
               <input type="checkbox" [(ngModel)]="useCurrencyConversion" (ngModelChange)="recalc()" />
-              <span>Para Birimi Dönüştürme Farkı (%2.5) Ekle</span>
+              <span>{{ t('finance.profitCalculator.currencyConvCheckbox') }}</span>
             </label>
           </div>
 
           <div class="form-group">
-            <label>Offsite Ads (Dış Reklam)</label>
+            <label>{{ t('finance.profitCalculator.offsiteAdsLabel') }}</label>
             <select [(ngModel)]="offsiteAdsPercent" (ngModelChange)="recalc()" class="form-select">
-              <option [ngValue]="0">Yok (%0)</option>
-              <option [ngValue]="12">Etsy İsteğe Bağlı (%12)</option>
-              <option [ngValue]="15">Etsy Zorunlu Katılım (%15)</option>
+              <option [ngValue]="0">{{ t('finance.profitCalculator.offsiteNone') }}</option>
+              <option [ngValue]="12">{{ t('finance.profitCalculator.offsiteOptional') }}</option>
+              <option [ngValue]="15">{{ t('finance.profitCalculator.offsiteMandatory') }}</option>
             </select>
           </div>
 
           <button class="btn-save-costs" (click)="saveToCostManager()">
-            💾 Bu Maliyeti Maliyet Yöneticisine Kaydet
+            {{ t('finance.profitCalculator.saveToCostMgrBtn') }}
           </button>
           <div *ngIf="saveToast" class="cost-saved-toast">
             {{ saveToast }}
@@ -253,6 +256,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .calc-view {
@@ -595,7 +599,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class ProfitCalculatorComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
-  productName = '3D Kristal Ejderha (Bambu PLA)';
+  private transloco = inject(TranslocoService);
+  productName = '3D Crystal Dragon (Bambu PLA)';
   salePriceUsd = 49.50;
   buyerShippingUsd = 0;
   giftWrapUsd = 0;
@@ -629,6 +634,11 @@ export class ProfitCalculatorComponent implements OnInit {
   constructor(public etsyApi: EtsyApiService) {}
 
   ngOnInit(): void {
+    this.transloco.selectTranslation('finance').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (!this.selectedListingId) {
+        this.productName = this.transloco.translate('finance.profitCalculator.defaultProductName');
+      }
+    });
     this.recalc();
     this.loadListings();
   }
@@ -690,10 +700,10 @@ export class ProfitCalculatorComponent implements OnInit {
       }
 
       localStorage.setItem('etsy_product_costs_v1', JSON.stringify(savedCosts));
-      this.saveToast = `✓ "${this.productName.substring(0, 30)}..." maliyetleri başarıyla Ürün Maliyet Yöneticisine kaydedildi!`;
+      this.saveToast = this.transloco.translate('finance.profitCalculator.savedToast', { name: this.productName.substring(0, 30) });
       setTimeout(() => this.saveToast = null, 4000);
     } catch {
-      this.saveToast = '⚠️ Kaydedilirken bir hata oluştu.';
+      this.saveToast = this.transloco.translate('finance.profitCalculator.saveErrorToast');
       setTimeout(() => this.saveToast = null, 4000);
     }
   }

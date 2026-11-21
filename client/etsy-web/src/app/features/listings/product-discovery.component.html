@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
 <div class="discovery-container">
   
   <!-- TOAST NOTIFICATION -->
@@ -10,16 +11,16 @@
     <div class="header-top-row">
       <div class="header-title-box">
         <h1 class="header-title">
-          <span class="header-icon">🎯</span> Etsy Ürün Bul ve Listing Hazırla
+          <span class="header-icon">🎯</span> {{ t('listings.discovery.title') }}
         </h1>
         <p class="header-subtitle">
-          Rakip ürünü analiz edin, 1-Tık Full AI ile klonlayıp geliştirin ve doğrudan mağazanıza taslak ekleyin.
+          {{ t('listings.discovery.subtitle') }}
         </p>
       </div>
 
       <div class="ai-model-pill">
         <span class="pulsing-dot">●</span>
-        <span class="ai-label">Aktif Model:</span>
+        <span class="ai-label">{{ t('listings.discovery.activeModelLabel') }}</span>
         <span class="ai-name">{{ activeAiModel() }}</span>
       </div>
     </div>
@@ -29,7 +30,7 @@
       <!-- ROW 1: Anahtar Kelime + Arama + Aksiyonlar -->
       <div class="toolbar-row">
         <div class="field-group flex-3">
-          <label class="field-label">Anahtar Kelime:</label>
+          <label class="field-label">{{ t('listings.discovery.keywordLabel') }}</label>
           <div class="input-with-icon">
             <span class="icon">🔍</span>
             <input 
@@ -37,12 +38,12 @@
               class="toolbar-input"
               [(ngModel)]="keywordInput"
               (keyup.enter)="searchEtsy()"
-              placeholder="Örn: 3d cosplay prop, miniature figure, wall art..." />
+              [placeholder]="t('listings.discovery.keywordPlaceholder')" />
           </div>
         </div>
 
         <div class="field-group flex-1">
-          <label class="field-label">Adet:</label>
+          <label class="field-label">{{ t('listings.discovery.limitLabel') }}</label>
           <input 
             type="number" 
             class="toolbar-input text-center" 
@@ -54,22 +55,22 @@
 
         <div class="button-group flex-auto">
           <button class="btn btn-search" (click)="searchEtsy()" [disabled]="isLoading">
-            <span *ngIf="!isLoading">🔍 Etsy'de Ara</span>
-            <span *ngIf="isLoading" class="spinner">⏳ Aranıyor...</span>
+            <span *ngIf="!isLoading">{{ t('listings.discovery.searchBtn') }}</span>
+            <span *ngIf="isLoading" class="spinner">{{ t('listings.discovery.searchingBtn') }}</span>
           </button>
 
           <button class="btn btn-autopilot" (click)="generateFullAutoPilotListing()" [disabled]="isGeneratingFullAi || (!selectedItem && !draftTitle)">
-            <span *ngIf="!isGeneratingFullAi">🚀 1-Tık Full AI Listing</span>
-            <span *ngIf="isGeneratingFullAi" class="spinner">⚡ Hazırlanıyor...</span>
+            <span *ngIf="!isGeneratingFullAi">{{ t('listings.discovery.fullAiBtn') }}</span>
+            <span *ngIf="isGeneratingFullAi" class="spinner">{{ t('listings.discovery.fullAiLoading') }}</span>
           </button>
 
           <button class="btn btn-save-draft" (click)="saveDraftToEtsy()" [disabled]="isSavingDraft || !draftTitle">
-            <span *ngIf="!isSavingDraft">💾 Etsy Taslak Ekle</span>
-            <span *ngIf="isSavingDraft" class="spinner">💾 Gönderiliyor...</span>
+            <span *ngIf="!isSavingDraft">{{ t('listings.discovery.saveDraftBtn') }}</span>
+            <span *ngIf="isSavingDraft" class="spinner">{{ t('listings.discovery.savingDraftBtn') }}</span>
           </button>
 
-          <button class="btn btn-fast-transfer" (click)="transferToFastCreator()" [disabled]="!draftTitle" title="Hızlı Ürün Ekleme (AI) sayfasına tüm verileri aktar">
-            <span>⚡ Hızlı Ürün Ekle'ye Aktar</span>
+          <button class="btn btn-fast-transfer" (click)="transferToFastCreator()" [disabled]="!draftTitle" [title]="t('listings.discovery.transferFastCreatorTitle')">
+            <span>{{ t('listings.discovery.transferFastCreatorBtn') }}</span>
           </button>
         </div>
       </div>
@@ -77,7 +78,7 @@
       <!-- ROW 2: Etsy Listing Linki + Linkten Al + Görsel Stüdyosu -->
       <div class="toolbar-row">
         <div class="field-group flex-4">
-          <label class="field-label">Etsy Listing Linki / Ürün No:</label>
+          <label class="field-label">{{ t('listings.discovery.linkLabel') }}</label>
           <div class="input-with-icon">
             <span class="icon">🔗</span>
             <input 
@@ -85,18 +86,18 @@
               class="toolbar-input highlight-input"
               [(ngModel)]="listingLinkInput"
               (keyup.enter)="importListingLink()"
-              placeholder="Örn: https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed..." />
+              [placeholder]="t('listings.discovery.linkPlaceholder')" />
           </div>
         </div>
 
         <div class="button-group flex-auto">
           <button class="btn btn-import-link" (click)="importListingLink()" [disabled]="isImporting">
-            <span *ngIf="!isImporting">🔗 Linkten Al</span>
-            <span *ngIf="isImporting" class="spinner">⏳ Çekiliyor...</span>
+            <span *ngIf="!isImporting">{{ t('listings.discovery.importLinkBtn') }}</span>
+            <span *ngIf="isImporting" class="spinner">{{ t('listings.discovery.importingLinkBtn') }}</span>
           </button>
 
           <button class="btn btn-secondary" (click)="activeTab = 'prompts'">
-            <span>✨ AI Görsel Promptlar</span>
+            <span>{{ t('listings.discovery.aiImagePromptsBtn') }}</span>
           </button>
         </div>
       </div>
@@ -105,32 +106,32 @@
     <!-- STATUS BAR -->
     <div class="status-bar">
       <span class="status-indicator">ℹ️</span>
-      <span class="status-text">{{ statusText }}</span>
+      <span class="status-text">{{ statusText || t('listings.discovery.statusReady') }}</span>
     </div>
   </header>
 
   <!-- MAIN PRODUCT TABLE (Matching Desktop Grid) -->
   <section class="grid-section glass-card">
     <div class="table-header-strip">
-      <span class="table-title">📋 Pazar & Rakip İlanları ({{ items.length }} İlan)</span>
-      <span class="table-hint">💡 Düzenlemek ve klonlamak istediğiniz ürünün satırına tıklayın.</span>
+      <span class="table-title">{{ t('listings.discovery.tableTitle', { count: items.length }) }}</span>
+      <span class="table-hint">{{ t('listings.discovery.tableHint') }}</span>
     </div>
 
     <div class="table-responsive">
       <table class="discovery-table">
         <thead>
           <tr>
-            <th class="col-thumb">Resim</th>
-            <th class="col-opp">Fırsat</th>
-            <th class="col-title">Ürün Fikri</th>
-            <th class="col-id">Rakip Listing</th>
-            <th class="col-price">Fiyat</th>
-            <th class="col-shop">Mağaza</th>
-            <th class="col-sales">Mağaza Satışı</th>
-            <th class="col-fav">Favori</th>
-            <th class="col-views">Görüntülenme</th>
-            <th class="col-seo">SEO</th>
-            <th class="col-tags">Tagler</th>
+            <th class="col-thumb">{{ t('listings.discovery.colImage') }}</th>
+            <th class="col-opp">{{ t('listings.discovery.colOpportunity') }}</th>
+            <th class="col-title">{{ t('listings.discovery.colIdea') }}</th>
+            <th class="col-id">{{ t('listings.discovery.colCompetitorListing') }}</th>
+            <th class="col-price">{{ t('listings.discovery.colPrice') }}</th>
+            <th class="col-shop">{{ t('listings.discovery.colShop') }}</th>
+            <th class="col-sales">{{ t('listings.discovery.colShopSales') }}</th>
+            <th class="col-fav">{{ t('listings.discovery.colFavorites') }}</th>
+            <th class="col-views">{{ t('listings.discovery.colViews') }}</th>
+            <th class="col-seo">{{ t('listings.discovery.colSeo') }}</th>
+            <th class="col-tags">{{ t('listings.discovery.colTags') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -153,10 +154,10 @@
 
             <!-- Fırsat -->
             <td class="col-opp">
-              <span *ngIf="item.isTargetListing" class="pill pill-target">🎯 Hedef</span>
-              <span *ngIf="!item.isTargetListing && item.isOpportunityListing" class="pill pill-opp">⚡ Fırsat</span>
-              <span *ngIf="!item.isTargetListing && item.isBestseller" class="pill pill-best">🔥 Çok Satan</span>
-              <span *ngIf="!item.isTargetListing && !item.isOpportunityListing && !item.isBestseller" class="pill pill-neutral">Standart</span>
+              <span *ngIf="item.isTargetListing" class="pill pill-target">{{ t('listings.discovery.pillTarget') }}</span>
+              <span *ngIf="!item.isTargetListing && item.isOpportunityListing" class="pill pill-opp">{{ t('listings.discovery.pillOpportunity') }}</span>
+              <span *ngIf="!item.isTargetListing && item.isBestseller" class="pill pill-best">{{ t('listings.discovery.pillBestseller') }}</span>
+              <span *ngIf="!item.isTargetListing && !item.isOpportunityListing && !item.isBestseller" class="pill pill-neutral">{{ t('listings.discovery.pillStandard') }}</span>
             </td>
 
             <!-- Ürün Fikri -->
@@ -171,7 +172,7 @@
                 target="_blank" 
                 class="listing-link-pill" 
                 (click)="$event.stopPropagation()"
-                title="Etsy'de Aç">
+                [title]="t('listings.discovery.openOnEtsyTitle')">
                 #{{ item.id }} ↗
               </a>
             </td>
@@ -214,7 +215,7 @@
             <!-- Tagler -->
             <td class="col-tags">
               <div class="mini-tags-wrap">
-                <span *ngFor="let t of item.tags.slice(0, 3)" class="mini-tag">{{ t }}</span>
+                <span *ngFor="let tag of item.tags.slice(0, 3)" class="mini-tag">{{ tag }}</span>
                 <span *ngIf="item.tags.length > 3" class="mini-tag-more">+{{ item.tags.length - 3 }}</span>
               </div>
             </td>
@@ -225,8 +226,8 @@
             <td colspan="11" class="empty-state">
               <div class="empty-box">
                 <span class="empty-icon">🔍</span>
-                <h3>Henüz listelenen ürün yok</h3>
-                <p>Yukarıdaki arama kutusuna bir anahtar kelime girin veya doğrudan bir Etsy ürün linki yapıştırıp "Linkten Al" butonuna basın.</p>
+                <h3>{{ t('listings.discovery.emptyTitle') }}</h3>
+                <p>{{ t('listings.discovery.emptyDesc') }}</p>
               </div>
             </td>
           </tr>
@@ -253,7 +254,7 @@
             <ng-template #noImageTemplate>
               <div class="no-img-box">
                 <span>📦</span>
-                <p>Görsel Seçilmedi</p>
+                <p>{{ t('listings.discovery.noImageSelected') }}</p>
               </div>
             </ng-template>
 
@@ -268,24 +269,24 @@
           <!-- QUICK ACTION BUTTONS (Matching Desktop Left Panel) -->
           <div class="left-action-buttons">
             <button class="btn btn-full-ai-sidebar" (click)="generateFullAutoPilotListing()" [disabled]="isGeneratingFullAi || (!selectedItem && !draftTitle)">
-              <span>🚀 1-Tık Full AI</span>
+              <span>{{ t('listings.discovery.sidebarFullAiBtn') }}</span>
             </button>
 
             <button class="btn btn-ai-image-sidebar" (click)="activeTab = 'prompts'">
-              <span>✨ AI Görsel Üret</span>
+              <span>{{ t('listings.discovery.sidebarAiImageBtn') }}</span>
             </button>
 
             <button 
               class="btn btn-copy-url" 
               *ngIf="selectedItem?.imageUrl" 
-              (click)="copyToClipboard(selectedItem?.imageUrl || '', 'Görsel Linki')">
-              <span>📋 Görsel URL Kopyala</span>
+              (click)="copyToClipboard(selectedItem?.imageUrl || '', t('listings.discovery.imageUrlLabel'))">
+              <span>{{ t('listings.discovery.copyImageUrlBtn') }}</span>
             </button>
           </div>
 
           <!-- LQS SUMMARY PILL -->
           <div class="lqs-preview-badge">
-            <span class="lqs-label">Tahmini Kalite:</span>
+            <span class="lqs-label">{{ t('listings.discovery.estimatedQualityLabel') }}</span>
             <span class="lqs-value" [class.lqs-perfect]="targetLqsScore >= 95">{{ targetLqsScore }}/100 ({{ targetLqsGrade }})</span>
           </div>
         </div>
@@ -296,19 +297,19 @@
         <!-- TAB HEADERS -->
         <div class="tab-header-strip">
           <button class="tab-btn" [class.active]="activeTab === 'seo'" (click)="activeTab = 'seo'">
-            <span>⚡ Başlık & SEO Açıklama</span>
+            <span>{{ t('listings.discovery.tabSeo') }}</span>
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'tags'" (click)="activeTab = 'tags'">
-            <span>🏷️ 13 Tag & Materyaller ({{ draftTags.length }}/13)</span>
+            <span>{{ t('listings.discovery.tabTags', { count: draftTags.length }) }}</span>
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'shipping'" (click)="activeTab = 'shipping'">
-            <span>💧 Fiyat & Kargo Ayarları</span>
+            <span>{{ t('listings.discovery.tabShipping') }}</span>
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'prompts'" (click)="activeTab = 'prompts'">
-            <span>🎨 AI Görsel / Promptlar</span>
+            <span>{{ t('listings.discovery.tabPrompts') }}</span>
           </button>
           <button class="tab-btn" [class.active]="activeTab === 'lqs'" (click)="activeTab = 'lqs'">
-            <span>📊 Kalite Karnesi (LQS)</span>
+            <span>{{ t('listings.discovery.tabLqs') }}</span>
           </button>
         </div>
 
@@ -316,9 +317,9 @@
         <div class="tab-content" *ngIf="activeTab === 'seo'">
           <div class="form-section">
             <div class="field-header">
-              <label class="form-label">Etsy SEO Başlığı (Maks. 140 Karakter):</label>
+              <label class="form-label">{{ t('listings.discovery.seoTitleLabel') }}</label>
               <span class="char-counter" [class.char-warning]="draftTitle.length > 130" [class.char-danger]="draftTitle.length > 140">
-                {{ draftTitle.length }} / 140 Karakter
+                {{ t('listings.discovery.charCounter', { count: draftTitle.length }) }}
               </span>
             </div>
             <input 
@@ -326,19 +327,19 @@
               class="form-control title-input" 
               [(ngModel)]="draftTitle" 
               maxlength="140"
-              placeholder="Etsy mağazanız için arama odaklı, net ve yüksek hacimli SEO başlığı..." />
+              [placeholder]="t('listings.discovery.seoTitlePlaceholder')" />
           </div>
 
           <div class="form-section">
             <div class="field-header">
-              <label class="form-label">Satış Odaklı Açıklama (Biçimlendirilmiş):</label>
+              <label class="form-label">{{ t('listings.discovery.descLabel') }}</label>
               <div class="desc-actions">
                 <button class="btn-micro btn-template" (click)="applyDescriptionTemplate()">
-                  <span>📐 Şablonla Paragrafla</span>
+                  <span>{{ t('listings.discovery.templateFormatBtn') }}</span>
                 </button>
                 <button class="btn-micro btn-ai-desc" (click)="generateDescriptionWithAi()" [disabled]="isGeneratingDesc">
-                  <span *ngIf="!isGeneratingDesc">✨ AI Açıklama Yenile</span>
-                  <span *ngIf="isGeneratingDesc">⏳ Yazılıyor...</span>
+                  <span *ngIf="!isGeneratingDesc">{{ t('listings.discovery.aiDescRefreshBtn') }}</span>
+                  <span *ngIf="isGeneratingDesc">{{ t('listings.discovery.aiDescWriting') }}</span>
                 </button>
               </div>
             </div>
@@ -346,7 +347,7 @@
               class="form-control desc-textarea" 
               rows="12" 
               [(ngModel)]="draftDescription"
-              placeholder="Ürününüzün tüm detaylarını içeren, ferah paragraflı ve Etsy alıcılarını ikna eden açıklama metni..."></textarea>
+              [placeholder]="t('listings.discovery.descPlaceholder')"></textarea>
           </div>
         </div>
 
@@ -354,10 +355,10 @@
         <div class="tab-content" *ngIf="activeTab === 'tags'">
           <div class="form-section">
             <div class="field-header">
-              <label class="form-label">13 Altın Etsy Etiketi (Tags):</label>
+              <label class="form-label">{{ t('listings.discovery.tagsLabel') }}</label>
               <div class="desc-actions">
                 <button class="btn-micro" (click)="copyCompetitorTags()">
-                  <span>📋 Rakibin 13 Tagini Kopyala</span>
+                  <span>{{ t('listings.discovery.copyCompetitorTagsBtn') }}</span>
                 </button>
               </div>
             </div>
@@ -367,10 +368,10 @@
               <div *ngFor="let tg of draftTags; let idx = index" class="tag-chip">
                 <span class="tag-text">{{ tg }}</span>
                 <span class="tag-len">{{ tg.length }}/20</span>
-                <button class="tag-delete-btn" (click)="removeTag(idx)" title="Etiketi Sil">✕</button>
+                <button class="tag-delete-btn" (click)="removeTag(idx)" [title]="t('listings.discovery.removeTagTitle')">✕</button>
               </div>
               <div *ngIf="draftTags.length === 0" class="no-tags-hint">
-                Henüz etiket eklenmedi. Yukarıdan rakip etiketlerini kopyalayabilir veya aşağıdan yazabilirsiniz.
+                {{ t('listings.discovery.noTagsHint') }}
               </div>
             </div>
 
@@ -382,24 +383,24 @@
                 [(ngModel)]="newTagInput" 
                 (keyup.enter)="addTag()"
                 maxlength="20"
-                placeholder="Yeni etiket yazıp Enter'a basın (maks. 20 karakter)..." />
-              <button class="btn btn-secondary" (click)="addTag()" [disabled]="!newTagInput.trim()">+ Ekle</button>
+                [placeholder]="t('listings.discovery.newTagPlaceholder')" />
+              <button class="btn btn-secondary" (click)="addTag()" [disabled]="!newTagInput.trim()">{{ t('listings.discovery.addTagBtn') }}</button>
             </div>
             <div class="tag-info-bar">
               <span [class.text-success]="draftTags.length === 13">
-                Toplam: {{ draftTags.length }} / 13 Etiket
+                {{ t('listings.discovery.tagsTotal', { count: draftTags.length }) }}
               </span>
-              <span>⚠️ Kural: Her etiket en fazla 20 karakter olmalıdır.</span>
+              <span>{{ t('listings.discovery.tagsRuleHint') }}</span>
             </div>
           </div>
 
           <div class="form-section">
-            <label class="form-label">Materyaller / Malzemeler (Virgülle ayırın):</label>
+            <label class="form-label">{{ t('listings.discovery.materialsLabel') }}</label>
             <input 
               type="text" 
               class="form-control" 
               [(ngModel)]="draftMaterials" 
-              placeholder="Örn: PLA, Resin, Acrylic, Matte Finish, Premium Wood..." />
+              [placeholder]="t('listings.discovery.materialsPlaceholder')" />
           </div>
         </div>
 
@@ -407,7 +408,7 @@
         <div class="tab-content" *ngIf="activeTab === 'shipping'">
           <div class="form-row-2">
             <div class="form-section">
-              <label class="form-label">Satış Fiyatı (USD):</label>
+              <label class="form-label">{{ t('listings.discovery.salePriceLabel') }}</label>
               <div class="input-with-currency">
                 <span class="currency-symbol">$</span>
                 <input 
@@ -417,11 +418,11 @@
                   step="0.5" 
                   min="1" />
               </div>
-              <span class="field-hint">Yaklaşık: ₺{{ (draftPriceUsd * etsyApi.exchangeRate()).toFixed(2) }} TRY</span>
+              <span class="field-hint">{{ t('listings.discovery.approxTry', { amount: (draftPriceUsd * etsyApi.exchangeRate()).toFixed(2) }) }}</span>
             </div>
 
             <div class="form-section">
-              <label class="form-label">Miktar / Stok:</label>
+              <label class="form-label">{{ t('listings.discovery.quantityLabel') }}</label>
               <input 
                 type="number" 
                 class="form-control" 
@@ -431,9 +432,9 @@
           </div>
 
           <div class="form-section">
-            <label class="form-label">Kargo Profili:</label>
+            <label class="form-label">{{ t('listings.discovery.shippingProfileLabel') }}</label>
             <select class="form-control select-control" [(ngModel)]="draftShippingProfileId">
-              <option [ngValue]="null">Varsayılan Mağaza Kargo Profili</option>
+              <option [ngValue]="null">{{ t('listings.discovery.defaultShippingProfile') }}</option>
               <option *ngFor="let p of shippingProfiles" [ngValue]="p.shippingProfileId ?? p.shipping_profile_id">
                 {{ p.title }} (ID: {{ p.shippingProfileId ?? p.shipping_profile_id }}){{ p.deliveryDaysDisplay ? ' — ' + p.deliveryDaysDisplay : '' }}
               </option>
@@ -442,26 +443,26 @@
 
           <div class="form-row-3">
             <div class="form-section">
-              <label class="form-label">Kim Yaptı? (Who Made):</label>
+              <label class="form-label">{{ t('listings.discovery.whoMadeLabel') }}</label>
               <select class="form-control select-control" [(ngModel)]="draftWhoMade">
-                <option value="i_did">Ben Yaptım (i_did)</option>
-                <option value="someone_else">Ekibim / Başkası</option>
+                <option value="i_did">{{ t('listings.discovery.whoMadeIDid') }}</option>
+                <option value="someone_else">{{ t('listings.discovery.whoMadeSomeoneElse') }}</option>
               </select>
             </div>
 
             <div class="form-section">
-              <label class="form-label">Ne Zaman? (When Made):</label>
+              <label class="form-label">{{ t('listings.discovery.whenMadeLabel') }}</label>
               <select class="form-control select-control" [(ngModel)]="draftWhenMade">
-                <option value="made_to_order">Sipariş Üzerine (Made to Order)</option>
-                <option value="2020_2024">2020 - 2026 Arası</option>
+                <option value="made_to_order">{{ t('listings.discovery.whenMadeToOrder') }}</option>
+                <option value="2020_2024">{{ t('listings.discovery.whenMade2020_2024') }}</option>
               </select>
             </div>
 
             <div class="form-section">
-              <label class="form-label">İlan Türü:</label>
+              <label class="form-label">{{ t('listings.discovery.listingTypeLabel') }}</label>
               <select class="form-control select-control" [(ngModel)]="draftIsDigital">
-                <option [ngValue]="false">Fiziksel Ürün (Kargo ile)</option>
-                <option [ngValue]="true">Dijital Ürün (Anında İndirme)</option>
+                <option [ngValue]="false">{{ t('listings.discovery.typePhysical') }}</option>
+                <option [ngValue]="true">{{ t('listings.discovery.typeDigital') }}</option>
               </select>
             </div>
           </div>
@@ -470,15 +471,15 @@
         <!-- TAB CONTENT 4: AI GÖRSEL PROMPTLAR -->
         <div class="tab-content" *ngIf="activeTab === 'prompts'">
           <div class="prompts-intro">
-            <h4>🎨 AI Ürün Görseli Promptları (Midjourney / FLUX / DALL-E)</h4>
-            <p>Bu ürün fikri için profesyonel e-ticaret fotoğrafı stüdyo promptları:</p>
+            <h4>{{ t('listings.discovery.promptsTitle') }}</h4>
+            <p>{{ t('listings.discovery.promptsDesc') }}</p>
           </div>
 
           <div class="prompt-cards-list">
             <div *ngFor="let pr of imagePrompts; let pIdx = index" class="prompt-card">
               <div class="prompt-header">
-                <span class="prompt-badge">Stil #{{ pIdx + 1 }}</span>
-                <button class="btn-micro" (click)="copyToClipboard(pr, 'AI Görsel Promptu')">📋 Kopyala</button>
+                <span class="prompt-badge">{{ t('listings.discovery.promptStyleBadge', { index: pIdx + 1 }) }}</span>
+                <button class="btn-micro" (click)="copyToClipboard(pr, t('listings.discovery.aiImagePromptLabel'))">{{ t('listings.discovery.copyPromptBtn') }}</button>
               </div>
               <p class="prompt-text">{{ pr }}</p>
             </div>
@@ -491,30 +492,30 @@
             <div class="lqs-score-circle">
               <span class="circle-val">{{ targetLqsScore }}</span>
               <span class="circle-max">/100</span>
-              <span class="circle-grade">Not: {{ targetLqsGrade }}</span>
+              <span class="circle-grade">{{ t('listings.discovery.lqsGrade', { grade: targetLqsGrade }) }}</span>
             </div>
 
             <div class="lqs-checks-list">
-              <h4>🎯 Etsy LQS Kalite Kontrol Tablosu:</h4>
+              <h4>{{ t('listings.discovery.lqsTableTitle') }}</h4>
               <div class="check-item" [class.passed]="draftTitle.length >= 80 && draftTitle.length <= 140">
                 <span class="icon">{{ draftTitle.length >= 80 && draftTitle.length <= 140 ? '✅' : '⚠️' }}</span>
-                <span>Başlık 80 - 140 karakter aralığında (Şu an: {{ draftTitle.length }} karakter)</span>
+                <span>{{ t('listings.discovery.lqsCheckTitle', { count: draftTitle.length }) }}</span>
               </div>
               <div class="check-item" [class.passed]="draftTags.length === 13">
                 <span class="icon">{{ draftTags.length === 13 ? '✅' : '⚠️' }}</span>
-                <span>13 adet altın etiket eksiksiz tanımlanmış (Şu an: {{ draftTags.length }} / 13)</span>
+                <span>{{ t('listings.discovery.lqsCheckTags', { count: draftTags.length }) }}</span>
               </div>
               <div class="check-item" [class.passed]="draftDescription.length >= 500">
                 <span class="icon">{{ draftDescription.length >= 500 ? '✅' : '⚠️' }}</span>
-                <span>Açıklama 500+ karakter ve ferah paragraflara sahip (Şu an: {{ draftDescription.length }} karakter)</span>
+                <span>{{ t('listings.discovery.lqsCheckDesc', { count: draftDescription.length }) }}</span>
               </div>
               <div class="check-item" [class.passed]="(selectedItem?.imageUrls?.length || 0) >= 5">
                 <span class="icon">{{ (selectedItem?.imageUrls?.length || 0) >= 5 ? '✅' : '⚠️' }}</span>
-                <span>En az 5 ürün görseli mevcut (Şu an: {{ selectedItem?.imageUrls?.length || 0 }} görsel)</span>
+                <span>{{ t('listings.discovery.lqsCheckImages', { count: selectedItem?.imageUrls?.length || 0 }) }}</span>
               </div>
               <div class="check-item passed">
                 <span class="icon">✅</span>
-                <span>Fiyat ve stok bilgileri kurala uygun tanımlandı</span>
+                <span>{{ t('listings.discovery.lqsCheckPriceStock') }}</span>
               </div>
             </div>
           </div>
@@ -529,17 +530,17 @@
   <div class="modal-overlay" *ngIf="showSuccessModal">
     <div class="modal-card">
       <div class="modal-icon">🎉</div>
-      <h2 class="modal-title">Etsy Taslağınız Başarıyla Oluşturuldu!</h2>
+      <h2 class="modal-title">{{ t('listings.discovery.successModalTitle') }}</h2>
       <p class="modal-desc">
-        İlanınız <strong>#{{ createdListingId }}</strong> numarasıyla resmi olarak Etsy mağazanızın taslaklarına eklendi.
+        {{ t('listings.discovery.successModalDescPrefix') }} <strong>#{{ createdListingId }}</strong> {{ t('listings.discovery.successModalDescSuffix') }}
       </p>
 
       <div class="modal-actions">
         <a [href]="createdListingUrl" target="_blank" class="btn btn-primary">
-          <span>↗️ Etsy Panelinde İncele & Yayınla</span>
+          <span>{{ t('listings.discovery.openEtsyPanelBtn') }}</span>
         </a>
         <button class="btn btn-secondary" (click)="showSuccessModal = false">
-          <span>Kapat</span>
+          <span>{{ t('listings.discovery.closeBtn') }}</span>
         </button>
       </div>
     </div>
@@ -554,3 +555,4 @@
   </div>
 
 </div>
+</ng-container>

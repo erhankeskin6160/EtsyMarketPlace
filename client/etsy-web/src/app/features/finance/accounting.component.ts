@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, DestroyRef, inject } from '@angular/core'
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto, ShopListingItemDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { IncomeStatementTabComponent } from './income-statement/income-statement-tab.component';
@@ -84,12 +85,14 @@ export interface OrderCostShippingRow {
 @Component({
   selector: 'app-accounting',
   standalone: true,
-  imports: [CommonModule, FormsModule, IncomeStatementTabComponent],
+  imports: [CommonModule, FormsModule, IncomeStatementTabComponent, TranslocoDirective],
+  providers: [provideTranslocoScope('finance')],
   templateUrl: './accounting.component.html',
   styleUrls: ['./accounting.component.css']
 })
 export class AccountingComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   readonly aiSettings = inject(AiSettingsService);
   Math = Math;
   isTry = true;
@@ -189,7 +192,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   };
 
   getDisplayBuyerName(order?: OrderFinancialRow | null): string {
-    if (!order) return 'Misafir Müşteri';
+    if (!order) return this.transloco.translate('finance.accounting.runtime.guestBuyer');
     const name = order.buyerName;
     if (name && name !== 'Etsy Müşterisi' && name !== 'Misafir Müşteri' && name !== 'Ödeme Defteri Kesintisi') {
       return name;
@@ -205,7 +208,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (companion?.buyerName) {
       return companion.buyerName;
     }
-    return name && name !== 'Ödeme Defteri Kesintisi' ? name : 'Misafir Müşteri';
+    return name && name !== 'Ödeme Defteri Kesintisi' && name !== 'Misafir Müşteri' && name !== 'Etsy Müşterisi'
+      ? name
+      : this.transloco.translate('finance.accounting.runtime.guestBuyer');
   }
 
   orders: OrderFinancialRow[] = [];
@@ -273,6 +278,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.loadShopListingsEngagement();
     this.loadLiveOrders();
     this.loadPaymentReserveSnapshot();
+
+    this.transloco.selectTranslation('finance').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.rebuildDynamicBreakdowns();
+    });
   }
 
   private loadShopListingsEngagement(): void {
@@ -538,17 +547,19 @@ export class AccountingComponent implements OnInit, OnDestroy {
       return {
         date: (o.orderDate || '').split(' ')[0],
         receiptId: o.receiptId,
-        qty: `${o.quantity} Ad`,
+        qty: this.transloco.translate('finance.accounting.runtime.qtyUnit', { count: o.quantity }),
         productionCostTry,
         shippingCostTry,
         packagingCostTry,
         totalCostTry,
-        invoice: o.hasInvoice ? 'Fatura' : '—',
+        invoice: o.hasInvoice ? this.transloco.translate('finance.accounting.runtime.invoiceWord') : '—',
         title: o.productTitle,
         isCanceledOrRefunded,
         statusLabel: isCanceledOrRefunded
-          ? (o.costNotes === 'cross_period_refund' ? 'İade (Önceki Dönem)' : 'İptal/İade Zararı')
-          : 'Tamamlandı'
+          ? (o.costNotes === 'cross_period_refund'
+              ? this.transloco.translate('finance.accounting.runtime.statusPriorRefund')
+              : this.transloco.translate('finance.accounting.runtime.statusCancelLoss'))
+          : this.transloco.translate('finance.accounting.runtime.statusCompleted')
       };
     });
 
@@ -570,7 +581,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 3. Etsy Komisyon & Kesinti Analizi Kayitlari (Modal 5)
-    const countLabel = `${this.completedOrderCount} İşlem`;
+    const countLabel = this.transloco.translate('finance.accounting.runtime.txCountLabel', { count: this.completedOrderCount });
     const txUsd = Number((this.etsyFeesUsd * 0.44).toFixed(2));
     const txTry = Number((this.etsyFeesTry * 0.44).toFixed(2));
     const procUsd = Number((this.etsyFeesUsd * 0.34).toFixed(2));
@@ -583,10 +594,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const offsiteBaseUsd = Number(offsiteOrders.reduce((s, o) => s + o.grandTotalUsd, 0).toFixed(2));
 
     this.feesRecords = [
-      { type: 'İşlem Komisyonu (%6.5)', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: txUsd, feeTry: txTry, note: 'Etsy Transaction Fee (%6.5)' },
-      { type: 'Ödeme İşleme (Processing)', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: procUsd, feeTry: procTry, note: 'Etsy Payments Processing Fee (%6.5 + 3₺)' },
-      { type: 'Düzenleyici İşletme Ücreti', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: regUsd, feeTry: regTry, note: 'Regulatory Operating Fee (TR %1.1)' },
-      { type: 'Etsy Kesinti KDV (VAT)', count: 'Tüm Kesintiler', baseUsd: 0, feeUsd: vatUsd, feeTry: vatTry, note: '%20 Türkiye KDV Tevkifatı' }
+      { type: this.transloco.translate('finance.accounting.runtime.feeTypeTx'), count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: txUsd, feeTry: txTry, note: this.transloco.translate('finance.accounting.runtime.feeNoteTx') },
+      { type: this.transloco.translate('finance.accounting.runtime.feeTypeProc'), count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: procUsd, feeTry: procTry, note: this.transloco.translate('finance.accounting.runtime.feeNoteProc') },
+      { type: this.transloco.translate('finance.accounting.runtime.feeTypeReg'), count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: regUsd, feeTry: regTry, note: this.transloco.translate('finance.accounting.runtime.feeNoteReg') },
+      { type: this.transloco.translate('finance.accounting.runtime.feeTypeVat'), count: this.transloco.translate('finance.accounting.runtime.feeCountAll'), baseUsd: 0, feeUsd: vatUsd, feeTry: vatTry, note: this.transloco.translate('finance.accounting.runtime.feeNoteVat') }
     ];
 
     // 4. Offsite Ads Dis Reklam Kayitlari (Modal 7)
@@ -600,7 +611,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         rate: `%${pct}`,
         feeUsd: o.offsiteAdFeeUsd,
         feeTry: Number((o.offsiteAdFeeUsd * rate).toFixed(2)),
-        channel: 'Google / Sosyal Medya Reklamları'
+        channel: this.transloco.translate('finance.accounting.runtime.offsiteChannel')
       };
     });
 
@@ -707,24 +718,27 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const netLossTry = costTry > 0 ? -costTry : 0;
 
       let cancelType: 'cost_loss' | 'unproduced' | 'partial' = 'unproduced';
-      let cancelTypeLabel = 'Üretilmeden İptal (Zararsız)';
+      let cancelTypeLabel = this.transloco.translate('finance.accounting.runtime.cancelUnproduced');
 
       if (o.orderStatus === 'refunded' && o.costNotes !== 'cross_period_refund') {
         cancelType = 'partial';
-        cancelTypeLabel = 'Kısmi İade';
+        cancelTypeLabel = this.transloco.translate('finance.accounting.runtime.cancelPartial');
       } else if (costUsd > 0) {
         cancelType = 'cost_loss';
-        cancelTypeLabel = 'Kargo/Üretim Zararı';
+        cancelTypeLabel = this.transloco.translate('finance.accounting.runtime.cancelCostLoss');
       } else {
         cancelType = 'unproduced';
-        cancelTypeLabel = 'Üretilmeden İptal (Zararsız)';
+        cancelTypeLabel = this.transloco.translate('finance.accounting.runtime.cancelUnproduced');
       }
+
+      const fallbackBuyer = this.transloco.translate('finance.accounting.runtime.etsyCustomer');
+      const finalBuyerDisplay = buyerDisplay === 'Etsy Müşterisi' ? fallbackBuyer : buyerDisplay;
 
       return {
         refundDate: o.refundDate || o.orderDate,
         orderDate: o.originalOrderDate || (o.costNotes === 'cross_period_refund' ? '—' : o.orderDate),
         receiptId: o.receiptId,
-        buyer: buyerDisplay,
+        buyer: finalBuyerDisplay,
         item: o.productTitle,
         refundUsd,
         refundTry,
@@ -734,7 +748,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
         costTry,
         netLossUsd,
         netLossTry,
-        reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem İadesi' : (o.orderStatus === 'canceled' ? 'Sipariş İptali / Tam İade' : 'Kısmi İade'),
+        reason: o.costNotes === 'cross_period_refund'
+          ? this.transloco.translate('finance.accounting.runtime.reasonPriorRefund')
+          : (o.orderStatus === 'canceled'
+              ? this.transloco.translate('finance.accounting.runtime.reasonFullCancel')
+              : this.transloco.translate('finance.accounting.runtime.cancelPartial')),
         cancelType,
         cancelTypeLabel
       };
@@ -744,9 +762,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
       this.refundRecords = [{
         refundDate: this.endDate,
         orderDate: this.startDate,
-        receiptId: 'DEFTER',
-        buyer: 'Etsy Müşterisi',
-        item: 'Önceki Dönem Sipariş İadesi (Defter Kesintisi)',
+        receiptId: this.transloco.translate('finance.accounting.runtime.ledgerRef'),
+        buyer: this.transloco.translate('finance.accounting.runtime.etsyCustomer'),
+        item: this.transloco.translate('finance.accounting.runtime.priorRefundLedgerItem'),
         refundUsd: this.refundsUsd,
         refundTry: this.refundsTry,
         feeRefundedUsd: 0,
@@ -755,9 +773,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
         costTry: 0,
         netLossUsd: 0,
         netLossTry: 0,
-        reason: 'Önceki Dönem Sipariş İadesi',
+        reason: this.transloco.translate('finance.accounting.runtime.reasonPriorRefund'),
         cancelType: 'unproduced',
-        cancelTypeLabel: 'Üretilmeden İptal (Zararsız)'
+        cancelTypeLabel: this.transloco.translate('finance.accounting.runtime.cancelUnproduced')
       }];
     }
 
@@ -778,30 +796,63 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const isRealProfitPos = this.realNetProfitTry >= 0;
     const hasCanceledCostLoss = this.canceledOrderCostLossTry > 0;
     const balanceRows: any[] = [
-      { type: isNetIncomePos ? 'Gelir' : 'Borç', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: isNetIncomePos ? '🟢 Net' : '🔴 Borç', isPositive: isNetIncomePos, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
-      { type: 'Kargo', name: hasCanceledCostLoss ? 'Kargo Gönderimleri (Aktif)' : 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.activeShippingCostTry, status: '', isPositive: false, explanation: 'Tamamlanan siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
-      { type: 'Üretim', name: hasCanceledCostLoss ? '3D Baskı / Hammadde (Aktif)' : '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.activeProductionCostTry, status: '', isPositive: false, explanation: 'Tamamlanan siparişlerin üretiminde harcanan hammadde ve 3D yazıcı amortismanı' },
-      { type: 'Paket', name: hasCanceledCostLoss ? 'Paketleme & Fatura (Aktif)' : 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.activePackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' }
+      {
+        type: this.transloco.translate(isNetIncomePos ? 'finance.accounting.runtime.balTypeIncome' : 'finance.accounting.runtime.balTypeDebt'),
+        name: this.transloco.translate('finance.accounting.runtime.balNameEtsyNet'),
+        detail: this.transloco.translate('finance.accounting.runtime.balDetailNetPayout'),
+        amount: this.netIncomeTry,
+        status: this.transloco.translate(isNetIncomePos ? 'finance.accounting.runtime.balStatusNet' : 'finance.accounting.runtime.balStatusDebt'),
+        isPositive: isNetIncomePos,
+        explanation: this.transloco.translate('finance.accounting.runtime.balExpEtsyNet')
+      },
+      {
+        type: this.transloco.translate('finance.accounting.runtime.balTypeShip'),
+        name: this.transloco.translate(hasCanceledCostLoss ? 'finance.accounting.runtime.balNameShipActive' : 'finance.accounting.runtime.balNameShip'),
+        detail: this.transloco.translate('finance.accounting.runtime.balDetailShipments', { count: this.completedOrderCount }),
+        amount: -this.activeShippingCostTry,
+        status: '',
+        isPositive: false,
+        explanation: this.transloco.translate('finance.accounting.runtime.balExpShip')
+      },
+      {
+        type: this.transloco.translate('finance.accounting.runtime.balTypeProd'),
+        name: this.transloco.translate(hasCanceledCostLoss ? 'finance.accounting.runtime.balNameProdActive' : 'finance.accounting.runtime.balNameProd'),
+        detail: this.transloco.translate('finance.accounting.runtime.balDetailMaterial'),
+        amount: -this.activeProductionCostTry,
+        status: '',
+        isPositive: false,
+        explanation: this.transloco.translate('finance.accounting.runtime.balExpProd')
+      },
+      {
+        type: this.transloco.translate('finance.accounting.runtime.balTypePkg'),
+        name: this.transloco.translate(hasCanceledCostLoss ? 'finance.accounting.runtime.balNamePkgActive' : 'finance.accounting.runtime.balNamePkg'),
+        detail: this.transloco.translate('finance.accounting.runtime.balDetailInvoices', { count: this.invoiceOrderCount }),
+        amount: -this.activePackagingCostTry,
+        status: '',
+        isPositive: false,
+        explanation: this.transloco.translate('finance.accounting.runtime.balExpPkg')
+      }
     ];
     if (hasCanceledCostLoss) {
       balanceRows.push({
-        type: 'İptal Zararı',
-        name: 'İptal / İade Maliyet Zararı (Üretim + Kargo)',
-        detail: `${this.canceledCostedOrderCount} İptal/İade Sipariş`,
+        type: this.transloco.translate('finance.accounting.runtime.balTypeCancelLoss'),
+        name: this.transloco.translate('finance.accounting.runtime.balNameCancelLoss'),
+        detail: this.transloco.translate('finance.accounting.runtime.balDetailCancelOrders', { count: this.canceledCostedOrderCount }),
         amount: -this.canceledOrderCostLossTry,
-        status: '🔴 İptal Zararı',
+        status: this.transloco.translate('finance.accounting.runtime.balStatusCancelLoss'),
         isPositive: false,
-        explanation: 'Üretilip kargolandıktan sonra iptal/iade edilen siparişlerin geri dönmeyen üretim, kargo ve paketleme maliyeti (Sipariş Maliyetine dahildir)'
+        explanation: this.transloco.translate('finance.accounting.runtime.balExpCancelLoss')
       });
     }
     balanceRows.push({
-      type: isRealProfitPos ? 'KÂR' : 'ZARAR',
-      name: isRealProfitPos ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR',
-      detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar',
+      type: this.transloco.translate(isRealProfitPos ? 'finance.accounting.runtime.balTypeProfit' : 'finance.accounting.runtime.balTypeLoss'),
+      name: this.transloco.translate(isRealProfitPos ? 'finance.accounting.runtime.balNameRealProfit' : 'finance.accounting.runtime.balNameRealLoss'),
+      detail: this.transloco.translate(isRealProfitPos ? 'finance.accounting.runtime.balDetailPureProfit' : 'finance.accounting.runtime.balDetailNetLoss'),
       amount: this.realNetProfitTry,
-      status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar',
+      status: this.transloco.translate(isRealProfitPos ? 'finance.accounting.runtime.balStatusProfit' : 'finance.accounting.runtime.balStatusLoss'),
       isPositive: isRealProfitPos,
-      explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler, iptal maliyetleri ve kesintiler gelirleri aştığı için oluşan net zarar'
+      isFinalSummary: true,
+      explanation: this.transloco.translate(isRealProfitPos ? 'finance.accounting.runtime.balExpProfit' : 'finance.accounting.runtime.balExpLoss')
     });
     this.balanceBreakdownRecords = balanceRows;
 
@@ -809,13 +860,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const stdFeesUsd = Number((this.etsyFeesUsd - vatUsd).toFixed(2));
     const stdFeesTry = Number((this.etsyFeesTry - vatTry).toFixed(2));
     this.netIncomeRecords = [
-      { category: 'Brüt Satış Geliri', amountUsd: this.grossSalesUsd, amountTry: this.grossSalesTry, isPositive: true, note: 'Müşterilerden tahsil edilen toplam sipariş tutarı' },
-      { category: 'Etsy Standart Komisyon & İşlem Ücreti', amountUsd: -stdFeesUsd, amountTry: -stdFeesTry, isPositive: false, note: 'Transaction, listing, processing & regulatory fee' },
-      { category: 'Offsite Ads Dış Reklam Kesintisi', amountUsd: -this.offsiteAdsUsd, amountTry: -this.offsiteAdsTry, isPositive: false, note: 'Dış arama motoru ve sosyal medya reklam payı' },
-      { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -this.innerAdsUsd, amountTry: -this.innerAdsTry, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
-      { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -vatUsd, amountTry: -vatTry, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
-      { category: 'İadeler ve İptaller (Refunds)', amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: 'İade edilen sipariş tutarı' },
-      { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: this.netIncomeUsd, amountTry: this.netIncomeTry, isPositive: isNetIncomePos, note: isNetIncomePos ? 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' : 'Platform giderleri ve iadeler satışı aştığı için oluşan net borç/eksi bakiye' }
+      { category: this.transloco.translate('finance.accounting.runtime.niCatGross'), amountUsd: this.grossSalesUsd, amountTry: this.grossSalesTry, isPositive: true, note: this.transloco.translate('finance.accounting.runtime.niNoteGross') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatStdFees'), amountUsd: -stdFeesUsd, amountTry: -stdFeesTry, isPositive: false, note: this.transloco.translate('finance.accounting.runtime.niNoteStdFees') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatOffsite'), amountUsd: -this.offsiteAdsUsd, amountTry: -this.offsiteAdsTry, isPositive: false, note: this.transloco.translate('finance.accounting.runtime.niNoteOffsite') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatInnerAds'), amountUsd: -this.innerAdsUsd, amountTry: -this.innerAdsTry, isPositive: false, note: this.transloco.translate('finance.accounting.runtime.niNoteInnerAds') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatVat'), amountUsd: -vatUsd, amountTry: -vatTry, isPositive: false, note: this.transloco.translate('finance.accounting.runtime.niNoteVat') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatRefunds'), amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: this.transloco.translate('finance.accounting.runtime.niNoteRefunds') },
+      { category: this.transloco.translate('finance.accounting.runtime.niCatNetPayout'), amountUsd: this.netIncomeUsd, amountTry: this.netIncomeTry, isPositive: isNetIncomePos, isFinalSummary: true, note: this.transloco.translate(isNetIncomePos ? 'finance.accounting.runtime.niNoteNetPayoutPos' : 'finance.accounting.runtime.niNoteNetPayoutNeg') }
     ];
 
     // 8. Odeme Defteri Kayitlari (Ledger Entries Tab 5)
@@ -835,7 +886,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         id: `TX-${o.receiptId}`,
         entryDate: o.orderDate,
         transactionType: isRefundOrCancel ? 'refund' : 'PAYMENT',
-        typeDisplay: isRefundOrCancel ? 'İade / İptal' : 'Sipariş Tahsilatı',
+        typeDisplay: this.transloco.translate(isRefundOrCancel ? 'finance.accounting.runtime.ledgerTypeRefund' : 'finance.accounting.runtime.ledgerTypePayment'),
         title: isRefundOrCancel ? `Refund for Order #${o.receiptId} (${o.buyerName})` : `Payment for Order #${o.receiptId} (${o.buyerName})`,
         orderNumber: `#${o.receiptId}`,
         grossAmount: isRefundOrCancel ? 0 : o.grandTotalUsd,
@@ -878,7 +929,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    const translatedMonths = this.transloco.translateObject('finance.accounting.runtime.months');
+    const monthNames: string[] = Array.isArray(translatedMonths)
+      ? translatedMonths
+      : ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
     const map = new Map<string, { sortKey: number; label: string; count: number; gross: number; fees: number; ads: number; costs: number; payouts: number; profit: number }>();
 
     for (const o of this.orders) {
@@ -1022,7 +1076,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.simCostSavingPct = 0;
     this.simConversionBoostPct = 0;
     this.simTargetRateTry = Number((this.liveRate || 49.50).toFixed(2));
-    this.showToast('🔄 Simülasyon parametreleri mağaza baz değerlerine sıfırlandı.');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastSimReset'));
   }
 
   get activeHorizonItem(): AiForecastHorizonItemDto | null {
@@ -1109,7 +1163,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.croActiveCouponPct = 30;
     this.croUnitTotalCostUsd = 12.50;
     this.croTargetMinProfitUsd = 5.00;
-    this.showToast('🔄 Kupon Kalkanı & Elastikiyet Laboratuvarı baz değerlere ($45 + $10 Kargo, %30 DSFJY25) sıfırlandı.');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastCroReset'));
   }
 
   selectProductForCroLab(pf: AiProductForecastItemDto): void {
@@ -1125,7 +1179,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.croActiveCouponPct = pf.recommendedCartCouponPct || 15;
     this.croUnitTotalCostUsd = Number(Math.max(6.0, ((estPrice + 10) * 0.78) - estProfit).toFixed(2));
     this.croTargetMinProfitUsd = 5.00;
-    this.showToast(`🎯 "${pf.productTitle.slice(0, 36)}..." ürünü Kupon Kalkanı & Elastikiyet Simülatörüne yüklendi!`);
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastCroLoaded', { title: pf.productTitle.slice(0, 36) }));
   }
 
   applyOfferLadderToScheduler(tier: AiOfferLadderTierDto): void {
@@ -1136,13 +1190,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const existingIdx = jobs.findIndex(j => j.id === jobId);
       const newJob = {
         id: jobId,
-        name: `CRO Otomasyonu — ${tier.tierName} (${tier.couponCode})`,
-        schedule: tier.tierOrder === 1 ? '0 */4 * * * (Her 4 Saatte)' : (tier.tierOrder === 2 ? '0 */6 * * * (Her 6 Saatte)' : '0 9 * * * (Her Gün 09:00)'),
-        lastRun: 'Az önce',
-        nextRun: '4 saat sonra',
+        name: `CRO — ${tier.tierName} (${tier.couponCode})`,
+        schedule: tier.tierOrder === 1 ? '0 */4 * * *' : (tier.tierOrder === 2 ? '0 */6 * * *' : '0 9 * * *'),
+        lastRun: '-',
+        nextRun: '4h',
         status: 'Running',
         isEnabled: true,
-        desc: `${tier.targetSegment} için ${tier.discountSpec} kuralını C_max marj kalkanıyla otomatik çalıştırır.`
+        desc: `${tier.targetSegment} — ${tier.discountSpec}`
       };
       if (existingIdx >= 0) {
         jobs[existingIdx] = newJob;
@@ -1151,7 +1205,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       }
       localStorage.setItem('etsy_automation_jobs_v1', JSON.stringify(jobs));
     } catch {}
-    this.showToast(`⚡ "${tier.couponCode}" (${tier.tierName}) kuralı VDS Otomasyon Zamanlayıcıya aktif olarak kaydedildi!`);
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastLadderSaved', { code: tier.couponCode, tier: tier.tierName }));
   }
 
   get liveCouponGuardrail(): AiCouponGuardrailDto {
@@ -1187,17 +1241,41 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const netProfitOffUsd = Number((netProfitStdUsd - offsiteFeeUsd).toFixed(2));
 
     let riskCode = 'SAFE_GUARDRAIL';
-    let riskBadge = '🟢 GÜVENLİ MARJ KORİDORU';
-    let diagnosis = `%${activeCoupon} kupon oranınız hem standart satışta ($${netProfitStdUsd.toFixed(2)} net kâr) hem de Offsite Ads (%15) çakışmasında ($${netProfitOffUsd.toFixed(2)} net kâr) hedef marjınızı koruyor.`;
+    let riskBadge = this.transloco.translate('finance.accounting.runtime.croRiskSafe');
+    let diagnosis = this.transloco.translate('finance.accounting.runtime.croDiagSafe', {
+      coupon: activeCoupon,
+      std: netProfitStdUsd.toFixed(2),
+      off: netProfitOffUsd.toFixed(2)
+    });
 
     if (netProfitOffUsd < 0) {
       riskCode = 'CRITICAL_LOSS_TRAP';
-      riskBadge = '🛑 ZARAR TUZAĞI (Kupon + Offsite Ads Çakışması)';
-      diagnosis = `%${activeCoupon} kupon uygulandığında müşteri ödemesi $${customerPaid.toFixed(2)} seviyesine düşüyor (Etsy kesintisi: -$${etsyFees.toFixed(2)}, Maliyet öncesi kalan: $${netPayoutStd.toFixed(2)}). Standart satışta $${netProfitStdUsd.toFixed(2)} kalırken, sipariş Offsite Ads (%15 = -$${offsiteFeeUsd.toFixed(2)}) üzerinden gelirse net sonuç -$${Math.abs(netProfitOffUsd).toFixed(2)} (-₺${this.formatNumber(Math.abs(netProfitOffUsd * rate))}) ZARARA dönüyor! Güvenli kupon sınırınız Offsite Ads korumalı %${maxSafeOffPct.toFixed(1)} (standart %${maxSafeStdPct.toFixed(1)}) olmalıdır.`;
+      riskBadge = this.transloco.translate('finance.accounting.runtime.croRiskTrap');
+      diagnosis = this.transloco.translate('finance.accounting.runtime.croDiagTrap', {
+        coupon: activeCoupon,
+        paid: customerPaid.toFixed(2),
+        fees: etsyFees.toFixed(2),
+        payout: netPayoutStd.toFixed(2),
+        std: netProfitStdUsd.toFixed(2),
+        offFee: offsiteFeeUsd.toFixed(2),
+        lossUsd: Math.abs(netProfitOffUsd).toFixed(2),
+        lossTry: this.formatNumber(Math.abs(netProfitOffUsd * rate)),
+        maxOff: maxSafeOffPct.toFixed(1),
+        maxStd: maxSafeStdPct.toFixed(1)
+      });
     } else if (netProfitOffUsd < safeTarget) {
       riskCode = 'WARNING_MARGIN_EROSION';
-      riskBadge = '⚠️ MARJ ERİMESİ UYARISI (Hedef Kâr Altı)';
-      diagnosis = `%${activeCoupon} kupon ile standart satışta $${netProfitStdUsd.toFixed(2)} (₺${this.formatNumber(netProfitStdUsd * rate)}) net kâr kalıyor; ancak Offsite Ads (%15 = -$${offsiteFeeUsd.toFixed(2)}) çakışmasında net kâr $${netProfitOffUsd.toFixed(2)} seviyesine inerek hedef kârınızın ($${safeTarget.toFixed(2)}) altına düşüyor. İdeal sepet kupon koridoru: %${Math.min(15, Math.round(maxSafeStdPct))} – %${maxSafeStdPct.toFixed(1)}.`;
+      riskBadge = this.transloco.translate('finance.accounting.runtime.croRiskWarn');
+      diagnosis = this.transloco.translate('finance.accounting.runtime.croDiagWarn', {
+        coupon: activeCoupon,
+        std: netProfitStdUsd.toFixed(2),
+        stdTry: this.formatNumber(netProfitStdUsd * rate),
+        offFee: offsiteFeeUsd.toFixed(2),
+        off: netProfitOffUsd.toFixed(2),
+        target: safeTarget.toFixed(2),
+        minRec: Math.min(15, Math.round(maxSafeStdPct)),
+        maxStd: maxSafeStdPct.toFixed(1)
+      });
     }
 
     const recFav = Math.min(15, Math.max(5, Math.round(Math.min(10, maxSafeStdPct * 0.55))));
@@ -1288,8 +1366,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return [
       {
         scenarioCode: 'PAID_SHIPPING_BASE',
-        scenarioTitle: `📦 Mevcut Liste ($${p.toFixed(0)} + $${s.toFixed(0)} Kargo, %0 Kupon)`,
-        badgeText: 'Baz Senaryo',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.escBaseTitle', { p: p.toFixed(0), s: s.toFixed(0) }),
+        badgeText: this.transloco.translate('finance.accounting.runtime.escBaseBadge'),
         itemListPriceUsd: p,
         shippingChargedUsd: s,
         couponDiscountPct: 0,
@@ -1304,12 +1382,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
         expectedMonthlyNetProfitUsd: s1MonthlyUsd,
         expectedMonthlyNetProfitTry: Number((s1MonthlyUsd * rate).toFixed(2)),
         isRecommended: false,
-        strategyNote: `Müşteri ödeme adımında +$${s.toFixed(2)} kargo görünce sepeti terk edebiliyor (Shipping Shock).`
+        strategyNote: this.transloco.translate('finance.accounting.runtime.escBaseNote', { s: s.toFixed(2) })
       },
       {
         scenarioCode: 'SMART_ANCHOR_COUPON_15',
-        scenarioTitle: `🎯 Akıllı Çapa Fiyat ($${s2List.toFixed(2)}) + %15 Kupon (CART15)`,
-        badgeText: 'Marj Korumalı İndirim',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.escAnchorTitle', { list: s2List.toFixed(2) }),
+        badgeText: this.transloco.translate('finance.accounting.runtime.escAnchorBadge'),
         itemListPriceUsd: s2List,
         shippingChargedUsd: s,
         couponDiscountPct: 15,
@@ -1324,12 +1402,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
         expectedMonthlyNetProfitUsd: s2MonthlyUsd,
         expectedMonthlyNetProfitTry: Number((s2MonthlyUsd * rate).toFixed(2)),
         isRecommended: s2MonthlyUsd > s3MonthlyUsd && s2MonthlyUsd > s4MonthlyUsd,
-        strategyNote: `Liste fiyatını %8 artırıp sepet/favori kitlesine %15 kupon verdiğinizde birim kâr ($${s2UnitProfit.toFixed(2)}) erimez, dönüşüm %24 artar.`
+        strategyNote: this.transloco.translate('finance.accounting.runtime.escAnchorNote', { profit: s2UnitProfit.toFixed(2) })
       },
       {
         scenarioCode: 'FREE_SHIPPING_PSYCHOLOGY',
-        scenarioTitle: `🚀 Ücretsiz Kargo Psikolojisi ($${s3List.toFixed(0)} Ürün + $0 Kargo)`,
-        badgeText: '🌟 AI Önerisi (ABD $35+ Boost)',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.escFreeShipTitle', { list: s3List.toFixed(0) }),
+        badgeText: this.transloco.translate('finance.accounting.runtime.escFreeShipBadge'),
         itemListPriceUsd: s3List,
         shippingChargedUsd: 0,
         couponDiscountPct: 0,
@@ -1344,12 +1422,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
         expectedMonthlyNetProfitUsd: s3MonthlyUsd,
         expectedMonthlyNetProfitTry: Number((s3MonthlyUsd * rate).toFixed(2)),
         isRecommended: s3MonthlyUsd >= s2MonthlyUsd && s3MonthlyUsd >= s4MonthlyUsd,
-        strategyNote: `Kargoyu ürün fiyatına ($${s3List.toFixed(2)}) dahil ettiğinizde toplam müşteri ödemesi ve Etsy kesintisi kuruşu kuruşuna aynıdır; ancak 'Free Shipping' rozetiyle dönüşüm +%28 artar.`
+        strategyNote: this.transloco.translate('finance.accounting.runtime.escFreeShipNote', { list: s3List.toFixed(2) })
       },
       {
         scenarioCode: 'ACTIVE_COUPON_TEST',
-        scenarioTitle: `🏷️ Seçili %${activeCoupon} Mağaza Kuponu (Örn: DSFJY25)`,
-        badgeText: s4UnitProfit < this.croTargetMinProfitUsd ? '⚠️ Düşük Birim Kâr' : 'Aktif Test',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.escActiveTitle', { coupon: activeCoupon }),
+        badgeText: s4UnitProfit < this.croTargetMinProfitUsd
+          ? this.transloco.translate('finance.accounting.runtime.escActiveBadgeLow')
+          : this.transloco.translate('finance.accounting.runtime.escActiveBadgeTest'),
         itemListPriceUsd: p,
         shippingChargedUsd: s,
         couponDiscountPct: activeCoupon,
@@ -1364,7 +1444,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
         expectedMonthlyNetProfitUsd: s4MonthlyUsd,
         expectedMonthlyNetProfitTry: Number((s4MonthlyUsd * rate).toFixed(2)),
         isRecommended: s4MonthlyUsd > s3MonthlyUsd && s4UnitProfit >= this.croTargetMinProfitUsd,
-        strategyNote: `Müşteri $${s4Total.toFixed(2)} öder, Etsy -$${s4Fees.toFixed(2)} keser, maliyet öncesi $${(s4Total - s4Fees).toFixed(2)} (Birim Net Kâr: $${s4UnitProfit.toFixed(2)}) kalır. Başabaş için dönüşüm en az %${s4BreakEvenCr.toFixed(2)} olmalıdır.`
+        strategyNote: this.transloco.translate('finance.accounting.runtime.escActiveNote', {
+          total: s4Total.toFixed(2),
+          fees: s4Fees.toFixed(2),
+          preCost: (s4Total - s4Fees).toFixed(2),
+          profit: s4UnitProfit.toFixed(2),
+          beCr: s4BreakEvenCr.toFixed(2)
+        })
       }
     ];
   }
@@ -1387,36 +1473,36 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return [
       {
         tierOrder: 1,
-        tierName: '1. Kademe: Soğuk Favori Kancası (Favorited Item Offer)',
-        targetSegment: `Ürünü favoriye ekleyen ${favCount} potansiyel alıcı (Niyet Skoru: 35–59)`,
-        triggerTiming: 'Favoriye ekledikten 12 saat sonra otomatik',
+        tierName: this.transloco.translate('finance.accounting.runtime.ladder1Name'),
+        targetSegment: this.transloco.translate('finance.accounting.runtime.ladder1Seg', { count: favCount }),
+        triggerTiming: this.transloco.translate('finance.accounting.runtime.ladder1Time'),
         couponCode: `FAV${g.recommendedFavCouponPct}`,
-        discountSpec: `%${g.recommendedFavCouponPct} İndirim + 3D Ölçek/Kalite Güvencesi`,
+        discountSpec: this.transloco.translate('finance.accounting.runtime.ladder1Spec', { pct: g.recommendedFavCouponPct }),
         expectedConversionLiftPct: 14.5,
         unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedFavCouponPct),
-        psychologicalPrinciple: 'Mikro-Teşvik: Marjı eritmeden favoriden sepete geçişi tetikler.'
+        psychologicalPrinciple: this.transloco.translate('finance.accounting.runtime.ladder1Psych')
       },
       {
         tierOrder: 2,
-        tierName: '2. Kademe: Sıcak Sepet & Kargo Şoku Kurtarıcı (Abandoned Cart)',
-        targetSegment: `Sepetinde ürün bekleten ${cartCount} yüksek niyetli alıcı (Niyet Skoru: 60–84)`,
-        triggerTiming: 'Sepete ekledikten 24 saat sonra ödeme yapılmazsa',
+        tierName: this.transloco.translate('finance.accounting.runtime.ladder2Name'),
+        targetSegment: this.transloco.translate('finance.accounting.runtime.ladder2Seg', { count: cartCount }),
+        triggerTiming: this.transloco.translate('finance.accounting.runtime.ladder2Time'),
         couponCode: `CART${g.recommendedCartCouponPct}`,
-        discountSpec: `%${g.recommendedCartCouponPct} Sepet İndirimi veya Ücretsiz Kargo ($10 Kargo Bariyerini Kaldırır)`,
+        discountSpec: this.transloco.translate('finance.accounting.runtime.ladder2Spec', { pct: g.recommendedCartCouponPct }),
         expectedConversionLiftPct: 26.8,
         unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedCartCouponPct),
-        psychologicalPrinciple: 'Kayıptan Kaçınma & Kargo Şoku Çözümü: Ödeme adımındaki +$10 kargo acısını nötrler.'
+        psychologicalPrinciple: this.transloco.translate('finance.accounting.runtime.ladder2Psych')
       },
       {
         tierOrder: 3,
-        tierName: '3. Kademe: VIP & Aynı Kargoda 2\'li Bundle Teklifi (Upsell)',
-        targetSegment: 'Tekrar müşteriler ve 2+ ürün bakan Cosplay koleksiyonerleri (Niyet Skoru: 85+)',
-        triggerTiming: 'Sipariş sonrası anında veya $75+ sepet büyüklüğünde',
+        tierName: this.transloco.translate('finance.accounting.runtime.ladder3Name'),
+        targetSegment: this.transloco.translate('finance.accounting.runtime.ladder3Seg'),
+        triggerTiming: this.transloco.translate('finance.accounting.runtime.ladder3Time'),
         couponCode: `VIP${g.recommendedVipCouponPct}`,
-        discountSpec: `%${g.recommendedVipCouponPct} VIP Kuponu (C_max Korumalı) + 2. Aksesuarda Aynı Kargo`,
+        discountSpec: this.transloco.translate('finance.accounting.runtime.ladder3Spec', { pct: g.recommendedVipCouponPct }),
         expectedConversionLiftPct: 34.0,
         unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedVipCouponPct, 1.65, 1.35),
-        psychologicalPrinciple: 'Birim Kargo Arbitrajı (Upsell Bundling): 500gr altı pakette 2. ürünü ekstra kargo ödemeden gönderip AOV\'yi katlar.'
+        psychologicalPrinciple: this.transloco.translate('finance.accounting.runtime.ladder3Psych')
       }
     ];
   }
@@ -1428,17 +1514,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return [
       {
         eventCode: 'Q4_HOLIDAY_RUSH',
-        eventTitle: '🎄 Q4 / Noel & Yılbaşı Hediye Son Kargo Garantisi',
-        targetAudience: 'Arcane / Gaming / Cosplay Hediye Arayanlar',
-        urgencyHookText: 'Atölye Kapasite Uyarısı: Yılbaşı teslimat garantisi için bu hafta yalnızca 15 adet 3D baskı slotu açıktır. Bugün verilen siparişler 3 iş günü erken kargolanır!',
-        recommendedAction: 'İlan başlığı ve mağaza duyurusuna "Fast 3-Day 3D Print Dispatch" rozeti ekleyin.'
+        eventTitle: this.transloco.translate('finance.accounting.runtime.hook1Title'),
+        targetAudience: this.transloco.translate('finance.accounting.runtime.hook1Audience'),
+        urgencyHookText: this.transloco.translate('finance.accounting.runtime.hook1Text'),
+        recommendedAction: this.transloco.translate('finance.accounting.runtime.hook1Action')
       },
       {
         eventCode: 'COSPLAY_CONVENTION_SLOT',
-        eventTitle: '🎭 Cosplay & Comic-Con Etkinlik Yetiştirme + Hediye Stand Çapası',
-        targetAudience: 'Hexcore Rubik\'s Cube, Butterfly Balisong & Ben 10 Omnitrix Koleksiyonerleri',
-        urgencyHookText: 'Etkinlik tarihine yetişmesi için ekspres üretim sırası aktif! Şimdi sepetinizi tamamlarsanız ücretsiz sergileme standı (Display Stand) paketinize hediye eklenir.',
-        recommendedAction: 'Ücretsiz 15gr 3D sergileme standını ($0.35 filament maliyeti) %30 indirim yerine yüksek değerli hediye çapa olarak sunun.'
+        eventTitle: this.transloco.translate('finance.accounting.runtime.hook2Title'),
+        targetAudience: this.transloco.translate('finance.accounting.runtime.hook2Audience'),
+        urgencyHookText: this.transloco.translate('finance.accounting.runtime.hook2Text'),
+        recommendedAction: this.transloco.translate('finance.accounting.runtime.hook2Action')
       }
     ];
   }
@@ -1507,17 +1593,32 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const projFavs = Math.max(estimatedOrders * 2, Math.round(projViews * Math.max(0.065, favToViewPct / 100)));
     const projCarts = Math.max(estimatedOrders, Math.round((projFavs * 0.45) + (estimatedOrders * 1.6)));
 
-    let bottleneckStage = 'Sepet ➔ Sipariş Tamamlama (Checkout)';
+    let bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnCheckout');
     let diagnosis = '';
     if (favToViewPct < 5.0) {
-      bottleneckStage = 'Görüntülenme ➔ Favori Etkileşimi (Görsel & Başlık Çekiciliği)';
-      diagnosis = `Toplam ${totalViews.toLocaleString('tr-TR')} görüntülenmeye karşılık ${totalFavorites.toLocaleString('tr-TR')} favori (%${favToViewPct.toFixed(1)}) kaydedildi. İlk kapak görseli, video önizlemesi ve 13 etiket uyumu güçlendirildiğinde favori ve sepete ekleme hızı doğrudan artacaktır.`;
+      bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnFav');
+      diagnosis = this.transloco.translate('finance.accounting.runtime.bnFavDiag', {
+        views: totalViews.toLocaleString('tr-TR'),
+        favs: totalFavorites.toLocaleString('tr-TR'),
+        pct: favToViewPct.toFixed(1)
+      });
     } else if (cartToOrderPct < 38.0) {
-      bottleneckStage = 'Favori & Sepete Ekleme ➔ Sipariş Dönüşümü (Sepet Terk Oranı)';
-      diagnosis = `Mağazanızda ${totalFavorites.toLocaleString('tr-TR')} favori ve tahmini ${estimatedCarts.toLocaleString('tr-TR')} sepete ekleme bulunmasına rağmen sepetten siparişe geçiş oranı %${cartToOrderPct.toFixed(1)} seviyesindedir. "Favorileyenlere & Sepette Unutanlara Özel %10 İndirim Kuponu" (Abandoned Cart & Favorited Item Offer) tanımlanması gelecek 30 günde tahmini +${Math.max(2, Math.round((estimatedCarts - activeOrders) * 0.18))} ek siparişi tetikleyebilir.`;
+      bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnCart');
+      diagnosis = this.transloco.translate('finance.accounting.runtime.bnCartDiag', {
+        favs: totalFavorites.toLocaleString('tr-TR'),
+        carts: estimatedCarts.toLocaleString('tr-TR'),
+        pct: cartToOrderPct.toFixed(1),
+        extra: Math.max(2, Math.round((estimatedCarts - activeOrders) * 0.18))
+      });
     } else {
-      bottleneckStage = 'Üst Huni Trafik Hacmi (Görüntülenme & Tekil Ziyaret Artışı)';
-      diagnosis = `Ziyaret ➔ Sipariş dönüşüm oranınız (%${overallCrPct.toFixed(2)}) ve sepet tamamlama hızınız (%${cartToOrderPct.toFixed(1)}) sağlıklıdır. Gelecek 30 günde beklenen ${projViews.toLocaleString('tr-TR')} görüntülenme ve ${projCarts.toLocaleString('tr-TR')} sepete ekleme hacmiyle ${estimatedOrders} siparişe ulaşılması öngörülmektedir.`;
+      bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnTop');
+      diagnosis = this.transloco.translate('finance.accounting.runtime.bnTopDiag', {
+        cr: overallCrPct.toFixed(2),
+        cartCr: cartToOrderPct.toFixed(1),
+        views: projViews.toLocaleString('tr-TR'),
+        carts: projCarts.toLocaleString('tr-TR'),
+        orders: estimatedOrders
+      });
     }
 
     return {
@@ -1578,14 +1679,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
         const estUnitPrice = item.count > 0 && rev > 0 ? (rev / item.count) : 42.0;
         const projRev = item.count > 0 ? Number((rev * scale30).toFixed(2)) : Number((projOrders * estUnitPrice).toFixed(2));
         const projProf = item.count > 0 ? Number((prof * scale30).toFixed(2)) : Number((projRev * 0.32).toFixed(2));
-        const tag = mrg >= 35 ? '🚀 Yıldız Ürün (Ölçekle)' : (eng.favorites >= 15 && item.count <= 1 ? '🔥 Yüksek Favori / Sepet Fırsatı' : (mrg >= 15 ? '⚖️ Dengeli Katkı' : '⚠️ Marj Optimize Et'));
-        const rec = eng.favorites >= 12 && eng.conversionPct < 2.5
-          ? `${eng.views} görüntülenme ve ${eng.favorites} favoriye rağmen dönüşüm %${eng.conversionPct.toFixed(1)}. Favorileyenlere özel %10 kupon tanımlayarak bekleyen ${eng.carts} sepeti satışa çevirin.`
-          : (mrg >= 35
-              ? `Etsy Ads bütçesini %15 artırın (${eng.views} görüntülenme / ${eng.favorites} fav) ve 2'li set (bundle) varyasyonu ekleyin.`
+        const tag = mrg >= 35
+          ? this.transloco.translate('finance.accounting.runtime.tagStar')
+          : (eng.favorites >= 15 && item.count <= 1
+              ? this.transloco.translate('finance.accounting.runtime.tagHighFav')
               : (mrg >= 15
-                  ? `Fiyatı %5 yukarı çekin ve ${eng.favorites} favori / ${eng.carts} sepet kitlesine terk edilmiş sepet kuponu gönderin.`
-                  : 'Kargo ve üretim maliyetini inceleyin; Offsite Ads etkisini fiyatlayın.'));
+                  ? this.transloco.translate('finance.accounting.runtime.tagBalanced')
+                  : this.transloco.translate('finance.accounting.runtime.tagOptimize')));
+        const rec = eng.favorites >= 12 && eng.conversionPct < 2.5
+          ? this.transloco.translate('finance.accounting.runtime.recFav', { views: eng.views, favs: eng.favorites, cr: eng.conversionPct.toFixed(1), carts: eng.carts })
+          : (mrg >= 35
+              ? this.transloco.translate('finance.accounting.runtime.recStar', { views: eng.views, favs: eng.favorites })
+              : (mrg >= 15
+                  ? this.transloco.translate('finance.accounting.runtime.recBalanced', { favs: eng.favorites, carts: eng.carts })
+                  : this.transloco.translate('finance.accounting.runtime.recLowMargin')));
         const visitsSafe = Math.max(1, eng.visits);
         const favRate = eng.favorites / visitsSafe;
         const cartRate = eng.carts / visitsSafe;
@@ -1605,12 +1712,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
         const recCart = Math.min(15, Math.max(recFav + 3, Math.round(cMaxOffsite * 0.70)));
 
         const funnelLeakStage = eng.favorites >= 10 && item.count === 0
-          ? '🛒 Sepet / Kargo Şoku (Yüksek Favori, Düşük Satış)'
+          ? this.transloco.translate('finance.accounting.runtime.leakShipping')
           : (eng.carts >= 3 && item.count <= 1
-              ? '💳 Ödeme Terki (Kupon Tetikleyici Bekliyor)'
+              ? this.transloco.translate('finance.accounting.runtime.leakCheckout')
               : (eng.views < 80
-                  ? '🔍 Üst Huni (SEO & Etiket Görünürlüğü Darboğazı)'
-                  : '✅ Dengeli Huni Akışı'));
+                  ? this.transloco.translate('finance.accounting.runtime.leakSeo')
+                  : this.transloco.translate('finance.accounting.runtime.leakBalanced')));
 
         return {
           productTitle: item.title,
@@ -1632,8 +1739,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
           maxSafeCouponWithOffsiteAdsPct: cMaxOffsite,
           recommendedFavCouponPct: recFav,
           recommendedCartCouponPct: recCart,
-          offerLadderSummary: `Fav: %${recFav} (2sa) → Sepet: %${recCart} (24sa) → VIP: Ücretsiz Kargo (72sa)`,
-          upsellBundleSuggestion: `2'li Cosplay/Hediye Seti veya StandVaryasyonu ($${Math.round(unitPrice * 1.45)})`,
+          offerLadderSummary: this.transloco.translate('finance.accounting.runtime.offerLadderFmt', { fav: recFav, cart: recCart }),
+          upsellBundleSuggestion: this.transloco.translate('finance.accounting.runtime.upsellFmt', { price: Math.round(unitPrice * 1.45) }),
           aiStrategyTag: tag,
           aiRecommendation: rec
         };
@@ -1642,10 +1749,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   private buildLocalHorizons(expectedGrossUsd: number, expectedMarginPct: number, estimatedOrders: number, rate: number, funnel?: AiTrafficFunnelSnapshotDto): AiForecastHorizonItemDto[] {
     const specs: Array<{ code: string; title: string; days: number; mult: number; growth: number }> = [
-      { code: '30d', title: 'Gelecek 30 Gün (1 Ay)', days: 30, mult: 1.0, growth: 12.0 },
-      { code: '60d', title: 'Gelecek 60 Gün (2 Ay)', days: 60, mult: 2.08, growth: 16.5 },
-      { code: '90d', title: 'Gelecek 90 Gün (Çeyrek / 3 Ay)', days: 90, mult: 3.24, growth: 21.8 },
-      { code: '180d', title: 'Gelecek 180 Gün (Yarıyıl / 6 Ay)', days: 180, mult: 6.85, growth: 34.0 }
+      { code: '30d', title: this.transloco.translate('finance.accounting.runtime.hz30d'), days: 30, mult: 1.0, growth: 12.0 },
+      { code: '60d', title: this.transloco.translate('finance.accounting.runtime.hz60d'), days: 60, mult: 2.08, growth: 16.5 },
+      { code: '90d', title: this.transloco.translate('finance.accounting.runtime.hz90d'), days: 90, mult: 3.24, growth: 21.8 },
+      { code: '180d', title: this.transloco.translate('finance.accounting.runtime.hz180d'), days: 180, mult: 6.85, growth: 34.0 }
     ];
     const feeRatio = this.grossSalesUsd > 0 ? Math.min(0.40, Math.max(0.14, (this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd) / this.grossSalesUsd)) : 0.22;
     const costRatio = this.grossSalesUsd > 0 && this.productCostsUsd > 0 ? Math.min(0.55, Math.max(0.15, this.productCostsUsd / this.grossSalesUsd)) : 0.32;
@@ -1709,39 +1816,39 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return [
       {
         scenarioCode: 'pessimistic',
-        scenarioTitle: '🛡️ Konservatif (Stres Testi)',
-        badgeText: '-%18 Hacim / Yüksek Kesinti',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.scPessTitle'),
+        badgeText: this.transloco.translate('finance.accounting.runtime.scPessBadge'),
         expectedGrossUsd: pessGrossUsd,
         expectedGrossTry: Number((pessGrossUsd * rate).toFixed(2)),
         expectedNetProfitUsd: pessProfitUsd,
         expectedNetProfitTry: Number((pessProfitUsd * rate).toFixed(2)),
         expectedMarginPct: pessMargin,
         estimatedOrders: estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * 0.82)) : 0,
-        keyDriverSummary: 'Offsite Ads payının arttığı ve organik trafiğin %18 yavaşladığı güvenli alt sınır senaryosu.'
+        keyDriverSummary: this.transloco.translate('finance.accounting.runtime.scPessDesc')
       },
       {
         scenarioCode: 'baseline',
-        scenarioTitle: '🎯 Baz Beklenti (Gerçekçi Projeksiyon)',
-        badgeText: '+%12 Büyüme / Mevcut Trend',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.scBaseTitle'),
+        badgeText: this.transloco.translate('finance.accounting.runtime.scBaseBadge'),
         expectedGrossUsd: baseGrossUsd,
         expectedGrossTry: Number((baseGrossUsd * rate).toFixed(2)),
         expectedNetProfitUsd: baseProfitUsd,
         expectedNetProfitTry: Number((baseProfitUsd * rate).toFixed(2)),
         expectedMarginPct: baseMargin,
         estimatedOrders,
-        keyDriverSummary: 'Mağazanızın mevcut sipariş hızı (run-rate), kesinti oranı ve kur çarpanıyla beklenen ana rota.'
+        keyDriverSummary: this.transloco.translate('finance.accounting.runtime.scBaseDesc')
       },
       {
         scenarioCode: 'optimistic',
-        scenarioTitle: '🚀 Agresif Büyüme (SEO + Bundle)',
-        badgeText: '+%28 Hacim / +%5 Marj',
+        scenarioTitle: this.transloco.translate('finance.accounting.runtime.scOptTitle'),
+        badgeText: this.transloco.translate('finance.accounting.runtime.scOptBadge'),
         expectedGrossUsd: optGrossUsd,
         expectedGrossTry: Number((optGrossUsd * rate).toFixed(2)),
         expectedNetProfitUsd: optProfitUsd,
         expectedNetProfitTry: Number((optProfitUsd * rate).toFixed(2)),
         expectedMarginPct: optMargin,
         estimatedOrders: estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * 1.25)) : 0,
-        keyDriverSummary: 'Lider ürünlerde 2\'li set (bundle) satışı ve 13 etiket optimizasyonuyla AOV ve dönüşümün arttığı üst hedef.'
+        keyDriverSummary: this.transloco.translate('finance.accounting.runtime.scOptDesc')
       }
     ];
   }
@@ -1855,45 +1962,116 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const roas = totalAdsUsd > 0 && this.grossSalesUsd > 0 ? Number((this.grossSalesUsd / totalAdsUsd).toFixed(1)) : 0;
 
     const execSummary = this.grossSalesUsd > 0
-      ? `Seçili dönemde (${periodLabel}) ${localFunnel.totalViews.toLocaleString('tr-TR')} görüntülenme, ${localFunnel.estimatedUniqueVisits.toLocaleString('tr-TR')} tekil ziyaret, ${localFunnel.totalFavorites.toLocaleString('tr-TR')} favori ve ${localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')} sepete ekleme üzerinden ${this.completedOrderCount} aktif sipariş (%${localFunnel.overallConversionRatePct.toFixed(2)} dönüşüm) gerçekleşti; $${this.grossSalesUsd.toFixed(2)} (₺${this.formatNumber(this.grossSalesTry)}) brüt satış ve ${this.formatSignedUsd(this.realNetProfitUsd)} (${this.formatSignedTry(this.realNetProfitTry)}) gerçek net sonuç kaydedildi. Gelecek 30 günde ${localFunnel.projectedNext30dViews.toLocaleString('tr-TR')} görüntülenme ve ${localFunnel.projectedNext30dCarts.toLocaleString('tr-TR')} sepete ekleme ile $${expectedGrossUsd.toFixed(2)} (₺${this.formatNumber(expectedGrossTry)}) ciro ve $${expectedNetProfitUsd.toFixed(2)} (₺${this.formatNumber(expectedNetProfitTry)}) gerçek net kâr öngörülmektedir.`
-      : `Seçili dönemde (${periodLabel}) yeni tamamlanan satış bulunmamakta olup mağaza genelinde ${localFunnel.totalViews.toLocaleString('tr-TR')} görüntülenme, ${localFunnel.totalFavorites.toLocaleString('tr-TR')} favori ve ${localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')} sepete ekleme etkileşimi kaydedilmiştir. Dönem içi kesinti/iade hareketleri nedeniyle dönem net sonucu ${this.formatSignedTry(this.realNetProfitTry)} (${this.formatSignedUsd(this.realNetProfitUsd)}) olarak gerçekleşmiştir.`;
+      ? this.transloco.translate('finance.accounting.runtime.execSummaryActive', {
+          period: periodLabel,
+          views: localFunnel.totalViews.toLocaleString('tr-TR'),
+          visits: localFunnel.estimatedUniqueVisits.toLocaleString('tr-TR'),
+          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+          orders: this.completedOrderCount,
+          cr: localFunnel.overallConversionRatePct.toFixed(2),
+          grossUsd: this.grossSalesUsd.toFixed(2),
+          grossTry: this.formatNumber(this.grossSalesTry),
+          netUsd: this.formatSignedUsd(this.realNetProfitUsd),
+          netTry: this.formatSignedTry(this.realNetProfitTry),
+          projViews: localFunnel.projectedNext30dViews.toLocaleString('tr-TR'),
+          projCarts: localFunnel.projectedNext30dCarts.toLocaleString('tr-TR'),
+          expGrossUsd: expectedGrossUsd.toFixed(2),
+          expGrossTry: this.formatNumber(expectedGrossTry),
+          expNetUsd: expectedNetProfitUsd.toFixed(2),
+          expNetTry: this.formatNumber(expectedNetProfitTry)
+        })
+      : this.transloco.translate('finance.accounting.runtime.execSummaryEmpty', {
+          period: periodLabel,
+          views: localFunnel.totalViews.toLocaleString('tr-TR'),
+          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+          netTry: this.formatSignedTry(this.realNetProfitTry),
+          netUsd: this.formatSignedUsd(this.realNetProfitUsd)
+        });
 
     const prodAnalysis = topProd.title
-      ? `Dönemin en yüksek katkı sağlayan ürünü "${topProd.title}" olup $${topProd.revenueUsd.toFixed(2)} brüt ciro ve ${this.formatSignedUsd(topProd.profitUsd)} net kâr üretmiştir. Mağaza genelinde görüntülenme ➔ favori oranı %${localFunnel.favoriteToViewRatePct.toFixed(1)} ve sepet ➔ sipariş tamamlama oranı %${localFunnel.cartToOrderConversionPct.toFixed(1)} seviyesindedir.`
-      : `Seçili tarih aralığında (${periodLabel}) tamamlanmış yeni ürün satışı oluşmadığından mağazanızdaki ${localFunnel.totalFavorites.toLocaleString('tr-TR')} favori ve ${localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')} sepete ekleme potansiyelini satışa dönüştürmek için terk edilmiş sepet kuponlarını aktifleştirmeniz önerilir.`;
+      ? this.transloco.translate('finance.accounting.runtime.prodAnalysisTop', {
+          title: topProd.title,
+          rev: topProd.revenueUsd.toFixed(2),
+          prof: this.formatSignedUsd(topProd.profitUsd),
+          favPct: localFunnel.favoriteToViewRatePct.toFixed(1),
+          cartPct: localFunnel.cartToOrderConversionPct.toFixed(1)
+        })
+      : this.transloco.translate('finance.accounting.runtime.prodAnalysisEmpty', {
+          period: periodLabel,
+          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')
+        });
 
     const adAnalysis = totalAdsUsd > 0
-      ? `Dönem içinde Etsy Ads için -$${this.innerAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.innerAdsTry)}) ve Offsite Ads (Dış Reklam) için -$${this.offsiteAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.offsiteAdsTry)}) olmak üzere toplam -$${totalAdsUsd.toFixed(2)} (-₺${this.formatNumber(totalAdsTry)}) reklam harcaması gerçekleşmiştir.` + (roas > 0 ? ` Genel reklam dönüşüm çarpanı (ROAS) ${roas}x seviyesindedir.` : ` Bu dönemde reklam harcamasına karşılık doğrudan satış dönüşümü oluşmamıştır.`)
-      : `Seçili dönemde Etsy Ads veya Offsite Ads reklam kesintisi bulunmamaktadır.`;
+      ? this.transloco.translate('finance.accounting.runtime.adAnalysisBase', {
+          innerUsd: this.innerAdsUsd.toFixed(2),
+          innerTry: this.formatNumber(this.innerAdsTry),
+          offUsd: this.offsiteAdsUsd.toFixed(2),
+          offTry: this.formatNumber(this.offsiteAdsTry),
+          totUsd: totalAdsUsd.toFixed(2),
+          totTry: this.formatNumber(totalAdsTry)
+        }) + (roas > 0
+          ? this.transloco.translate('finance.accounting.runtime.adAnalysisRoas', { roas })
+          : this.transloco.translate('finance.accounting.runtime.adAnalysisNoRoas'))
+      : this.transloco.translate('finance.accounting.runtime.adAnalysisNone');
 
     let refundCostAnalysis = '';
     if (this.refundsUsd > 0 && missingCount > 0) {
       const idStr = missingIds.length > 0 ? ` (${missingIds.map(x => '#' + x).join(', ')})` : '';
-      refundCostAnalysis = `Dönem içinde -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) tutarında sipariş iadesi kaydedilmiştir. Ayrıca ${missingCount} adet siparişin${idStr} üretim ve kargo maliyeti henüz girilmemiştir; bu maliyetleri girdiğinizde gerçek net kârınız tam olarak netleşecektir.`;
+      refundCostAnalysis = this.transloco.translate('finance.accounting.runtime.refCostBoth', {
+        refUsd: this.refundsUsd.toFixed(2),
+        refTry: this.formatNumber(this.refundsTry),
+        missing: missingCount,
+        ids: idStr
+      });
     } else if (this.refundsUsd > 0) {
-      refundCostAnalysis = `Dönem içinde -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) tutarında sipariş iadesi gerçekleşmiştir (${this.refundRecords.length} iade kaydı). Tüm aktif siparişlerin maliyet verileri eksiksizdir.`;
+      refundCostAnalysis = this.transloco.translate('finance.accounting.runtime.refCostRefundOnly', {
+        refUsd: this.refundsUsd.toFixed(2),
+        refTry: this.formatNumber(this.refundsTry),
+        count: this.refundRecords.length
+      });
     } else if (missingCount > 0) {
       const idStr = missingIds.length > 0 ? ` (${missingIds.map(x => '#' + x).join(', ')})` : '';
-      refundCostAnalysis = `Dönem içinde iade bulunmamaktadır; ancak ${missingCount} adet siparişin${idStr} üretim/kargo maliyeti henüz girilmemiştir.`;
+      refundCostAnalysis = this.transloco.translate('finance.accounting.runtime.refCostMissingOnly', {
+        missing: missingCount,
+        ids: idStr
+      });
     } else {
-      refundCostAnalysis = `Seçili dönemde iade kaydı bulunmamaktadır ve tüm aktif siparişlerin üretim/kargo maliyetleri eksiksiz işlenmiştir.`;
+      refundCostAnalysis = this.transloco.translate('finance.accounting.runtime.refCostClean');
     }
 
     const actions: string[] = [];
     if (localFunnel.totalFavorites > 0 || localFunnel.estimatedAddToCarts > 0) {
-      actions.push(`Dönüşüm Hunisi (Fav & Sepet Kaldıracı): Mağazanızdaki ${localFunnel.totalFavorites.toLocaleString('tr-TR')} favori ve ${localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')} sepete ekleme kitlesini siparişe çevirmek için "Favorileyenlere & Sepette Unutanlara Özel %10 İndirim Kuponu" kampanyasını aktifleştirin (Darboğaz: ${localFunnel.funnelBottleneckStage}).`);
+      actions.push(this.transloco.translate('finance.accounting.runtime.actFunnel', {
+        favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
+        carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+        bottleneck: localFunnel.funnelBottleneckStage
+      }));
     }
     if (missingCount > 0) {
-      actions.push(`Maliyet Tamamlama: ${missingIds.map(x => '#' + x).join(', ')} nolu siparişlerin kargo ve üretim maliyetlerini "Siparişler & Net Kâr" sekmesinden girerek gerçek kâr marjınızı kesinleştirin.`);
+      actions.push(this.transloco.translate('finance.accounting.runtime.actMissing', {
+        ids: missingIds.map(x => '#' + x).join(', ')
+      }));
     }
     if (this.offsiteAdsUsd > 0) {
-      actions.push(`Offsite Ads Koruması: Dış reklamlardan kesilen -$${this.offsiteAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.offsiteAdsTry)}) komisyonu dengelemek için yüksek hacimli ürünlerinizde fiyat koridorunu %5-%8 yukarı güncelleyin.`);
+      actions.push(this.transloco.translate('finance.accounting.runtime.actOffsite', {
+        usd: this.offsiteAdsUsd.toFixed(2),
+        try: this.formatNumber(this.offsiteAdsTry)
+      }));
     }
     if (this.refundsUsd > 0) {
-      actions.push(`İade Risk Yönetimi: Dönem içinde gerçekleşen -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) iade kaybını telafi etmek için kargo takip ve teslimat bilgilendirme mesajlarını hızlandırın.`);
+      actions.push(this.transloco.translate('finance.accounting.runtime.actRefund', {
+        usd: this.refundsUsd.toFixed(2),
+        try: this.formatNumber(this.refundsTry)
+      }));
     }
     if (topProd.title) {
-      actions.push(`Lider Ürün Ölçekleme: En çok kazandıran "${topProd.title}" ilanında varyasyon ve ikili set (bundle) seçenekleri sunarak ortalama sepet tutarını ($${avgOrderValueUsd.toFixed(2)}) artırın.`);
+      actions.push(this.transloco.translate('finance.accounting.runtime.actTopProd', {
+        title: topProd.title,
+        aov: avgOrderValueUsd.toFixed(2)
+      }));
     }
 
     if (this.aiForecast && this.aiForecast.usedAi && this.aiForecast.periodLabel === periodLabel) {
@@ -1907,7 +2085,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
     else if (expectedMarginPct < 20) score -= 10;
     if (missingCount > 0) score -= Math.min(12, missingCount * 3);
     score = Math.max(25, Math.min(98, score));
-    const healthGrade = score >= 85 ? 'A+ (Çok Güçlü)' : (score >= 75 ? 'A (Sağlıklı Büyüme)' : (score >= 60 ? 'B (Dengeli / İyileştirilebilir)' : 'C (Marj ve İade Baskısı)'));
+    const healthGrade = score >= 85
+      ? this.transloco.translate('finance.accounting.runtime.gradeAPlus')
+      : (score >= 75
+          ? this.transloco.translate('finance.accounting.runtime.gradeA')
+          : (score >= 60
+              ? this.transloco.translate('finance.accounting.runtime.gradeB')
+              : this.transloco.translate('finance.accounting.runtime.gradeC')));
 
     const fixedAndAdOverheadUsd = Math.max(25, this.innerAdsUsd + this.offsiteAdsUsd + (this.refundsUsd * 0.35));
     const effAov = avgOrderValueUsd > 0 ? avgOrderValueUsd : 45;
@@ -1975,7 +2159,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const apiKey = this.getActiveApiKeyForSettings();
 
     if (isManualTrigger) {
-      this.showToast(`🤖 ${provider} (${model}) finansal ve trafik/dönüşüm hunisi verilerinizi analiz ediyor...`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastAiAnalyzing', { provider, model }));
     }
 
     this.etsyApi.generateAiFinancialForecast({
@@ -2025,7 +2209,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
           }
           this.isAnalyzingForecast = false;
           if (isManualTrigger) {
-            this.showToast(`✅ ${this.aiForecast.provider} (${this.aiForecast.model}) finansal & dönüşüm hunisi analizi tamamlandı!`);
+            this.showToast(this.transloco.translate('finance.accounting.runtime.toastAiDone', { provider: this.aiForecast.provider, model: this.aiForecast.model }));
           }
         } else {
           this.isAnalyzingForecast = false;
@@ -2037,7 +2221,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         }
         this.isAnalyzingForecast = false;
         if (isManualTrigger) {
-          this.showToast(`✅ ${provider} (${model}) canlı mağaza ve trafik verileriyle tahmin raporunu güncelledi.`);
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastAiFallback', { provider, model }));
         }
       }
     });
@@ -2176,7 +2360,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   onCustomDateChange(): void {
     this.selectedDatePreset = 'custom';
-    this.showToast(`📅 Özel tarih aralığı: ${this.startDate} — ${this.endDate}`);
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastCustomDate', { start: this.startDate, end: this.endDate }));
     this.loadLiveOrders();
     this.loadPaymentReserveSnapshot();
   }
@@ -2222,9 +2406,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
             orderDate: dto.orderDate || '',
             receiptId: String(dto.receiptId),
             orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded' | 'open',
-            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : (dto.orderStatus === 'open' ? '🔵 Kargolanacak (Yeni)' : '🟢 Tamamlandı')),
+            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled'
+              ? this.transloco.translate('finance.accounting.runtime.statusOrderCanceled')
+              : (dto.orderStatus === 'open'
+                  ? this.transloco.translate('finance.accounting.runtime.statusOrderOpen')
+                  : this.transloco.translate('finance.accounting.runtime.statusOrderCompleted'))),
 
-            buyerName: dto.buyerName || 'Misafir Müşteri',
+            buyerName: dto.buyerName || this.transloco.translate('finance.accounting.runtime.guestBuyer'),
             productTitle: dto.productTitle || dto.title || '',
             quantity: dto.quantity || 1,
             grandTotalUsd: dto.grandTotalUsd || 0,
@@ -2314,14 +2502,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
           this.filterOrders();
           this.rebuildDynamicBreakdowns();
           if (isManualRefresh) {
-            this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
+            this.showToast(this.transloco.translate('finance.accounting.runtime.toastSyncOrdersOk', { count: this.orders.length }));
           }
         } else {
           this.orders = [];
           this.filterOrders();
           this.rebuildDynamicBreakdowns();
           if (isManualRefresh) {
-            this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
+            this.showToast(this.transloco.translate('finance.accounting.runtime.toastSyncOrdersEmpty'));
           }
         }
       },
@@ -2329,7 +2517,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         if (isManualRefresh) this.isRefreshing = false;
         console.warn('Canlı sipariş finans dökümü alınamadı, yerel veriler korunuyor:', err);
         if (isManualRefresh) {
-          this.showToast('⚠️ Canlı API bağlantısı sağlanamadı, yerel veriler korunuyor.');
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastSyncOrdersErr'));
         }
       }
     });
@@ -2403,17 +2591,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
           }
           if (fromVdsSync) {
             this.isSyncingVds = false;
-            this.showToast('🌐 VDS Canlı Defter ve Sipariş Senkronizasyonu Tamamlandı.');
+            this.showToast(this.transloco.translate('finance.accounting.runtime.toastVdsSyncOk'));
           }
         } else if (fromVdsSync) {
           this.isSyncingVds = false;
-          this.showToast('ℹ️ VDS yanıtı boş döndü.');
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastVdsSyncEmpty'));
         }
       },
       error: (err) => {
         if (fromVdsSync) {
           this.isSyncingVds = false;
-          this.showToast('⚠️ VDS canlı defter senkronizasyonu başarısız oldu.');
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastVdsSyncErr'));
         }
         console.warn('Canlı finansal performans verisi alınamadı:', err);
       }
@@ -2467,10 +2655,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
             return {
               date: dateStr,
               refNo: refDisplay,
-              type: 'Banka Transferi',
+              type: this.transloco.translate('finance.accounting.runtime.payoutTypeBank'),
               amount: Number(tryAmt.toFixed(2)),
-              status: p.status === 'completed' ? 'Yatırıldı' : p.status,
-              note: `${p.description || 'disburse2'} (Kur: 1$ = ${pRate.toFixed(2)}₺)`
+              status: p.status === 'completed' ? this.transloco.translate('finance.accounting.runtime.payoutStatusDone') : p.status,
+              note: this.transloco.translate('finance.accounting.runtime.payoutNoteFmt', { desc: p.description || 'disburse2', rate: pRate.toFixed(2) })
             };
           });
         } else if (!this.bankPayoutsTry) {
@@ -2525,20 +2713,22 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   copyValue(label: string, val: string): void {
     navigator.clipboard.writeText(val);
-    this.showToast(`📋 Kopyalandı: ${label} ➔ ${val}`);
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastCopied', { label, val }));
   }
 
   onPresetChange(): void {
     if (this.selectedDatePreset !== 'custom') {
       this.applyDatePreset(this.selectedDatePreset);
     }
-    this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastPeriodUpdated', { start: this.startDate, end: this.endDate }));
     this.loadLiveOrders();
     this.loadPaymentReserveSnapshot();
   }
 
   onAutoRateToggle(): void {
-    this.showToast(this.autoRateEnabled ? `🇹🇷 TCMB/Google Oto Kur Aktif (${this.liveRate} ₺)` : 'Manuel Kur Modu');
+    this.showToast(this.autoRateEnabled
+      ? this.transloco.translate('finance.accounting.runtime.toastAutoRateOn', { rate: this.liveRate })
+      : this.transloco.translate('finance.accounting.runtime.toastAutoRateOff'));
   }
 
   refreshFromEtsy(): void {
@@ -2554,7 +2744,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   exportExcel(): void {
-    const headers = ['Tarih', 'Siparis No', 'Durum', 'Musteri', 'Urun', 'Adet', 'Odeme ($)', 'Kesintiler ($)', 'Dis Reklam ($)', 'Maliyet ($)', 'Net Kar ($)', 'Kilitli Kur (TL)', 'Net Kar (TL)', 'Maliyet Durumu'];
+    const translatedHeaders = this.transloco.translateObject('finance.accounting.runtime.csvHeaders');
+    const headers: string[] = Array.isArray(translatedHeaders)
+      ? translatedHeaders
+      : ['Date', 'Order #', 'Status', 'Customer', 'Product', 'Qty', 'Payment ($)', 'Fees ($)', 'Offsite Ads ($)', 'Cost ($)', 'Net Profit ($)', 'Locked Rate (TRY)', 'Net Profit (TRY)', 'Cost Status'];
+    const costEntered = this.transloco.translate('finance.accounting.runtime.csvCostEntered');
+    const costMissing = this.transloco.translate('finance.accounting.runtime.csvCostMissing');
     const rows = this.orders.map(o => [
       o.orderDate,
       `#${o.receiptId}`,
@@ -2569,21 +2764,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
       o.netProfitUsd,
       o.exchangeRate,
       o.netProfitTry,
-      o.hasCostData ? 'Girildi' : 'Eksik'
+      o.hasCostData ? costEntered : costMissing
     ]);
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Etsy_Finansal_Rapor_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${this.transloco.translate('finance.accounting.runtime.csvFilenamePrefix')}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('📊 5 Sayfalık Excel / CSV Raporu başarıyla indirildi!');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastExcelExported'));
   }
 
   sendTelegramReport(): void {
-    this.showToast('ℹ️ Telegram Bot entegrasyonu için henüz aktif webhook/kanal yapılandırması tanımlı değil.');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastTelegramNotConfigured'));
   }
 
   syncVds(): void {
@@ -2681,28 +2876,29 @@ export class AccountingComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.showToast(`📊 Sıralandı: ${this.getColumnLabel(col)} (${this.sortDirection === 'asc' ? 'Küçükten Büyüğe ▲' : 'Büyükten Küçüğe ▼'})`);
+    const dirLabel = this.transloco.translate(this.sortDirection === 'asc' ? 'finance.accounting.runtime.sortAsc' : 'finance.accounting.runtime.sortDesc');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastSorted', { col: this.getColumnLabel(col), dir: dirLabel }));
   }
 
   getColumnLabel(col: string): string {
-    const map: Record<string, string> = {
-      date: 'Tarih',
-      receiptId: 'Sipariş No',
-      orderStatus: 'Durum',
-      buyerName: 'Müşteri',
-      productTitle: 'Ürün',
-      quantity: 'Adet',
-      grandTotalUsd: 'Müşteri Ödemesi ($)',
-      etsyFeesUsd: 'Etsy Kesintileri ($)',
-      offsiteAdFeeUsd: 'Dış Reklam ($)',
-      productCostUsd: 'Sipariş Maliyeti ($)',
-      netProfitUsd: 'Net Kâr ($)',
-      exchangeRate: 'Kur (₺)',
-      netProfitTry: 'Net Kâr (₺)',
-      hasCostData: 'Maliyet Durumu',
-      hasInvoice: 'Kargo Faturası'
+    const keyMap: Record<string, string> = {
+      date: 'finance.accounting.orders.colDate',
+      receiptId: 'finance.accounting.orders.colReceipt',
+      orderStatus: 'finance.accounting.orders.colStatus',
+      buyerName: 'finance.accounting.orders.colBuyer',
+      productTitle: 'finance.accounting.orders.colProduct',
+      quantity: 'finance.accounting.orders.colQty',
+      grandTotalUsd: 'finance.accounting.orders.colPayment',
+      etsyFeesUsd: 'finance.accounting.orders.colFees',
+      offsiteAdFeeUsd: 'finance.accounting.orders.colOffsite',
+      productCostUsd: 'finance.accounting.orders.colCost',
+      netProfitUsd: 'finance.accounting.orders.colNetUsd',
+      exchangeRate: 'finance.accounting.orders.colRate',
+      netProfitTry: 'finance.accounting.orders.colNetTry',
+      hasCostData: 'finance.accounting.orders.colCostStatus',
+      hasInvoice: 'finance.accounting.orders.colInvoice'
     };
-    return map[col] || col;
+    return keyMap[col] ? this.transloco.translate(keyMap[col]) : col;
   }
 
   openSalesAnalysisModal(): void {
@@ -2772,14 +2968,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   generateInvoicePdf(): void {
     if (this.contextMenuOrder) {
-      this.showToast(`⚡ #${this.contextMenuOrder.receiptId} için PDF fatura ve konşimento oluşturuldu.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastPdfGenerated', { id: this.contextMenuOrder.receiptId }));
     }
     this.closeContextMenu();
   }
 
   openInvoicePdf(): void {
     if (this.contextMenuOrder) {
-      this.showToast(`📄 #${this.contextMenuOrder.receiptId} PDF faturası açıldı.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastPdfOpened', { id: this.contextMenuOrder.receiptId }));
     }
     this.closeContextMenu();
   }
@@ -2787,14 +2983,18 @@ export class AccountingComponent implements OnInit, OnDestroy {
   uploadInvoicePdf(): void {
     if (this.contextMenuOrder) {
       this.contextMenuOrder.hasInvoice = true;
-      this.showToast(`📎 #${this.contextMenuOrder.receiptId} için kargo faturası yüklendi.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastInvoiceUploaded', { id: this.contextMenuOrder.receiptId }));
     }
     this.closeContextMenu();
   }
 
   viewOrderDetails(): void {
     if (this.contextMenuOrder) {
-      this.showToast(`📊 #${this.contextMenuOrder.receiptId} detayları: ${this.contextMenuOrder.buyerName} — ${this.contextMenuOrder.productTitle}`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastOrderDetails', {
+        id: this.contextMenuOrder.receiptId,
+        buyer: this.contextMenuOrder.buyerName,
+        product: this.contextMenuOrder.productTitle
+      }));
     }
     this.closeContextMenu();
   }
@@ -2809,7 +3009,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   copyOrderNumber(): void {
     if (this.contextMenuOrder) {
       navigator.clipboard.writeText(`#${this.contextMenuOrder.receiptId}`);
-      this.showToast(`📋 Kopyalandı: #${this.contextMenuOrder.receiptId}`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastCopiedOrderNo', { id: this.contextMenuOrder.receiptId }));
     }
     this.closeContextMenu();
   }
@@ -2817,7 +3017,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   copyCustomerInfo(): void {
     if (this.contextMenuOrder) {
       navigator.clipboard.writeText(this.contextMenuOrder.buyerName);
-      this.showToast(`👤 Müşteri kopyalandı: ${this.contextMenuOrder.buyerName}`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastCopiedCustomer', { buyer: this.contextMenuOrder.buyerName }));
     }
     this.closeContextMenu();
   }
@@ -2825,7 +3025,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   copySelectedCell(): void {
     if (this.contextMenuOrder) {
       navigator.clipboard.writeText(`$${this.contextMenuOrder.grandTotalUsd}`);
-      this.showToast(`📝 Hücre tutarı kopyalandı: $${this.contextMenuOrder.grandTotalUsd}`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastCopiedCell', { amount: this.contextMenuOrder.grandTotalUsd }));
     }
     this.closeContextMenu();
   }
@@ -2834,7 +3034,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (this.contextMenuOrder) {
       const row = `${this.contextMenuOrder.orderDate} | #${this.contextMenuOrder.receiptId} | ${this.contextMenuOrder.buyerName} | ${this.contextMenuOrder.productTitle} | $${this.contextMenuOrder.grandTotalUsd} | Net: $${this.contextMenuOrder.netProfitUsd} (₺${this.contextMenuOrder.netProfitTry})`;
       navigator.clipboard.writeText(row);
-      this.showToast(`📄 Tüm satır kopyalandı.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastCopiedRow'));
     }
     this.closeContextMenu();
   }
@@ -2896,7 +3096,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         packagingCost: this.costModalPackaging
       }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
-          this.showToast(`✅ #${order.receiptId} maliyeti ${totalCost.toFixed(2)} kaydedildi ve VDS ile senkronize edildi!`);
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastCostSavedVds', { id: order.receiptId, cost: totalCost.toFixed(2) }));
           // VDS Canlı Defter Motorundan güncel performans verilerini yeniden çek
           const start = this.parseTurkishDate(this.startDate, false);
           const end = this.parseTurkishDate(this.endDate, true);
@@ -2919,7 +3119,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
           });
         },
         error: () => {
-          this.showToast(`✅ #${order.receiptId} maliyeti ${totalCost.toFixed(2)} yerel güncellendi.`);
+          this.showToast(this.transloco.translate('finance.accounting.runtime.toastCostSavedLocal', { id: order.receiptId, cost: totalCost.toFixed(2) }));
         }
       });
     }
@@ -2928,10 +3128,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   handleInvoice(order: OrderFinancialRow): void {
     if (order.hasInvoice) {
-      this.showToast(`📄 Fatura Görüntüleyici: #${order.receiptId} Kargo Faturası açıldı.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastInvoiceViewer', { id: order.receiptId }));
     } else {
       order.hasInvoice = true;
-      this.showToast(`📎 Fatura Eklendi: #${order.receiptId} için PDF kargo faturası sisteme bağlandı.`);
+      this.showToast(this.transloco.translate('finance.accounting.runtime.toastInvoiceAttached', { id: order.receiptId }));
     }
   }
 
@@ -2954,7 +3154,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   copyBookmarkletCode(): void {
     navigator.clipboard.writeText(this.bookmarkletCode);
-    this.showToast('📋 VDS 1-Tık Senkron Yer İmi Kodu Kopyalandı!');
+    this.showToast(this.transloco.translate('finance.accounting.runtime.toastBookmarkletCopied'));
   }
 
   get bookmarkletCode(): string {
@@ -2971,11 +3171,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
         if (res && res.data) {
           this.reserveSnapshot = res.data;
         }
-        this.showToast('✅ Etsy Fon Rezervi başarıyla güncellendi!');
+        this.showToast(this.transloco.translate('finance.accounting.runtime.toastReserveSaved'));
       },
       error: () => {
         this.isSavingReserve = false;
-        this.showToast('✅ Yerel fon rezervi güncellendi.');
+        this.showToast(this.transloco.translate('finance.accounting.runtime.toastReserveSavedLocal'));
       }
     });
   }

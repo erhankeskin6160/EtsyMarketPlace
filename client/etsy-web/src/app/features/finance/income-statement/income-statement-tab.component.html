@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
 <div class="is-shell">
   <div class="visually-hidden" aria-live="polite">{{ liveAnnouncement() }}</div>
 
@@ -13,23 +14,23 @@
   <div class="is-top-banner">
     <div class="is-title-wrap">
       <h2>
-        📜 Resmi Gelir Tablosu (TDHP 600–692)
-        <span class="is-badge-official">MSUGT 1 No.lu Tebliğ</span>
+        {{ t('finance.incomeStatement.title') }}
+        <span class="is-badge-official">{{ t('finance.incomeStatement.badgeOfficial') }}</span>
       </h2>
       <p class="is-subtitle">
-        Anadolu Üniversitesi Genel Muhasebe ilke ve hesap planına uygun; canlı Etsy defteri, sipariş maliyetleri, sabit kıymet amortismanları ve vergi köprüsü entegre.
+        {{ t('finance.incomeStatement.subtitle') }}
       </p>
     </div>
 
     <div class="is-actions-bar no-print">
       <button type="button" class="btn-is" (click)="refreshStatement()" [disabled]="loading()">
-        {{ loading() ? '⏳ Hesaplanıyor...' : '🔄 Yenile' }}
+        {{ loading() ? t('finance.incomeStatement.calculatingBtn') : t('finance.incomeStatement.refreshBtn') }}
       </button>
       <button type="button" class="btn-is btn-is-success" (click)="exportExcelCsv()" [disabled]="!response()">
-        📊 Excel (CSV) İndir
+        {{ t('finance.incomeStatement.exportCsvBtn') }}
       </button>
       <button type="button" class="btn-is" (click)="printReport()" [disabled]="!response()">
-        🖨️ Yazdır / PDF
+        {{ t('finance.incomeStatement.printBtn') }}
       </button>
     </div>
   </div>
@@ -50,10 +51,9 @@
       <div class="young-toggle-panel">
         <div class="young-toggle-row">
           <div>
-            <div class="young-title">🌱 Genç Girişimci Özel Modu (2026)</div>
+            <div class="young-title">{{ t('finance.incomeStatement.youngTitle') }}</div>
             <p class="young-desc">
-              GVK Mükerrer Md. 20: {{ formatTry(d.taxBridge.youngEntrepreneurAnnualLimitTry) }} yıllık kazanç istisnası.
-              (7566 sayılı Kanun ile 01.01.2026 sonrası Bağ-Kur teşviki kalktığından Bağ-Kur ayrıca Gider Fişleri / 890 üzerinden girilir.)
+              {{ t('finance.incomeStatement.youngDesc', { limit: formatTry(d.taxBridge.youngEntrepreneurAnnualLimitTry) }) }}
             </p>
           </div>
           <button
@@ -61,22 +61,22 @@
             class="switch-pill no-print"
             [class.on]="d.taxBridge.youngEntrepreneurModeEnabled"
             (click)="toggleYoungPreview(!d.taxBridge.youngEntrepreneurModeEnabled)">
-            {{ d.taxBridge.youngEntrepreneurModeEnabled ? '✅ AKTİF' : '⏸️ KAPALI' }}
+            {{ d.taxBridge.youngEntrepreneurModeEnabled ? t('finance.incomeStatement.statusActive') : t('finance.incomeStatement.statusInactive') }}
           </button>
         </div>
 
         @if (previewYoungOverride() !== null && previewYoungOverride() !== savedProfile().youngEntrepreneurModeEnabled) {
           <div class="no-print" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span style="font-size:0.75rem; color:#fbbf24;">⚠️ Önizleme modundasınız</span>
+            <span style="font-size:0.75rem; color:#fbbf24;">{{ t('finance.incomeStatement.previewWarning') }}</span>
             <button type="button" class="btn-is btn-is-primary" style="padding:5px 10px; font-size:0.75rem;" (click)="persistYoungMode(previewYoungOverride()!)">
-              Kalıcı Varsayılan Yap
+              {{ t('finance.incomeStatement.makePermanentBtn') }}
             </button>
           </div>
         }
 
         <div>
           <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#cbd5e1;">
-            <span>2026 İstisna Kotası Kullanımı</span>
+            <span>{{ t('finance.incomeStatement.quotaUsageLabel') }}</span>
             <span>{{ formatTry(d.taxBridge.youngEntrepreneurAppliedInPeriodTry + d.taxBridge.youngEntrepreneurPriorUsedTry) }} / {{ formatTry(d.taxBridge.youngEntrepreneurAnnualLimitTry) }}</span>
           </div>
           <div class="quota-track">
@@ -87,44 +87,44 @@
 
       <div class="young-metrics-grid">
         <div class="ym-kpi">
-          <div class="ym-label">690 Ticari Kâr / Zarar</div>
+          <div class="ym-label">{{ t('finance.incomeStatement.kpi690Label') }}</div>
           <div class="ym-val" [class.pos]="d.commercialProfit690Try >= 0" [class.neg]="d.commercialProfit690Try < 0">
             {{ formatAmount(d.commercialProfit690Try, d.commercialProfit690Usd) }}
           </div>
-          <div class="ym-sub">KKEG (950): +{{ formatTry(d.taxBridge.kkegAdditions950Try) }}</div>
+          <div class="ym-sub">{{ t('finance.incomeStatement.kpi690Sub', { amount: formatTry(d.taxBridge.kkegAdditions950Try) }) }}</div>
         </div>
 
         <div class="ym-kpi">
-          <div class="ym-label">GVK Matrahı (İstisna Sonrası)</div>
+          <div class="ym-label">{{ t('finance.incomeStatement.kpiTaxBaseLabel') }}</div>
           <div class="ym-val">{{ formatTry(d.taxBridge.taxableBaseTry) }}</div>
           <div class="ym-sub">
-            Genç İnd.: -{{ formatTry(d.taxBridge.youngEntrepreneurAppliedInPeriodTry) }}
+            {{ t('finance.incomeStatement.kpiYoungDeduction', { amount: formatTry(d.taxBridge.youngEntrepreneurAppliedInPeriodTry) }) }}
             @if (d.taxBridge.eExportExemptionDeductionTry > 0) {
-              | E-İhr.: -{{ formatTry(d.taxBridge.eExportExemptionDeductionTry) }}
+              | {{ t('finance.incomeStatement.kpiEExportDeduction', { amount: formatTry(d.taxBridge.eExportExemptionDeductionTry) }) }}
             }
           </div>
         </div>
 
         <div class="ym-kpi">
-          <div class="ym-label">691 Tahmini Vergi Karşılığı</div>
+          <div class="ym-label">{{ t('finance.incomeStatement.kpi691Label') }}</div>
           <div class="ym-val warn">{{ formatAmount(d.taxProvision691Try, d.taxProvision691Usd) }}</div>
           <div class="ym-sub">
-            Modsuz Vergi: {{ formatTry(d.taxBridge.taxWithoutYoungEntrepreneurTry) }}
+            {{ t('finance.incomeStatement.kpiTaxWithoutMode', { amount: formatTry(d.taxBridge.taxWithoutYoungEntrepreneurTry) }) }}
           </div>
         </div>
 
         <div class="ym-kpi">
-          <div class="ym-label">Genç Girişimci Tasarrufu</div>
+          <div class="ym-label">{{ t('finance.incomeStatement.kpiSavingsLabel') }}</div>
           <div class="ym-val pos">+{{ formatTry(d.taxBridge.youngEntrepreneurTaxSavingsTry) }}</div>
-          <div class="ym-sub">Efektif Oran: %{{ d.taxBridge.effectiveTaxRatePct }}</div>
+          <div class="ym-sub">{{ t('finance.incomeStatement.kpiEffectiveRate', { pct: d.taxBridge.effectiveTaxRatePct }) }}</div>
         </div>
 
         <div class="ym-kpi">
-          <div class="ym-label">692 Dönem Net Kârı</div>
+          <div class="ym-label">{{ t('finance.incomeStatement.kpi692Label') }}</div>
           <div class="ym-val" [class.pos]="d.periodNetProfit692Try >= 0" [class.neg]="d.periodNetProfit692Try < 0">
             {{ formatAmount(d.periodNetProfit692Try, d.periodNetProfit692Usd) }}
           </div>
-          <div class="ym-sub">Bilançoya Devir (590/591)</div>
+          <div class="ym-sub">{{ t('finance.incomeStatement.kpi692Sub') }}</div>
         </div>
       </div>
     </div>
@@ -132,7 +132,7 @@
     <!-- Eksik Veri / Envanter Bilgilendirmeleri -->
     @if (notes().length > 0) {
       <div class="notes-banner">
-        <strong>📌 Dönemsel Muhasebe Notları & Veri Doğruluğu:</strong>
+        <strong>{{ t('finance.incomeStatement.notesTitle') }}</strong>
         <ul>
           @for (note of notes(); track note) {
             <li>{{ note }}</li>
@@ -142,15 +142,15 @@
     }
   }
 
-  <!-- İç Alt Sekmeler (Modern Web Guidance: role=tablist + aria-selected underline + single row) -->
-  <div class="is-tablist no-print" role="tablist" aria-label="Genel Muhasebe Modülleri">
+  <!-- İç Alt Sekmeler -->
+  <div class="is-tablist no-print" role="tablist" [attr.aria-label]="t('finance.incomeStatement.tablistAria')">
     <button
       type="button"
       role="tab"
       class="is-tab-btn"
       [attr.aria-selected]="activeSubTab() === 'statement'"
       (click)="activeSubTab.set('statement')">
-      📜 Resmi Tablo (600–692)
+      {{ t('finance.incomeStatement.tabStatement') }}
     </button>
     <button
       type="button"
@@ -158,7 +158,7 @@
       class="is-tab-btn"
       [attr.aria-selected]="activeSubTab() === 'expenses'"
       (click)="activeSubTab.set('expenses')">
-      🧾 Gider / KKEG & Bağ-Kur ({{ expenses().length }})
+      {{ t('finance.incomeStatement.tabExpenses', { count: expenses().length }) }}
     </button>
     <button
       type="button"
@@ -166,7 +166,7 @@
       class="is-tab-btn"
       [attr.aria-selected]="activeSubTab() === 'assets'"
       (click)="activeSubTab.set('assets')">
-      🖨️ 3D Yazıcı & Demirbaşlar ({{ assets().length }})
+      {{ t('finance.incomeStatement.tabAssets', { count: assets().length }) }}
     </button>
     <button
       type="button"
@@ -174,7 +174,7 @@
       class="is-tab-btn"
       [attr.aria-selected]="activeSubTab() === 'vouchers'"
       (click)="activeSubTab.set('vouchers')">
-      📒 Yansıtma & Kapanış Fişleri ({{ doc()?.closingVouchers?.length ?? 0 }})
+      {{ t('finance.incomeStatement.tabVouchers', { count: doc()?.closingVouchers?.length ?? 0 }) }}
     </button>
     <button
       type="button"
@@ -182,7 +182,7 @@
       class="is-tab-btn"
       [attr.aria-selected]="activeSubTab() === 'policy'"
       (click)="activeSubTab.set('policy')">
-      ⚙️ Politika & Aralıklı Envanter
+      {{ t('finance.incomeStatement.tabPolicy') }}
     </button>
   </div>
 
@@ -190,46 +190,45 @@
   <!-- ALT SEKME 1: RESMİ MSUGT DİKEY GELİR TABLOSU (600–692)    -->
   <!-- ========================================================= -->
   @if (activeSubTab() === 'statement' && doc(); as d) {
-    <!-- Etsy Katkı Kârı <-> Resmi Net Kâr Mutabakat Köprüsü -->
     <div class="bridge-card">
-      <div class="bridge-title">🔗 Canlı Etsy Kartları ile Resmi Gelir Tablosu Mutabakat Köprüsü</div>
+      <div class="bridge-title">{{ t('finance.incomeStatement.bridgeTitle') }}</div>
       <div class="bridge-steps">
         <div class="bridge-step">
-          <div class="bridge-step-label">Etsy Sipariş Net Kârı</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeEtsyNet') }}</div>
           <div class="bridge-step-val" [class.pos-val]="d.reconciliation.etsyContributionProfitTry >= 0" [class.neg-val]="d.reconciliation.etsyContributionProfitTry < 0">
             {{ formatTry(d.reconciliation.etsyContributionProfitTry) }}
           </div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step">
-          <div class="bridge-step-label">689 İptal/İade Ayrıştırması</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeCanceled689') }}</div>
           <div class="bridge-step-val muted-val">{{ formatTry(d.reconciliation.separatedCanceledCostLossTry) }}</div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step">
-          <div class="bridge-step-label">Etsy Dışı Giderler</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeNonEtsy') }}</div>
           <div class="bridge-step-val neg-val">-{{ formatTry(d.reconciliation.nonEtsyOperatingExpensesTry) }}</div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step">
-          <div class="bridge-step-label">Amortisman Payı (257)</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeDepreciation') }}</div>
           <div class="bridge-step-val neg-val">-{{ formatTry(d.reconciliation.depreciationExpenseTry) }}</div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step">
-          <div class="bridge-step-label">Kur Farkı Net (646–656)</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeFxNet') }}</div>
           <div class="bridge-step-val" [class.pos-val]="d.reconciliation.fxGainLossNetTry >= 0" [class.neg-val]="d.reconciliation.fxGainLossNetTry < 0">
             {{ formatTry(d.reconciliation.fxGainLossNetTry) }}
           </div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step final">
-          <div class="bridge-step-label">690 Ticari Kâr</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeProfit690') }}</div>
           <div class="bridge-step-val">{{ formatTry(d.commercialProfit690Try) }}</div>
         </div>
         <span class="bridge-arrow">→</span>
         <div class="bridge-step final">
-          <div class="bridge-step-label">692 Vergi Sonrası Net</div>
+          <div class="bridge-step-label">{{ t('finance.incomeStatement.bridgeNet692') }}</div>
           <div class="bridge-step-val" [class.pos-val]="d.periodNetProfit692Try >= 0" [class.neg-val]="d.periodNetProfit692Try < 0">
             {{ formatTry(d.periodNetProfit692Try) }}
           </div>
@@ -237,16 +236,16 @@
       </div>
     </div>
 
-    <div class="table-scroll-wrap" tabindex="0" role="region" aria-label="Resmi MSUGT Tekdüzen Gelir Tablosu">
+    <div class="table-scroll-wrap" tabindex="0" role="region" [attr.aria-label]="t('finance.incomeStatement.tableAria')">
       <table class="msugt-table">
         <thead>
           <tr>
-            <th>Kod</th>
-            <th>MSUGT Hesap / Bölüm Adı</th>
-            <th class="num">{{ isTry ? 'Tutar (₺ TRY)' : 'Tutar ($ USD)' }}</th>
-            <th class="num">{{ isTry ? 'USD Karşılığı' : 'TRY Karşılığı' }}</th>
-            <th class="num">Net Satış %</th>
-            <th>Dayanak / Politika Açıklaması</th>
+            <th>{{ t('finance.incomeStatement.colCode') }}</th>
+            <th>{{ t('finance.incomeStatement.colAccountName') }}</th>
+            <th class="num">{{ isTry ? t('finance.incomeStatement.colAmountTry') : t('finance.incomeStatement.colAmountUsd') }}</th>
+            <th class="num">{{ isTry ? t('finance.incomeStatement.colUsdEquiv') : t('finance.incomeStatement.colTryEquiv') }}</th>
+            <th class="num">{{ t('finance.incomeStatement.colNetSalesPct') }}</th>
+            <th>{{ t('finance.incomeStatement.colNote') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -270,7 +269,7 @@
                   <span>{{ line.accountName }}</span>
                   @if (line.sources.length > 0) {
                     <span style="margin-left:8px; font-size:0.72rem; color:#818cf8;">
-                      {{ expandedCode() === line.accountCode ? '▾ Gizle' : '▸ ' + line.sources.length + ' Kayıt' }}
+                      {{ expandedCode() === line.accountCode ? t('finance.incomeStatement.hideSources') : t('finance.incomeStatement.showSources', { count: line.sources.length }) }}
                     </span>
                   }
                 </td>
@@ -303,7 +302,7 @@
                           <span>
                             {{ src.description }}
                             @if (!src.isTaxDeductible) {
-                              <span style="color:#fbbf24; font-weight:700; margin-left:6px;">[KKEG 950]</span>
+                              <span style="color:#fbbf24; font-weight:700; margin-left:6px;">{{ t('finance.incomeStatement.kkegBadge') }}</span>
                             }
                           </span>
                           <span style="text-align:right; font-weight:700;">{{ formatTry(src.amountTry) }}</span>
@@ -322,15 +321,15 @@
 
     @if (d.taxBridge.bracketBreakdown.length > 0) {
       <div class="panel-card" style="margin-top:4px;">
-        <h3>📊 2026 GVK Md. 103 Gelir Vergisi Artan Oranlı Dilim Hesap Dökümü</h3>
-        <div class="table-scroll-wrap" tabindex="0" role="region" aria-label="GVK Vergi Dilimleri">
+        <h3>{{ t('finance.incomeStatement.gvkBracketsTitle') }}</h3>
+        <div class="table-scroll-wrap" tabindex="0" role="region" [attr.aria-label]="t('finance.incomeStatement.gvkBracketsAria')">
           <table class="msugt-table">
             <thead>
               <tr>
-                <th>Gelir Vergisi Dilimi</th>
-                <th class="num">Dilime Giren Matrah (₺)</th>
-                <th class="num">Vergi Oranı</th>
-                <th class="num">Hesaplanan Vergi (₺)</th>
+                <th>{{ t('finance.incomeStatement.colBracket') }}</th>
+                <th class="num">{{ t('finance.incomeStatement.colTaxableSlice') }}</th>
+                <th class="num">{{ t('finance.incomeStatement.colTaxRate') }}</th>
+                <th class="num">{{ t('finance.incomeStatement.colCalculatedTax') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -354,12 +353,12 @@
   <!-- ========================================================= -->
   @if (activeSubTab() === 'expenses') {
     <div class="panel-card">
-      <h3>➕ Yeni İşletme Gideri / Fatura / KKEG / Bağ-Kur Fişi Ekle</h3>
+      <h3>{{ t('finance.incomeStatement.expenseFormTitle') }}</h3>
       <form (ngSubmit)="submitExpense()" novalidate>
         <div class="form-grid">
           <div class="form-field">
-            <label for="expDate">Fiş / Fatura Tarihi</label>
-            <p class="field-hint">Tekrarlayan giderlerde başlangıç ayı esas alınır.</p>
+            <label for="expDate">{{ t('finance.incomeStatement.expDateLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expDateHint') }}</p>
             <input
               id="expDate"
               name="entryDate"
@@ -370,29 +369,29 @@
               [attr.aria-describedby]="isExpenseDateInvalid() ? 'expDate-err' : null"
               required />
             @if (isExpenseDateInvalid()) {
-              <div id="expDate-err" class="field-error">Geçerli bir tarih seçiniz.</div>
+              <div id="expDate-err" class="field-error">{{ t('finance.incomeStatement.expDateError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="expDoc">Belge / Fatura No</label>
-            <p class="field-hint">Tarafsızlık ve belgelendirme ilkesi için (örn: GIB2026001).</p>
-            <input id="expDoc" name="documentNo" type="text" class="field-input" [(ngModel)]="expenseForm.documentNo" placeholder="FTR-2026-01" />
+            <label for="expDoc">{{ t('finance.incomeStatement.expDocLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expDocHint') }}</p>
+            <input id="expDoc" name="documentNo" type="text" class="field-input" [(ngModel)]="expenseForm.documentNo" [placeholder]="t('finance.incomeStatement.expDocPlaceholder')" />
           </div>
 
           <div class="form-field">
-            <label for="expCat">TDHP Hesap Sınıfı</label>
-            <p class="field-hint">Gider türüne göre 630/631/632/653/689 veya 890 Bağ-Kur seçin.</p>
+            <label for="expCat">{{ t('finance.incomeStatement.expCatLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expCatHint') }}</p>
             <select id="expCat" name="category" class="field-input" [(ngModel)]="expenseForm.category" required>
               @for (opt of categoryOptions; track opt.value) {
-                <option [ngValue]="opt.value">{{ opt.label }}</option>
+                <option [ngValue]="opt.value">{{ t('finance.incomeStatement.categories.' + opt.value) }}</option>
               }
             </select>
           </div>
 
           <div class="form-field">
-            <label for="expDesc">Açıklama</label>
-            <p class="field-hint">Zorunlu — Örn: Atölye Kirası, Mali Müşavirlik, Bağ-Kur.</p>
+            <label for="expDesc">{{ t('finance.incomeStatement.expDescLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expDescHint') }}</p>
             <input
               id="expDesc"
               name="description"
@@ -403,15 +402,15 @@
               [attr.aria-describedby]="isExpenseDescriptionInvalid() ? 'expDesc-err' : null"
               required
               minlength="2"
-              placeholder="Gider kalemi açıklaması" />
+              [placeholder]="t('finance.incomeStatement.expDescPlaceholder')" />
             @if (isExpenseDescriptionInvalid()) {
-              <div id="expDesc-err" class="field-error">En az 2 karakterlik açıklama girmelisiniz.</div>
+              <div id="expDesc-err" class="field-error">{{ t('finance.incomeStatement.expDescError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="expAmount">Tutar</label>
-            <p class="field-hint">Pozitif sayısal tutar (örn: 4500.00).</p>
+            <label for="expAmount">{{ t('finance.incomeStatement.expAmountLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expAmountHint') }}</p>
             <input
               id="expAmount"
               name="amount"
@@ -424,37 +423,37 @@
               [attr.aria-describedby]="isExpenseAmountInvalid() ? 'expAmount-err' : null"
               required />
             @if (isExpenseAmountInvalid()) {
-              <div id="expAmount-err" class="field-error">Tutar 0'dan büyük olmalıdır.</div>
+              <div id="expAmount-err" class="field-error">{{ t('finance.incomeStatement.expAmountError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="expCurr">Para Birimi & Sıklık</label>
-            <p class="field-hint">Aylık seçilirse bitiş tarihine dek her ay yansır.</p>
+            <label for="expCurr">{{ t('finance.incomeStatement.expCurrFreqLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.expCurrFreqHint') }}</p>
             <div style="display:flex; gap:6px;">
               <select id="expCurr" name="currency" class="field-input" [(ngModel)]="expenseForm.currency" style="flex:1;">
                 <option value="TRY">₺ TRY</option>
                 <option value="USD">$ USD</option>
               </select>
               <select name="frequency" class="field-input" [(ngModel)]="expenseForm.frequency" style="flex:1.4;">
-                <option [ngValue]="0">Tek Seferlik</option>
-                <option [ngValue]="1">Aylık Tekrarlayan</option>
+                <option [ngValue]="0">{{ t('finance.incomeStatement.freqOneTime') }}</option>
+                <option [ngValue]="1">{{ t('finance.incomeStatement.freqMonthly') }}</option>
               </select>
             </div>
           </div>
 
           @if (expenseForm.currency === 'USD') {
             <div class="form-field">
-              <label for="expFx">Kur (1 USD = ? TRY)</label>
-              <p class="field-hint">Boş/0 bırakılırsa dönemin ortalama TCMB kuru uygulanır.</p>
+              <label for="expFx">{{ t('finance.incomeStatement.expFxLabel') }}</label>
+              <p class="field-hint">{{ t('finance.incomeStatement.expFxHint') }}</p>
               <input id="expFx" name="exchangeRateToTry" type="number" step="0.01" min="0" class="field-input" [(ngModel)]="expenseForm.exchangeRateToTry" />
             </div>
           }
 
           @if (expenseForm.frequency === 1) {
             <div class="form-field">
-              <label for="expRecEnd">Tekrar Bitiş Tarihi (Opsiyonel)</label>
-              <p class="field-hint">Boş bırakılırsa devam eden sabit gider sayılır.</p>
+              <label for="expRecEnd">{{ t('finance.incomeStatement.expRecEndLabel') }}</label>
+              <p class="field-hint">{{ t('finance.incomeStatement.expRecEndHint') }}</p>
               <input id="expRecEnd" name="recurringEndDate" type="date" class="field-input" [(ngModel)]="expenseForm.recurringEndDate" />
             </div>
           }
@@ -462,14 +461,14 @@
           <div class="form-field">
             <label class="checkbox-row">
               <input type="checkbox" name="isTaxDeductible" [(ngModel)]="expenseForm.isTaxDeductible" />
-              <span>Vergiden Düşülebilir (İşaret kaldırılırsa <strong>950 KKEG</strong> sayılır)</span>
+              <span>{{ t('finance.incomeStatement.expTaxDeductiblePrefix') }}<strong>{{ t('finance.incomeStatement.expTaxDeductibleStrong') }}</strong>{{ t('finance.incomeStatement.expTaxDeductibleSuffix') }}</span>
             </label>
           </div>
         </div>
 
         <div class="form-actions-row">
           <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
-            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Fişi Kaydet & Tabloyu Güncelle' }}
+            {{ saving() ? t('finance.incomeStatement.savingBtn') : t('finance.incomeStatement.saveExpenseBtn') }}
           </button>
           <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
         </div>
@@ -477,19 +476,19 @@
     </div>
 
     <div class="panel-card">
-      <h3>📋 Kayıtlı İşletme Gideri & KKEG Fişleri</h3>
-      <div class="table-scroll-wrap" tabindex="0" role="region" aria-label="İşletme Gider Fişleri">
+      <h3>{{ t('finance.incomeStatement.expenseListTitle') }}</h3>
+      <div class="table-scroll-wrap" tabindex="0" role="region" [attr.aria-label]="t('finance.incomeStatement.expenseListAria')">
         <table class="msugt-table">
           <thead>
             <tr>
-              <th>Tarih</th>
-              <th>Belge No</th>
-              <th>TDHP Hesap</th>
-              <th>Açıklama</th>
-              <th>Sıklık</th>
-              <th>Vergi Statüsü</th>
-              <th class="num">Tutar (₺)</th>
-              <th class="num">İşlem</th>
+              <th>{{ t('finance.incomeStatement.colDate') }}</th>
+              <th>{{ t('finance.incomeStatement.colDocNo') }}</th>
+              <th>{{ t('finance.incomeStatement.colTdhpAccount') }}</th>
+              <th>{{ t('finance.incomeStatement.colDesc') }}</th>
+              <th>{{ t('finance.incomeStatement.colFreq') }}</th>
+              <th>{{ t('finance.incomeStatement.colTaxStatus') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colAmountTryShort') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colAction') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -499,25 +498,25 @@
                 <td style="font-family:monospace;">{{ item.documentNo || '—' }}</td>
                 <td><span class="code-pill">{{ item.category }}</span></td>
                 <td>{{ item.description }}</td>
-                <td>{{ item.frequency === 1 ? '🔁 Aylık' : 'Tek Seferlik' }}</td>
+                <td>{{ item.frequency === 1 ? t('finance.incomeStatement.freqMonthlyBadge') : t('finance.incomeStatement.freqOneTimeBadge') }}</td>
                 <td>
                   @if (item.category === 890) {
-                    <span class="pos-val">GVK Md.89 Bağ-Kur</span>
+                    <span class="pos-val">{{ t('finance.incomeStatement.statusBagkur') }}</span>
                   } @else if (item.isTaxDeductible) {
-                    <span class="pos-val">İndirilebilir</span>
+                    <span class="pos-val">{{ t('finance.incomeStatement.statusDeductible') }}</span>
                   } @else {
-                    <span style="color:#fbbf24; font-weight:700;">KKEG (950)</span>
+                    <span style="color:#fbbf24; font-weight:700;">{{ t('finance.incomeStatement.statusKkeg') }}</span>
                   }
                 </td>
                 <td class="num">{{ formatTry(item.amountTry) }}</td>
                 <td class="num">
-                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeExpense(item.id)">🗑️ Sil</button>
+                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeExpense(item.id)">{{ t('finance.incomeStatement.deleteBtn') }}</button>
                 </td>
               </tr>
             } @empty {
               <tr>
                 <td colspan="8" style="text-align:center; color:#64748b; padding:18px;">
-                  Henüz manuel gider fişi eklenmedi (Atölye kirası, Bağ-Kur, elektrik, muhasebe vb. buradan ekleyebilirsiniz).
+                  {{ t('finance.incomeStatement.expenseEmpty') }}
                 </td>
               </tr>
             }
@@ -532,12 +531,12 @@
   <!-- ========================================================= -->
   @if (activeSubTab() === 'assets') {
     <div class="panel-card">
-      <h3>🖨️ Yeni Duran Varlık (3D Yazıcı / Makine / Demirbaş) Kartı</h3>
+      <h3>{{ t('finance.incomeStatement.assetFormTitle') }}</h3>
       <form (ngSubmit)="submitAsset()" novalidate>
         <div class="form-grid">
           <div class="form-field">
-            <label for="assetName">Varlık Adı</label>
-            <p class="field-hint">Örn: Bambu Lab X1C #1 veya İş İstasyonu PC.</p>
+            <label for="assetName">{{ t('finance.incomeStatement.assetNameLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetNameHint') }}</p>
             <input
               id="assetName"
               name="assetName"
@@ -548,33 +547,33 @@
               [attr.aria-describedby]="isAssetNameInvalid() ? 'assetName-err' : null"
               required />
             @if (isAssetNameInvalid()) {
-              <div id="assetName-err" class="field-error">Varlık adı zorunludur.</div>
+              <div id="assetName-err" class="field-error">{{ t('finance.incomeStatement.assetNameError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="assetCode">TDHP Varlık Hesabı</label>
-            <p class="field-hint">3D Yazıcılar 253, bilgisayar ve ofis mobilyası 255'tir.</p>
+            <label for="assetCode">{{ t('finance.incomeStatement.assetAccountLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetAccountHint') }}</p>
             <select id="assetCode" name="assetAccountCode" class="field-input" [(ngModel)]="assetForm.assetAccountCode">
-              <option value="253">253 — Tesis, Makine ve Cihazlar (3D Yazıcılar)</option>
-              <option value="255">255 — Demirbaşlar (PC, Masa, Raf)</option>
+              <option value="253">{{ t('finance.incomeStatement.assetAccount253') }}</option>
+              <option value="255">{{ t('finance.incomeStatement.assetAccount255') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="assetTarget">Amortisman Gider Hedefi</label>
-            <p class="field-hint">Üretim 3D yazıcısı 620, yönetim bilgisayarı 632.</p>
+            <label for="assetTarget">{{ t('finance.incomeStatement.assetTargetLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetTargetHint') }}</p>
             <select id="assetTarget" name="expenseTargetCategory" class="field-input" [(ngModel)]="assetForm.expenseTargetCategory">
-              <option [ngValue]="632">632 — Genel Yönetim Giderleri</option>
-              <option [ngValue]="620">620 — Satılan Mamuller Maliyeti (Üretim)</option>
-              <option [ngValue]="630">630 — Ar-Ge Giderleri</option>
-              <option [ngValue]="631">631 — Pazarlama Satış Dağıtım</option>
+              <option [ngValue]="632">{{ t('finance.incomeStatement.assetTarget632') }}</option>
+              <option [ngValue]="620">{{ t('finance.incomeStatement.assetTarget620') }}</option>
+              <option [ngValue]="630">{{ t('finance.incomeStatement.assetTarget630') }}</option>
+              <option [ngValue]="631">{{ t('finance.incomeStatement.assetTarget631') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="assetDate">Aktife Giriş (Alış) Tarihi</label>
-            <p class="field-hint">Kıst / gün oranlı dönem amortismanı bu tarihten başlar.</p>
+            <label for="assetDate">{{ t('finance.incomeStatement.assetDateLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetDateHint') }}</p>
             <input
               id="assetDate"
               name="acquisitionDate"
@@ -585,13 +584,13 @@
               [attr.aria-describedby]="isAssetDateInvalid() ? 'assetDate-err' : null"
               required />
             @if (isAssetDateInvalid()) {
-              <div id="assetDate-err" class="field-error">Aktife giriş (alış) tarihi zorunludur.</div>
+              <div id="assetDate-err" class="field-error">{{ t('finance.incomeStatement.assetDateError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="assetCost">Maliyet Bedeli (₺ TRY)</label>
-            <p class="field-hint">KDV hariç (veya KDV indirilmiyorsa toplam) alış bedeli.</p>
+            <label for="assetCost">{{ t('finance.incomeStatement.assetCostLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetCostHint') }}</p>
             <input
               id="assetCost"
               name="acquisitionCostTry"
@@ -604,13 +603,13 @@
               [attr.aria-describedby]="isAssetCostInvalid() ? 'assetCost-err' : null"
               required />
             @if (isAssetCostInvalid()) {
-              <div id="assetCost-err" class="field-error">Maliyet bedeli 0'dan büyük olmalıdır.</div>
+              <div id="assetCost-err" class="field-error">{{ t('finance.incomeStatement.assetCostError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="assetLife">Ekonomik Ömür (Yıl) & Hurda Değer (₺)</label>
-            <p class="field-hint">3D yazıcı/PC genelde 4–5 yıl ekonomik ömre sahiptir.</p>
+            <label for="assetLife">{{ t('finance.incomeStatement.assetLifeLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetLifeHint') }}</p>
             <div style="display:flex; gap:6px;">
               <input
                 id="assetLife"
@@ -631,27 +630,27 @@
                 class="field-input"
                 [(ngModel)]="assetForm.salvageValueTry"
                 [attr.aria-invalid]="isAssetLifeOrSalvageInvalid() ? 'true' : 'false'"
-                placeholder="Hurda ₺"
+                [placeholder]="t('finance.incomeStatement.salvagePlaceholder')"
                 style="flex:1;" />
             </div>
             @if (isAssetLifeOrSalvageInvalid()) {
-              <div id="assetLife-err" class="field-error">Ömür 1–50 yıl, hurda değer maliyetin altında olmalıdır.</div>
+              <div id="assetLife-err" class="field-error">{{ t('finance.incomeStatement.assetLifeError') }}</div>
             }
           </div>
 
           <div class="form-field">
-            <label for="assetMethod">Amortisman Yöntemi</label>
-            <p class="field-hint">Azalan Bakiyeler: Çift kat oran (%50 tavan) uygular.</p>
+            <label for="assetMethod">{{ t('finance.incomeStatement.assetMethodLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.assetMethodHint') }}</p>
             <select id="assetMethod" name="method" class="field-input" [(ngModel)]="assetForm.method">
-              <option [ngValue]="0">Normal Amortisman (Eşit Pay)</option>
-              <option [ngValue]="1">Azalan Bakiyeler (Hızlandırılmış)</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.methodNormal') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.methodDeclining') }}</option>
             </select>
           </div>
         </div>
 
         <div class="form-actions-row">
           <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
-            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Sabit Kıymeti Kaydet' }}
+            {{ saving() ? t('finance.incomeStatement.savingBtn') : t('finance.incomeStatement.saveAssetBtn') }}
           </button>
           <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
         </div>
@@ -659,20 +658,20 @@
     </div>
 
     <div class="panel-card">
-      <h3>⚙️ Seçili Dönem Amortisman Hesapları (257 Birikmiş Amortismanlar)</h3>
-      <div class="table-scroll-wrap" tabindex="0" role="region" aria-label="Duran Varlık Amortisman Listesi">
+      <h3>{{ t('finance.incomeStatement.assetListTitle') }}</h3>
+      <div class="table-scroll-wrap" tabindex="0" role="region" [attr.aria-label]="t('finance.incomeStatement.assetListAria')">
         <table class="msugt-table">
           <thead>
             <tr>
-              <th>Hesap</th>
-              <th>Varlık Adı</th>
-              <th>Yöntem</th>
-              <th>Gider Yeri</th>
-              <th class="num">Maliyet Bedeli (₺)</th>
-              <th class="num">Dönem Payı (₺)</th>
-              <th class="num">Birikmiş Amort. (₺)</th>
-              <th class="num">Net Defter Değeri (₺)</th>
-              <th class="num">İşlem</th>
+              <th>{{ t('finance.incomeStatement.colAccount') }}</th>
+              <th>{{ t('finance.incomeStatement.colAssetName') }}</th>
+              <th>{{ t('finance.incomeStatement.colMethod') }}</th>
+              <th>{{ t('finance.incomeStatement.colExpenseTarget') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colAcqCost') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colPeriodDep') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colAccumDep') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colNetBookVal') }}</th>
+              <th class="num">{{ t('finance.incomeStatement.colAction') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -680,20 +679,20 @@
               <tr>
                 <td><span class="code-pill">{{ dep.assetAccountCode }}</span></td>
                 <td>{{ dep.assetName }}</td>
-                <td>{{ dep.method === 1 ? 'Azalan (%50 max)' : 'Normal (' + dep.usefulLifeYears + ' Yıl)' }}</td>
+                <td>{{ dep.method === 1 ? t('finance.incomeStatement.methodDecliningShort') : t('finance.incomeStatement.methodNormalShort', { years: dep.usefulLifeYears }) }}</td>
                 <td><span class="code-pill">{{ dep.expenseTargetCategory }}</span></td>
                 <td class="num">{{ formatTry(dep.acquisitionCostTry) }}</td>
                 <td class="num neg-val">{{ formatTry(dep.periodDepreciationTry) }}</td>
                 <td class="num muted-val">{{ formatTry(dep.accumulatedDepreciationEndTry) }}</td>
                 <td class="num pos-val">{{ formatTry(dep.netBookValueEndTry) }}</td>
                 <td class="num">
-                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeAsset(dep.assetId)">🗑️ Sil</button>
+                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeAsset(dep.assetId)">{{ t('finance.incomeStatement.deleteBtn') }}</button>
                 </td>
               </tr>
             } @empty {
               <tr>
                 <td colspan="9" style="text-align:center; color:#64748b; padding:18px;">
-                  Henüz duran varlık (3D yazıcı, bilgisayar, demirbaş) eklenmedi.
+                  {{ t('finance.incomeStatement.assetEmpty') }}
                 </td>
               </tr>
             }
@@ -711,11 +710,11 @@
       <div class="voucher-card">
         <div class="voucher-header">
           <div>
-            <div class="voucher-title">Fiş #{{ v.voucherNo }}: {{ v.title }}</div>
+            <div class="voucher-title">{{ t('finance.incomeStatement.voucherTitle', { no: v.voucherNo, title: v.title }) }}</div>
             <div class="voucher-expl">{{ v.explanation }}</div>
           </div>
           <span class="balance-pill">
-            {{ v.isBalanced ? '✅ Borç = Alacak Denk' : '⚠️ Dengesiz' }}
+            {{ v.isBalanced ? t('finance.incomeStatement.voucherBalanced') : t('finance.incomeStatement.voucherUnbalanced') }}
             ({{ formatTry(v.totalDebitTry) }})
           </span>
         </div>
@@ -724,11 +723,11 @@
           <table class="msugt-table">
             <thead>
               <tr>
-                <th>Hesap Kodu</th>
-                <th>Hesap Adı</th>
-                <th>Açıklama</th>
-                <th class="num">Borç (₺ TRY)</th>
-                <th class="num">Alacak (₺ TRY)</th>
+                <th>{{ t('finance.incomeStatement.colAccountCode') }}</th>
+                <th>{{ t('finance.incomeStatement.colVoucherAccountName') }}</th>
+                <th>{{ t('finance.incomeStatement.colDesc') }}</th>
+                <th class="num">{{ t('finance.incomeStatement.colDebit') }}</th>
+                <th class="num">{{ t('finance.incomeStatement.colCredit') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -746,7 +745,7 @@
                 </tr>
               }
               <tr class="subtotal-row">
-                <td colspan="3" style="text-align:right;">YEVMİYE TOPLAMI</td>
+                <td colspan="3" style="text-align:right;">{{ t('finance.incomeStatement.journalTotal') }}</td>
                 <td class="num">{{ formatTry(v.totalDebitTry) }}</td>
                 <td class="num">{{ formatTry(v.totalCreditTry) }}</td>
               </tr>
@@ -762,81 +761,81 @@
   <!-- ========================================================= -->
   @if (activeSubTab() === 'policy') {
     <div class="panel-card">
-      <h3>⚙️ Mağaza TDHP Muhasebe Politikası & Vergi Seçenekleri</h3>
+      <h3>{{ t('finance.incomeStatement.policyTitle') }}</h3>
       <form (ngSubmit)="saveProfile()" novalidate>
         <div class="form-grid">
           <div class="form-field">
-            <label for="polComm">Etsy Platform Komisyonları Konumu</label>
-            <p class="field-hint">Varsayılan Seçenek B: Transaction/Listing/Processing 653'te ayrılır.</p>
+            <label for="polComm">{{ t('finance.incomeStatement.polCommLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polCommHint') }}</p>
             <select id="polComm" name="commissionTarget" class="field-input" [(ngModel)]="profileForm.commissionTarget">
-              <option [ngValue]="0">Seçenek B (Önerilen): 653 Komisyon Giderleri</option>
-              <option [ngValue]="1">Seçenek A: 631 Pazarlama Satış ve Dağıtım</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polCommOptB') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.polCommOptA') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polShip">Kargo Navlunu & Paketleme Konumu</label>
-            <p class="field-hint">Varsayılan Seçenek A: Sadece hammadde/ürün 620, kargo/paket 631.</p>
+            <label for="polShip">{{ t('finance.incomeStatement.polShipLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polShipHint') }}</p>
             <select id="polShip" name="shippingTarget" class="field-input" [(ngModel)]="profileForm.shippingTarget">
-              <option [ngValue]="0">Seçenek A (Önerilen): 760 → 631 Pazarlama Satış</option>
-              <option [ngValue]="1">Seçenek B: Ürün + Kargo + Paket Hepsi 620 SMM</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polShipOptA') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.polShipOptB') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polCancel">Üretilmiş İptal/İade Maliyet Zararı</label>
-            <p class="field-hint">Örnek: ₺4.690,96 iade/iptal maliyet kaybının hesap sınıfı.</p>
+            <label for="polCancel">{{ t('finance.incomeStatement.polCancelLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polCancelHint') }}</p>
             <select id="polCancel" name="canceledCostTarget" class="field-input" [(ngModel)]="profileForm.canceledCostTarget">
-              <option [ngValue]="0">689 Diğer Olağandışı Gider ve Zararlar (Önerilen)</option>
-              <option [ngValue]="1">620 Satışların Maliyeti (Normal Maliyete Ekle)</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polCancelOpt689') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.polCancelOpt620') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polInv">Stok Maliyet Yöntemi (Genel Muhasebe Ünite 4)</label>
-            <p class="field-hint">Devamlı envanter her siparişin maliyetini, Aralıklı sayım formülünü kullanır.</p>
+            <label for="polInv">{{ t('finance.incomeStatement.polInvLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polInvHint') }}</p>
             <select id="polInv" name="inventoryMethod" class="field-input" [(ngModel)]="profileForm.inventoryMethod">
-              <option [ngValue]="0">Devamlı Envanter (Sipariş Maliyeti Bazlı)</option>
-              <option [ngValue]="1">Aralıklı Envanter (D.Başı + Alış - D.Sonu = STMM)</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polInvPerpetual') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.polInvPeriodic') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polTaxReg">Vergi Mükellefiyet Rejimi (691)</label>
-            <p class="field-hint">Şahıs GVK 2026 dilimleri (%15–%40) + opsiyonel Genç Girişimci.</p>
+            <label for="polTaxReg">{{ t('finance.incomeStatement.polTaxRegimeLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polTaxRegimeHint') }}</p>
             <select id="polTaxReg" name="taxRegime" class="field-input" [(ngModel)]="profileForm.taxRegime">
-              <option [ngValue]="0">Şahıs İşletmesi (2026 GVK Dilimleri + Genç Girişimci)</option>
-              <option [ngValue]="1">Limited / A.Ş. (%25 Kurumlar Vergisi)</option>
-              <option [ngValue]="2">Özel Sabit Vergi Oranı</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polTaxIndividual') }}</option>
+              <option [ngValue]="1">{{ t('finance.incomeStatement.polTaxCorporate') }}</option>
+              <option [ngValue]="2">{{ t('finance.incomeStatement.polTaxCustom') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polExport">E-İhracat Kazanç İstisnası (GVK 89/16 / KVK 10/ğ)</label>
-            <p class="field-hint">ETGB mikro ihracat varsa %50 (veya Gümrük/özel şartlarda %80) seçin.</p>
+            <label for="polExport">{{ t('finance.incomeStatement.polExportLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polExportHint') }}</p>
             <select id="polExport" name="eExportExemptionRatePct" class="field-input" [(ngModel)]="profileForm.eExportExemptionRatePct">
-              <option [ngValue]="0">%0 — ETGB / E-İhracat İstisnası Uygulanmasın</option>
-              <option [ngValue]="50">%50 — Mikro İhracat (ETGB) Kazanç İstisnası</option>
-              <option [ngValue]="80">%80 — İhracat İstisnası</option>
+              <option [ngValue]="0">{{ t('finance.incomeStatement.polExport0') }}</option>
+              <option [ngValue]="50">{{ t('finance.incomeStatement.polExport50') }}</option>
+              <option [ngValue]="80">{{ t('finance.incomeStatement.polExport80') }}</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label for="polYLimit">Genç Girişimci Yıllık İstisna Tavanı (₺)</label>
-            <p class="field-hint">2026 yılı resmi limiti 400.000 TL'dir (GVK Mük. Md. 20).</p>
+            <label for="polYLimit">{{ t('finance.incomeStatement.polYoungLimitLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polYoungLimitHint') }}</p>
             <input id="polYLimit" name="youngLimit" type="number" step="1000" min="0" class="field-input" [(ngModel)]="profileForm.youngEntrepreneurAnnualLimitTry" />
           </div>
 
           <div class="form-field">
-            <label for="polYPrior">Yıl İçi Önceki Dönemlerde Kullanılan İstisna (₺)</label>
-            <p class="field-hint">Bu yıl önceki aylarda istisnadan düşülen tutar (varsa).</p>
+            <label for="polYPrior">{{ t('finance.incomeStatement.polYoungPriorLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.polYoungPriorHint') }}</p>
             <input id="polYPrior" name="youngPrior" type="number" step="100" min="0" class="field-input" [(ngModel)]="profileForm.youngEntrepreneurPriorUsedTry" />
           </div>
 
           @if (profileForm.taxRegime === 2) {
             <div class="form-field">
-              <label for="polCustomTax">Özel Vergi Oranı (%)</label>
-              <p class="field-hint">0 ile 100 arasında yüzde oranı girin.</p>
+              <label for="polCustomTax">{{ t('finance.incomeStatement.polCustomTaxLabel') }}</label>
+              <p class="field-hint">{{ t('finance.incomeStatement.polCustomTaxHint') }}</p>
               <input id="polCustomTax" name="customRate" type="number" step="0.5" min="0" max="100" class="field-input" [(ngModel)]="profileForm.customOrCorporateTaxRatePct" />
             </div>
           }
@@ -844,21 +843,21 @@
           <div class="form-field">
             <label class="checkbox-row">
               <input type="checkbox" name="youngEnabled" [(ngModel)]="profileForm.youngEntrepreneurModeEnabled" />
-              <span>Genç Girişimci Özel Modu Varsayılan Açık</span>
+              <span>{{ t('finance.incomeStatement.polYoungDefaultLabel') }}</span>
             </label>
           </div>
 
           <div class="form-field">
             <label class="checkbox-row">
               <input type="checkbox" name="includeFx" [(ngModel)]="profileForm.includeFxSpreadAndExchangeDifference" />
-              <span>Banka Hakedişi Kur Farklarını (646/656) Otomatik Hesapla</span>
+              <span>{{ t('finance.incomeStatement.polIncludeFxLabel') }}</span>
             </label>
           </div>
         </div>
 
         <div class="form-actions-row">
           <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
-            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Muhasebe Politikasını Kaydet' }}
+            {{ saving() ? t('finance.incomeStatement.savingBtn') : t('finance.incomeStatement.savePolicyBtn') }}
           </button>
           <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
         </div>
@@ -866,12 +865,12 @@
     </div>
 
     <div class="panel-card">
-      <h3>📦 Aralıklı Envanter Dönem Sayımı (STMM = Dönem Başı + Net Alış - Dönem Sonu)</h3>
+      <h3>{{ t('finance.incomeStatement.periodicTitle') }}</h3>
       <form (ngSubmit)="saveInventory()" novalidate>
         <div class="form-grid">
           <div class="form-field">
-            <label for="invYear">Yıl & Ay</label>
-            <p class="field-hint">Aralıklı Envanter seçili olduğunda bu dönemin 620 hesabını belirler.</p>
+            <label for="invYear">{{ t('finance.incomeStatement.invYearMonthLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invYearMonthHint') }}</p>
             <div style="display:flex; gap:6px;">
               <input id="invYear" name="invYear" type="number" min="2024" max="2035" class="field-input" [(ngModel)]="invForm.year" style="flex:1;" />
               <input name="invMonth" type="number" min="1" max="12" class="field-input" [(ngModel)]="invForm.month" style="flex:1;" />
@@ -879,32 +878,32 @@
           </div>
 
           <div class="form-field">
-            <label for="invOpen">Dönem Başı Hammadde/Mamul Stoku (₺)</label>
-            <p class="field-hint">150/152 hesap dönem başı fiili mevcudu.</p>
+            <label for="invOpen">{{ t('finance.incomeStatement.invOpenLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invOpenHint') }}</p>
             <input id="invOpen" name="opening" type="number" step="0.01" min="0" class="field-input" [(ngModel)]="invForm.openingInventoryTry" />
           </div>
 
           <div class="form-field">
-            <label for="invPurch">Dönem İçi Filament/Reçine/Malzeme Alışları (₺)</label>
-            <p class="field-hint">Dönem içinde faturalı tüm hammadde ve malzeme alışları.</p>
+            <label for="invPurch">{{ t('finance.incomeStatement.invPurchLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invPurchHint') }}</p>
             <input id="invPurch" name="purchases" type="number" step="0.01" min="0" class="field-input" [(ngModel)]="invForm.grossPurchasesTry" />
           </div>
 
           <div class="form-field">
-            <label for="invRet">Alış İadeleri & İskontoları (- ₺)</label>
-            <p class="field-hint">Tedarikçiden alınan iskonto veya iade tutarı.</p>
+            <label for="invRet">{{ t('finance.incomeStatement.invRetLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invRetHint') }}</p>
             <input id="invRet" name="returns" type="number" step="0.01" min="0" class="field-input" [(ngModel)]="invForm.purchaseReturnsAndDiscountsTry" />
           </div>
 
           <div class="form-field">
-            <label for="invClose">Dönem Sonu Fiili Sayım Stoku (₺)</label>
-            <p class="field-hint">Ay sonunda atölyede sayılan kalan stok tutarı.</p>
+            <label for="invClose">{{ t('finance.incomeStatement.invCloseLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invCloseHint') }}</p>
             <input id="invClose" name="closing" type="number" step="0.01" min="0" class="field-input" [(ngModel)]="invForm.closingInventoryTry" />
           </div>
 
           <div class="form-field">
-            <label>Hesaplanan Dönem 620 STMM</label>
-            <p class="field-hint">Otomatik önizleme (D.Başı + Net Alış - D.Sonu)</p>
+            <label>{{ t('finance.incomeStatement.invCalcCogsLabel') }}</label>
+            <p class="field-hint">{{ t('finance.incomeStatement.invCalcCogsHint') }}</p>
             <div class="ym-kpi" style="padding:7px 10px;">
               <div class="ym-val pos">{{ formatTry(previewPeriodicCogs()) }}</div>
             </div>
@@ -913,7 +912,7 @@
 
         <div class="form-actions-row">
           <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
-            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Aralıklı Envanter Sayımını Kaydet' }}
+            {{ saving() ? t('finance.incomeStatement.savingBtn') : t('finance.incomeStatement.saveInventoryBtn') }}
           </button>
           <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
         </div>
@@ -921,4 +920,4 @@
     </div>
   }
 </div>
-
+</ng-container>

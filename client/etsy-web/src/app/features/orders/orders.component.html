@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
     <div class="orders-cockpit">
       <!-- 1. TOP HEADER & DESKTOP PARITY ACTION BAR -->
       <div class="cockpit-header">
@@ -13,19 +14,19 @@
           <div>
             <div class="header-title-row">
               <span class="brand-sub">EtsyMarketPlace</span>
-              <h1 class="page-title">SİPARİŞ KARGO STÜDYOSU</h1>
+              <h1 class="page-title">{{ t('orders.header.title') }}</h1>
             </div>
-            <p class="page-subtitle">Canlı Etsy sipariş karşılama, GTİP gümrük kodlama ve 4 taşıyıcılı anlık kargo entegrasyonu</p>
+            <p class="page-subtitle">{{ t('orders.header.subtitle') }}</p>
           </div>
         </div>
 
         <!-- RIGHT TOP ACTION BUTTONS MATCHING WINFORMS DESKTOP -->
         <div class="header-actions-right">
-          <button class="btn-top-action" (click)="openArasTemplateModal()" title="Aras Global Gönderi İstek Şablonu Tanı Aracı">
-            📋 Şablon yakala
+          <button class="btn-top-action" (click)="openArasTemplateModal()" [title]="t('orders.header.captureTemplateTitle')">
+            {{ t('orders.header.captureTemplateBtn') }}
           </button>
           
-          <button class="btn-top-action" (click)="openShiptomoreModal()" title="Ship to More API Entegrasyonu">
+          <button class="btn-top-action" (click)="openShiptomoreModal()" [title]="t('orders.header.shiptomoreTitle')">
             🌐 Ship to More
           </button>
 
@@ -33,9 +34,9 @@
             class="btn-top-action btn-accounts-hub" 
             [class.has-issues]="connectedSessionsCount < carrierSessions.length"
             (click)="toggleAccountsHub()" 
-            title="Kargo Taşıyıcı Hesapları ve Oturum Yönetimini Aç">
+            [title]="t('orders.header.accountsHubTitle')">
             <span class="bolt-icon">⚡</span>
-            <span>Kargo Hesapları Oturumlar</span>
+            <span>{{ t('orders.header.accountsHubBtn') }}</span>
             <span class="accounts-badge" [class.badge-ok]="connectedSessionsCount === carrierSessions.length">
               {{ connectedSessionsCount }}/{{ carrierSessions.length }}
             </span>
@@ -47,19 +48,19 @@
             class="btn-top-action btn-upload-csv" 
             (click)="csvFileInput.click()" 
             [disabled]="isUploadingCsv" 
-            title="Etsy Satıcı Panelinden indirilen sipariş CSV'sini yükleyerek tüm adresleri otomatik doldur">
+            [title]="t('orders.header.uploadCsvTitle')">
             <span>📥</span>
-            <span *ngIf="!isUploadingCsv">Etsy CSV Yükle</span>
-            <span *ngIf="isUploadingCsv">Yükleniyor...</span>
+            <span *ngIf="!isUploadingCsv">{{ t('orders.header.uploadCsvBtn') }}</span>
+            <span *ngIf="isUploadingCsv">{{ t('orders.header.uploading') }}</span>
           </button>
 
-          <button class="btn-refresh" (click)="refreshOrders()" title="Siparişleri ve canlı kargo fiyatlarını yenile">
+          <button class="btn-refresh" (click)="refreshOrders()" [title]="t('orders.header.refreshTitle')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"></path>
               <path d="M1 20v-6h6"></path>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
-            Yenile
+            {{ t('orders.header.refreshBtn') }}
           </button>
         </div>
       </div>
@@ -84,7 +85,7 @@
               <div class="carrier-name-status">
                 <span class="carrier-card-name">{{ s.name }}</span>
                 <span class="session-status-badge" [class.connected]="s.isConnected">
-                  {{ s.isConnected ? '● Bağlı' : '⚠️ Giriş Yap' }}
+                  {{ s.isConnected ? t('orders.hub.statusConnected') : t('orders.hub.statusLogin') }}
                 </span>
               </div>
               <div class="carrier-actions-row">
@@ -99,7 +100,7 @@
                   [href]="s.portalUrl" 
                   target="_blank" 
                   class="btn-carrier-web" 
-                  title="{{ s.name }} Resmi Portalını Tarayıcıda Aç">
+                  [title]="t('orders.hub.openPortalTitle', { name: s.name })">
                   🌐
                 </a>
                 <button 
@@ -107,7 +108,7 @@
                   class="btn-carrier-disconnect" 
                   [disabled]="!s.isConnected"
                   (click)="disconnectSession(s)" 
-                  title="{{ s.name }} Oturumunu Kapat">
+                  [title]="t('orders.hub.disconnectTitle', { name: s.name })">
                   🗑️
                 </button>
               </div>
@@ -117,8 +118,8 @@
           <!-- PLACEHOLDER CARD: YENİ FİRMA EKLE -->
           <div class="carrier-add-placeholder" (click)="openAddCarrierToast()">
             <div class="placeholder-icon">➕</div>
-            <span class="placeholder-title">Yeni Firma Ekle</span>
-            <span class="placeholder-sub">(DHL, PTT, vb.)</span>
+            <span class="placeholder-title">{{ t('orders.hub.addCarrierTitle') }}</span>
+            <span class="placeholder-sub">{{ t('orders.hub.addCarrierSub') }}</span>
           </div>
         </div>
       </div>
@@ -130,7 +131,7 @@
         <div class="cockpit-region queue-region">
           <div class="region-header-bar">
             <div class="title-with-count">
-              <span class="region-label">SİPARİŞ KUYRUĞU</span>
+              <span class="region-label">{{ t('orders.queue.title') }}</span>
               <span class="queue-count-badge">{{ filteredOrders.length }}</span>
             </div>
           </div>
@@ -141,25 +142,25 @@
               class="queue-chip" 
               [class.active]="activeTab === 'all'" 
               (click)="activeTab = 'all'">
-              Tümü
+              {{ t('orders.queue.tabAll') }}
             </button>
             <button 
               class="queue-chip" 
               [class.active]="activeTab === 'unfulfilled'" 
               (click)="activeTab = 'unfulfilled'">
-              Bekleyen
+              {{ t('orders.queue.tabUnfulfilled') }}
             </button>
             <button 
               class="queue-chip" 
               [class.active]="activeTab === 'shipped'" 
               (click)="activeTab = 'shipped'">
-              Gönderildi
+              {{ t('orders.queue.tabShipped') }}
             </button>
             <button 
               class="queue-chip alert-chip" 
               [class.active]="activeTab === 'missing_cost'" 
               (click)="activeTab = 'missing_cost'">
-              ⚠️ Maliyet ({{ missingCostCount }})
+              {{ t('orders.queue.tabMissingCost', { count: missingCostCount }) }}
             </button>
           </div>
 
@@ -173,21 +174,21 @@
               <input 
                 type="text" 
                 [(ngModel)]="searchQuery" 
-                placeholder="Müşteri adı, sipariş..."
+                [placeholder]="t('orders.queue.searchPlaceholder')"
                 class="queue-search-input" />
             </div>
 
             <select [(ngModel)]="sortMode" class="queue-sort-select">
-              <option value="newest">En yeni üstte</option>
-              <option value="oldest">En eski üstte</option>
-              <option value="name_asc">Müşteri A→Z</option>
-              <option value="name_desc">Müşteri Z→A</option>
+              <option value="newest">{{ t('orders.queue.sortNewest') }}</option>
+              <option value="oldest">{{ t('orders.queue.sortOldest') }}</option>
+              <option value="name_asc">{{ t('orders.queue.sortNameAsc') }}</option>
+              <option value="name_desc">{{ t('orders.queue.sortNameDesc') }}</option>
             </select>
           </div>
 
           <!-- Queue Scroll List -->
           <div class="order-list-scroll">
-            <div *ngIf="ordersService.ordersLoading" class="empty-orders-view"><p>Sipariş uyarıları API’den yükleniyor…</p></div>
+            <div *ngIf="ordersService.ordersLoading" class="empty-orders-view"><p>{{ t('orders.queue.loadingAlerts') }}</p></div>
             <div *ngIf="ordersService.ordersLoadError" class="empty-orders-view"><p>{{ ordersService.ordersLoadError }}</p></div>
             <div 
               *ngFor="let order of filteredOrders" 
@@ -199,7 +200,7 @@
               <div class="order-card-header">
                 <span class="order-num">{{ order.orderNumber }}</span>
                 <span class="order-status-pill" [ngClass]="order.status">
-                  {{ order.status === 'unfulfilled' ? 'Bekleyen' : order.status === 'shipped' ? 'Gönderildi' : 'Teslim' }}
+                  {{ order.status === 'unfulfilled' ? t('orders.queue.statusUnfulfilled') : order.status === 'shipped' ? t('orders.queue.statusShipped') : t('orders.queue.statusDelivered') }}
                 </span>
               </div>
 
@@ -210,23 +211,23 @@
 
               <!-- Desktop matching subtitle -->
               <div class="order-subtitle-line">
-                <span>{{ order.items.length }} kalem</span>
+                <span>{{ t('orders.queue.itemsCount', { count: order.items.length }) }}</span>
                 <span>·</span>
                 <span>{{ order.packageSpecs.weightKg | number:'1.2-2' }} kg</span>
                 <span>·</span>
-                <span>{{ order.exportType || 'Standart ihracat' }}</span>
+                <span>{{ order.exportType || t('orders.queue.defaultExportType') }}</span>
               </div>
 
               <div *ngIf="order.isAddressMissing" class="order-alert-tag address">
-                ⚠️ Alıcı Adresi Eksik
+                {{ t('orders.queue.alertAddressMissing') }}
               </div>
               <div *ngIf="order.isCostMissing" class="order-alert-tag cost">
-                ⚠️ Maliyet Eksik
+                {{ t('orders.queue.alertCostMissing') }}
               </div>
             </div>
 
             <div *ngIf="filteredOrders.length === 0" class="empty-orders-view">
-              <p *ngIf="!ordersService.ordersLoading && !ordersService.ordersLoadError">API’de filtreye uygun açık maliyet uyarısı bulunmuyor. Tam sipariş listesi bu API’de desteklenmiyor.</p>
+              <p *ngIf="!ordersService.ordersLoading && !ordersService.ordersLoadError">{{ t('orders.queue.emptyList') }}</p>
             </div>
           </div>
         </div>
@@ -240,23 +241,23 @@
               <div class="buyer-headline">
                 <h2 class="buyer-display-name">
                   {{ selectedOrder.buyerName }} 
-                  <span *ngIf="selectedOrder.isAddressMissing" class="address-missing-notice">(Sokak adresi girilmedi)</span>
+                  <span *ngIf="selectedOrder.isAddressMissing" class="address-missing-notice">{{ t('orders.detail.addressMissingNotice') }}</span>
                 </h2>
                 <div class="badge-group">
-                  <span class="badge-etsy">Etsy'den</span>
+                  <span class="badge-etsy">{{ t('orders.detail.fromEtsy') }}</span>
                   <span class="badge-country">{{ selectedOrder.countryCode }}</span>
                 </div>
               </div>
               <div class="export-mode-tag">
-                {{ selectedOrder.exportType || 'Standart ihracat' }}
+                {{ selectedOrder.exportType || t('orders.queue.defaultExportType') }}
               </div>
             </div>
 
             <!-- Tracking & Shipped Status Banner if already created -->
             <div *ngIf="selectedOrder.trackingNumber" class="shipment-created-banner">
-              <span class="shipped-badge">✅ GÖNDERİLDİ</span>
-              <span class="tracking-code-info">Takip No: <strong>{{ selectedOrder.trackingNumber }}</strong> ({{ selectedOrder.carrier || 'Kargo' }})</span>
-              <a *ngIf="selectedOrder.labelUrl" [href]="selectedOrder.labelUrl" target="_blank" class="btn-download-label-link">📄 Etiketi İndir / Aç</a>
+              <span class="shipped-badge">{{ t('orders.detail.shippedBadge') }}</span>
+              <span class="tracking-code-info">{{ t('orders.detail.trackingLabel') }} <strong>{{ selectedOrder.trackingNumber }}</strong> ({{ selectedOrder.carrier || t('orders.detail.defaultCarrier') }})</span>
+              <a *ngIf="selectedOrder.labelUrl" [href]="selectedOrder.labelUrl" target="_blank" class="btn-download-label-link">{{ t('orders.detail.downloadLabel') }}</a>
             </div>
           </div>
 
@@ -266,33 +267,33 @@
               <div class="address-card-header">
                 <div class="address-header-left">
                   <span class="address-icon">📍</span>
-                  <span class="address-title">ALICI TESLİMAT ADRESİ</span>
-                  <span *ngIf="selectedOrder.isAddressMissing" class="address-status-pill warn">Adres Eksik</span>
-                  <span *ngIf="!selectedOrder.isAddressMissing" class="address-status-pill ok">Doğrulandı</span>
+                  <span class="address-title">{{ t('orders.address.cardTitle') }}</span>
+                  <span *ngIf="selectedOrder.isAddressMissing" class="address-status-pill warn">{{ t('orders.address.statusMissing') }}</span>
+                  <span *ngIf="!selectedOrder.isAddressMissing" class="address-status-pill ok">{{ t('orders.address.statusVerified') }}</span>
                 </div>
-                <button type="button" class="btn-edit-address" (click)="openAddressModal()" title="Alıcı ve Teslimat Adresini Güncelle">
-                  ✏️ Adresi Düzenle
+                <button type="button" class="btn-edit-address" (click)="openAddressModal()" [title]="t('orders.address.editBtnTitle')">
+                  {{ t('orders.address.editBtn') }}
                 </button>
               </div>
 
               <div class="address-card-body" *ngIf="!selectedOrder.isAddressMissing">
                 <div class="addr-row">
-                  <span class="addr-label">Alıcı:</span>
+                  <span class="addr-label">{{ t('orders.address.labelBuyer') }}</span>
                   <span class="addr-val font-semibold">{{ selectedOrder.buyerName }}</span>
                   <span class="addr-phone" *ngIf="selectedOrder.phone">📞 {{ selectedOrder.phone }}</span>
                   <span class="addr-email" *ngIf="selectedOrder.buyerEmail">✉️ {{ selectedOrder.buyerEmail }}</span>
                 </div>
                 <div class="addr-row">
-                  <span class="addr-label">Cadde / Sokak:</span>
+                  <span class="addr-label">{{ t('orders.address.labelStreet') }}</span>
                   <span class="addr-val">{{ selectedOrder.streetAddress }}</span>
                   <span class="addr-sub" *ngIf="selectedOrder.secondAddress">({{ selectedOrder.secondAddress }})</span>
                 </div>
                 <div class="addr-row">
-                  <span class="addr-label">Şehir / Eyalet:</span>
+                  <span class="addr-label">{{ t('orders.address.labelCityState') }}</span>
                   <span class="addr-val">{{ selectedOrder.city }}<span *ngIf="selectedOrder.state">, {{ selectedOrder.state }}</span> {{ selectedOrder.postalCode }}</span>
                 </div>
                 <div class="addr-row">
-                  <span class="addr-label">Ülke:</span>
+                  <span class="addr-label">{{ t('orders.address.labelCountry') }}</span>
                   <span class="addr-val">{{ selectedOrder.country }} ({{ selectedOrder.countryCode }})</span>
                   <span *ngIf="selectedOrder.iossNumber" class="ioss-pill">IOSS: {{ selectedOrder.iossNumber }}</span>
                 </div>
@@ -301,7 +302,7 @@
               <!-- Address Warning Alert -->
               <div *ngIf="selectedOrder.isAddressMissing || selectedOrder.addressWarning" class="address-warning-banner">
                 <span class="warning-icon">⚠️</span>
-                <span>{{ selectedOrder.addressWarning || 'Alıcı adresi eksik! Kargo oluşturmak için lütfen Adresi Düzenle düğmesine tıklayın.' }}</span>
+                <span>{{ selectedOrder.addressWarning || t('orders.address.missingWarningDefault') }}</span>
               </div>
 
               <!-- PRE-FLIGHT CUSTOMS & ADDRESS CHECKLIST (FAZ 4) -->
@@ -321,21 +322,21 @@
             <!-- 1. PAKET ÖLÇÜLERİ (DESKTOP GRID PARITY + HAZIR KUTU ŞABLONLARI) -->
             <div class="glass-card package-specs-card">
               <div class="card-head-line" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                <span class="section-title">PAKET ÖLÇÜLERİ</span>
+                <span class="section-title">{{ t('orders.package.title') }}</span>
                 <div style="display: flex; flex-wrap: wrap; gap: 4px;">
                   <button
                     *ngFor="let p of packagePresets"
                     type="button"
                     (click)="applyPackagePreset(p)"
                     style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 6px; padding: 2px 7px; font-size: 0.68rem; font-weight: 700; cursor: pointer;">
-                    {{ p.label }}
+                    {{ t(p.labelKey) }}
                   </button>
                 </div>
               </div>
 
               <div class="specs-input-grid">
                 <div class="spec-cell">
-                  <label class="spec-label">Ağırlık</label>
+                  <label class="spec-label">{{ t('orders.package.weight') }}</label>
                   <div class="input-with-unit">
                     <input 
                       type="number" 
@@ -348,7 +349,7 @@
                 </div>
 
                 <div class="spec-cell">
-                  <label class="spec-label">Yükseklik</label>
+                  <label class="spec-label">{{ t('orders.package.height') }}</label>
                   <div class="input-with-unit">
                     <input 
                       type="number" 
@@ -360,7 +361,7 @@
                 </div>
 
                 <div class="spec-cell">
-                  <label class="spec-label">Boy</label>
+                  <label class="spec-label">{{ t('orders.package.length') }}</label>
                   <div class="input-with-unit">
                     <input 
                       type="number" 
@@ -372,7 +373,7 @@
                 </div>
 
                 <div class="spec-cell">
-                  <label class="spec-label">En</label>
+                  <label class="spec-label">{{ t('orders.package.width') }}</label>
                   <div class="input-with-unit">
                     <input 
                       type="number" 
@@ -388,13 +389,13 @@
             <!-- 2. GTİP / HS KODU GÜMRÜK ARAMA BÖLÜMÜ (CANLI KATALOG & OTOMATİK EŞLEŞTİRME) -->
             <div class="glass-card gtip-selector-card">
               <div class="card-head-line" style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="section-title">GTİP / HS KODU - yaz + Enter: panelde ara</span>
+                <span class="section-title">{{ t('orders.gtip.title') }}</span>
                 <button
                   type="button"
                   (click)="autoMatchGtip()"
-                  title="Sipariş kalemi başlığından en uygun GTİP kodunu otomatik bul"
+                  [title]="t('orders.gtip.autoMatchTitle')"
                   style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; border-radius: 6px; padding: 2px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer;">
-                  ✨ Başlıktan Otomatik Bul
+                  {{ t('orders.gtip.autoMatchBtn') }}
                 </button>
               </div>
 
@@ -405,7 +406,7 @@
                     [(ngModel)]="gtipSearchTerm" 
                     (keyup.enter)="onSearchGtip()"
                     (focus)="onSearchGtip()"
-                    placeholder="3926400000 - 3D Baskı Plastik Heykelcik" 
+                    [placeholder]="t('orders.gtip.searchPlaceholder')" 
                     class="gtip-input" />
                   
                   <div class="gtip-quick-suggestions" *ngIf="showGtipSuggestions">
@@ -420,7 +421,7 @@
                 </div>
 
                 <button type="button" class="btn-gtip-search" (click)="onSearchGtip()">
-                  GTİP Ara
+                  {{ t('orders.gtip.searchBtn') }}
                 </button>
               </div>
 
@@ -430,7 +431,7 @@
                   <div class="customs-decl-summary">
                     <span>🛡️</span>
                     <span>
-                      <strong>Gümrük Beyan:</strong> &#36;{{ customsDeclaredValueUsd | number:'1.2-2' }} × {{ customsQuantity }} Adet
+                      <strong>{{ t('orders.gtip.customsDeclLabel') }}</strong> &#36;{{ customsDeclaredValueUsd | number:'1.2-2' }} × {{ customsQuantity }} {{ t('orders.gtip.qtyUnit') }}
                       <ng-container *ngIf="!isCustomsCardExpanded"> · {{ selectedTaxRateSummary }}</ng-container>
                     </span>
                   </div>
@@ -441,18 +442,18 @@
                       [class.active]="isDdpEnabled"
                       [class.off]="!isDdpEnabled"
                       (click)="toggleDdpMode(undefined, $event)"
-                      title="DDP (Gümrük Dahil) teslim şartını aç veya kapat (True / False)">
-                      {{ isDdpEnabled ? '🛡️ DDP: AÇIK (True)' : 'DDP: KAPALI (False)' }}
+                      [title]="t('orders.gtip.ddpSwitchTitle')">
+                      {{ isDdpEnabled ? t('orders.gtip.ddpOn') : t('orders.gtip.ddpOff') }}
                     </button>
                     <button type="button" class="customs-toggle-btn" (click)="toggleCustomsCard($event)">
-                      {{ isCustomsCardExpanded ? '▲ Kapat' : '▼ Aç' }}
+                      {{ isCustomsCardExpanded ? t('orders.gtip.collapse') : t('orders.gtip.expand') }}
                     </button>
                   </div>
                 </div>
 
                 <div class="customs-inputs-grid" *ngIf="isCustomsCardExpanded">
                   <div class="dim-input-col">
-                    <label>Gümrük Beyan Değeri (&#36; USD)</label>
+                    <label>{{ t('orders.gtip.declaredValueLabel') }}</label>
                     <input
                       type="number"
                       step="0.5"
@@ -462,7 +463,7 @@
                       class="customs-num-input" />
                   </div>
                   <div class="dim-input-col">
-                    <label>Adet</label>
+                    <label>{{ t('orders.gtip.quantityLabel') }}</label>
                     <input
                       type="number"
                       step="1"
@@ -472,20 +473,20 @@
                       class="customs-num-input" />
                   </div>
                   <div class="customs-presets-col">
-                    <label>Hızlı Beyan Seçimi</label>
+                    <label>{{ t('orders.gtip.quickDeclLabel') }}</label>
                     <div class="customs-preset-chips">
-                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 1" (click)="setCustomsDeclaredValue(1)">&#36;1 Min</button>
+                      <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 1" (click)="setCustomsDeclaredValue(1)">{{ t('orders.gtip.presetMin') }}</button>
                       <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 5" (click)="setCustomsDeclaredValue(5)">&#36;5</button>
                       <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === 10" (click)="setCustomsDeclaredValue(10)">&#36;10</button>
                       <button type="button" class="customs-chip" [class.active]="customsDeclaredValueUsd === selectedOrder.totalAmount" (click)="setCustomsDeclaredValue(selectedOrder.totalAmount)">
-                        Sipariş (&#36;{{ selectedOrder.totalAmount | number:'1.2-2' }})
+                        {{ t('orders.gtip.presetOrder', { amount: (selectedOrder.totalAmount | number:'1.2-2') }) }}
                       </button>
                     </div>
                   </div>
                 </div>
                 <div class="tax-rate-info-band" *ngIf="isCustomsCardExpanded">
                   <span>🛡️</span>
-                  <span>GTİP <code>{{ getActiveHsCode() }}</code> ({{ selectedOrder.countryCode || 'US' }}) → {{ selectedTaxRateSummary }}</span>
+                  <span>{{ t('orders.gtip.hsCodePrefix') }} <code>{{ getActiveHsCode() }}</code> ({{ selectedOrder.countryCode || 'US' }}) → {{ selectedTaxRateSummary }}</span>
                 </div>
               </div>
 
@@ -493,12 +494,12 @@
               <div class="desi-calculation-row">
                 <div class="desi-stat-box">
                   <div class="desi-val">{{ selectedOrder.packageSpecs.desi | number:'1.2-2' }}</div>
-                  <div class="desi-desc">Desi <span class="desi-src">(kaynak: desi)</span></div>
+                  <div class="desi-desc">{{ t('orders.package.desi') }} <span class="desi-src">{{ t('orders.package.desiSource') }}</span></div>
                 </div>
 
                 <div class="desi-stat-box">
                   <div class="desi-val">{{ (selectedOrder.invoicedWeightKg || selectedOrder.packageSpecs.desi) | number:'1.2-2' }} kg</div>
-                  <div class="desi-desc">FATURALANDIRILACAK</div>
+                  <div class="desi-desc">{{ t('orders.package.billableWeight') }}</div>
                 </div>
               </div>
             </div>
@@ -506,11 +507,11 @@
             <!-- 3. KALEMLER (ITEMS) -->
             <div class="glass-card items-card">
               <div class="card-head-line">
-                <span class="section-title">KALEMLER</span>
+                <span class="section-title">{{ t('orders.items.title') }}</span>
               </div>
               <div class="items-list">
                 <div *ngFor="let item of selectedOrder.items" class="order-item-row">
-                  <img [src]="item.imageUrl || 'assets/placeholder-product.png'" class="item-thumb" alt="Product" />
+                  <img [src]="item.imageUrl || 'assets/placeholder-product.png'" class="item-thumb" [alt]="t('orders.items.productAlt')" />
                   <div class="item-info">
                     <span class="item-name">{{ item.quantity }}x {{ item.title }}</span>
                     <div class="item-meta">
@@ -528,14 +529,14 @@
             <!-- 4. FINANSAL MALİYET & KÂR ANALİZİ -->
             <div class="glass-card cost-engine-card">
               <div class="card-head-line">
-                <span class="section-title">MALİYET VE KÂR ANALİZİ</span>
-                <span *ngIf="selectedOrder.isCostMissing" class="cost-status-badge warn">Maliyet Eksik</span>
-                <span *ngIf="!selectedOrder.isCostMissing" class="cost-status-badge ok">Mutabık</span>
+                <span class="section-title">{{ t('orders.cost.title') }}</span>
+                <span *ngIf="selectedOrder.isCostMissing" class="cost-status-badge warn">{{ t('orders.cost.badgeMissing') }}</span>
+                <span *ngIf="!selectedOrder.isCostMissing" class="cost-status-badge ok">{{ t('orders.cost.badgeReconciled') }}</span>
               </div>
 
               <div class="costs-inputs-grid">
                 <div class="cost-field">
-                  <label>Ürün Maliyeti ($ USD)</label>
+                  <label>{{ t('orders.cost.productCostLabel') }}</label>
                   <input 
                     type="number" 
                     step="0.5" 
@@ -547,7 +548,7 @@
                 </div>
 
                 <div class="cost-field">
-                  <label>Kargo Maliyeti ($ USD)</label>
+                  <label>{{ t('orders.cost.shippingCostLabel') }}</label>
                   <input 
                     type="number" 
                     step="0.5" 
@@ -561,20 +562,20 @@
 
               <div class="profit-summary-banner" [class.negative]="liveNetProfit < 0">
                 <div class="summary-col">
-                  <span class="summary-label">Brüt Tutar</span>
+                  <span class="summary-label">{{ t('orders.cost.grossAmount') }}</span>
                   <span class="summary-val">{{ selectedOrder.totalAmount | number:'1.2-2' }} USD</span>
                 </div>
                 <div class="summary-col">
-                  <span class="summary-label">Tahmini Etsy (~%9.5)</span>
+                  <span class="summary-label">{{ t('orders.cost.estimatedEtsyFee') }}</span>
                   <span class="summary-val text-fee">-{{ (selectedOrder.totalAmount * 0.095) | number:'1.2-2' }} USD</span>
                 </div>
                 <div class="summary-col highlight">
-                  <span class="summary-label">{{ liveNetProfit >= 0 ? 'Net Kâr' : 'Net Zarar' }}</span>
+                  <span class="summary-label">{{ liveNetProfit >= 0 ? t('orders.cost.netProfit') : t('orders.cost.netLoss') }}</span>
                   <span class="summary-val" [ngClass]="liveNetProfit >= 0 ? 'text-profit' : 'text-danger'">{{ liveNetProfit | number:'1.2-2' }} USD</span>
                   <span class="try-sub">({{ formatTry(liveNetProfit) }})</span>
                 </div>
                 <div class="summary-col">
-                  <span class="summary-label">Kâr Marjı</span>
+                  <span class="summary-label">{{ t('orders.cost.profitMargin') }}</span>
                   <span class="summary-val text-margin">%{{ liveProfitMargin }}</span>
                 </div>
               </div>
@@ -584,8 +585,8 @@
 
           <!-- Bottom status line matching desktop -->
           <div class="detail-bottom-strip">
-            <span class="selected-offer-label">SEÇİLİ TEKLİF:</span>
-            <span class="selected-offer-val">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName + ' (' + selectedCarrierQuote.serviceType + ')' : 'Teklif seçilmedi' }}</span>
+            <span class="selected-offer-label">{{ t('orders.detail.selectedOfferLabel') }}</span>
+            <span class="selected-offer-val">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName + ' (' + selectedCarrierQuote.serviceType + ')' : t('orders.detail.noOfferSelected') }}</span>
           </div>
         </div>
 
@@ -595,10 +596,10 @@
           <div class="region-header-bar quotes-head-bar">
             <div class="quotes-title-row">
               <div class="title-with-count">
-                <span class="region-label">TAŞIYICI KARŞILAŞTIRMA</span>
-                <span class="quotes-count-badge">{{ carrierQuotes.length }} teklif</span>
+                <span class="region-label">{{ t('orders.quotes.title') }}</span>
+                <span class="quotes-count-badge">{{ t('orders.quotes.countBadge', { count: carrierQuotes.length }) }}</span>
               </div>
-              <span class="quotes-live-split-pill">{{ liveQuotesCount }} canlı • {{ estimatedQuotesCount }} tahmini</span>
+              <span class="quotes-live-split-pill">{{ t('orders.quotes.liveSplit', { live: liveQuotesCount, estimated: estimatedQuotesCount }) }}</span>
             </div>
 
             <!-- Görüntüleme Modu: Sadece Navlun (DDP: False) vs Gümrük Dahil (DDP: True) -->
@@ -609,18 +610,18 @@
                   class="mode-switch-btn"
                   [class.active]="quoteDisplayMode === 'freight_only'"
                   (click)="setQuoteDisplayMode('freight_only')">
-                  Sadece Navlun (DDP: False)
+                  {{ t('orders.quotes.modeFreightOnly') }}
                 </button>
                 <button
                   type="button"
                   class="mode-switch-btn ddp"
                   [class.active]="quoteDisplayMode === 'all_in_ddp'"
                   (click)="setQuoteDisplayMode('all_in_ddp')">
-                  🛡️ Gümrük Dahil (DDP: True)
+                  {{ t('orders.quotes.modeAllInDdp') }}
                 </button>
               </div>
               <button type="button" class="btn-toggle-all-details" (click)="toggleAllQuoteDetails()">
-                {{ showAllQuoteDetails ? '▲ Tümünü Kapat' : '▼ Tümünü Aç' }}
+                {{ showAllQuoteDetails ? t('orders.quotes.collapseAll') : t('orders.quotes.expandAll') }}
               </button>
               <button
                 *ngIf="selectedCarrierFilter === 'Navlungo' || selectedCarrierFilter === 'Tümü'"
@@ -628,13 +629,13 @@
                 class="btn-toggle-all-details"
                 [disabled]="isCapturingBrowserToken"
                 (click)="triggerNavlungoBrowserCapture(false)"
-                title="Navlungo Bearer JWT ve çerezlerini tek tıkla sessizce yenile">
-                {{ isCapturingBrowserToken ? '⏳ Yenileniyor...' : '🔄 Navlungo Token Yenile' }}
+                [title]="t('orders.quotes.refreshNavlungoTitle')">
+                {{ isCapturingBrowserToken ? t('orders.quotes.refreshing') : t('orders.quotes.refreshNavlungoBtn') }}
               </button>
             </div>
 
             <!-- Aras Global / Carrier token expired warning banner matching desktop screenshot -->
-            <div *ngIf="carrierWarningMessage" class="carrier-session-warning-banner" (click)="openSessionModal(carrierSessions[0])" title="Tokenı Yenilemek İçin Tıklayın">
+            <div *ngIf="carrierWarningMessage" class="carrier-session-warning-banner" (click)="openSessionModal(carrierSessions[0])" [title]="t('orders.quotes.tokenWarningTitle')">
               {{ carrierWarningMessage }}
             </div>
           </div>
@@ -646,7 +647,7 @@
               class="carrier-tab-btn"
               [class.active]="selectedCarrierFilter === tab"
               (click)="selectedCarrierFilter = tab">
-              {{ tab }} <span class="tab-count-num">({{ getQuoteCountForTab(tab) }})</span>
+              {{ tab === 'Tümü' ? t('orders.quotes.filterAll') : tab }} <span class="tab-count-num">({{ getQuoteCountForTab(tab) }})</span>
             </button>
           </div>
 
@@ -667,13 +668,13 @@
                   <div class="tile-carrier-info">
                     <div class="tile-title-line">
                       <span class="tile-carrier-name">{{ quote.serviceType }}</span>
-                      <span *ngIf="quote.isLowestPrice" class="lowest-price-badge">EN UCUZ</span>
-                      <span *ngIf="quote.isRecommended" class="recommended-badge">★ En Uygun</span>
+                      <span *ngIf="quote.isLowestPrice" class="lowest-price-badge">{{ t('orders.quotes.lowestPriceBadge') }}</span>
+                      <span *ngIf="quote.isRecommended" class="recommended-badge">{{ t('orders.quotes.recommendedBadge') }}</span>
                     </div>
                     <div class="tile-meta-line">
                       <span class="tile-carrier-sub">{{ quote.carrierName }} • {{ quote.estimatedDays }}</span>
                       <span class="trust-badge" [class.live]="quote.isLive">
-                        {{ quote.quoteSourceBadge || (quote.isLive ? 'Canlı teklif' : 'Tahmini tarife') }}
+                        {{ quote.quoteSourceBadge || (quote.isLive ? t('orders.quotes.liveQuoteBadge') : t('orders.quotes.estimatedTariffBadge')) }}
                       </span>
                     </div>
                   </div>
@@ -683,15 +684,15 @@
                   <div class="tile-price-stack">
                     <span class="tile-usd">&#36;{{ getDisplayPriceUsd(quote) | number:'1.2-2' }}</span>
                     <span class="tile-mode-tag" [class.ddp]="isDdpEnabled && hasCustomsBreakdown(quote)">
-                      {{ hasCustomsBreakdown(quote) ? (isDdpEnabled ? "DDP'li Toplam" : "DDP'siz Toplam") : 'Sadece Navlun' }}
+                      {{ hasCustomsBreakdown(quote) ? (isDdpEnabled ? t('orders.quotes.ddpTotalTag') : t('orders.quotes.nonDdpTotalTag')) : t('orders.quotes.freightOnlyTag') }}
                     </span>
                     <span class="tile-sub-compare" *ngIf="hasCustomsBreakdown(quote)">
-                      {{ isDdpEnabled ? ("DDP'siz: $" + (quote.priceUsd | number:'1.2-2')) : ("DDP'li: $" + ((quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2')) }}
+                      {{ isDdpEnabled ? t('orders.quotes.subNonDdp', { price: (quote.priceUsd | number:'1.2-2') }) : t('orders.quotes.subDdp', { price: ((quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2') }) }}
                     </span>
                     <span class="tile-try">₺{{ getDisplayPriceTry(quote) | number:'1.2-2' }}</span>
                   </div>
                   <button type="button" class="btn-tile-select" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
-                    {{ (selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType) ? '✓ Seçildi' : 'Seç' }}
+                    {{ (selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType) ? t('orders.quotes.selectedBtn') : t('orders.quotes.selectBtn') }}
                   </button>
                 </div>
               </div>
@@ -699,37 +700,37 @@
               <!-- Kompakt Navlun & Gümrük Özet Çipleri -->
               <div class="quote-mini-pills">
                 <ng-container *ngIf="quote.hasDetailedBreakdown; else carrierFlatPills">
-                  <span class="mini-pill">Baz: &#36;{{ (quote.baseCargoPriceUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
+                  <span class="mini-pill">{{ t('orders.quotes.pillBase', { price: ((quote.baseCargoPriceUsd ?? quote.priceUsd) | number:'1.2-2') }) }}</span>
                   <span class="mini-pill" *ngIf="(quote.fuelCostUsd ?? 0) > 0">
-                    Yakıt: &#36;{{ quote.fuelCostUsd | number:'1.2-2' }}<ng-container *ngIf="quote.fuelMultiplierPercent"> (%{{ quote.fuelMultiplierPercent | number:'1.0-1' }})</ng-container>
+                    {{ t('orders.quotes.pillFuel', { price: (quote.fuelCostUsd | number:'1.2-2') }) }}<ng-container *ngIf="quote.fuelMultiplierPercent"> (%{{ quote.fuelMultiplierPercent | number:'1.0-1' }})</ng-container>
                   </span>
                   <span class="mini-pill warn" *ngIf="(quote.additionalFeeUsd ?? 0) > 0">
-                    Ek: &#36;{{ quote.additionalFeeUsd | number:'1.2-2' }}
+                    {{ t('orders.quotes.pillAdditional', { price: (quote.additionalFeeUsd | number:'1.2-2') }) }}
                   </span>
                   <span class="mini-pill info" *ngIf="quote.returnPolicyNote">↩️ {{ quote.returnPolicyNote }}</span>
                   <span class="mini-pill info" *ngIf="quote.insuranceNote">🛡️ {{ quote.insuranceNote }}</span>
                 </ng-container>
                 <ng-template #carrierFlatPills>
-                  <span class="mini-pill">Tek Fiyat (API): &#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
-                  <span class="mini-pill" *ngIf="quote.serviceCode">Kod: {{ quote.serviceCode }}</span>
-                  <span class="mini-pill" *ngIf="quote.billableWeightKg">Fatura Ağırlığı: {{ quote.billableWeightKg | number:'1.2-2' }} kg</span>
+                  <span class="mini-pill">{{ t('orders.quotes.pillFlatRate', { price: (quote.priceUsd | number:'1.2-2') }) }}</span>
+                  <span class="mini-pill" *ngIf="quote.serviceCode">{{ t('orders.quotes.pillCode', { code: quote.serviceCode }) }}</span>
+                  <span class="mini-pill" *ngIf="quote.billableWeightKg">{{ t('orders.quotes.pillBillableWeight', { weight: (quote.billableWeightKg | number:'1.2-2') }) }}</span>
                   <span class="mini-pill info" *ngIf="quote.unDiscountedPriceUsd && quote.unDiscountedPriceUsd > quote.priceUsd">
-                    Liste: &#36;{{ quote.unDiscountedPriceUsd | number:'1.2-2' }}<ng-container *ngIf="quote.discountRatePercent"> (-%{{ quote.discountRatePercent | number:'1.0-1' }})</ng-container>
+                    {{ t('orders.quotes.pillListPrice', { price: (quote.unDiscountedPriceUsd | number:'1.2-2') }) }}<ng-container *ngIf="quote.discountRatePercent"> (-%{{ quote.discountRatePercent | number:'1.0-1' }})</ng-container>
                   </span>
                 </ng-template>
                 <ng-container *ngIf="hasCustomsBreakdown(quote)">
                   <span class="mini-pill ddp" *ngIf="isDdpEnabled">
-                    🛡️ DDP Ücreti: +&#36;{{ quote.fastCustomsPaymentUsd | number:'1.2-2' }}
+                    {{ t('orders.quotes.pillDdpFee', { price: (quote.fastCustomsPaymentUsd | number:'1.2-2') }) }}
                   </span>
                   <span class="mini-pill total" *ngIf="isDdpEnabled">
-                    Toplam: &#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }}
+                    {{ t('orders.quotes.pillTotal', { price: ((quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2') }) }}
                   </span>
                   <span class="mini-pill off" *ngIf="!isDdpEnabled">
-                    DDP: Kapalı (+&#36;{{ quote.fastCustomsPaymentUsd | number:'1.2-2' }} hariç)
+                    {{ t('orders.quotes.pillDdpOff', { price: (quote.fastCustomsPaymentUsd | number:'1.2-2') }) }}
                   </span>
                 </ng-container>
                 <button type="button" class="mini-pill toggle-btn" (click)="toggleQuoteDetails(quote, $event)">
-                  {{ isQuoteExpanded(quote) ? '▲ Kırılımı Kapat' : '▼ Detay Aç' }}
+                  {{ isQuoteExpanded(quote) ? t('orders.quotes.hideBreakdown') : t('orders.quotes.showDetails') }}
                 </button>
               </div>
 
@@ -737,33 +738,33 @@
               <div class="quote-receipt-panel" *ngIf="isQuoteExpanded(quote)" (click)="$event.stopPropagation()">
                 <div class="receipt-top-close-row">
                   <span class="receipt-top-label">
-                    📋 {{ quote.serviceType }} — {{ quote.hasDetailedBreakdown ? 'Navlun, DDP & Toplam Dökümü' : (quote.carrierName + ' API & DDP Dökümü') }}
+                    📋 {{ quote.serviceType }} — {{ quote.hasDetailedBreakdown ? t('orders.quotes.receiptTitleDetailed') : t('orders.quotes.receiptTitleFlat', { carrier: quote.carrierName }) }}
                   </span>
-                  <button type="button" class="btn-receipt-close" (click)="toggleQuoteDetails(quote, $event)">✕ Kapat</button>
+                  <button type="button" class="btn-receipt-close" (click)="toggleQuoteDetails(quote, $event)">{{ t('orders.quotes.closeReceipt') }}</button>
                 </div>
 
                 <!-- 1. NAVLUN (KARGO ÜCRETİ) -->
                 <ng-container *ngIf="quote.hasDetailedBreakdown; else flatFreightSection">
                   <div class="receipt-section">
-                    <div class="receipt-sec-title">1. NAVLUN (KARGO ÜCRETİ) KIRILIMI</div>
+                    <div class="receipt-sec-title">{{ t('orders.quotes.sec1Detailed') }}</div>
                     <div class="receipt-row">
-                      <span>Baz Kargo Ücreti</span>
+                      <span>{{ t('orders.quotes.baseCargoFee') }}</span>
                       <span>&#36;{{ (quote.baseCargoPriceUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
                     </div>
                     <div class="receipt-row" *ngIf="(quote.fuelCostUsd ?? 0) > 0">
-                      <span>Yakıt Ek Ücreti <small *ngIf="quote.fuelMultiplierPercent">(%{{ quote.fuelMultiplierPercent | number:'1.0-2' }})</small></span>
+                      <span>{{ t('orders.quotes.fuelSurcharge') }} <small *ngIf="quote.fuelMultiplierPercent">(%{{ quote.fuelMultiplierPercent | number:'1.0-2' }})</small></span>
                       <span>&#36;{{ quote.fuelCostUsd | number:'1.2-2' }}</span>
                     </div>
                     <div class="receipt-row" *ngIf="(quote.additionalFeeUsd ?? 0) > 0">
-                      <span>{{ quote.additionalFeeDescription || 'Yoğun Sezon Ek Ücreti' }}</span>
+                      <span>{{ quote.additionalFeeDescription || t('orders.quotes.defaultAdditionalFee') }}</span>
                       <span>&#36;{{ quote.additionalFeeUsd | number:'1.2-2' }}</span>
                     </div>
                     <div class="receipt-row subtotal">
-                      <span>Navlun Toplamı</span>
+                      <span>{{ t('orders.quotes.freightSubtotal') }}</span>
                       <span>&#36;{{ quote.priceUsd | number:'1.2-2' }} <small>(₺{{ quote.priceTry | number:'1.2-2' }})</small></span>
                     </div>
                     <div class="receipt-row prepay" *ngIf="quote.discountedFreightUsd && quote.discountedFreightUsd < quote.priceUsd">
-                      <span>⚡ Avantajlı Hemen Öde</span>
+                      <span>{{ t('orders.quotes.prepayAdvantage') }}</span>
                       <span>&#36;{{ quote.discountedFreightUsd | number:'1.2-2' }}</span>
                     </div>
                   </div>
@@ -771,29 +772,29 @@
 
                 <ng-template #flatFreightSection>
                   <div class="receipt-section">
-                    <div class="receipt-sec-title">1. NAVLUN (TAŞIYICI RESMİ API TEKLİFİ)</div>
+                    <div class="receipt-sec-title">{{ t('orders.quotes.sec1Flat') }}</div>
                     <div class="receipt-row">
-                      <span>Taşıyıcı / Alt Taşıyıcı</span>
+                      <span>{{ t('orders.quotes.carrierSubCarrier') }}</span>
                       <span>{{ quote.carrierName }} / {{ quote.subCarrier || quote.carrierName }}</span>
                     </div>
                     <div class="receipt-row" *ngIf="quote.serviceCode">
-                      <span>Servis Kodu (API)</span>
+                      <span>{{ t('orders.quotes.serviceCodeApi') }}</span>
                       <span>{{ quote.serviceCode }}</span>
                     </div>
                     <div class="receipt-row" *ngIf="quote.billableWeightKg">
-                      <span>Faturalandırılan Ağırlık</span>
+                      <span>{{ t('orders.quotes.billableWeight') }}</span>
                       <span>{{ quote.billableWeightKg | number:'1.2-2' }} kg</span>
                     </div>
                     <div class="receipt-row" *ngIf="quote.unDiscountedPriceUsd && quote.unDiscountedPriceUsd > quote.priceUsd">
-                      <span>Liste Fiyatı (İndirimsiz)</span>
+                      <span>{{ t('orders.quotes.listPriceUndiscounted') }}</span>
                       <span>&#36;{{ quote.unDiscountedPriceUsd | number:'1.2-2' }} <small *ngIf="quote.discountRatePercent">(-%{{ quote.discountRatePercent | number:'1.0-1' }})</small></span>
                     </div>
                     <div class="receipt-row subtotal">
-                      <span>Net Navlun Ücreti (Tek Kalem API Fiyatı)</span>
+                      <span>{{ t('orders.quotes.netFreightFlat') }}</span>
                       <span>&#36;{{ quote.priceUsd | number:'1.2-2' }} <small>(₺{{ quote.priceTry | number:'1.2-2' }})</small></span>
                     </div>
                     <div class="receipt-info-note compact">
-                      ℹ️ {{ quote.carrierName }} API'si navlunu tek kalem döndürür; yakıt/hızlı ödeme ayrımı yapılmaz.
+                      {{ t('orders.quotes.flatApiInfoNote', { carrier: quote.carrierName }) }}
                     </div>
                   </div>
                 </ng-template>
@@ -802,7 +803,7 @@
                 <div class="ddp-detail-subcard" *ngIf="hasCustomsBreakdown(quote)" [class.disabled-ddp]="!isDdpEnabled">
                   <div class="ddp-subcard-header">
                     <div class="ddp-subcard-title-wrap">
-                      <span class="receipt-sec-title ddp">2. DDP ÜCRETİ AYRINTI KARTI</span>
+                      <span class="receipt-sec-title ddp">{{ t('orders.quotes.sec2Ddp') }}</span>
                       <span class="ddp-source-chip" *ngIf="quote.customsSourceBadge">{{ quote.customsSourceBadge }}</span>
                     </div>
                     <button
@@ -810,33 +811,33 @@
                       class="ddp-inline-toggle"
                       [class.off]="!isDdpEnabled"
                       (click)="toggleDdpMode(undefined, $event)"
-                      title="DDP aktif (True) veya kapalı (False / DAP) yap">
-                      {{ isDdpEnabled ? '✓ DDP: AÇIK (True)' : '✕ DDP: KAPALI (False)' }}
+                      [title]="t('orders.quotes.ddpInlineToggleTitle')">
+                      {{ isDdpEnabled ? t('orders.quotes.ddpInlineOn') : t('orders.quotes.ddpInlineOff') }}
                     </button>
                   </div>
 
                   <div class="ddp-disabled-banner" *ngIf="!isDdpEnabled">
-                    DDP: False (DAP) seçili — Gümrük &amp; işlem bedeli toplam fiyata eklenmez, teslimatta alıcıya yansır.
+                    {{ t('orders.quotes.ddpDisabledBanner') }}
                   </div>
 
                   <div class="receipt-row muted">
-                    <span>Beyan ({{ customsQuantity }} × &#36;{{ customsDeclaredValueUsd | number:'1.2-2' }} • {{ quote.hsCode || getActiveHsCode() }})</span>
+                    <span>{{ t('orders.quotes.declarationRow', { qty: customsQuantity, val: (customsDeclaredValueUsd | number:'1.2-2'), hs: (quote.hsCode || getActiveHsCode()) }) }}</span>
                     <span>&#36;{{ (quote.declaredValueUsd ?? (customsDeclaredValueUsd * customsQuantity)) | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row">
-                    <span>Genel Gümrük Vergisi <small *ngIf="quote.generalDutyRatePercent !== undefined">(%{{ quote.generalDutyRatePercent | number:'1.1-2' }})</small></span>
+                    <span>{{ t('orders.quotes.generalDuty') }} <small *ngIf="quote.generalDutyRatePercent !== undefined">(%{{ quote.generalDutyRatePercent | number:'1.1-2' }})</small></span>
                     <span>&#36;{{ (quote.generalDutyUsd ?? 0) | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row" *ngIf="(quote.additionalDutyRatePercent ?? 0) > 0 || (quote.additionalDutyUsd ?? 0) > 0">
-                    <span>ABD Ek Tarife <small *ngIf="quote.additionalDutyHtsCode">({{ quote.additionalDutyHtsCode }})</small> <small *ngIf="quote.additionalDutyRatePercent">(%{{ quote.additionalDutyRatePercent | number:'1.1-2' }})</small></span>
+                    <span>{{ t('orders.quotes.usAdditionalTariff') }} <small *ngIf="quote.additionalDutyHtsCode">({{ quote.additionalDutyHtsCode }})</small> <small *ngIf="quote.additionalDutyRatePercent">(%{{ quote.additionalDutyRatePercent | number:'1.1-2' }})</small></span>
                     <span>&#36;{{ (quote.additionalDutyUsd ?? 0) | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row">
-                    <span>Vergi ve Masraflar Ara Toplamı</span>
+                    <span>{{ t('orders.quotes.taxAndDutySubtotal') }}</span>
                     <span>&#36;{{ (quote.taxAndDutySubtotalUsd ?? ((quote.generalDutyUsd ?? 0) + (quote.additionalDutyUsd ?? 0))) | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row">
-                    <span>+ {{ quote.carrierProcessingFeeLabel || 'Taşıyıcı İşlem Bedeli' }}</span>
+                    <span>+ {{ quote.carrierProcessingFeeLabel || t('orders.quotes.defaultProcessingFee') }}</span>
                     <span>
                       <s class="fee-strike" *ngIf="quote.carrierProcessingFeeListUsd && quote.carrierProcessingFeeListUsd > (quote.carrierProcessingFeeUsd ?? 0)">
                         &#36;{{ quote.carrierProcessingFeeListUsd | number:'1.2-2' }}
@@ -845,7 +846,7 @@
                     </span>
                   </div>
                   <div class="receipt-row subtotal ddp">
-                    <span>Toplam DDP Ücreti</span>
+                    <span>{{ t('orders.quotes.totalDdpFee') }}</span>
                     <span>&#36;{{ quote.fastCustomsPaymentUsd | number:'1.2-2' }} <small *ngIf="quote.fastCustomsPaymentTry">(₺{{ quote.fastCustomsPaymentTry | number:'1.2-2' }})</small></span>
                   </div>
                 </div>
@@ -853,25 +854,25 @@
                 <!-- 3. TOPLAM FİYAT KARŞILAŞTIRMASI (DDP'SİZ vs DDP'Lİ) -->
                 <div class="receipt-section grand" *ngIf="hasCustomsBreakdown(quote)">
                   <div class="receipt-row" [class.active-total-row]="!isDdpEnabled">
-                    <span>DDP'siz Toplam Tutar (Sadece Navlun · DAP)</span>
+                    <span>{{ t('orders.quotes.nonDdpGrandRow') }}</span>
                     <span>&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row muted">
-                    <span>+ DDP Ücreti <small>({{ isDdpEnabled ? 'Dahil' : 'DDP: False — Hariç' }})</small></span>
+                    <span>{{ t('orders.quotes.ddpFeeRowLabel') }} <small>({{ isDdpEnabled ? t('orders.quotes.ddpIncludedTag') : t('orders.quotes.ddpExcludedTag') }})</small></span>
                     <span>
-                      {{ isDdpEnabled ? ('+$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2')) : ('$0.00 (Opsiyonel: +$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2') + ')') }}
+                      {{ isDdpEnabled ? ('+$' + ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2')) : t('orders.quotes.ddpOptionalAmount', { amount: ((quote.fastCustomsPaymentUsd ?? 0) | number:'1.2-2') }) }}
                     </span>
                   </div>
                   <div class="receipt-row" [class.active-total-row]="isDdpEnabled">
-                    <span>DDP'li Toplam Tutar (Navlun + DDP)</span>
+                    <span>{{ t('orders.quotes.ddpGrandRow') }}</span>
                     <span>&#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }}</span>
                   </div>
                   <div class="receipt-row grand-total">
-                    <span>{{ isDdpEnabled ? '3. SEÇİLİ TOPLAM (DDP: TRUE)' : '3. SEÇİLİ TOPLAM (DDP: FALSE • DAP)' }}</span>
+                    <span>{{ isDdpEnabled ? t('orders.quotes.selectedTotalDdpOn') : t('orders.quotes.selectedTotalDdpOff') }}</span>
                     <span>&#36;{{ getDisplayPriceUsd(quote) | number:'1.2-2' }} <small>(₺{{ getDisplayPriceTry(quote) | number:'1.2-2' }})</small></span>
                   </div>
                   <div class="receipt-row prepay" *ngIf="isDdpEnabled && quote.discountedGrandTotalUsd">
-                    <span>⚡ Avantajlı Hemen Öde + Gümrük</span>
+                    <span>{{ t('orders.quotes.prepayPlusCustoms') }}</span>
                     <span>&#36;{{ quote.discountedGrandTotalUsd | number:'1.2-2' }}</span>
                   </div>
                 </div>
@@ -882,20 +883,20 @@
                     class="btn-receipt-apply freight"
                     [class.selected-mode]="!isDdpEnabled"
                     (click)="applyCarrierQuote(quote, false); $event.stopPropagation()">
-                    Sadece Navlun Seç (DDP: False · &#36;{{ quote.priceUsd | number:'1.2-2' }})
+                    {{ t('orders.quotes.selectFreightOnlyBtn', { price: (quote.priceUsd | number:'1.2-2') }) }}
                   </button>
                   <button
                     type="button"
                     class="btn-receipt-apply ddp"
                     [class.selected-mode]="isDdpEnabled"
                     (click)="applyCarrierQuote(quote, true); $event.stopPropagation()">
-                    🛡️ DDP Dahil Seç (DDP: True · &#36;{{ (quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2' }})
+                    {{ t('orders.quotes.selectWithDdpBtn', { price: ((quote.grandTotalUsd ?? quote.priceUsd) | number:'1.2-2') }) }}
                   </button>
                 </div>
                 <ng-template #freightOnlyAction>
                   <div class="receipt-actions-row single">
                     <button type="button" class="btn-receipt-apply freight" (click)="applyCarrierQuote(quote, false); $event.stopPropagation()">
-                      Sadece Navlun Seç (&#36;{{ quote.priceUsd | number:'1.2-2' }})
+                      {{ t('orders.quotes.selectFreightSimpleBtn', { price: (quote.priceUsd | number:'1.2-2') }) }}
                     </button>
                   </div>
                 </ng-template>
@@ -903,20 +904,20 @@
             </div>
 
             <div *ngIf="filteredQuotes.length === 0" class="no-quotes-hint">
-              Bu filtreye uygun aktif taşıyıcı teklifi bulunamadı.
+              {{ t('orders.quotes.emptyFilter') }}
             </div>
           </div>
 
           <!-- BARKOD / ETİKET BİLEŞENİ (KOMPAKT & KATLANABİLİR) -->
           <div class="barcode-preview-section">
-            <div class="barcode-section-header" (click)="isBarcodeExpanded = !isBarcodeExpanded" title="Barkod alanını aç/kapat">
+            <div class="barcode-section-header" (click)="isBarcodeExpanded = !isBarcodeExpanded" [title]="t('orders.barcode.toggleTitle')">
               <div class="barcode-title-left">
                 <span class="barcode-icon">🏷️</span>
-                <span class="barcode-section-title">BARKOD / ETİKET</span>
+                <span class="barcode-section-title">{{ t('orders.barcode.title') }}</span>
                 <span class="barcode-code-pill">{{ selectedOrder.barcodeNumber || '10092370104092' }}</span>
               </div>
               <button type="button" class="btn-toggle-barcode">
-                {{ isBarcodeExpanded ? '▲ Gizle' : '▼ Önizle' }}
+                {{ isBarcodeExpanded ? t('orders.barcode.hide') : t('orders.barcode.preview') }}
               </button>
             </div>
             
@@ -960,7 +961,7 @@
       <div class="cockpit-footer" *ngIf="selectedOrder">
         <div class="footer-left">
           <span class="footer-order-info">
-            Seçili Sipariş: <strong>{{ selectedOrder.orderNumber }}</strong> ({{ selectedOrder.buyerName }})
+            {{ t('orders.footer.selectedOrder') }} <strong>{{ selectedOrder.orderNumber }}</strong> ({{ selectedOrder.buyerName }})
           </span>
           <span *ngIf="saveSuccessMessage" class="save-toast">
             ✓ {{ saveSuccessMessage }}
@@ -968,35 +969,35 @@
         </div>
 
         <div class="footer-right">
-          <button class="btn-save-costs" (click)="saveCosts()" title="Maliyet ve GTİP Değerlerini Kaydet">
+          <button class="btn-save-costs" (click)="saveCosts()" [title]="t('orders.footer.saveCostsTitle')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
               <polyline points="17 21 17 13 7 13 7 21"></polyline>
               <polyline points="7 3 7 8 15 8"></polyline>
             </svg>
-            Maliyet Kaydet
+            {{ t('orders.footer.saveCostsBtn') }}
           </button>
 
           <button 
             type="button" 
             class="btn-footer-preview" 
             (click)="openLabelPreviewModal()" 
-            title="Kargo Etiketini Önizle ve Yazdır">
-            👁️ Etiketi Önizle
+            [title]="t('orders.footer.previewLabelTitle')">
+            {{ t('orders.footer.previewLabelBtn') }}
           </button>
 
           <!-- ETSY LIVE SYNC TOGGLE (SAFE TEST MODE BY DEFAULT) -->
           <label 
             class="etsy-live-sync-toggle" 
             [class.active]="notifyEtsyOnShipment"
-            [title]="notifyEtsyOnShipment ? 'DİKKAT: Etsy mağazanıza takip numarası gönderilecek ve sipariş kargolandı olarak güncellenecek!' : 'GÜVENLİ TEST MODU: Etsy mağazanıza bildirilmez. Sipariş Etsy\'de açık kalır, sadece kargo firmasından etiket alınır.'">
+            [title]="notifyEtsyOnShipment ? t('orders.footer.etsySyncLiveTitle') : t('orders.footer.etsySyncTestTitle')">
             <input 
               type="checkbox" 
               [(ngModel)]="notifyEtsyOnShipment" 
               name="notifyEtsyOnShipment" />
             <span class="sync-toggle-label">
-              <span *ngIf="!notifyEtsyOnShipment" class="mode-text test-mode">🛡️ Test Modu (Etsy'ye Bildirme)</span>
-              <span *ngIf="notifyEtsyOnShipment" class="mode-text live-mode">⚡ Canlı: Etsy'yi Kargolandı Yap</span>
+              <span *ngIf="!notifyEtsyOnShipment" class="mode-text test-mode">{{ t('orders.footer.testModeLabel') }}</span>
+              <span *ngIf="notifyEtsyOnShipment" class="mode-text live-mode">{{ t('orders.footer.liveModeLabel') }}</span>
             </span>
           </label>
 
@@ -1005,9 +1006,9 @@
             class="btn-footer-create-shipment" 
             [disabled]="isGeneratingShipment"
             (click)="executeCreateShipment()" 
-            title="Seçili Taşıyıcı ile Gönderi Oluştur">
-            <span *ngIf="!isGeneratingShipment">🚀 Gönderi Oluştur</span>
-            <span *ngIf="isGeneratingShipment">⏳ Oluşturuluyor...</span>
+            [title]="t('orders.footer.createShipmentTitle')">
+            <span *ngIf="!isGeneratingShipment">{{ t('orders.footer.createShipmentBtn') }}</span>
+            <span *ngIf="isGeneratingShipment">{{ t('orders.footer.creatingShipmentBtn') }}</span>
           </button>
         </div>
       </div>
@@ -1021,8 +1022,8 @@
             <div class="modal-title-with-logo">
               <img *ngIf="activeModalCarrier?.logoUrl" [src]="activeModalCarrier?.logoUrl" class="modal-carrier-logo" />
               <div>
-                <h3 class="modal-title">{{ activeModalCarrier?.name }} - Kargo Oturum Yönetimi</h3>
-                <span class="modal-sub">Doğrudan API ve Otomatik Entegrasyon Oturumu</span>
+                <h3 class="modal-title">{{ t('orders.sessionModal.title', { name: activeModalCarrier?.name || '' }) }}</h3>
+                <span class="modal-sub">{{ t('orders.sessionModal.subtitle') }}</span>
               </div>
             </div>
             <button class="btn-close-modal" (click)="closeSessionModal()">✕</button>
@@ -1031,19 +1032,19 @@
           <div class="modal-body">
             <div class="session-info-card">
               <div class="info-row">
-                <span>Durum:</span>
+                <span>{{ t('orders.sessionModal.statusLabel') }}</span>
                 <span class="status-pill" [class.ok]="activeModalCarrier?.isConnected">
-                  {{ activeModalCarrier?.isConnected ? '● Aktif Oturum Bağlı' : '⚠️ Oturum Kapalı / Giriş Gerekli' }}
+                  {{ activeModalCarrier?.isConnected ? t('orders.sessionModal.statusConnected') : t('orders.sessionModal.statusDisconnected') }}
                 </span>
               </div>
               <div class="info-row" *ngIf="activeModalCarrier?.id === 'aras'">
-                <span>Canlı Token Durumu:</span>
+                <span>{{ t('orders.sessionModal.liveTokenStatusLabel') }}</span>
                 <span class="status-pill" [class.ok]="isCurrentModalTokenValid" [class.warn]="!isCurrentModalTokenValid">
                   {{ modalTokenStatusText }}
                 </span>
               </div>
               <div class="info-row" *ngIf="activeModalCarrier?.lastUpdated">
-                <span>Son Güncelleme:</span>
+                <span>{{ t('orders.sessionModal.lastUpdatedLabel') }}</span>
                 <code>{{ activeModalCarrier?.lastUpdated }}</code>
               </div>
             </div>
@@ -1052,29 +1053,29 @@
             <div *ngIf="activeModalCarrier?.id === 'shipentegra'" class="shipentegra-credentials-section">
               <div class="jwt-helper-guide" style="margin-bottom: 14px;">
                 <div class="guide-title">
-                  <span>🚀</span> <strong>ShipEntegra Public API Entegrasyonu</strong>
+                  <span>🚀</span> <strong>{{ t('orders.sessionModal.seTitle') }}</strong>
                 </div>
                 <p class="guide-text">
-                  Canlı kargo teklifleri ve tek tıkla gönderi oluşturma için panelden (<code>app.shipentegra.com/integrations</code>) aldığınız Client ID ve Client Secret anahtarları otomatik eşleştirilmiştir.
+                  {{ t('orders.sessionModal.seDescBefore') }}<code>app.shipentegra.com/integrations</code>{{ t('orders.sessionModal.seDescAfter') }}
                 </p>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Client ID (API Key):</label>
-                <input type="text" [(ngModel)]="seApiKey" class="form-control" placeholder="Client ID girin..." />
+                <label class="form-label">{{ t('orders.sessionModal.seClientIdLabel') }}</label>
+                <input type="text" [(ngModel)]="seApiKey" class="form-control" [placeholder]="t('orders.sessionModal.seClientIdPlaceholder')" />
               </div>
 
               <div class="form-group">
-                <label class="form-label">Client Secret (API Secret):</label>
+                <label class="form-label">{{ t('orders.sessionModal.seClientSecretLabel') }}</label>
                 <input type="password" [(ngModel)]="seApiSecret" class="form-control" placeholder="••••••••••••••••" />
               </div>
 
               <div class="form-group">
-                <label class="form-label">İsteğe Bağlı Session / Bearer Token:</label>
+                <label class="form-label">{{ t('orders.sessionModal.seOptionalTokenLabel') }}</label>
                 <textarea 
                   [(ngModel)]="modalTokenInput" 
                   rows="2" 
-                  placeholder="Opsiyonel: Doğrudan API Token'ı (DevTools Authorization header)..." 
+                  [placeholder]="t('orders.sessionModal.seOptionalTokenPlaceholder')" 
                   class="form-control modal-textarea"></textarea>
               </div>
             </div>
@@ -1082,20 +1083,20 @@
             <!-- ARAS GLOBAL AUTOMATIC BROWSER LOGIN & TOKEN CAPTURE -->
             <div *ngIf="activeModalCarrier?.id === 'aras'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 12px; border-radius: 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
               <div class="guide-title" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
-                <span>⚡ <strong>Otomatik Giriş & Token Yakalama (F12 Gerektirmez)</strong></span>
-                <span style="font-size: 0.72rem; color: #10b981; font-weight: 600;">Access + 24s Refresh Token</span>
+                <span>⚡ <strong>{{ t('orders.sessionModal.arasAutoTitle') }}</strong></span>
+                <span style="font-size: 0.72rem; color: #10b981; font-weight: 600;">{{ t('orders.sessionModal.arasAutoBadge') }}</span>
               </div>
               <p class="guide-text" style="margin-bottom: 10px;">
-                Aras Global panelinde giriş yaptığınız anda sistem <code>Authorization: Bearer</code>, <code>/Auth/Login</code> ve <code>localStorage</code> üzerinden token'ınızı otomatik yakalar ve şifreli olarak kaydeder.
+                {{ t('orders.sessionModal.arasAutoDesc') }}
               </p>
 
               <div class="form-row-2" style="margin-bottom: 10px;">
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">Telefon veya E-posta (İsteğe Bağlı):</label>
-                  <input type="text" [(ngModel)]="arasEmail" class="form-control" placeholder="5XX... veya e-posta" />
+                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.arasEmailLabel') }}</label>
+                  <input type="text" [(ngModel)]="arasEmail" class="form-control" [placeholder]="t('orders.sessionModal.arasEmailPlaceholder')" />
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">Şifre (İsteğe Bağlı):</label>
+                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.passwordOptionalLabel') }}</label>
                   <input type="password" [(ngModel)]="arasPassword" class="form-control" placeholder="••••••••" />
                 </div>
               </div>
@@ -1107,16 +1108,16 @@
                   style="flex: 1; background: linear-gradient(135deg, #059669, #10b981); border: none;"
                   [disabled]="isCapturingBrowserToken"
                   (click)="triggerArasBrowserCapture(true)">
-                  <span *ngIf="!isCapturingBrowserToken">🌐 Tarayıcıda Giriş Yap &amp; Tokenı Otomatik Yakala</span>
-                  <span *ngIf="isCapturingBrowserToken">⏳ Giriş Bekleniyor &amp; Token Yakalanıyor...</span>
+                  <span *ngIf="!isCapturingBrowserToken">{{ t('orders.sessionModal.arasCaptureBtn') }}</span>
+                  <span *ngIf="isCapturingBrowserToken">{{ t('orders.sessionModal.arasCapturingBtn') }}</span>
                 </button>
                 <button
                   type="button"
                   class="btn-test-session"
                   [disabled]="isCapturingBrowserToken"
                   (click)="triggerArasBrowserCapture(false)"
-                  title="Kayıtlı Refresh Token ile tarayıcı açmadan sessizce yenile">
-                  🔄 Sessiz Yenile
+                  [title]="t('orders.sessionModal.arasSilentRefreshTitle')">
+                  {{ t('orders.sessionModal.silentRefreshBtn') }}
                 </button>
               </div>
 
@@ -1128,20 +1129,20 @@
             <!-- NAVLUNGO AUTOMATIC SESSION REFRESH & TOKEN CAPTURE -->
             <div *ngIf="activeModalCarrier?.id === 'navlungo'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 12px; border-radius: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.28);">
               <div class="guide-title" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                <span>⚡ <strong>Navlungo Tek Tıkla Token Yenileme (Bearer JWT + Cookie)</strong></span>
+                <span>⚡ <strong>{{ t('orders.sessionModal.navlungoTitle') }}</strong></span>
                 <span style="font-size: 0.72rem; color: #60a5fa; font-weight: 600;">{{ getCarrierRemainingValidityText(activeModalCarrier) }}</span>
               </div>
               <p class="guide-text" style="margin-bottom: 10px;">
-                <code>ship.navlungo.com</code> oturumu ilk girişten sonra tarayıcı profilinde saklanır. Token süresi dolduğunda (tipik 1–24 saat) aşağıdaki <strong>Sessiz Yenile</strong> butonuyla yeni <code>Authorization: Bearer</code> JWT ve çerezleri tek tıkla tazeleyebilirsiniz.
+                {{ t('orders.sessionModal.navlungoDesc') }}
               </p>
 
               <div class="form-row-2" style="margin-bottom: 10px;">
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">Navlungo E-posta (İsteğe Bağlı):</label>
-                  <input type="text" [(ngModel)]="navlungoEmail" class="form-control" placeholder="ornek@gmail.com" />
+                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.navlungoEmailLabel') }}</label>
+                  <input type="text" [(ngModel)]="navlungoEmail" class="form-control" [placeholder]="t('orders.sessionModal.navlungoEmailPlaceholder')" />
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">Şifre (İsteğe Bağlı):</label>
+                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.passwordOptionalLabel') }}</label>
                   <input type="password" [(ngModel)]="navlungoPassword" class="form-control" placeholder="••••••••" />
                 </div>
               </div>
@@ -1153,16 +1154,16 @@
                   style="flex: 1; background: linear-gradient(135deg, #2563eb, #3b82f6); border: none;"
                   [disabled]="isCapturingBrowserToken"
                   (click)="triggerNavlungoBrowserCapture(false)">
-                  <span *ngIf="!isCapturingBrowserToken">🔄 Tek Tıkla Sessiz Yenile</span>
-                  <span *ngIf="isCapturingBrowserToken">⏳ Oturum Yenileniyor...</span>
+                  <span *ngIf="!isCapturingBrowserToken">{{ t('orders.sessionModal.navlungoSilentBtn') }}</span>
+                  <span *ngIf="isCapturingBrowserToken">{{ t('orders.sessionModal.navlungoRefreshingBtn') }}</span>
                 </button>
                 <button
                   type="button"
                   class="btn-test-session"
                   [disabled]="isCapturingBrowserToken"
                   (click)="triggerNavlungoBrowserCapture(true)"
-                  title="Navlungo giriş penceresini aç ve reCAPTCHA sonrası otomatik yakala">
-                  🌐 Tarayıcıda Giriş Yap &amp; Yakala
+                  [title]="t('orders.sessionModal.navlungoBrowserTitle')">
+                  {{ t('orders.sessionModal.navlungoBrowserBtn') }}
                 </button>
               </div>
 
@@ -1173,22 +1174,22 @@
 
             <!-- OTHER CARRIERS TOKEN INPUT -->
             <div *ngIf="activeModalCarrier?.id !== 'shipentegra'" class="form-group">
-              <label class="form-label">Bearer Token / Session Cookie / API Key (Otomatik Dolar veya Manuel Yapıştırın):</label>
+              <label class="form-label">{{ t('orders.sessionModal.tokenInputLabel') }}</label>
               <textarea 
                 [(ngModel)]="modalTokenInput" 
                 rows="3" 
-                placeholder="Yukarıdaki 'Tarayıcıda Giriş Yap & Tokenı Otomatik Yakala' butonuna bastığınızda burası otomatik dolar..." 
+                [placeholder]="t('orders.sessionModal.tokenInputPlaceholder')" 
                 class="form-control modal-textarea"></textarea>
-              <span class="form-hint">Masaüstü ve web yetkilendirmesi için kullanılan güvenli JWT Bearer Token.</span>
+              <span class="form-hint">{{ t('orders.sessionModal.tokenInputHint') }}</span>
             </div>
 
             <div class="modal-actions-row">
               <button type="button" class="btn-test-session" [disabled]="isConnectingCarrier" (click)="testCarrierConnection()">
-                <span *ngIf="!isConnectingCarrier">⚡ Bağlantıyı Test Et</span>
-                <span *ngIf="isConnectingCarrier">⏳ Test Ediliyor...</span>
+                <span *ngIf="!isConnectingCarrier">{{ t('orders.sessionModal.testBtn') }}</span>
+                <span *ngIf="isConnectingCarrier">{{ t('orders.sessionModal.testingBtn') }}</span>
               </button>
               <button type="button" class="btn-save-session" [disabled]="isConnectingCarrier" (click)="saveCarrierSession()">
-                💾 Oturumu Kaydet &amp; Bağlan
+                {{ t('orders.sessionModal.saveBtn') }}
               </button>
             </div>
           </div>
@@ -1199,24 +1200,21 @@
       <div class="modal-overlay" *ngIf="isShiptomoreModalOpen" (click)="closeShiptomoreModal()">
         <div class="glass-modal stm-desktop-dialog" (click)="$event.stopPropagation()">
           <div class="stm-dialog-header">
-            <h3 class="stm-dialog-title">Ship to More bağlantısı</h3>
+            <h3 class="stm-dialog-title">{{ t('orders.shiptomore.modalTitle') }}</h3>
             <button class="btn-close-modal" (click)="closeShiptomoreModal()">✕</button>
           </div>
 
           <div class="stm-dialog-body">
             <p class="stm-dialog-help">
-              Gönderi fiyatlarını ve gönderi oluşturmayı Ship to More üzerinden yapmak için bir kez<br/>
-              erişim anahtarı girmen gerekiyor. Anahtarı Ship to More panelinden alabilirsin:<br/>
-              panelde "Bağlantı & Güvenlik" bölümü (veya dev.shiptomore.com).
+              {{ t('orders.shiptomore.helpLine1') }}
             </p>
             <p class="stm-dialog-help sub">
-              Anahtar yalnızca oluşturulduğu anda gösterilir; kaydedilmez. Bu yüzden kopyalayıp<br/>
-              buraya yapıştır — sonrası bizde şifreli saklanır, bir daha sorulmaz.
+              {{ t('orders.shiptomore.helpLine2') }}
             </p>
 
             <div class="stm-open-panel-row">
               <button type="button" class="btn-stm-open-panel" (click)="openShiptomorePortal()">
-                Paneli Aç
+                {{ t('orders.shiptomore.openPortalBtn') }}
               </button>
             </div>
 
@@ -1226,7 +1224,7 @@
                 type="text" 
                 [(ngModel)]="stmClientId" 
                 class="stm-input-text" 
-                placeholder="Client ID girin..." />
+                [placeholder]="t('orders.shiptomore.clientIdPlaceholder')" />
             </div>
 
             <div class="stm-field-group">
@@ -1241,7 +1239,7 @@
                   type="button" 
                   class="btn-toggle-mask" 
                   (click)="isSecretMasked = !isSecretMasked" 
-                  [title]="isSecretMasked ? 'Şifreyi Göster' : 'Şifreyi Gizle'">
+                  [title]="isSecretMasked ? t('orders.shiptomore.showSecretTitle') : t('orders.shiptomore.hideSecretTitle')">
                   {{ isSecretMasked ? '👁️' : '🙈' }}
                 </button>
               </div>
@@ -1249,7 +1247,7 @@
 
             <div class="stm-status-row">
               <span class="stm-status-badge" [ngClass]="stmStatusKind">
-                {{ stmStatusText }}
+                {{ stmStatusText || t('orders.shiptomore.statusUnknown') }}
               </span>
             </div>
 
@@ -1259,29 +1257,29 @@
                 class="btn-stm-action btn-test" 
                 [disabled]="isTestingShiptomore"
                 (click)="testShiptomore()">
-                <span *ngIf="isTestingShiptomore">⏳ Deneniyor...</span>
-                <span *ngIf="!isTestingShiptomore">Bağlantıyı Test Et</span>
+                <span *ngIf="isTestingShiptomore">{{ t('orders.shiptomore.testingBtn') }}</span>
+                <span *ngIf="!isTestingShiptomore">{{ t('orders.shiptomore.testBtn') }}</span>
               </button>
 
               <button 
                 type="button" 
                 class="btn-stm-action btn-save" 
                 (click)="saveShiptomore()">
-                Kaydet
+                {{ t('orders.shiptomore.saveBtn') }}
               </button>
 
               <button 
                 type="button" 
                 class="btn-stm-action btn-forget" 
                 (click)="forgetShiptomore()">
-                Bağlantıyı Kes
+                {{ t('orders.shiptomore.disconnectBtn') }}
               </button>
 
               <button 
                 type="button" 
                 class="btn-stm-action btn-close" 
                 (click)="closeShiptomoreModal()">
-                Kapat
+                {{ t('orders.shiptomore.closeBtn') }}
               </button>
             </div>
           </div>
@@ -1295,8 +1293,8 @@
             <div class="modal-title-with-logo">
               <img src="assets/shipping/aras_global.png" class="modal-carrier-logo" />
               <div>
-                <h3 class="modal-title">Taşıyıcı & Şablon Entegrasyonu</h3>
-                <span class="modal-sub">Masaüstü Yakalanan API Şablonları & Canlı Fiyat Senkronizasyonu</span>
+                <h3 class="modal-title">{{ t('orders.templateModal.title') }}</h3>
+                <span class="modal-sub">{{ t('orders.templateModal.subtitle') }}</span>
               </div>
             </div>
             <button class="btn-close-modal" (click)="closeArasTemplateModal()">✕</button>
@@ -1305,23 +1303,23 @@
           <div class="modal-body">
             <div class="template-instructions">
               <div class="step-num">1</div>
-              <p><strong>Masaüstü Yakalama Deposu:</strong> <code>%APPDATA%\SimilarProductsWinForms\captures\</code> içerisindeki şablonlar (Aras Widect, ShipEntegra, Navlungo, Shiptomore) canlı sözleşmeli hatlarla eşleştirildi.</p>
+              <p><strong>{{ t('orders.templateModal.step1Title') }}</strong> <code>%APPDATA%\SimilarProductsWinForms\captures\</code> {{ t('orders.templateModal.step1After') }}</p>
             </div>
             <div class="template-instructions">
               <div class="step-num">2</div>
-              <p><strong>Dinamik Desi & GTİP Doğrulama:</strong> Paket ölçüleri ve ağırlık adımları otomatik hesaplanarak 14 teklife birebir uygulanmaktadır.</p>
+              <p><strong>{{ t('orders.templateModal.step2Title') }}</strong> {{ t('orders.templateModal.step2Text') }}</p>
             </div>
 
             <div class="template-status-banner">
-              ✓ 4/4 Taşıyıcı oturumu bağlı ve 14/14 teklif canlı API şablonlarıyla doğrulanmış durumda.
+              {{ t('orders.templateModal.statusBanner') }}
             </div>
 
             <div class="modal-actions-row" style="display: flex; gap: 8px; justify-content: flex-end;">
               <button type="button" class="btn-cancel-modal" (click)="syncCapturedTemplates()">
-                🔄 Şablonları Eşitle
+                {{ t('orders.templateModal.syncBtn') }}
               </button>
               <button type="button" class="btn-save-session" (click)="closeArasTemplateModal()">
-                Tamam
+                {{ t('orders.templateModal.okBtn') }}
               </button>
             </div>
           </div>
@@ -1332,39 +1330,39 @@
       <div class="modal-overlay" *ngIf="isLabelPreviewOpen" (click)="closeLabelPreviewModal()">
         <div class="glass-modal label-preview-box" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3 class="modal-title">Termal Kargo Barkod & Etiket Önizleme</h3>
+            <h3 class="modal-title">{{ t('orders.labelModal.title') }}</h3>
             <button class="btn-close-modal" (click)="closeLabelPreviewModal()">✕</button>
           </div>
 
           <div class="modal-body thermal-label-body">
             <div class="thermal-label-canvas">
               <div class="lbl-header">
-                <span class="lbl-carrier-brand">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName : 'Aras Global Kargo' }}</span>
+                <span class="lbl-carrier-brand">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName : t('orders.labelModal.defaultCarrier') }}</span>
                 <span class="lbl-priority">AIR PRIORITY (DDP)</span>
               </div>
 
               <div class="lbl-grid">
                 <div class="lbl-left-meta">
                   <div class="lbl-row">
-                    <b>Etsy Order:</b> {{ selectedOrder?.orderNumber }}
+                    <b>{{ t('orders.labelModal.orderLabel') }}</b> {{ selectedOrder?.orderNumber }}
                   </div>
                   <div class="lbl-row">
-                    <b>Alıcı:</b> {{ selectedOrder?.buyerName }}
+                    <b>{{ t('orders.labelModal.buyerLabel') }}</b> {{ selectedOrder?.buyerName }}
                   </div>
                   <div class="lbl-row address">
-                    <b>Adres:</b> {{ selectedOrder?.addressSnippet }}, {{ selectedOrder?.city }} / {{ selectedOrder?.country }}
+                    <b>{{ t('orders.labelModal.addressLabel') }}</b> {{ selectedOrder?.addressSnippet }}, {{ selectedOrder?.city }} / {{ selectedOrder?.country }}
                   </div>
                   <div class="lbl-row">
-                    <b>GTİP:</b> {{ selectedOrder?.gtipCode || '3926400000' }}
+                    <b>{{ t('orders.labelModal.gtipLabel') }}</b> {{ selectedOrder?.gtipCode || '3926400000' }}
                   </div>
                   <div class="lbl-row">
-                    <b>Ağırlık:</b> {{ selectedOrder?.packageSpecs?.weightKg }} kg (Desi: {{ selectedOrder?.packageSpecs?.desi }})
+                    <b>{{ t('orders.labelModal.weightLabel') }}</b> {{ selectedOrder?.packageSpecs?.weightKg }} kg (Desi: {{ selectedOrder?.packageSpecs?.desi }})
                   </div>
                 </div>
 
                 <div class="lbl-right-badge">
                   <div class="country-big">{{ selectedOrder?.countryCode }}</div>
-                  <div class="export-type">{{ selectedOrder?.exportType || 'Standart' }}</div>
+                  <div class="export-type">{{ selectedOrder?.exportType || t('orders.labelModal.defaultExport') }}</div>
                 </div>
               </div>
 
@@ -1389,10 +1387,10 @@
 
             <div class="modal-actions-row">
               <button type="button" class="btn-print-label" (click)="printLabel()">
-                🖨️ Yazdır (10x15 cm)
+                {{ t('orders.labelModal.printBtn') }}
               </button>
               <button type="button" class="btn-save-session" (click)="closeLabelPreviewModal()">
-                Kapat
+                {{ t('orders.labelModal.closeBtn') }}
               </button>
             </div>
           </div>
@@ -1407,8 +1405,8 @@
             <div class="modal-title-with-logo">
               <span class="modal-icon" style="font-size: 1.5rem;">📍</span>
               <div>
-                <h3 class="modal-title">Alıcı Teslimat Adresini Düzenle</h3>
-                <span class="modal-sub">Etsy Siparişi {{ formatOrderNumber(selectedOrder?.orderNumber) }} Alıcı & Gümrük Bilgileri</span>
+                <h3 class="modal-title">{{ t('orders.addressModal.title') }}</h3>
+                <span class="modal-sub">{{ t('orders.addressModal.subtitle', { orderNumber: formatOrderNumber(selectedOrder?.orderNumber) }) }}</span>
               </div>
             </div>
             <button class="btn-close-modal" (click)="closeAddressModal()">✕</button>
@@ -1419,8 +1417,8 @@
             <div class="ai-address-smart-box">
               <div class="ai-box-header">
                 <div class="ai-title-row">
-                  <span class="ai-sparkle-badge">🤖 ✨ YAPAY ZEKA İLE OTOMATİK DOLDUR</span>
-                  <span class="ai-sub-desc">Etsy sipariş detayından kopyaladığınız adres metnini buraya yapıştırın; tüm kutucukları anında dolduralım.</span>
+                  <span class="ai-sparkle-badge">{{ t('orders.addressModal.aiBadge') }}</span>
+                  <span class="ai-sub-desc">{{ t('orders.addressModal.aiDesc') }}</span>
                 </div>
               </div>
               <div class="ai-box-input-row">
@@ -1428,7 +1426,7 @@
                   [(ngModel)]="rawAddressInput"
                   class="form-control ai-raw-textarea"
                   rows="3"
-                  placeholder="Örn: Barbara Yapana&#10;456 Oak Avenue Apt 4B&#10;Los Angeles, CA 90001, United States&#10;Tel: +1 555-0199"></textarea>
+                  [placeholder]="t('orders.addressModal.aiPlaceholder')"></textarea>
               </div>
               <div class="ai-box-actions-row">
                 <div class="ai-buttons-group">
@@ -1437,30 +1435,30 @@
                     class="btn-ai-parse" 
                     [disabled]="isAiParsing || !rawAddressInput"
                     (click)="parseAddressWithAi()">
-                    <span *ngIf="isAiParsing">⏳ Ayrıştırılıyor...</span>
-                    <span *ngIf="!isAiParsing">✨ Yapay Zeka ile Ayrıştır</span>
+                    <span *ngIf="isAiParsing">{{ t('orders.addressModal.aiParsingBtn') }}</span>
+                    <span *ngIf="!isAiParsing">{{ t('orders.addressModal.aiParseBtn') }}</span>
                   </button>
                   <button 
                     type="button" 
                     class="btn-ai-paste" 
-                    title="Panoda kopyalanan adresi tek tıkla yapıştır ve otomatik ayrıştır"
+                    [title]="t('orders.addressModal.pasteTitle')"
                     (click)="pasteFromClipboard()">
-                    📋 Panodan Yapıştır
+                    {{ t('orders.addressModal.pasteBtn') }}
                   </button>
                   <button 
                     type="button" 
                     class="btn-ai-load-db" 
-                    title="Sipariş için VDS / DB'ye kaydedilen müşteri ve adres metnini yapay zeka kutusuna doldur"
+                    [title]="t('orders.addressModal.loadDbTitle')"
                     (click)="fillRawAddressFromSelectedOrder()">
-                    🔄 DB'den Getir
+                    {{ t('orders.addressModal.loadDbBtn') }}
                   </button>
                   <button 
                     type="button" 
                     class="btn-ai-clear" 
                     [disabled]="!rawAddressInput"
-                    title="Yapay zeka kutusundaki metni temizle"
+                    [title]="t('orders.addressModal.clearTitle')"
                     (click)="clearRawAddressInput()">
-                    🗑️ Temizle
+                    {{ t('orders.addressModal.clearBtn') }}
                   </button>
                 </div>
                 <div class="ai-messages-group" *ngIf="aiParseSuccessMessage || aiParseErrorMessage">
@@ -1472,86 +1470,87 @@
 
             <!-- ETSY PII BILDIRIM ROZETI -->
             <div class="etsy-pii-notice-badge">
-              ℹ️ <strong>Etsy API Güvenlik Kısıtlaması:</strong> Etsy, mağaza API anahtarınız 'Preferred Partner' kategorisinde onaylanana dek alıcı sokak adresini maskelemektedir. Yukarıdaki yapay zeka kutusuna adresi yapıştırarak veya üst menüden Etsy CSV yükleyerek eksiksiz doldurabilirsiniz. Kaydedilen adres kalıcı saklanır.
+              ℹ️ <strong>{{ t('orders.addressModal.piiTitle') }}</strong> {{ t('orders.addressModal.piiText') }}
             </div>
 
             <!-- 2. ADDRESS FORM FIELDS -->
             <div class="form-row-2">
               <div class="form-group">
-                <label class="form-label">Alıcı Adı Soyadı *</label>
-                <input type="text" [(ngModel)]="editAddressModel.buyerName" class="form-control" placeholder="Ad Soyad" />
+                <label class="form-label">{{ t('orders.addressModal.buyerNameLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.buyerName" class="form-control" [placeholder]="t('orders.addressModal.buyerNamePlaceholder')" />
               </div>
               <div class="form-group">
-                <label class="form-label">Telefon Numarası</label>
+                <label class="form-label">{{ t('orders.addressModal.phoneLabel') }}</label>
                 <input type="text" [(ngModel)]="editAddressModel.phone" class="form-control" placeholder="+1 555 123 4567" />
               </div>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
-                <label class="form-label">Alıcı E-posta Adresi <span class="label-optional">(İsteğe bağlı)</span></label>
-                <input type="email" [(ngModel)]="editAddressModel.buyerEmail" class="form-control" placeholder="ornek: alici@email.com (CSV veya metinden)" />
+                <label class="form-label">{{ t('orders.addressModal.emailLabel') }} <span class="label-optional">{{ t('orders.addressModal.optional') }}</span></label>
+                <input type="email" [(ngModel)]="editAddressModel.buyerEmail" class="form-control" [placeholder]="t('orders.addressModal.emailPlaceholder')" />
               </div>
               <div class="form-group">
                 <div class="ioss-label-bar">
-                  <label class="form-label">IOSS / Vergi No <span class="label-optional">(Varsa)</span></label>
+                  <label class="form-label">{{ t('orders.addressModal.iossLabel') }} <span class="label-optional">{{ t('orders.addressModal.ifApplicable') }}</span></label>
                   <div class="ioss-quick-chips">
-                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('IM3720000224')" title="Resmi Etsy AB IOSS Numarasını Doldur: IM3720000224">
-                      🇪🇺 Etsy AB (IM3720000224)
+                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('IM3720000224')" [title]="t('orders.addressModal.etsyEuIossTitle')">
+                      🇪🇺 Etsy EU (IM3720000224)
                     </button>
-                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('370 6004 28')" title="Resmi Etsy Birleşik Krallık VAT Numarasını Doldur">
+                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('370 6004 28')" [title]="t('orders.addressModal.etsyUkVatTitle')">
                       🇬🇧 UK VAT
                     </button>
                   </div>
                 </div>
-                <input type="text" [(ngModel)]="editAddressModel.iossNumber" class="form-control" placeholder="IM3720000224 (AB için) veya boş bırakın" />
+                <input type="text" [(ngModel)]="editAddressModel.iossNumber" class="form-control" [placeholder]="t('orders.addressModal.iossPlaceholder')" />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Adres Satırı 1 (Cadde, Sokak, Kapı No) *</label>
-              <input type="text" [(ngModel)]="editAddressModel.streetAddress" class="form-control" placeholder="Cadde, sokak, mahalle ve bina/kapı numarası" />
+              <label class="form-label">{{ t('orders.addressModal.street1Label') }}</label>
+              <input type="text" [(ngModel)]="editAddressModel.streetAddress" class="form-control" [placeholder]="t('orders.addressModal.street1Placeholder')" />
             </div>
 
             <div class="form-group">
-              <label class="form-label">Adres Satırı 2 (Daire, Kat, Blok - İsteğe bağlı)</label>
-              <input type="text" [(ngModel)]="editAddressModel.secondAddress" class="form-control" placeholder="Daire, kat, blok, suite vb." />
+              <label class="form-label">{{ t('orders.addressModal.street2Label') }}</label>
+              <input type="text" [(ngModel)]="editAddressModel.secondAddress" class="form-control" [placeholder]="t('orders.addressModal.street2Placeholder')" />
             </div>
 
             <div class="form-row-3">
               <div class="form-group">
-                <label class="form-label">Şehir *</label>
-                <input type="text" [(ngModel)]="editAddressModel.city" class="form-control" placeholder="Şehir / İlçe" />
+                <label class="form-label">{{ t('orders.addressModal.cityLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.city" class="form-control" [placeholder]="t('orders.addressModal.cityPlaceholder')" />
               </div>
               <div class="form-group">
-                <label class="form-label">Eyalet / Bölge</label>
-                <input type="text" [(ngModel)]="editAddressModel.state" class="form-control" placeholder="Eyalet kodu (Örn: CA, NY, TX)" />
+                <label class="form-label">{{ t('orders.addressModal.stateLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.state" class="form-control" [placeholder]="t('orders.addressModal.statePlaceholder')" />
               </div>
               <div class="form-group">
-                <label class="form-label">Posta Kodu *</label>
-                <input type="text" [(ngModel)]="editAddressModel.postalCode" class="form-control" placeholder="Posta kodu" />
+                <label class="form-label">{{ t('orders.addressModal.postalCodeLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.postalCode" class="form-control" [placeholder]="t('orders.addressModal.postalCodePlaceholder')" />
               </div>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
-                <label class="form-label">Ülke *</label>
-                <input type="text" [(ngModel)]="editAddressModel.country" class="form-control" placeholder="Ülke adı" />
+                <label class="form-label">{{ t('orders.addressModal.countryLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.country" class="form-control" [placeholder]="t('orders.addressModal.countryPlaceholder')" />
               </div>
               <div class="form-group">
-                <label class="form-label">Ülke Kodu (ISO-2) *</label>
-                <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" placeholder="US, DE, GB vb." maxlength="2" style="text-transform: uppercase;" />
+                <label class="form-label">{{ t('orders.addressModal.countryCodeLabel') }}</label>
+                <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" [placeholder]="t('orders.addressModal.countryCodePlaceholder')" maxlength="2" style="text-transform: uppercase;" />
               </div>
             </div>
           </div>
 
           <!-- FIXED MODAL FOOTER (ALWAYS VISIBLE PINNED ACTIONS) -->
           <div class="modal-footer address-modal-footer">
-            <button type="button" class="btn-cancel-modal" (click)="closeAddressModal()">İptal</button>
-            <button type="button" class="btn-save-session btn-save-address" (click)="saveEditedAddress()">💾 Adresi Kaydet</button>
+            <button type="button" class="btn-cancel-modal" (click)="closeAddressModal()">{{ t('orders.addressModal.cancelBtn') }}</button>
+            <button type="button" class="btn-save-session btn-save-address" (click)="saveEditedAddress()">{{ t('orders.addressModal.saveBtn') }}</button>
           </div>
 
         </div>
       </div>
 
 </div>
+</ng-container>

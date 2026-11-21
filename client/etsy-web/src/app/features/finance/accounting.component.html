@@ -1,14 +1,15 @@
+<ng-container *transloco="let t">
 <div class="accounting-view">
       <!-- 1. TOP HEADER & DESKTOP CONTROLS -->
       <div class="accounting-header">
         <div class="header-left">
           <div class="title-row">
-            <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
+            <h1 class="page-title">{{ t('finance.accounting.title') }}</h1>
             <span class="live-status-pill">
-              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} sipariş<span *ngIf="totalLedgerCount > orders.length"> ({{ totalLedgerCount }} defter kaydı)</span> | {{ startDate }} — {{ endDate }}
+              <span class="live-dot"></span> {{ t('finance.accounting.liveStatusLoaded', { count: orders.length }) }}<span *ngIf="totalLedgerCount > orders.length">{{ t('finance.accounting.liveStatusLedger', { count: totalLedgerCount }) }}</span> | {{ startDate }} — {{ endDate }}
             </span>
           </div>
-          <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>
+          <p class="page-subtitle">{{ t('finance.accounting.subtitle') }}</p>
         </div>
 
         <div class="header-actions">
@@ -34,56 +35,56 @@
       <div class="desktop-action-bar">
         <!-- Date Preset Dropdown -->
         <div class="bar-control-group">
-          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select" aria-label="Tarih Aralığı Filtresi">
-            <option value="last30">Son 30 Gün</option>
-            <option value="last7">Son 7 Gün</option>
-            <option value="thisMonth">Bu Ay</option>
-            <option value="lastMonth">Geçen Ay</option>
-            <option value="all">Tüm Zamanlar</option>
-            <option value="custom">Özel Tarih Aralığı</option>
+          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select" [attr.aria-label]="t('finance.accounting.presetAria')">
+            <option value="last30">{{ t('finance.accounting.presetLast30') }}</option>
+            <option value="last7">{{ t('finance.accounting.presetLast7') }}</option>
+            <option value="thisMonth">{{ t('finance.accounting.presetThisMonth') }}</option>
+            <option value="lastMonth">{{ t('finance.accounting.presetLastMonth') }}</option>
+            <option value="all">{{ t('finance.accounting.presetAll') }}</option>
+            <option value="custom">{{ t('finance.accounting.presetCustom') }}</option>
           </select>
         </div>
 
         <!-- Date Range Pickers -->
         <div class="bar-control-group dates">
-          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Başlangıç Tarihi" placeholder="GG.AA.YYYY" />
+          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" [attr.aria-label]="t('finance.accounting.startDateAria')" [placeholder]="t('finance.accounting.datePlaceholder')" />
           <span class="date-sep">—</span>
-          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Bitiş Tarihi" placeholder="GG.AA.YYYY" />
+          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" [attr.aria-label]="t('finance.accounting.endDateAria')" [placeholder]="t('finance.accounting.datePlaceholder')" />
         </div>
 
         <!-- Action Buttons -->
         <button class="bar-btn refresh" (click)="refreshFromEtsy()" [disabled]="isRefreshing">
-          <span class="btn-icon">🔄</span> {{ isRefreshing ? 'Yenileniyor...' : "Etsy'den Yenile" }}
+          <span class="btn-icon">🔄</span> {{ isRefreshing ? t('finance.accounting.refreshingBtn') : t('finance.accounting.refreshBtn') }}
         </button>
 
         <button class="bar-btn secondary" (click)="openCostManager()">
-          <span class="btn-icon">🏷️</span> Ürün Maliyetleri
+          <span class="btn-icon">🏷️</span> {{ t('finance.accounting.productCostsBtn') }}
         </button>
 
         <button class="bar-btn accent" (click)="openApiSettings()">
-          <span class="btn-icon">⚙️</span> API Ayarları
+          <span class="btn-icon">⚙️</span> {{ t('finance.accounting.apiSettingsBtn') }}
         </button>
 
         <!-- Auto Rate Checkbox -->
         <div class="rate-toggle-group">
           <label class="checkbox-label">
             <input type="checkbox" [(ngModel)]="autoRateEnabled" (change)="onAutoRateToggle()" />
-            <span class="flag-icon">🇹🇷</span> TR Oto Kur:
+            <span class="flag-icon">🇹🇷</span> {{ t('finance.accounting.autoRateLabel') }}
           </label>
           <span class="live-rate-badge">{{ liveRate.toFixed(2) }} ₺</span>
         </div>
 
         <!-- Excel, Telegram, VDS Buttons -->
         <button class="bar-btn excel" (click)="exportExcel()">
-          <span class="btn-icon">📊</span> Excel
+          <span class="btn-icon">📊</span> {{ t('finance.accounting.excelBtn') }}
         </button>
 
         <button class="bar-btn telegram" (click)="sendTelegramReport()">
-          <span class="btn-icon">✈️</span> Telegram'a Gönder
+          <span class="btn-icon">✈️</span> {{ t('finance.accounting.telegramBtn') }}
         </button>
 
         <button class="bar-btn vds" (click)="syncVds()" [disabled]="isSyncingVds">
-          <span class="btn-icon">☁️</span> {{ isSyncingVds ? 'Aktarılıyor...' : "VDS'e Aktar" }}
+          <span class="btn-icon">☁️</span> {{ isSyncingVds ? t('finance.accounting.syncingVdsBtn') : t('finance.accounting.syncVdsBtn') }}
         </button>
       </div>
 
@@ -93,17 +94,17 @@
         <div class="reserve-banner-left">
           <div class="reserve-badge-pill">
             <span class="live-pulse-dot"></span>
-            <strong>Etsy Ödeme Hesabı & Fon Rezervi (VDS Canlı)</strong>
+            <strong>{{ t('finance.accounting.reserveBadgeTitle') }}</strong>
           </div>
           <p class="reserve-sub-text">
-            Etsy Kuralı: Fonlar <strong>{{ reserveSnapshot.reserveHoldDays }} gün</strong> süreyle rezerve tutulur. Sonraki denetim / inceleme: <strong>{{ reserveSnapshot.reevaluationDate || '30 Kasım' }}</strong>
+            {{ t('finance.accounting.reserveRulePrefix') }}<strong>{{ t('finance.accounting.reserveRuleDays', { days: reserveSnapshot.reserveHoldDays }) }}</strong>{{ t('finance.accounting.reserveRuleMid') }}<strong>{{ reserveSnapshot.reevaluationDate || t('finance.accounting.reserveDefaultDate') }}</strong>
           </p>
         </div>
 
         <div class="reserve-metrics-group">
           <!-- Kullanılabilir Bakiye -->
           <div class="reserve-metric-box">
-            <span class="metric-lbl">Kullanılabilir (Deposit):</span>
+            <span class="metric-lbl">{{ t('finance.accounting.reserveAvailable') }}</span>
             <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-emerald' : 'text-danger'">
               {{ formatSignedTry(reserveSnapshot.currentBalanceTry) }}
             </span>
@@ -111,7 +112,7 @@
 
           <!-- Rezervedeki Para -->
           <div class="reserve-metric-box">
-            <span class="metric-lbl">Rezervedeki Fon (%{{ reserveSnapshot.reservePercent }}):</span>
+            <span class="metric-lbl">{{ t('finance.accounting.reserveHeld', { pct: reserveSnapshot.reservePercent }) }}</span>
             <span class="metric-val text-warning">
               ₺{{ formatNumber(reserveSnapshot.pendingBalanceTry) }}
             </span>
@@ -119,7 +120,7 @@
 
           <!-- Toplam Etsy Fonu -->
           <div class="reserve-metric-box">
-            <span class="metric-lbl">Toplam Etsy Hesabı:</span>
+            <span class="metric-lbl">{{ t('finance.accounting.reserveTotal') }}</span>
             <span class="metric-val" [ngClass]="reserveSnapshot.totalFundsTry >= 0 ? 'text-emerald' : 'text-danger'">
               {{ formatSignedTry(reserveSnapshot.totalFundsTry) }}
             </span>
@@ -127,8 +128,8 @@
 
           <!-- Denetim ve Senkron Butonu -->
           <div class="reserve-action-box">
-            <button class="btn-sync-reserve" (click)="openSyncModal()" title="VDS 1-Tık Senkron Yer İmi ve Rezerv Ayarları">
-              <span class="sync-icon">⚡</span> VDS Senkronizasyonu
+            <button class="btn-sync-reserve" (click)="openSyncModal()" [title]="t('finance.accounting.reserveSyncTooltip')">
+              <span class="sync-icon">⚡</span> {{ t('finance.accounting.reserveSyncBtn') }}
             </button>
           </div>
         </div>
@@ -137,131 +138,131 @@
       <!-- 2. NINE FINANCIAL KPI CARDS (Matching FinancialReportForm.cs Image 2) -->
       <div class="kpi-grid-9">
         <!-- 1. Brüt Satış -->
-        <div class="kpi-card gross interactive-kpi" (click)="openSalesAnalysisModal()" title="Satış ve Gelir Analizini Aç (Detay)">
+        <div class="kpi-card gross interactive-kpi" (click)="openSalesAnalysisModal()" [title]="t('finance.accounting.kpiGrossTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">💰 BRÜT SATIŞ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiGrossTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-emerald">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
           <div class="kpi-indicator emerald"></div>
         </div>
 
         <!-- 2. Etsy Kesintisi -->
-        <div class="kpi-card fee interactive-kpi" (click)="openFeesAnalysisModal()" title="Etsy Komisyon & Kesinti Analizini Aç (Detay)">
+        <div class="kpi-card fee interactive-kpi" (click)="openFeesAnalysisModal()" [title]="t('finance.accounting.kpiFeesTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">📋 ETSY KESİNTİSİ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiFeesTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 3. İç Reklam -->
-        <div class="kpi-card inner-ad interactive-kpi" (click)="openInnerAdsModal()" title="Etsy Ads İç Reklam Analizini Aç (Detay)">
+        <div class="kpi-card inner-ad interactive-kpi" (click)="openInnerAdsModal()" [title]="t('finance.accounting.kpiInnerAdsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">📢 İÇ REKLAM</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiInnerAdsTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 4. Dış Reklam -->
-        <div class="kpi-card offsite-ad interactive-kpi" (click)="openOffsiteAdsModal()" title="Offsite Ads Dış Reklam Analizini Aç (Detay)">
+        <div class="kpi-card offsite-ad interactive-kpi" (click)="openOffsiteAdsModal()" [title]="t('finance.accounting.kpiOffsiteAdsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">🌐 DIŞ REKLAM</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiOffsiteAdsTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 5. İadeler -->
-        <div class="kpi-card refunds interactive-kpi" (click)="openRefundsModal()" title="İade ve Geri Ödeme Analizini Aç (Detay)">
+        <div class="kpi-card refunds interactive-kpi" (click)="openRefundsModal()" [title]="t('finance.accounting.kpiRefundsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">↩️ İADELER</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiRefundsTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(refundsTry, refundsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 6. Etsy Net Gelir -->
-        <div class="kpi-card net-income interactive-kpi" (click)="openNetIncomeModal()" title="Etsy Net Gelir & Platform Hakediş Analizini Aç (Detay)">
+        <div class="kpi-card net-income interactive-kpi" (click)="openNetIncomeModal()" [title]="t('finance.accounting.kpiNetIncomeTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">{{ netIncomeTry >= 0 ? '✅ ETSY NET GELİR' : '🔴 ETSY NET GELİR (BORÇ)' }}</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ netIncomeTry >= 0 ? t('finance.accounting.kpiNetIncomeTitle') : t('finance.accounting.kpiNetIncomeDebtTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</div>
           <div class="kpi-indicator" [ngClass]="netIncomeTry >= 0 ? 'indigo' : 'crimson'"></div>
         </div>
 
         <!-- 7. Sipariş Maliyeti -->
-        <div class="kpi-card costs interactive-kpi" (click)="openCostBreakdownModal()" title="Sipariş & Kargo Maliyet Analizini Aç (Detay)">
+        <div class="kpi-card costs interactive-kpi" (click)="openCostBreakdownModal()" [title]="t('finance.accounting.kpiCostsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">📦 SİPARİŞ MALİYETİ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiCostsTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 8. Gerçek Net Kâr -->
-        <div class="kpi-card real-profit highlight interactive-kpi" [class.danger]="realNetProfitTry < 0" (click)="openBalanceAnalysisModal()" title="Gerçek Net Kâr & Bilanço Analizini Aç (Detay)">
+        <div class="kpi-card real-profit highlight interactive-kpi" [class.danger]="realNetProfitTry < 0" (click)="openBalanceAnalysisModal()" [title]="t('finance.accounting.kpiRealProfitTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title" [class.text-danger]="realNetProfitTry < 0">{{ realNetProfitTry >= 0 ? '💵 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title" [class.text-danger]="realNetProfitTry < 0">{{ realNetProfitTry >= 0 ? t('finance.accounting.kpiRealProfitTitle') : t('finance.accounting.kpiRealLossTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value" [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</div>
           <div class="kpi-indicator" [ngClass]="realNetProfitTry >= 0 ? 'emerald' : 'crimson'"></div>
         </div>
 
         <!-- 9. Banka Yatırımı -->
-        <div class="kpi-card payouts interactive-kpi" (click)="openBankPayoutModal()" title="Etsy Banka Yatırımı & Transfer Analizini Aç (Detay)">
+        <div class="kpi-card payouts interactive-kpi" (click)="openBankPayoutModal()" [title]="t('finance.accounting.kpiPayoutsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-title">🏦 BANKA YATIRIMI</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
+            <span class="kpi-title">{{ t('finance.accounting.kpiPayoutsTitle') }}</span>
+            <span class="kpi-zoom-hint">{{ t('finance.accounting.detailHint') }}</span>
           </div>
           <div class="kpi-value text-emerald">{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
           <div class="kpi-indicator emerald"></div>
         </div>
       </div>
 
-      <!-- 3. NAVIGATION TABS (5 Desktop Tabs) -->
+      <!-- 3. NAVIGATION TABS (6 Desktop Tabs) -->
       <div class="tab-nav-bar">
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'charts'" 
           (click)="switchTab('charts')">
-          📊 Grafik Analizleri
+          {{ t('finance.accounting.tabCharts') }}
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'forecast'" 
           (click)="switchTab('forecast')">
-          🤖 AI Kâr & Ciro Tahmini
+          {{ t('finance.accounting.tabForecast') }}
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'period'" 
           (click)="switchTab('period')">
-          📅 Dönemsel Muhasebe
+          {{ t('finance.accounting.tabPeriod') }}
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'orders'" 
           (click)="switchTab('orders')">
-          📦 Siparişler & Net Kâr
+          {{ t('finance.accounting.tabOrders') }}
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'ledger'" 
           (click)="switchTab('ledger')">
-          📋 Ödeme Defteri Kayıtları
+          {{ t('finance.accounting.tabLedger') }}
         </button>
         <button
           class="nav-tab"
@@ -269,7 +270,7 @@
           [attr.aria-selected]="activeTab === 'income-statement'"
           [class.active]="activeTab === 'income-statement'"
           (click)="switchTab('income-statement')">
-          📜 Resmi Gelir Tablosu
+          {{ t('finance.accounting.tabIncomeStatement') }}
         </button>
       </div>
 
@@ -285,43 +286,43 @@
                 type="text" 
                 [(ngModel)]="orderSearchQuery" 
                 (ngModelChange)="filterOrders()"
-                placeholder="🔍 Sipariş No, Müşteri No / Adı veya Ürün Ara..." 
+                [placeholder]="t('finance.accounting.orders.searchPlaceholder')" 
                 class="order-search-input" />
             </div>
 
             <div class="filter-dropdown-wrap">
-              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select" aria-label="Sipariş Durumu Filtresi">
-                <option value="all">📦 Tüm Siparişler</option>
-                <option value="open">🔵 Kargolanacak (Yeni)</option>
-                <option value="completed">🟢 Tamamlanan / Gönderilen</option>
-                <option value="canceled">🔴 İptal / İade Edilenler</option>
-                <option value="hasCost">✅ Maliyeti Girilmiş</option>
-                <option value="missingCost">⚠️ Maliyeti Eksik</option>
-                <option value="hasInvoice">📎 Faturalı Siparişler</option>
+              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select" [attr.aria-label]="t('finance.accounting.orders.filterAria')">
+                <option value="all">{{ t('finance.accounting.orders.filterAll') }}</option>
+                <option value="open">{{ t('finance.accounting.orders.filterOpen') }}</option>
+                <option value="completed">{{ t('finance.accounting.orders.filterCompleted') }}</option>
+                <option value="canceled">{{ t('finance.accounting.orders.filterCanceled') }}</option>
+                <option value="hasCost">{{ t('finance.accounting.orders.filterHasCost') }}</option>
+                <option value="missingCost">{{ t('finance.accounting.orders.filterMissingCost') }}</option>
+                <option value="hasInvoice">{{ t('finance.accounting.orders.filterHasInvoice') }}</option>
               </select>
             </div>
 
-            <button class="btn-clear-filter" (click)="clearOrderFilters()" title="Filtreyi Temizle">
+            <button class="btn-clear-filter" (click)="clearOrderFilters()" [title]="t('finance.accounting.orders.clearFilterTooltip')">
               ✕
             </button>
 
             <button class="btn-profit-info" (click)="openProfitReconciliationModal()">
-              ❓ Kâr Farkı Nedir?
+              {{ t('finance.accounting.orders.profitDiffBtn') }}
             </button>
 
             <!-- Order Summary KPI Text -->
             <div class="orders-summary-label">
-              <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong><ng-container *ngIf="canceledOrderCount > 0"> ({{ canceledOrderCount }} iptal)</ng-container></span>
+              <span>📦 <strong>{{ t('finance.accounting.orders.summaryOrders', { count: filteredOrders.length }) }}</strong><ng-container *ngIf="canceledOrderCount > 0">{{ t('finance.accounting.orders.summaryCanceled', { count: canceledOrderCount }) }}</ng-container></span>
               <span class="sep">|</span>
-              <span>Sipariş Kârı: <strong [ngClass]="totalOrderProfitUsd >= 0 ? 'text-success' : 'text-danger'">{{ totalOrderProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(totalOrderProfitTry))) : ('₺' + formatNumber(totalOrderProfitTry)) }} ({{ totalOrderProfitUsd < 0 ? ('-$' + Math.abs(totalOrderProfitUsd).toFixed(2)) : ('$' + totalOrderProfitUsd.toFixed(2)) }})</strong></span>
+              <span>{{ t('finance.accounting.orders.summaryOrderProfit') }} <strong [ngClass]="totalOrderProfitUsd >= 0 ? 'text-success' : 'text-danger'">{{ totalOrderProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(totalOrderProfitTry))) : ('₺' + formatNumber(totalOrderProfitTry)) }} ({{ totalOrderProfitUsd < 0 ? ('-$' + Math.abs(totalOrderProfitUsd).toFixed(2)) : ('$' + totalOrderProfitUsd.toFixed(2)) }})</strong></span>
               <span class="sep">|</span>
-              <span>🏛️ Mağaza Net: <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
+              <span>{{ t('finance.accounting.orders.summaryShopNet') }} <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
               <span class="sep">|</span>
               <span class="missing-badge" *ngIf="missingCostCount > 0">
-                ⚠️ {{ missingCostCount }} maliyetsiz
+                {{ t('finance.accounting.orders.summaryMissing', { count: missingCostCount }) }}
               </span>
               <span class="text-success" *ngIf="missingCostCount === 0">
-                ✅ Tamamlandı
+                {{ t('finance.accounting.orders.summaryCompleted') }}
               </span>
             </div>
           </div>
@@ -331,63 +332,63 @@
             <table class="glass-table orders-table">
               <thead>
                 <tr>
-                  <th (click)="sortOrders('date')" class="sortable-th" [class.active-sort]="sortColumn === 'date'" title="Tarihe Göre Sırala">
+                  <th (click)="sortOrders('date')" class="sortable-th" [class.active-sort]="sortColumn === 'date'" [title]="t('finance.accounting.orders.sortByDate')">
                     <span class="sort-badge" *ngIf="sortColumn === 'date'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Tarih
+                    {{ t('finance.accounting.orders.colDate') }}
                   </th>
-                  <th (click)="sortOrders('receiptId')" class="sortable-th" [class.active-sort]="sortColumn === 'receiptId'" title="Sipariş No'ya Göre Sırala">
+                  <th (click)="sortOrders('receiptId')" class="sortable-th" [class.active-sort]="sortColumn === 'receiptId'" [title]="t('finance.accounting.orders.sortByReceipt')">
                     <span class="sort-badge" *ngIf="sortColumn === 'receiptId'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Sipariş No
+                    {{ t('finance.accounting.orders.colReceipt') }}
                   </th>
-                  <th (click)="sortOrders('orderStatus')" class="sortable-th" [class.active-sort]="sortColumn === 'orderStatus'" title="Duruma Göre Sırala">
+                  <th (click)="sortOrders('orderStatus')" class="sortable-th" [class.active-sort]="sortColumn === 'orderStatus'" [title]="t('finance.accounting.orders.sortByStatus')">
                     <span class="sort-badge" *ngIf="sortColumn === 'orderStatus'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Durum
+                    {{ t('finance.accounting.orders.colStatus') }}
                   </th>
-                  <th (click)="sortOrders('buyerName')" class="sortable-th" [class.active-sort]="sortColumn === 'buyerName'" title="Müşteri Adına Göre Sırala">
+                  <th (click)="sortOrders('buyerName')" class="sortable-th" [class.active-sort]="sortColumn === 'buyerName'" [title]="t('finance.accounting.orders.sortByBuyer')">
                     <span class="sort-badge" *ngIf="sortColumn === 'buyerName'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Müşteri
+                    {{ t('finance.accounting.orders.colBuyer') }}
                   </th>
-                  <th (click)="sortOrders('productTitle')" class="sortable-th" [class.active-sort]="sortColumn === 'productTitle'" title="Ürün Adına Göre Sırala">
+                  <th (click)="sortOrders('productTitle')" class="sortable-th" [class.active-sort]="sortColumn === 'productTitle'" [title]="t('finance.accounting.orders.sortByProduct')">
                     <span class="sort-badge" *ngIf="sortColumn === 'productTitle'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Ürün
+                    {{ t('finance.accounting.orders.colProduct') }}
                   </th>
-                  <th (click)="sortOrders('quantity')" class="sortable-th" [class.active-sort]="sortColumn === 'quantity'" title="Adede Göre Sırala">
+                  <th (click)="sortOrders('quantity')" class="sortable-th" [class.active-sort]="sortColumn === 'quantity'" [title]="t('finance.accounting.orders.sortByQty')">
                     <span class="sort-badge" *ngIf="sortColumn === 'quantity'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Adet
+                    {{ t('finance.accounting.orders.colQty') }}
                   </th>
-                  <th (click)="sortOrders('grandTotalUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'grandTotalUsd'" title="Müşteri Ödemesine Göre Sırala">
+                  <th (click)="sortOrders('grandTotalUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'grandTotalUsd'" [title]="t('finance.accounting.orders.sortByPayment')">
                     <span class="sort-badge" *ngIf="sortColumn === 'grandTotalUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Müşteri Ödemesi ($)
+                    {{ t('finance.accounting.orders.colPayment') }}
                   </th>
-                  <th (click)="sortOrders('etsyFeesUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'etsyFeesUsd'" title="Etsy Kesintisine Göre Sırala">
+                  <th (click)="sortOrders('etsyFeesUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'etsyFeesUsd'" [title]="t('finance.accounting.orders.sortByFees')">
                     <span class="sort-badge" *ngIf="sortColumn === 'etsyFeesUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Etsy Kesintileri ($)
+                    {{ t('finance.accounting.orders.colFees') }}
                   </th>
-                  <th (click)="sortOrders('offsiteAdFeeUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'offsiteAdFeeUsd'" title="Dış Reklam Maliyetine Göre Sırala">
+                  <th (click)="sortOrders('offsiteAdFeeUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'offsiteAdFeeUsd'" [title]="t('finance.accounting.orders.sortByOffsite')">
                     <span class="sort-badge" *ngIf="sortColumn === 'offsiteAdFeeUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Dış Reklam ($)
+                    {{ t('finance.accounting.orders.colOffsite') }}
                   </th>
-                  <th (click)="sortOrders('productCostUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'productCostUsd'" title="Sipariş Maliyetine Göre Sırala">
+                  <th (click)="sortOrders('productCostUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'productCostUsd'" [title]="t('finance.accounting.orders.sortByCost')">
                     <span class="sort-badge" *ngIf="sortColumn === 'productCostUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Sipariş Maliyeti ($)
+                    {{ t('finance.accounting.orders.colCost') }}
                   </th>
-                  <th (click)="sortOrders('netProfitUsd')" class="sortable-th highlight-th" [class.active-sort]="sortColumn === 'netProfitUsd'" title="Net Kâr Dolarına Göre Sırala">
+                  <th (click)="sortOrders('netProfitUsd')" class="sortable-th highlight-th" [class.active-sort]="sortColumn === 'netProfitUsd'" [title]="t('finance.accounting.orders.sortByNetUsd')">
                     <span class="sort-badge highlight" *ngIf="sortColumn === 'netProfitUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Net Kâr ($)
+                    {{ t('finance.accounting.orders.colNetUsd') }}
                   </th>
-                  <th (click)="sortOrders('exchangeRate')" class="sortable-th" [class.active-sort]="sortColumn === 'exchangeRate'" title="Kilitli Kura Göre Sırala">
+                  <th (click)="sortOrders('exchangeRate')" class="sortable-th" [class.active-sort]="sortColumn === 'exchangeRate'" [title]="t('finance.accounting.orders.sortByRate')">
                     <span class="sort-badge" *ngIf="sortColumn === 'exchangeRate'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Kur (₺)
+                    {{ t('finance.accounting.orders.colRate') }}
                   </th>
-                  <th (click)="sortOrders('netProfitTry')" class="sortable-th" [class.active-sort]="sortColumn === 'netProfitTry'" title="Net Kâr TL'ye Göre Sırala">
+                  <th (click)="sortOrders('netProfitTry')" class="sortable-th" [class.active-sort]="sortColumn === 'netProfitTry'" [title]="t('finance.accounting.orders.sortByNetTry')">
                     <span class="sort-badge" *ngIf="sortColumn === 'netProfitTry'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Net Kâr (₺)
+                    {{ t('finance.accounting.orders.colNetTry') }}
                   </th>
-                  <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" title="Maliyet Giriş Durumuna Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>Maliyet & Düzenle</th>
-                  <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" title="Fatura Durumuna Göre Sırala">
+                  <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" [title]="t('finance.accounting.orders.sortByCostStatus')">
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>{{ t('finance.accounting.orders.colCostStatus') }}</th>
+                  <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" [title]="t('finance.accounting.orders.sortByInvoice')">
                     <span class="sort-badge" *ngIf="sortColumn === 'hasInvoice'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Kargo Faturası
+                    {{ t('finance.accounting.orders.colInvoice') }}
                   </th>
                 </tr>
               </thead>
@@ -411,13 +412,13 @@
                   <td class="fee-cell" [class.text-danger]="o.offsiteAdFeeUsd > 0">{{ o.offsiteAdFeeUsd > 0 ? ('-$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
                   <td class="cost-cell" [class.text-danger]="(o.productCostUsd || 0) > 0">
                     {{ o.productCostUsd !== null && o.productCostUsd > 0 ? ('-$' + o.productCostUsd.toFixed(2)) : (o.productCostUsd === 0 ? '$0.00' : '—') }}
-                    <small *ngIf="o.costNotes === 'cross_period_refund' && (o.productCostUsd || 0) > 0" class="text-muted" style="display:block;font-size:0.68rem;">(Önceki dönem)</small>
+                    <small *ngIf="o.costNotes === 'cross_period_refund' && (o.productCostUsd || 0) > 0" class="text-muted" style="display:block;font-size:0.68rem;">{{ t('finance.accounting.orders.priorPeriodTag') }}</small>
                   </td>
                   <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
                   </td>
-                  <td class="rate-cell" [title]="'TCMB Kilitli Kuru: ₺' + o.exchangeRate.toFixed(2) + (o.effectiveExchangeRate ? ('\nEtsy Fiili Kuru (%2.5 FX Kesintili): ₺' + o.effectiveExchangeRate.toFixed(2)) : '') + (o.etsyNetPayoutTry ? ('\nEtsy Net Hak Ediş: ₺' + formatNumber(o.etsyNetPayoutTry)) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
-                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'" [title]="'Resmi Muhasebe Kârı: ₺' + formatNumber(o.netProfitTry) + (o.effectiveExchangeRate && o.netProfitUsd ? ('\nFiili Kasa Kârı: ₺' + formatNumber(o.netProfitUsd * o.effectiveExchangeRate)) : '')">
+                  <td class="rate-cell" [title]="t('finance.accounting.orders.rateTooltipTcmb', { rate: o.exchangeRate.toFixed(2) }) + (o.effectiveExchangeRate ? t('finance.accounting.orders.rateTooltipEffective', { rate: o.effectiveExchangeRate.toFixed(2) }) : '') + (o.etsyNetPayoutTry ? t('finance.accounting.orders.rateTooltipPayout', { amount: formatNumber(o.etsyNetPayoutTry) }) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
+                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'" [title]="t('finance.accounting.orders.profitTooltipOfficial', { amount: formatNumber(o.netProfitTry) }) + (o.effectiveExchangeRate && o.netProfitUsd ? t('finance.accounting.orders.profitTooltipActual', { amount: formatNumber(o.netProfitUsd * o.effectiveExchangeRate) }) : '')">
                     {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
                   </td>
                   <td class="cost-flag-cell">
@@ -428,13 +429,13 @@
                         [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
                         [class.canceled-pill]="o.orderStatus === 'canceled'"
                         (click)="editOrderCost(o)">
-                        {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
+                        {{ o.orderStatus === 'canceled' ? (o.hasCostData ? t('finance.accounting.orders.statusCanceledCosted') : t('finance.accounting.orders.statusCanceled')) : (o.hasCostData ? t('finance.accounting.orders.statusEntered') : t('finance.accounting.orders.statusMissing')) }}
                       </span>
                       <button 
                         class="btn-edit-cost" 
                         (click)="editOrderCost(o)" 
-                        title="Bu siparişin ürün, kargo ve paketleme maliyetini düzenle">
-                        ✏️ Düzenle
+                        [title]="t('finance.accounting.orders.editCostTooltip')">
+                        {{ t('finance.accounting.orders.editBtn') }}
                       </button>
                     </div>
                   </td>
@@ -443,7 +444,7 @@
                       class="btn-invoice" 
                       [class.has-inv]="o.hasInvoice" 
                       (click)="handleInvoice(o)">
-                      {{ o.hasInvoice ? '📄 Aç' : '📎 Yükle' }}
+                      {{ o.hasInvoice ? t('finance.accounting.orders.openInvoiceBtn') : t('finance.accounting.orders.uploadInvoiceBtn') }}
                     </button>
                   </td>
                 </tr>
@@ -456,65 +457,65 @@
         <div *ngIf="activeTab === 'charts'" class="tab-pane">
           <div class="charts-grid">
             <div class="chart-card">
-              <h3 class="chart-title">📊 Aylık Gelir vs Gider vs Kâr Dağılımı</h3>
+              <h3 class="chart-title">{{ t('finance.accounting.charts.monthlyTitle') }}</h3>
               <div class="chart-bar-container">
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar gross-bar" style="height: 85%;"></div>
                   </div>
-                  <span class="bar-lbl">Brüt Satış<br><strong>₺{{ formatNumber(grossSalesTry) }}</strong></span>
+                  <span class="bar-lbl">{{ t('finance.accounting.charts.barGross') }}<br><strong>₺{{ formatNumber(grossSalesTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar fees-bar" style="height: 25%;"></div>
                   </div>
-                  <span class="bar-lbl">Kesintiler<br><strong>₺{{ formatNumber(etsyFeesTry) }}</strong></span>
+                  <span class="bar-lbl">{{ t('finance.accounting.charts.barFees') }}<br><strong>₺{{ formatNumber(etsyFeesTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar ads-bar" style="height: 12%;"></div>
                   </div>
-                  <span class="bar-lbl">Reklamlar<br><strong>₺{{ formatNumber(totalAdsTry) }}</strong></span>
+                  <span class="bar-lbl">{{ t('finance.accounting.charts.barAds') }}<br><strong>₺{{ formatNumber(totalAdsTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar costs-bar" style="height: 28%;"></div>
                   </div>
-                  <span class="bar-lbl">Maliyetler<br><strong>₺{{ formatNumber(productCostsTry) }}</strong></span>
+                  <span class="bar-lbl">{{ t('finance.accounting.charts.barCosts') }}<br><strong>₺{{ formatNumber(productCostsTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar" [ngClass]="realNetProfitTry >= 0 ? 'profit-bar' : 'danger-bar'" style="height: 48%;"></div>
                   </div>
-                  <span class="bar-lbl">{{ realNetProfitTry >= 0 ? 'Net Kâr' : 'Net Zarar' }}<br><strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
+                  <span class="bar-lbl">{{ realNetProfitTry >= 0 ? t('finance.accounting.charts.barNetProfit') : t('finance.accounting.charts.barNetLoss') }}<br><strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
                 </div>
               </div>
             </div>
 
             <div class="chart-card">
-              <h3 class="chart-title">🥧 Gider Dağılımı ve Maliyet Payları</h3>
+              <h3 class="chart-title">{{ t('finance.accounting.charts.breakdownTitle') }}</h3>
               <div class="expense-breakdown-list">
                 <div class="expense-row">
                   <span class="exp-dot orange"></span>
-                  <span class="exp-name">Ürün & Kargo Maliyetleri</span>
+                  <span class="exp-name">{{ t('finance.accounting.charts.expProductShipping') }}</span>
                   <span class="exp-pct">%{{ expenseCostPct }}</span>
                   <span class="exp-val">₺{{ formatNumber(productCostsTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot yellow"></span>
-                  <span class="exp-name">Etsy Komisyon & İşlem Ücreti</span>
+                  <span class="exp-name">{{ t('finance.accounting.charts.expEtsyFees') }}</span>
                   <span class="exp-pct">%{{ expenseFeesPct }}</span>
                   <span class="exp-val">₺{{ formatNumber(etsyFeesTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot red"></span>
-                  <span class="exp-name">Offsite & Etsy Ads Reklamları</span>
+                  <span class="exp-name">{{ t('finance.accounting.charts.expAds') }}</span>
                   <span class="exp-pct">%{{ expenseAdsPct }}</span>
                   <span class="exp-val">₺{{ formatNumber(totalAdsTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot purple"></span>
-                  <span class="exp-name">Müşteri İadeleri</span>
+                  <span class="exp-name">{{ t('finance.accounting.charts.expRefunds') }}</span>
                   <span class="exp-pct">%{{ expenseRefundsPct }}</span>
                   <span class="exp-val">₺{{ formatNumber(refundsTry) }}</span>
                 </div>
@@ -530,16 +531,16 @@
             <div class="forecast-toolbar-left">
               <span class="ai-engine-badge" [class.ai-live]="fc.usedAi">
                 <span class="ai-pulse-dot"></span>
-                🧠 Aktif AI Motoru: <strong>{{ fc.provider || aiSettings.activeProvider() }} ({{ fc.model || aiSettings.activeModelName() }})</strong>
+                {{ t('finance.accounting.forecast.activeEngine') }} <strong>{{ fc.provider || aiSettings.activeProvider() }} ({{ fc.model || aiSettings.activeModelName() }})</strong>
               </span>
               <span class="forecast-period-pill">
-                📅 Baz Dönem: <strong>{{ fc.periodLabel || (startDate + ' — ' + endDate) }}</strong>
+                {{ t('finance.accounting.forecast.basePeriod') }} <strong>{{ fc.periodLabel || (startDate + ' — ' + endDate) }}</strong>
               </span>
               <span class="forecast-health-pill" [ngClass]="(fc.healthScore || 70) >= 75 ? 'health-good' : ((fc.healthScore || 70) >= 55 ? 'health-warn' : 'health-bad')">
-                🩺 Finansal Sağlık: <strong>{{ fc.healthScore || 75 }}/100 — {{ fc.healthGrade || 'A (Sağlıklı)' }}</strong>
+                {{ t('finance.accounting.forecast.healthLabel') }} <strong>{{ fc.healthScore || 75 }}/100 — {{ fc.healthGrade || t('finance.accounting.forecast.defaultHealthGrade') }}</strong>
               </span>
               <span class="forecast-breakeven-pill">
-                ⚖️ Başabaş (Break-Even): <strong>{{ fc.breakEvenOrdersPerMonth || 1 }} Sipariş / ${{ formatNumber(fc.breakEvenRevenueUsd || 0) }} (₺{{ formatNumber(fc.breakEvenRevenueTry || 0) }})</strong>
+                {{ t('finance.accounting.forecast.breakEvenLabel') }} <strong>{{ t('finance.accounting.forecast.breakEvenVal', { orders: fc.breakEvenOrdersPerMonth || 1, usd: formatNumber(fc.breakEvenRevenueUsd || 0), try: formatNumber(fc.breakEvenRevenueTry || 0) }) }}</strong>
               </span>
             </div>
 
@@ -548,8 +549,8 @@
                 class="btn-ai-analyze" 
                 [disabled]="isAnalyzingForecast"
                 (click)="runAiForecastAnalysis(true)">
-                <span *ngIf="!isAnalyzingForecast">🤖 Yapay Zeka ile Şimdi Analiz Et</span>
-                <span *ngIf="isAnalyzingForecast">⏳ {{ aiSettings.activeProvider() }} Analiz Ediyor...</span>
+                <span *ngIf="!isAnalyzingForecast">{{ t('finance.accounting.forecast.analyzeNowBtn') }}</span>
+                <span *ngIf="isAnalyzingForecast">{{ t('finance.accounting.forecast.analyzingBtn', { provider: aiSettings.activeProvider() }) }}</span>
               </button>
             </div>
           </div>
@@ -557,207 +558,202 @@
           <!-- 2. MULTI-HORIZON SELECTOR & 4 DYNAMIC KPI CARDS (30 / 60 / 90 / 180 GÜN) -->
           <div class="horizon-selector-bar" *ngIf="aiForecast as fc">
             <div class="horizon-bar-left">
-              <span class="horizon-bar-title">🔭 İleri Projeksiyon Ufku Seçimi:</span>
+              <span class="horizon-bar-title">{{ t('finance.accounting.forecast.horizonSelect') }}</span>
               <div class="horizon-btn-group">
-                <button class="horizon-btn" [class.active]="selectedHorizonCode === '30d'" (click)="selectedHorizonCode = '30d'">Gelecek 30 Gün (1 Ay)</button>
-                <button class="horizon-btn" [class.active]="selectedHorizonCode === '60d'" (click)="selectedHorizonCode = '60d'">Gelecek 60 Gün (2 Ay)</button>
-                <button class="horizon-btn" [class.active]="selectedHorizonCode === '90d'" (click)="selectedHorizonCode = '90d'">Gelecek 90 Gün (Çeyrek)</button>
-                <button class="horizon-btn" [class.active]="selectedHorizonCode === '180d'" (click)="selectedHorizonCode = '180d'">Gelecek 180 Gün (6 Ay)</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '30d'" (click)="selectedHorizonCode = '30d'">{{ t('finance.accounting.forecast.horizon30d') }}</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '60d'" (click)="selectedHorizonCode = '60d'">{{ t('finance.accounting.forecast.horizon60d') }}</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '90d'" (click)="selectedHorizonCode = '90d'">{{ t('finance.accounting.forecast.horizon90d') }}</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '180d'" (click)="selectedHorizonCode = '180d'">{{ t('finance.accounting.forecast.horizon180d') }}</button>
               </div>
             </div>
             <div class="horizon-bar-right" *ngIf="activeHorizonItem as hz">
-              <span>🏦 Beklenen Banka Yatırımı: <strong class="text-emerald">₺{{ formatNumber(hz.estimatedBankPayoutTry) }}</strong></span>
+              <span>{{ t('finance.accounting.forecast.expectedBankPayout') }} <strong class="text-emerald">₺{{ formatNumber(hz.estimatedBankPayoutTry) }}</strong></span>
               <span *ngIf="hz.estimatedReserveReleaseTry > 0" class="sep">|</span>
-              <span *ngIf="hz.estimatedReserveReleaseTry > 0">🔓 Çözülecek Rezerv Fonu: <strong class="text-cyan">+₺{{ formatNumber(hz.estimatedReserveReleaseTry) }}</strong></span>
+              <span *ngIf="hz.estimatedReserveReleaseTry > 0">{{ t('finance.accounting.forecast.reserveRelease') }} <strong class="text-cyan">+₺{{ formatNumber(hz.estimatedReserveReleaseTry) }}</strong></span>
             </div>
           </div>
 
           <!-- 4 DYNAMIC FORECAST KPI CARDS (SELECTED HORIZON) -->
           <div class="forecast-grid-4" *ngIf="activeHorizonItem as hz">
             <div class="forecast-card primary">
-              <div class="fc-title">🔮 {{ hz.horizonTitle | uppercase }} BEKLENEN CİRO</div>
+              <div class="fc-title">{{ t('finance.accounting.forecast.kpiExpectedGross', { horizon: (hz.horizonTitle | uppercase) }) }}</div>
               <div class="fc-value" [ngClass]="hz.expectedGrossUsd > 0 ? 'text-emerald' : ''">
                 ${{ formatNumber(hz.expectedGrossUsd) }} / ₺{{ formatNumber(hz.expectedGrossTry) }}
               </div>
               <div class="fc-sub">
-                Tahmini Kesinti & Reklam: <span class="text-danger">-${{ formatNumber(hz.expectedFeesAndAdsUsd) }}</span>
+                {{ t('finance.accounting.forecast.kpiEstFeesAds') }} <span class="text-danger">-${{ formatNumber(hz.expectedFeesAndAdsUsd) }}</span>
               </div>
             </div>
 
             <div class="forecast-card" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'success' : 'danger'">
-              <div class="fc-title">{{ hz.expectedNetProfitUsd >= 0 ? '💵 ' + (hz.horizonTitle | uppercase) + ' GERÇEK NET KÂR' : '🔴 ' + (hz.horizonTitle | uppercase) + ' GERÇEK NET ZARAR' }}</div>
+              <div class="fc-title">{{ hz.expectedNetProfitUsd >= 0 ? t('finance.accounting.forecast.kpiRealNetProfit', { horizon: (hz.horizonTitle | uppercase) }) : t('finance.accounting.forecast.kpiRealNetLoss', { horizon: (hz.horizonTitle | uppercase) }) }}</div>
               <div class="fc-value" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                 {{ formatSignedUsd(hz.expectedNetProfitUsd) }} / {{ formatSignedTry(hz.expectedNetProfitTry) }}
               </div>
               <div class="fc-sub">
-                Beklenen Net Kâr Marjı: <strong [ngClass]="hz.expectedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ hz.expectedMarginPct.toFixed(1) }}</strong> | Maliyet: <span class="text-danger">-${{ formatNumber(hz.expectedCostsUsd) }}</span>
+                {{ t('finance.accounting.forecast.kpiExpectedMargin') }} <strong [ngClass]="hz.expectedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ hz.expectedMarginPct.toFixed(1) }}</strong> | {{ t('finance.accounting.forecast.kpiCostLabel') }} <span class="text-danger">-${{ formatNumber(hz.expectedCostsUsd) }}</span>
               </div>
             </div>
 
             <div class="forecast-card sky">
-              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME İVMESİ</div>
-              <div class="fc-value">{{ hz.estimatedOrders }} Sipariş</div>
+              <div class="fc-title">{{ t('finance.accounting.forecast.kpiEstOrdersTitle') }}</div>
+              <div class="fc-value">{{ t('finance.accounting.forecast.ordersUnit', { count: hz.estimatedOrders }) }}</div>
               <div class="fc-sub">
-                Kümülatif Büyüme: <strong class="text-emerald">+%{{ hz.growthRatePct.toFixed(1) }}</strong> | Ort. Sepet (AOV): ${{ (aiForecast?.averageOrderValueUsd || 0).toFixed(2) }}
+                {{ t('finance.accounting.forecast.cumulativeGrowth') }} <strong class="text-emerald">+%{{ hz.growthRatePct.toFixed(1) }}</strong> | {{ t('finance.accounting.forecast.avgCartAov') }} ${{ (aiForecast?.averageOrderValueUsd || 0).toFixed(2) }}
               </div>
             </div>
 
             <div class="forecast-card warning" *ngIf="aiForecast as fc">
-              <div class="fc-title">🖨️ STOK, HAMMADDE & NAKİT AKIŞI</div>
-              <div class="fc-value">{{ (hz.estimatedOrders * 0.26).toFixed(2) }} kg Filament</div>
+              <div class="fc-title">{{ t('finance.accounting.forecast.kpiStockTitle') }}</div>
+              <div class="fc-value">{{ t('finance.accounting.forecast.filamentUnit', { kg: (hz.estimatedOrders * 0.26).toFixed(2) }) }}</div>
               <div class="fc-sub">
-                {{ hz.estimatedOrders }} Kargo Kutusu
-                <span *ngIf="fc.missingCostOrderCount > 0" class="text-danger"> | ⚠️ {{ fc.missingCostOrderCount }} Eksik Maliyet</span>
-                <span *ngIf="fc.missingCostOrderCount === 0" class="text-emerald"> | ✅ Maliyetler Tam</span>
+                {{ t('finance.accounting.forecast.shippingBoxes', { count: hz.estimatedOrders }) }}
+                <span *ngIf="fc.missingCostOrderCount > 0" class="text-danger">{{ t('finance.accounting.forecast.missingCostBadge', { count: fc.missingCostOrderCount }) }}</span>
+                <span *ngIf="fc.missingCostOrderCount === 0" class="text-emerald">{{ t('finance.accounting.forecast.costsCompleteBadge') }}</span>
               </div>
             </div>
           </div>
 
-          <!-- 2.5. GEÇMİŞ ZİYARET, GÖRÜNTÜLENME, FAVORİ & SEPETE EKLEME DÖNÜŞÜM HUNİSİ (TRAFFIC & ENGAGEMENT FUNNEL) -->
+          <!-- 2.5. TRAFFIC & ENGAGEMENT FUNNEL -->
           <div class="traffic-funnel-panel" *ngIf="aiForecast?.trafficFunnel as tf">
             <div class="funnel-header">
               <div>
-                <h4>🎯 Geçmiş Ziyaret, Görüntülenme, Favori & Sepete Ekleme Dönüşüm Hunisi (CRO Analizi)</h4>
+                <h4>{{ t('finance.accounting.forecast.funnelTitle') }}</h4>
                 <span class="funnel-sub">
-                  Mağazadaki <strong>{{ tf.activeListingCount }} aktif ilanın</strong> geçmiş görüntülenme, tekil ziyaret, favori ve sepete ekleme verilerinin gelecek 30 günlük satış projeksiyonuna etkisi
+                  {{ t('finance.accounting.forecast.funnelSubPrefix') }}<strong>{{ t('finance.accounting.forecast.funnelSubActive', { count: tf.activeListingCount }) }}</strong>{{ t('finance.accounting.forecast.funnelSubSuffix') }}
                 </span>
               </div>
               <div class="funnel-header-badges">
                 <span class="funnel-cr-badge">
-                  ⚡ Genel Mağaza Dönüşüm Oranı (CR): <strong>%{{ tf.overallConversionRatePct.toFixed(2) }}</strong>
+                  {{ t('finance.accounting.forecast.funnelCrLabel') }} <strong>%{{ tf.overallConversionRatePct.toFixed(2) }}</strong>
                 </span>
                 <span class="funnel-bottleneck-badge">
-                  🔍 Ana Huni Darboğazı: <strong>{{ tf.funnelBottleneckStage }}</strong>
+                  {{ t('finance.accounting.forecast.funnelBottleneckLabel') }} <strong>{{ tf.funnelBottleneckStage }}</strong>
                 </span>
               </div>
             </div>
 
             <div class="funnel-steps-grid">
-              <!-- Aşama 1: Görüntülenme (Views) -->
               <div class="funnel-step-card views">
                 <div class="f-step-top">
-                  <span class="f-step-icon">👁️ GÖRÜNTÜLENME (VIEWS)</span>
-                  <span class="f-step-rate">Üst Huni (%100)</span>
+                  <span class="f-step-icon">{{ t('finance.accounting.forecast.funnelViews') }}</span>
+                  <span class="f-step-rate">{{ t('finance.accounting.forecast.funnelTopRate') }}</span>
                 </div>
                 <div class="f-step-val">{{ tf.totalViews | number }}</div>
                 <div class="f-step-proj">
-                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dViews | number }} Görüntülenme</strong>
+                  {{ t('finance.accounting.forecast.funnelNext30d') }} <strong class="text-cyan">{{ t('finance.accounting.forecast.funnelViewsUnit', { count: (tf.projectedNext30dViews | number) }) }}</strong>
                 </div>
               </div>
 
-              <!-- Aşama 2: Tekil Ziyaret (Visits) -->
               <div class="funnel-step-card visits">
                 <div class="f-step-top">
-                  <span class="f-step-icon">🚶 TEKİL ZİYARET (VISITS)</span>
-                  <span class="f-step-rate">%{{ tf.viewToVisitRatePct.toFixed(1) }} Geçiş</span>
+                  <span class="f-step-icon">{{ t('finance.accounting.forecast.funnelVisits') }}</span>
+                  <span class="f-step-rate">{{ t('finance.accounting.forecast.funnelPassRate', { pct: tf.viewToVisitRatePct.toFixed(1) }) }}</span>
                 </div>
                 <div class="f-step-val">{{ tf.estimatedUniqueVisits | number }}</div>
                 <div class="f-step-proj">
-                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dVisits | number }} Ziyaret</strong>
+                  {{ t('finance.accounting.forecast.funnelNext30d') }} <strong class="text-cyan">{{ t('finance.accounting.forecast.funnelVisitsUnit', { count: (tf.projectedNext30dVisits | number) }) }}</strong>
                 </div>
               </div>
 
-              <!-- Aşama 3: Favoriye Ekleme (Favorites) -->
               <div class="funnel-step-card favorites">
                 <div class="f-step-top">
-                  <span class="f-step-icon">❤️ FAVORİLER (FAVORITES)</span>
-                  <span class="f-step-rate">%{{ tf.favoriteToViewRatePct.toFixed(2) }} Fav/Gör.</span>
+                  <span class="f-step-icon">{{ t('finance.accounting.forecast.funnelFavorites') }}</span>
+                  <span class="f-step-rate">{{ t('finance.accounting.forecast.funnelFavRate', { pct: tf.favoriteToViewRatePct.toFixed(2) }) }}</span>
                 </div>
                 <div class="f-step-val text-warning">{{ tf.totalFavorites | number }}</div>
                 <div class="f-step-proj">
-                  Gelecek 30G Tahmini: <strong class="text-warning">+{{ tf.projectedNext30dFavorites | number }} Favori</strong>
+                  {{ t('finance.accounting.forecast.funnelNext30d') }} <strong class="text-warning">{{ t('finance.accounting.forecast.funnelFavsUnit', { count: (tf.projectedNext30dFavorites | number) }) }}</strong>
                 </div>
               </div>
 
-              <!-- Aşama 4: Sepete Ekleme (Add-to-Cart) -->
               <div class="funnel-step-card carts">
                 <div class="f-step-top">
-                  <span class="f-step-icon">🛒 SEPETE EKLEME (CARTS)</span>
-                  <span class="f-step-rate">%{{ tf.addToCartRatePct.toFixed(2) }} Sepet/Ziyaret</span>
+                  <span class="f-step-icon">{{ t('finance.accounting.forecast.funnelCarts') }}</span>
+                  <span class="f-step-rate">{{ t('finance.accounting.forecast.funnelCartRate', { pct: tf.addToCartRatePct.toFixed(2) }) }}</span>
                 </div>
                 <div class="f-step-val text-cyan">{{ tf.estimatedAddToCarts | number }}</div>
                 <div class="f-step-proj">
-                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dCarts | number }} Sepet</strong>
+                  {{ t('finance.accounting.forecast.funnelNext30d') }} <strong class="text-cyan">{{ t('finance.accounting.forecast.funnelCartsUnit', { count: (tf.projectedNext30dCarts | number) }) }}</strong>
                 </div>
               </div>
 
-              <!-- Aşama 5: Tamamlanan Sipariş (Orders) -->
               <div class="funnel-step-card orders">
                 <div class="f-step-top">
-                  <span class="f-step-icon">🛍️ SATIŞA DÖNÜŞEN SİPARİŞ</span>
-                  <span class="f-step-rate text-emerald">%{{ tf.cartToOrderConversionPct.toFixed(1) }} Sepet➔Satış</span>
+                  <span class="f-step-icon">{{ t('finance.accounting.forecast.funnelOrders') }}</span>
+                  <span class="f-step-rate text-emerald">{{ t('finance.accounting.forecast.funnelCartToOrder', { pct: tf.cartToOrderConversionPct.toFixed(1) }) }}</span>
                 </div>
-                <div class="f-step-val text-emerald">{{ tf.realizedOrders }} Sipariş</div>
+                <div class="f-step-val text-emerald">{{ t('finance.accounting.forecast.ordersUnit', { count: tf.realizedOrders }) }}</div>
                 <div class="f-step-proj">
-                  Gelecek 30G Tahmini: <strong class="text-emerald">{{ aiForecast?.estimatedOrders || 0 }} Sipariş</strong>
+                  {{ t('finance.accounting.forecast.funnelNext30d') }} <strong class="text-emerald">{{ t('finance.accounting.forecast.ordersUnit', { count: aiForecast?.estimatedOrders || 0 }) }}</strong>
                 </div>
               </div>
             </div>
 
             <div class="funnel-diagnosis-box" *ngIf="tf.funnelAiDiagnosis">
-              <span class="diag-badge">🧠 AI Dönüşüm Hunisi (CRO) Teşhisi:</span>
+              <span class="diag-badge">{{ t('finance.accounting.forecast.funnelDiagnosisBadge') }}</span>
               <span class="diag-text">{{ tf.funnelAiDiagnosis }}</span>
             </div>
           </div>
 
-          <!-- 2.6. AI KUPON ÇAKIŞMASI KALKANI (C_MAX GUARDRAIL) & FİYAT / ÜCRETSİZ KARGO ELASTİKİYET LABORATUVARI -->
+          <!-- 2.6. AI KUPON ÇAKIŞMASI KALKANI (C_MAX GUARDRAIL) & ELASTİKİYET LABORATUVARI -->
           <div class="cro-elasticity-lab-panel" *ngIf="liveCouponGuardrail as cg">
             <div class="cro-lab-header">
               <div>
-                <h4>🛡️ AI Kupon Çakışması Kalkanı (C_max Guardrail) & Fiyat / Ücretsiz Kargo Elastikiyet Laboratuvarı</h4>
+                <h4>{{ t('finance.accounting.forecast.croTitle') }}</h4>
                 <span class="cro-lab-sub">
-                  Seçili Ürün: <strong class="text-cyan">{{ croSelectedProductTitle }}</strong> — Kupon + %15 Offsite Ads çakışmasını canlı test edin ve Ücretsiz Kargo psikolojisiyle başabaş dönüşüm oranını (Break-Even CVR) karşılaştırın.
+                  {{ t('finance.accounting.forecast.croSelectedProduct') }} <strong class="text-cyan">{{ croSelectedProductTitle }}</strong> — {{ t('finance.accounting.forecast.croSubDesc') }}
                 </span>
               </div>
               <div class="cro-lab-header-actions">
                 <span class="cro-risk-pill" [class.danger]="cg.riskCode !== 'SAFE_GUARDRAIL'" [class.safe]="cg.riskCode === 'SAFE_GUARDRAIL'">
                   {{ cg.riskBadge }}
                 </span>
-                <button class="btn-reset-sim" (click)="resetCroLabSliders()">🔄 #4225379961 Referansına Sıfırla</button>
+                <button class="btn-reset-sim" (click)="resetCroLabSliders()">{{ t('finance.accounting.forecast.croResetBtn') }}</button>
               </div>
             </div>
 
             <!-- C_max Guardrail KPI Strip -->
             <div class="cro-guardrail-strip">
               <div class="cg-kpi-card">
-                <span class="cg-lbl">MÜŞTERİ ÖDEMESİ (VERGİ HARİÇ)</span>
+                <span class="cg-lbl">{{ t('finance.accounting.forecast.croCustomerPaid') }}</span>
                 <div class="cg-val text-cyan">${{ cg.customerPaidAfterCouponUsd.toFixed(2) }}</div>
-                <span class="cg-sub">İndirim: -${{ (cg.itemPriceUsd * cg.activeCouponPct / 100).toFixed(2) }} (%{{ cg.activeCouponPct }}) + ${{ cg.shippingChargedUsd.toFixed(2) }} Kargo</span>
+                <span class="cg-sub">{{ t('finance.accounting.forecast.croDiscountSub', { disc: (cg.itemPriceUsd * cg.activeCouponPct / 100).toFixed(2), pct: cg.activeCouponPct, ship: cg.shippingChargedUsd.toFixed(2) }) }}</span>
               </div>
 
               <div class="cg-kpi-card">
-                <span class="cg-lbl">STANDART SİPARİŞ NET KÂR</span>
+                <span class="cg-lbl">{{ t('finance.accounting.forecast.croStdNetProfit') }}</span>
                 <div class="cg-val" [ngClass]="cg.netProfitStandardUsd >= cg.targetMinProfitUsd ? 'text-emerald' : 'text-warning'">
                   {{ formatSignedUsd(cg.netProfitStandardUsd) }}
                 </div>
-                <span class="cg-sub">Etsy Kesintisi: -${{ cg.etsyFeesUsd.toFixed(2) }} | Hak Ediş: ${{ cg.netPayoutBeforeCostUsd.toFixed(2) }}</span>
+                <span class="cg-sub">{{ t('finance.accounting.forecast.croFeesPayoutSub', { fees: cg.etsyFeesUsd.toFixed(2), payout: cg.netPayoutBeforeCostUsd.toFixed(2) }) }}</span>
               </div>
 
               <div class="cg-kpi-card" [class.trap-alert]="cg.riskCode !== 'SAFE_GUARDRAIL'">
-                <span class="cg-lbl">OFFSITE ADS (%15) ÇAKIŞMALI NET KÂR</span>
+                <span class="cg-lbl">{{ t('finance.accounting.forecast.croOffsiteNetProfit') }}</span>
                 <div class="cg-val" [ngClass]="cg.netProfitWithOffsiteAdsUsd >= 0 ? 'text-warning' : 'text-danger'">
                   {{ formatSignedUsd(cg.netProfitWithOffsiteAdsUsd) }}
                 </div>
-                <span class="cg-sub">Offsite Kesintisi: -${{ cg.offsiteAdFeeIfTriggeredUsd.toFixed(2) }} | Başabaş Kupon: %{{ cg.breakEvenCouponWithOffsiteAdsPct.toFixed(1) }}</span>
+                <span class="cg-sub">{{ t('finance.accounting.forecast.croOffsiteSub', { fee: cg.offsiteAdFeeIfTriggeredUsd.toFixed(2), be: cg.breakEvenCouponWithOffsiteAdsPct.toFixed(1) }) }}</span>
               </div>
 
               <div class="cg-kpi-card highlight">
-                <span class="cg-lbl">MAKSİMUM GÜVENLİ KUPON TAVANI (C_MAX)</span>
+                <span class="cg-lbl">{{ t('finance.accounting.forecast.croMaxSafeCoupon') }}</span>
                 <div class="cg-val text-emerald">
-                  Standart: %{{ cg.maxSafeCouponStandardPct.toFixed(1) }} <small class="text-warning">| Offsite: %{{ cg.maxSafeCouponWithOffsiteAdsPct.toFixed(1) }}</small>
+                  {{ t('finance.accounting.forecast.croStandard') }} %{{ cg.maxSafeCouponStandardPct.toFixed(1) }} <small class="text-warning">{{ t('finance.accounting.forecast.croOffsite') }} %{{ cg.maxSafeCouponWithOffsiteAdsPct.toFixed(1) }}</small>
                 </div>
-                <span class="cg-sub">Min. ${{ cg.targetMinProfitUsd.toFixed(2) }} net kâr koruma eşiği</span>
+                <span class="cg-sub">{{ t('finance.accounting.forecast.croMinProfitSub', { min: cg.targetMinProfitUsd.toFixed(2) }) }}</span>
               </div>
             </div>
 
             <!-- Interactive Sliders + 4-Scenario Matrix -->
             <div class="cro-lab-body-grid">
               <div class="cro-sliders-box">
-                <h5>🎛️ Birim Ekonomi & Kupon Parametreleri</h5>
+                <h5>{{ t('finance.accounting.forecast.croSlidersTitle') }}</h5>
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🏷️ Ürün Liste Fiyatı (P_list)</span>
+                    <span>{{ t('finance.accounting.forecast.croListPrice') }}</span>
                     <strong class="text-cyan">${{ croItemPriceUsd.toFixed(2) }}</strong>
                   </div>
                   <input type="range" min="15" max="150" step="1" [(ngModel)]="croItemPriceUsd" class="sim-range" />
@@ -765,7 +761,7 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🚚 Müşteriden Alınan Kargo Ücreti (S_charge)</span>
+                    <span>{{ t('finance.accounting.forecast.croShippingCharged') }}</span>
                     <strong class="text-cyan">${{ croShippingChargedUsd.toFixed(2) }}</strong>
                   </div>
                   <input type="range" min="0" max="25" step="1" [(ngModel)]="croShippingChargedUsd" class="sim-range" />
@@ -773,15 +769,15 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🎟️ Aktif Mağaza Kupon İndirimi (%)</span>
-                    <strong [ngClass]="croActiveCouponPct > cg.maxSafeCouponWithOffsiteAdsPct ? 'text-danger' : 'text-emerald'">%{{ croActiveCouponPct }} İndirim</strong>
+                    <span>{{ t('finance.accounting.forecast.croActiveCoupon') }}</span>
+                    <strong [ngClass]="croActiveCouponPct > cg.maxSafeCouponWithOffsiteAdsPct ? 'text-danger' : 'text-emerald'">{{ t('finance.accounting.forecast.croDiscountBadge', { pct: croActiveCouponPct }) }}</strong>
                   </div>
                   <input type="range" min="0" max="50" step="5" [(ngModel)]="croActiveCouponPct" class="sim-range" />
                 </div>
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🖨️ 3D Baskı + Navlun + Kutu Maliyeti (COGS)</span>
+                    <span>{{ t('finance.accounting.forecast.croCogs') }}</span>
                     <strong class="text-warning">${{ croUnitTotalCostUsd.toFixed(2) }}</strong>
                   </div>
                   <input type="range" min="4" max="60" step="0.5" [(ngModel)]="croUnitTotalCostUsd" class="sim-range" />
@@ -789,20 +785,20 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🎯 Hedeflenen Minimum Birim Net Kâr</span>
+                    <span>{{ t('finance.accounting.forecast.croTargetMinProfit') }}</span>
                     <strong class="text-emerald">${{ croTargetMinProfitUsd.toFixed(2) }}</strong>
                   </div>
                   <input type="range" min="2" max="35" step="1" [(ngModel)]="croTargetMinProfitUsd" class="sim-range" />
                 </div>
 
                 <div class="cro-guardrail-diag" [class.danger]="cg.riskCode !== 'SAFE_GUARDRAIL'">
-                  <strong>🛡️ C_max Guardrail Teşhisi:</strong> {{ cg.guardrailDiagnosis }}
+                  <strong>{{ t('finance.accounting.forecast.croGuardrailDiagLabel') }}</strong> {{ cg.guardrailDiagnosis }}
                 </div>
               </div>
 
               <!-- 4-Scenario Free Shipping vs Coupon Elasticity Matrix -->
               <div class="cro-scenarios-box">
-                <h5>⚖️ Fiyat Çapası, Kupon ve "Ücretsiz Kargo Psikolojisi" Elastikiyet Matrisi (4 Senaryo)</h5>
+                <h5>{{ t('finance.accounting.forecast.croMatrixTitle') }}</h5>
                 <div class="cro-scenario-cards-grid">
                   <div class="cro-sc-card" *ngFor="let esc of livePriceElasticityScenarios" [class.recommended]="esc.isRecommended">
                     <div class="cro-sc-top">
@@ -810,12 +806,12 @@
                       <span class="cro-sc-badge">{{ esc.badgeText }}</span>
                     </div>
                     <div class="cro-sc-price-row">
-                      <span>Liste: <strong>${{ esc.itemListPriceUsd.toFixed(2) }}</strong> + Kargo: <strong>${{ esc.shippingChargedUsd.toFixed(2) }}</strong> (Kupon: %{{ esc.couponDiscountPct }})</span>
-                      <span class="text-cyan">Müşteri Öder: <strong>${{ esc.customerPaysTotalUsd.toFixed(2) }}</strong></span>
+                      <span>{{ t('finance.accounting.forecast.croListLabel') }} <strong>${{ esc.itemListPriceUsd.toFixed(2) }}</strong> {{ t('finance.accounting.forecast.croShippingLabel') }} <strong>${{ esc.shippingChargedUsd.toFixed(2) }}</strong> {{ t('finance.accounting.forecast.croCouponLabel', { pct: esc.couponDiscountPct }) }}</span>
+                      <span class="text-cyan">{{ t('finance.accounting.forecast.croCustomerPays') }} <strong>${{ esc.customerPaysTotalUsd.toFixed(2) }}</strong></span>
                     </div>
                     <div class="cro-sc-metrics">
                       <div>
-                        <small>Birim Net Kâr ($ / ₺)</small>
+                        <small>{{ t('finance.accounting.forecast.croUnitNetProfit') }}</small>
                         <strong [ngClass]="esc.unitNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                           {{ formatSignedUsd(esc.unitNetProfitUsd) }}
                         </strong>
@@ -824,13 +820,13 @@
                         </small>
                       </div>
                       <div>
-                        <small>Tahmini CR / Başabaş CR</small>
+                        <small>{{ t('finance.accounting.forecast.croEstCrBreakEven') }}</small>
                         <strong class="text-cyan">%{{ esc.estimatedConversionRatePct.toFixed(2) }}</strong>
-                        <small class="text-muted"> (Eşik: %{{ esc.breakEvenConversionRatePct.toFixed(2) }})</small>
+                        <small class="text-muted">{{ t('finance.accounting.forecast.croThreshold', { pct: esc.breakEvenConversionRatePct.toFixed(2) }) }}</small>
                       </div>
                       <div>
-                        <small>30G Beklenen Net Kâr</small>
-                        <strong class="text-emerald">${{ formatNumber(esc.expectedMonthlyNetProfitUsd) }} ({{ esc.estimatedMonthlyOrders }} Sip.)</strong>
+                        <small>{{ t('finance.accounting.forecast.cro30dNetProfit') }}</small>
+                        <strong class="text-emerald">${{ formatNumber(esc.expectedMonthlyNetProfitUsd) }} {{ t('finance.accounting.forecast.croOrdersShort', { count: esc.estimatedMonthlyOrders }) }}</strong>
                       </div>
                     </div>
                     <p class="cro-sc-note">{{ esc.strategyNote }}</p>
@@ -845,8 +841,8 @@
             <div class="cro-ladder-grid">
               <div class="ladder-col">
                 <div class="matrix-card-header">
-                  <h4>🪜 Terk Edilmiş Sepet & Favori 3 Kademeli Teklif Merdiveni (Offer Ladder)</h4>
-                  <span class="matrix-sub">Herkese %30 kupon dağıtmak yerine marjı koruyan kademeli davranışsal tetikleme mimarisi</span>
+                  <h4>{{ t('finance.accounting.forecast.ladderTitle') }}</h4>
+                  <span class="matrix-sub">{{ t('finance.accounting.forecast.ladderSub') }}</span>
                 </div>
                 <div class="ladder-tiers-list">
                   <div class="ladder-tier-item" *ngFor="let tier of liveOfferLadderTiers">
@@ -857,14 +853,14 @@
                         <span class="lt-channel">📡 {{ tier.targetSegment }}</span>
                       </div>
                       <div class="lt-offer">
-                        🎁 <strong>{{ tier.discountSpec }}</strong> — Kod: <code>{{ tier.couponCode }}</code>
-                        <span class="text-emerald"> | Birim Net Kâr: ${{ tier.unitNetProfitAfterOfferUsd.toFixed(2) }} (+%{{ tier.expectedConversionLiftPct }} CR)</span>
+                        🎁 <strong>{{ tier.discountSpec }}</strong> — {{ t('finance.accounting.forecast.ladderCode') }} <code>{{ tier.couponCode }}</code>
+                        <span class="text-emerald">{{ t('finance.accounting.forecast.ladderUnitNet', { net: tier.unitNetProfitAfterOfferUsd.toFixed(2), lift: tier.expectedConversionLiftPct }) }}</span>
                       </div>
                       <p class="lt-copy">"{{ tier.psychologicalPrinciple }}"</p>
                     </div>
                     <div class="lt-right">
                       <button class="btn-apply-ladder" (click)="applyOfferLadderToScheduler(tier)">
-                        ⚡ Otomasyona Bağla
+                        {{ t('finance.accounting.forecast.ladderApplyBtn') }}
                       </button>
                     </div>
                   </div>
@@ -873,8 +869,8 @@
 
               <div class="urgency-col" *ngIf="liveEventUrgencyHooks.length">
                 <div class="matrix-card-header">
-                  <h4>⏳ Cosplay & Özel Gün "Son Baskı / Kargo Kesim" Aciliyet Kancaları</h4>
-                  <span class="matrix-sub">3D baskı üretim süresi + uluslararası kargo (7-12 gün) teslimat garantisi tetikleyicileri</span>
+                  <h4>{{ t('finance.accounting.forecast.urgencyTitle') }}</h4>
+                  <span class="matrix-sub">{{ t('finance.accounting.forecast.urgencySub') }}</span>
                 </div>
                 <div class="urgency-hooks-list">
                   <div class="urgency-hook-card" *ngFor="let hook of liveEventUrgencyHooks">
@@ -882,9 +878,9 @@
                       <strong>🎭 {{ hook.eventTitle }}</strong>
                       <span class="uh-window">📅 {{ hook.eventCode }}</span>
                     </div>
-                    <div class="uh-cutoff text-warning">🎯 Hedef Kitle: {{ hook.targetAudience }}</div>
+                    <div class="uh-cutoff text-warning">{{ t('finance.accounting.forecast.urgencyAudience') }} {{ hook.targetAudience }}</div>
                     <p class="uh-banner">"{{ hook.urgencyHookText }}"</p>
-                    <div class="uh-upsell">💡 <strong>AOV / Aksiyon Önerisi:</strong> {{ hook.recommendedAction }}</div>
+                    <div class="uh-upsell">💡 <strong>{{ t('finance.accounting.forecast.urgencyAction') }}</strong> {{ hook.recommendedAction }}</div>
                   </div>
                 </div>
               </div>
@@ -894,25 +890,25 @@
           <!-- 3. MULTI-HORIZON PROJECTION TABLE (30 / 60 / 90 / 180 DAYS) -->
           <div class="projection-matrix-card" *ngIf="aiForecast?.horizonProjections?.length">
             <div class="matrix-card-header">
-              <h4>📈 Çok Ufuklu İleri Finansal & Trafik Projeksiyon Tablosu (30 — 60 — 90 — 180 Gün)</h4>
-              <span class="matrix-sub">Canlı satış hızı (Run-Rate), görüntülenme/favori/sepet hunisi, 60 gün rezerv çözülmesi ve bileşik büyüme modeli</span>
+              <h4>{{ t('finance.accounting.forecast.projTableTitle') }}</h4>
+              <span class="matrix-sub">{{ t('finance.accounting.forecast.projTableSub') }}</span>
             </div>
             <div class="glass-table-wrapper">
               <table class="glass-table">
                 <thead>
                   <tr>
-                    <th>Projeksiyon Ufku</th>
-                    <th>Tahmini Görüntülenme / Ziyaret</th>
-                    <th>Tahmini Favori / Sepet</th>
-                    <th>Tahmini Sipariş</th>
-                    <th>Beklenen Brüt Ciro ($)</th>
-                    <th>Beklenen Brüt Ciro (₺)</th>
-                    <th>Etsy Kesinti & Reklam ($)</th>
-                    <th>Üretim & Kargo Maliyeti ($)</th>
-                    <th>Beklenen Gerçek Net Kâr ($)</th>
-                    <th>Beklenen Gerçek Net Kâr (₺)</th>
-                    <th>Kâr Marjı</th>
-                    <th>Banka Yatırımı & Rezerv Çözülmesi (₺)</th>
+                    <th>{{ t('finance.accounting.forecast.colHorizon') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colEstViewsVisits') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colEstFavCart') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colEstOrders') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpGrossUsd') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpGrossTry') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpFeesAds') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpCosts') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpNetUsd') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colExpNetTry') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colMargin') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colBankReserve') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -921,14 +917,14 @@
                       (click)="selectedHorizonCode = $any(h.horizonCode)">
                     <td><strong>{{ h.horizonTitle }}</strong></td>
                     <td>
-                      <span class="text-cyan">{{ (h.projectedViews || 0) | number }} Gör.</span>
-                      <small class="text-muted"> / {{ (h.projectedVisits || 0) | number }} Ziy.</small>
+                      <span class="text-cyan">{{ t('finance.accounting.forecast.viewsShort', { count: ((h.projectedViews || 0) | number) }) }}</span>
+                      <small class="text-muted">{{ t('finance.accounting.forecast.visitsShort', { count: ((h.projectedVisits || 0) | number) }) }}</small>
                     </td>
                     <td>
                       <span class="text-warning">❤️ {{ (h.projectedFavorites || 0) | number }}</span>
                       <small class="text-cyan"> | 🛒 {{ (h.projectedAddToCarts || 0) | number }}</small>
                     </td>
-                    <td>{{ h.estimatedOrders }} Adet <span class="text-emerald">(+%{{ h.growthRatePct.toFixed(1) }})</span></td>
+                    <td>{{ t('finance.accounting.forecast.unitsShort', { count: h.estimatedOrders }) }} <span class="text-emerald">(+%{{ h.growthRatePct.toFixed(1) }})</span></td>
                     <td class="text-emerald">${{ formatNumber(h.expectedGrossUsd) }}</td>
                     <td class="text-emerald">₺{{ formatNumber(h.expectedGrossTry) }}</td>
                     <td class="text-danger">-${{ formatNumber(h.expectedFeesAndAdsUsd) }}</td>
@@ -938,7 +934,7 @@
                     <td><span class="margin-pill" [ngClass]="h.expectedMarginPct >= 0 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ h.expectedMarginPct.toFixed(1) }}</span></td>
                     <td class="text-emerald">
                       ₺{{ formatNumber(h.estimatedBankPayoutTry) }}
-                      <span *ngIf="h.estimatedReserveReleaseTry > 0" class="reserve-release-tag">+₺{{ formatNumber(h.estimatedReserveReleaseTry) }} Rezerv</span>
+                      <span *ngIf="h.estimatedReserveReleaseTry > 0" class="reserve-release-tag">{{ t('finance.accounting.forecast.reserveTag', { amount: formatNumber(h.estimatedReserveReleaseTry) }) }}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -955,18 +951,18 @@
               </div>
               <div class="sc-metrics">
                 <div class="sc-metric-item">
-                  <span class="sc-lbl">Beklenen Ciro (30G)</span>
+                  <span class="sc-lbl">{{ t('finance.accounting.forecast.scenarioExpGross30d') }}</span>
                   <span class="sc-val text-emerald">${{ formatNumber(sc.expectedGrossUsd) }} <small>(₺{{ formatNumber(sc.expectedGrossTry) }})</small></span>
                 </div>
                 <div class="sc-metric-item">
-                  <span class="sc-lbl">Beklenen Gerçek Net Kâr</span>
+                  <span class="sc-lbl">{{ t('finance.accounting.forecast.scenarioExpNetProfit') }}</span>
                   <span class="sc-val" [ngClass]="sc.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ formatSignedUsd(sc.expectedNetProfitUsd) }} <small>({{ formatSignedTry(sc.expectedNetProfitTry) }})</small>
                   </span>
                 </div>
                 <div class="sc-metric-item">
-                  <span class="sc-lbl">Sipariş & Net Marj</span>
-                  <span class="sc-val">{{ sc.estimatedOrders }} Sipariş | <strong>%{{ sc.expectedMarginPct.toFixed(1) }} Marj</strong></span>
+                  <span class="sc-lbl">{{ t('finance.accounting.forecast.scenarioOrdersMargin') }}</span>
+                  <span class="sc-val">{{ t('finance.accounting.forecast.ordersUnit', { count: sc.estimatedOrders }) }} | <strong>{{ t('finance.accounting.forecast.scenarioMarginWord', { pct: sc.expectedMarginPct.toFixed(1) }) }}</strong></span>
                 </div>
               </div>
               <p class="sc-desc">{{ sc.keyDriverSummary }}</p>
@@ -977,17 +973,17 @@
           <div class="what-if-simulator-panel" *ngIf="aiForecast as fc">
             <div class="sim-header">
               <div>
-                <h4>🎛️ İnteraktif "What-If" Kâr, Fiyat, Dönüşüm Hunisi, Reklam ve Kur Simülatörü</h4>
-                <p>Fiyat, sipariş hacmi, favori/sepet dönüşüm oranı, reklam bütçesi, maliyet tasarrufu ve USD/TRY kurunu değiştirerek gelecek 30 günlük net kârınıza etkisini canlı test edin.</p>
+                <h4>{{ t('finance.accounting.forecast.whatIfTitle') }}</h4>
+                <p>{{ t('finance.accounting.forecast.whatIfDesc') }}</p>
               </div>
-              <button class="btn-reset-sim" (click)="resetSimulationSliders()">🔄 Varsayılana Sıfırla</button>
+              <button class="btn-reset-sim" (click)="resetSimulationSliders()">{{ t('finance.accounting.forecast.whatIfResetBtn') }}</button>
             </div>
 
             <div class="sim-body-grid">
               <div class="sim-sliders-col">
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🏷️ Ürün Satış Fiyatı Değişimi</span>
+                    <span>{{ t('finance.accounting.forecast.simPriceLabel') }}</span>
                     <strong [ngClass]="simPriceChangePct >= 0 ? 'text-emerald' : 'text-danger'">{{ simPriceChangePct >= 0 ? '+' : '' }}%{{ simPriceChangePct }}</strong>
                   </div>
                   <input type="range" min="-20" max="40" step="1" [(ngModel)]="simPriceChangePct" class="sim-range" />
@@ -995,7 +991,7 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>📦 Aylık Trafik / Ziyaret Hacmi Değişimi</span>
+                    <span>{{ t('finance.accounting.forecast.simVolumeLabel') }}</span>
                     <strong [ngClass]="simVolumeChangePct >= 0 ? 'text-emerald' : 'text-danger'">{{ simVolumeChangePct >= 0 ? '+' : '' }}%{{ simVolumeChangePct }}</strong>
                   </div>
                   <input type="range" min="-30" max="100" step="5" [(ngModel)]="simVolumeChangePct" class="sim-range" />
@@ -1003,7 +999,7 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🛒 Favori & Sepet ➔ Sipariş Dönüşüm Artışı (CRO)</span>
+                    <span>{{ t('finance.accounting.forecast.simConvLabel') }}</span>
                     <strong [ngClass]="simConversionBoostPct >= 0 ? 'text-emerald' : 'text-danger'">{{ simConversionBoostPct >= 0 ? '+' : '' }}%{{ simConversionBoostPct }}</strong>
                   </div>
                   <input type="range" min="-20" max="50" step="2" [(ngModel)]="simConversionBoostPct" class="sim-range" />
@@ -1011,7 +1007,7 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>📣 Reklam Bütçesi (Etsy Ads) Değişimi</span>
+                    <span>{{ t('finance.accounting.forecast.simAdBudgetLabel') }}</span>
                     <strong [ngClass]="simAdBudgetChangePct <= 0 ? 'text-emerald' : 'text-warning'">{{ simAdBudgetChangePct >= 0 ? '+' : '' }}%{{ simAdBudgetChangePct }}</strong>
                   </div>
                   <input type="range" min="-50" max="100" step="5" [(ngModel)]="simAdBudgetChangePct" class="sim-range" />
@@ -1019,15 +1015,15 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>🚚 Kargo & Filament Maliyet Tasarrufu</span>
-                    <strong class="text-emerald">+%{{ simCostSavingPct }} Tasarruf</strong>
+                    <span>{{ t('finance.accounting.forecast.simCostSavingLabel') }}</span>
+                    <strong class="text-emerald">{{ t('finance.accounting.forecast.simSavingBadge', { pct: simCostSavingPct }) }}</strong>
                   </div>
                   <input type="range" min="0" max="35" step="1" [(ngModel)]="simCostSavingPct" class="sim-range" />
                 </div>
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>💱 Hedef USD / TRY Döviz Kuru</span>
+                    <span>{{ t('finance.accounting.forecast.simFxLabel') }}</span>
                     <strong class="text-cyan">1$ = ₺{{ simTargetRateTry.toFixed(2) }}</strong>
                   </div>
                   <input type="range" min="45" max="65" step="0.25" [(ngModel)]="simTargetRateTry" class="sim-range" />
@@ -1036,27 +1032,27 @@
 
               <div class="sim-results-col">
                 <div class="sim-result-box">
-                  <span class="sim-res-lbl">SİMÜLE EDİLEN AYLIK CİRO</span>
+                  <span class="sim-res-lbl">{{ t('finance.accounting.forecast.simResGross') }}</span>
                   <div class="sim-res-val text-emerald">${{ formatNumber(simulatedGrossUsd) }} / ₺{{ formatNumber(simulatedGrossTry) }}</div>
-                  <span class="sim-res-sub">Tahmini {{ simulatedOrdersCount }} Sipariş (Baz: {{ fc.estimatedOrders }} Sipariş)</span>
+                  <span class="sim-res-sub">{{ t('finance.accounting.forecast.simResOrders', { sim: simulatedOrdersCount, base: fc.estimatedOrders }) }}</span>
                 </div>
 
                 <div class="sim-result-box highlight">
-                  <span class="sim-res-lbl">SİMÜLE EDİLEN GERÇEK NET KÂR</span>
+                  <span class="sim-res-lbl">{{ t('finance.accounting.forecast.simResNetProfit') }}</span>
                   <div class="sim-res-val" [ngClass]="simulatedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ formatSignedUsd(simulatedNetProfitUsd) }} / {{ formatSignedTry(simulatedNetProfitTry) }}
                   </div>
                   <span class="sim-res-sub">
-                    Simüle Net Marj: <strong [ngClass]="simulatedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ simulatedMarginPct.toFixed(1) }}</strong>
+                    {{ t('finance.accounting.forecast.simResMargin') }} <strong [ngClass]="simulatedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ simulatedMarginPct.toFixed(1) }}</strong>
                   </span>
                 </div>
 
                 <div class="sim-result-box delta">
-                  <span class="sim-res-lbl">BAZ SENARYOYA GÖRE NET KÂR FARKI (ETKİ)</span>
+                  <span class="sim-res-lbl">{{ t('finance.accounting.forecast.simResDelta') }}</span>
                   <div class="sim-res-val" [ngClass]="simulatedProfitDeltaTry >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ simulatedProfitDeltaUsd >= 0 ? '+' : '' }}{{ formatSignedUsd(simulatedProfitDeltaUsd) }} ({{ simulatedProfitDeltaTry >= 0 ? '+' : '' }}{{ formatSignedTry(simulatedProfitDeltaTry) }})
                   </div>
-                  <span class="sim-res-sub">Parametre değişimlerinin kasaya doğrudan aylık net etkisi</span>
+                  <span class="sim-res-sub">{{ t('finance.accounting.forecast.simResDeltaSub') }}</span>
                 </div>
               </div>
             </div>
@@ -1065,34 +1061,34 @@
           <!-- 6. SKU / PRODUCT-LEVEL FORECAST TABLE -->
           <div class="projection-matrix-card" *ngIf="aiForecast?.productForecasts?.length">
             <div class="matrix-card-header">
-              <h4>🏆 Ürün / SKU Bazlı Görüntülenme, Favori, Sepet ve 30 Gün Satış Projeksiyonu</h4>
-              <span class="matrix-sub">Gerçek sipariş ve ilan etkileşim (görüntülenme, ziyaret, favori, sepete ekleme) verilerinden ürün bazlı büyüme ve AI strateji önerisi</span>
+              <h4>{{ t('finance.accounting.forecast.skuTableTitle') }}</h4>
+              <span class="matrix-sub">{{ t('finance.accounting.forecast.skuTableSub') }}</span>
             </div>
             <div class="glass-table-wrapper">
               <table class="glass-table">
                 <thead>
                   <tr>
-                    <th>Ürün Adı (Gerçek Mağaza İlanı)</th>
-                    <th>Görüntülenme / Ziyaret</th>
-                    <th>Favori & Sepet</th>
-                    <th>Niyet Skoru (0-100)</th>
-                    <th>Dönüşüm (CR)</th>
-                    <th>Güvenli Kupon (C_max)</th>
-                    <th>Mevcut Sipariş / Ciro</th>
-                    <th>Mevcut Net Kâr ($)</th>
-                    <th>Gelecek 30G Tahmini</th>
-                    <th>Huni Darboğazı & Teklif Merdiveni</th>
-                    <th>AI Strateji Sınıfı</th>
-                    <th>AI Ürün & Dönüşüm Aksiyon Önerisi</th>
-                    <th>CRO Lab</th>
+                    <th>{{ t('finance.accounting.forecast.colSkuName') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colViewsVisits') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colFavCart') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colIntentScore') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colCr') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colSafeCoupon') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colCurrOrdersRev') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colCurrNetProfit') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colNext30dEst') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colLeakLadder') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colAiStrategy') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colAiAction') }}</th>
+                    <th>{{ t('finance.accounting.forecast.colCroLab') }}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let pf of aiForecast?.productForecasts">
                     <td class="product-cell" [title]="pf.productTitle"><strong>{{ pf.productTitle }}</strong></td>
                     <td>
-                      <span class="text-cyan">{{ (pf.views || 0) | number }} Gör.</span>
-                      <small class="text-muted"> / {{ (pf.visits || 0) | number }} Ziy.</small>
+                      <span class="text-cyan">{{ t('finance.accounting.forecast.viewsShort', { count: ((pf.views || 0) | number) }) }}</span>
+                      <small class="text-muted">{{ t('finance.accounting.forecast.visitsShort', { count: ((pf.visits || 0) | number) }) }}</small>
                     </td>
                     <td>
                       <span class="text-warning">❤️ {{ (pf.favorites || 0) | number }}</span>
@@ -1113,25 +1109,25 @@
                       <small class="text-warning"> (Offsite: %{{ (pf.maxSafeCouponWithOffsiteAdsPct ?? 14).toFixed(0) }})</small>
                     </td>
                     <td>
-                      {{ pf.currentOrders }} Adet | <span class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</span>
+                      {{ t('finance.accounting.forecast.unitsShort', { count: pf.currentOrders }) }} | <span class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</span>
                     </td>
                     <td [ngClass]="pf.currentProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                       {{ formatSignedUsd(pf.currentProfitUsd) }} <small>(%{{ pf.currentMarginPct.toFixed(1) }})</small>
                     </td>
                     <td>
-                      <strong>{{ pf.projectedNext30dOrders }} Adet</strong> |
+                      <strong>{{ t('finance.accounting.forecast.unitsShort', { count: pf.projectedNext30dOrders }) }}</strong> |
                       <span class="text-emerald">${{ formatNumber(pf.projectedNext30dRevenueUsd) }}</span>
                       <small [ngClass]="pf.projectedNext30dProfitUsd >= 0 ? 'text-emerald' : 'text-danger'"> ({{ formatSignedUsd(pf.projectedNext30dProfitUsd) }})</small>
                     </td>
                     <td class="ai-rec-cell">
-                      <div><strong>{{ pf.funnelLeakStage || '✅ Dengeli Huni Akışı' }}</strong></div>
-                      <small class="text-cyan">{{ pf.offerLadderSummary || 'Fav: %8 → Sepet: %15 → VIP: Ücretsiz Kargo' }}</small>
+                      <div><strong>{{ pf.funnelLeakStage || t('finance.accounting.forecast.defaultLeakBalanced') }}</strong></div>
+                      <small class="text-cyan">{{ pf.offerLadderSummary || t('finance.accounting.forecast.defaultLadderSummary') }}</small>
                     </td>
                     <td><span class="ai-strategy-pill">{{ pf.aiStrategyTag }}</span></td>
                     <td class="ai-rec-cell">{{ pf.aiRecommendation }}</td>
                     <td>
-                      <button class="btn-apply-ladder" (click)="selectProductForCroLab(pf)" title="Bu ürünü CRO & Kupon Simülatörüne yükle">
-                        🎛️ Simüle Et
+                      <button class="btn-apply-ladder" (click)="selectProductForCroLab(pf)" [title]="t('finance.accounting.forecast.simulateTooltip')">
+                        {{ t('finance.accounting.forecast.simulateBtn') }}
                       </button>
                     </td>
                   </tr>
@@ -1145,37 +1141,37 @@
             <div class="ai-cfo-header">
               <div class="ai-cfo-title-row">
                 <span class="sparkle">✨</span>
-                <h4>{{ fc.provider }} ({{ fc.model }}) AI CFO — Derinlemesine Mağaza Büyüme ve Kârlılık Raporu</h4>
+                <h4>{{ t('finance.accounting.forecast.cfoReportTitle', { provider: fc.provider, model: fc.model }) }}</h4>
               </div>
               <span class="ai-source-tag" [class.live]="fc.usedAi">
-                {{ fc.usedAi ? '🟢 Canlı LLM CFO Analizi' : '🔵 Canlı VDS Finans Motoru Analizi' }}
+                {{ fc.usedAi ? t('finance.accounting.forecast.cfoLiveLlm') : t('finance.accounting.forecast.cfoLiveVds') }}
               </span>
             </div>
 
             <div class="ai-cfo-grid">
               <div class="ai-cfo-section">
-                <div class="ai-sec-title">📊 Yönetici Özeti ve Nakit Akışı Projeksiyonu</div>
+                <div class="ai-sec-title">{{ t('finance.accounting.forecast.cfoExecSummary') }}</div>
                 <p>{{ fc.executiveSummary }}</p>
               </div>
 
               <div class="ai-cfo-section">
-                <div class="ai-sec-title">🏆 Ürün Kârlılığı ve Dönüşüm Analizi</div>
+                <div class="ai-sec-title">{{ t('finance.accounting.forecast.cfoProdProfit') }}</div>
                 <p>{{ fc.productProfitabilityAnalysis }}</p>
               </div>
 
               <div class="ai-cfo-section">
-                <div class="ai-sec-title">📣 Reklam Harcamaları (Etsy Ads & Offsite Ads) ve ROAS</div>
+                <div class="ai-sec-title">{{ t('finance.accounting.forecast.cfoAdsRoas') }}</div>
                 <p>{{ fc.adSpendAndRoasAnalysis }}</p>
               </div>
 
               <div class="ai-cfo-section">
-                <div class="ai-sec-title">🛡️ İade Riski ve Operasyonel Maliyet Denetimi</div>
+                <div class="ai-sec-title">{{ t('finance.accounting.forecast.cfoRefundCost') }}</div>
                 <p>{{ fc.refundAndCostAlertAnalysis }}</p>
               </div>
             </div>
 
             <div class="ai-action-box" *ngIf="fc.actionPlan && fc.actionPlan.length > 0">
-              <div class="ai-action-header">🚀 Gelecek 30-90 Gün İçin AI CFO Stratejik Eylem Planı</div>
+              <div class="ai-action-header">{{ t('finance.accounting.forecast.cfoActionPlan') }}</div>
               <ul class="ai-action-list">
                 <li *ngFor="let item of fc.actionPlan; let i = index">
                   <span class="action-idx">{{ i + 1 }}</span>
@@ -1192,21 +1188,21 @@
             <table class="glass-table">
               <thead>
                 <tr>
-                  <th>Dönem (Ay / Yıl)</th>
-                  <th>Sipariş</th>
-                  <th>Brüt Satış</th>
-                  <th>Etsy Kesintisi</th>
-                  <th>Dış Reklam</th>
-                  <th>Sipariş Maliyeti</th>
-                  <th>Banka Yatırımı</th>
-                  <th>Gerçek Net Kâr</th>
-                  <th>Kâr Marjı</th>
+                  <th>{{ t('finance.accounting.period.colPeriod') }}</th>
+                  <th>{{ t('finance.accounting.period.colOrders') }}</th>
+                  <th>{{ t('finance.accounting.period.colGross') }}</th>
+                  <th>{{ t('finance.accounting.period.colFees') }}</th>
+                  <th>{{ t('finance.accounting.period.colAds') }}</th>
+                  <th>{{ t('finance.accounting.period.colCosts') }}</th>
+                  <th>{{ t('finance.accounting.period.colPayouts') }}</th>
+                  <th>{{ t('finance.accounting.period.colNetProfit') }}</th>
+                  <th>{{ t('finance.accounting.period.colMargin') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let p of periodSummaries">
                   <td><strong>{{ p.periodLabel }}</strong></td>
-                  <td>{{ p.orderCount }} Adet</td>
+                  <td>{{ t('finance.accounting.period.unitsShort', { count: p.orderCount }) }}</td>
                   <td class="text-emerald">₺{{ formatNumber(p.grossTry) }}</td>
                   <td class="text-danger">{{ p.feesTry > 0 ? '-₺' + formatNumber(p.feesTry) : '₺0,00' }}</td>
                   <td class="text-danger">{{ p.adsTry > 0 ? '-₺' + formatNumber(p.adsTry) : '₺0,00' }}</td>
@@ -1226,16 +1222,16 @@
             <table class="glass-table">
               <thead>
                 <tr>
-                  <th>İşlem ID</th>
-                  <th>Tarih</th>
-                  <th>Tür</th>
-                  <th>Açıklama</th>
-                  <th>Sipariş No</th>
-                  <th>Brüt Tutar</th>
-                  <th>Kesinti</th>
-                  <th>Net Tutar ($)</th>
-                  <th>Net Tutar (₺)</th>
-                  <th>Bakiye ($)</th>
+                  <th>{{ t('finance.accounting.ledger.colTxId') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colDate') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colType') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colDesc') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colOrderNo') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colGross') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colFee') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colNetUsd') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colNetTry') }}</th>
+                  <th>{{ t('finance.accounting.ledger.colBalance') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1283,35 +1279,35 @@
            [style.left.px]="contextMenuX" 
            (click)="$event.stopPropagation()">
         <div class="ctx-item" (click)="generateInvoicePdf()">
-          <span class="ctx-icon">⚡</span> Otomatik Fatura / Konşimento Oluştur (PDF)
+          <span class="ctx-icon">⚡</span> {{ t('finance.accounting.contextMenu.generatePdf') }}
         </div>
         <div class="ctx-item" (click)="openInvoicePdf()">
-          <span class="ctx-icon">📄</span> Faturayı / PDF'i Aç
+          <span class="ctx-icon">📄</span> {{ t('finance.accounting.contextMenu.openPdf') }}
         </div>
         <div class="ctx-item" (click)="uploadInvoicePdf()">
-          <span class="ctx-icon">📎</span> Kargo Faturası Yükle...
+          <span class="ctx-icon">📎</span> {{ t('finance.accounting.contextMenu.uploadInvoice') }}
         </div>
         <div class="ctx-item" (click)="viewOrderDetails()">
-          <span class="ctx-icon">📊</span> Sipariş Detaylarını Gör
+          <span class="ctx-icon">📊</span> {{ t('finance.accounting.contextMenu.viewDetails') }}
         </div>
         <div class="ctx-item highlight" (click)="editCostFromContext()">
-          <span class="ctx-icon">🏷️</span> Maliyet / Fatura Düzenle
+          <span class="ctx-icon">🏷️</span> {{ t('finance.accounting.contextMenu.editCost') }}
         </div>
         <div class="ctx-divider"></div>
         <div class="ctx-item" (click)="openEtsyOrder()">
-          <span class="ctx-icon">🌐</span> Etsy'de Siparişi Aç
+          <span class="ctx-icon">🌐</span> {{ t('finance.accounting.contextMenu.openEtsy') }}
         </div>
         <div class="ctx-item" (click)="copyOrderNumber()">
-          <span class="ctx-icon">📋</span> Sipariş No Kopyala
+          <span class="ctx-icon">📋</span> {{ t('finance.accounting.contextMenu.copyOrderNo') }}
         </div>
         <div class="ctx-item" (click)="copyCustomerInfo()">
-          <span class="ctx-icon">👤</span> Müşteri Bilgisini Kopyala
+          <span class="ctx-icon">👤</span> {{ t('finance.accounting.contextMenu.copyCustomer') }}
         </div>
         <div class="ctx-item" (click)="copySelectedCell()">
-          <span class="ctx-icon">📝</span> Seçili Hücreyi Kopyala
+          <span class="ctx-icon">📝</span> {{ t('finance.accounting.contextMenu.copyCell') }}
         </div>
         <div class="ctx-item" (click)="copyWholeRow()">
-          <span class="ctx-icon">📄</span> Tüm Satırı Kopyala
+          <span class="ctx-icon">📄</span> {{ t('finance.accounting.contextMenu.copyRow') }}
         </div>
       </div>
 
@@ -1319,35 +1315,35 @@
       <div class="modal-backdrop" *ngIf="showReconciliationModal" (click)="closeModals()">
         <div class="modal-card reconciliation-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>📊 KÂR MUTABAKATI & FARK ANALİZİ</h3>
+            <h3>{{ t('finance.accounting.modals.reconciliation.title') }}</h3>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="rec-section">
-              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺{{ formatNumber(totalOrderProfitTry) }} (${{ formatNumber(totalOrderProfitUsd) }})</span></h4>
-              <p>• Tek tek {{ orders.length }} adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
-              <p>• Henüz mağaza geneline ait olan reklamlar ve genel giderler bundan düşülmemiştir.</p>
+              <h4>{{ t('finance.accounting.modals.reconciliation.sec1Title') }} <span class="text-success">₺{{ formatNumber(totalOrderProfitTry) }} (${{ formatNumber(totalOrderProfitUsd) }})</span></h4>
+              <p>{{ t('finance.accounting.modals.reconciliation.sec1Line1', { count: orders.length }) }}</p>
+              <p>{{ t('finance.accounting.modals.reconciliation.sec1Line2') }}</p>
             </div>
 
             <div class="rec-section">
-              <h4>2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):</h4>
+              <h4>{{ t('finance.accounting.modals.reconciliation.sec2Title') }}</h4>
               <ul>
-                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺{{ formatNumber(innerAdsTry) }} (-${{ formatNumber(innerAdsUsd) }})</span></li>
-                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺{{ formatNumber(offsiteAdsTry) }} (-${{ formatNumber(offsiteAdsUsd) }})</span></li>
-                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺{{ formatNumber(refundsTry) }} (-${{ formatNumber(refundsUsd) }})</span></li>
-                <li *ngIf="missingCostCount > 0">⚠️ <strong>{{ missingCostCount }} siparişin</strong> maliyeti henüz girilmemiştir.</li>
+                <li>📢 <strong>{{ t('finance.accounting.modals.reconciliation.sec2InnerAds') }}</strong> <span class="text-danger">-₺{{ formatNumber(innerAdsTry) }} (-${{ formatNumber(innerAdsUsd) }})</span></li>
+                <li>🌐 <strong>{{ t('finance.accounting.modals.reconciliation.sec2OffsiteAds') }}</strong> <span class="text-orange">-₺{{ formatNumber(offsiteAdsTry) }} (-${{ formatNumber(offsiteAdsUsd) }})</span></li>
+                <li>↩️ <strong>{{ t('finance.accounting.modals.reconciliation.sec2Refunds') }}</strong> <span class="text-danger">-₺{{ formatNumber(refundsTry) }} (-${{ formatNumber(refundsUsd) }})</span></li>
+                <li *ngIf="missingCostCount > 0">⚠️ <strong>{{ t('finance.accounting.modals.reconciliation.sec2MissingPrefix', { count: missingCostCount }) }}</strong>{{ t('finance.accounting.modals.reconciliation.sec2MissingSuffix') }}</li>
               </ul>
             </div>
 
             <div class="rec-divider"></div>
 
             <div class="rec-final">
-              <h4>🏛️ Üst Karttaki {{ realNetProfitTry >= 0 ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR' }}: <span [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }} ({{ formatSignedUsd(realNetProfitUsd) }})</span></h4>
-              <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
+              <h4>{{ t('finance.accounting.modals.reconciliation.finalPrefix') }}{{ realNetProfitTry >= 0 ? t('finance.accounting.modals.reconciliation.finalProfit') : t('finance.accounting.modals.reconciliation.finalLoss') }}: <span [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }} ({{ formatSignedUsd(realNetProfitUsd) }})</span></h4>
+              <p>{{ t('finance.accounting.modals.reconciliation.finalDesc') }}</p>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Anladım, Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.reconciliation.gotItBtn') }}</button>
           </div>
         </div>
       </div>
@@ -1356,90 +1352,90 @@
       <div class="modal-backdrop" *ngIf="showCostModal" (click)="closeModals()">
         <div class="modal-card cost-modal-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>🏷️ Maliyet / Fatura Düzenle (#{{ selectedOrder?.receiptId }})</h3>
+            <h3>{{ t('finance.accounting.modals.costEdit.title', { id: selectedOrder?.receiptId }) }}</h3>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body" *ngIf="selectedOrder">
             <div class="order-context-box">
-              <div class="ctx-row"><strong>Müşteri:</strong> {{ getDisplayBuyerName(selectedOrder) }}</div>
-              <div class="ctx-row"><strong>Ürün Adı:</strong> {{ selectedOrder.productTitle }}</div>
+              <div class="ctx-row"><strong>{{ t('finance.accounting.modals.costEdit.customer') }}</strong> {{ getDisplayBuyerName(selectedOrder) }}</div>
+              <div class="ctx-row"><strong>{{ t('finance.accounting.modals.costEdit.product') }}</strong> {{ selectedOrder.productTitle }}</div>
               <div class="badge-row">
-                <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
-                <span class="ctx-badge fee">Etsy Kesintisi: -&#36;{{ selectedOrder.etsyFeesUsd.toFixed(2) }}</span>
+                <span class="ctx-badge gross">{{ t('finance.accounting.modals.costEdit.paymentBadge', { amount: selectedOrder.grandTotalUsd.toFixed(2) }) }}</span>
+                <span class="ctx-badge fee">{{ t('finance.accounting.modals.costEdit.feesBadge', { amount: selectedOrder.etsyFeesUsd.toFixed(2) }) }}</span>
                 <span class="ctx-badge ads" *ngIf="selectedOrder.offsiteAdFeeUsd > 0" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
-                  Dış Reklam: -&#36;{{ selectedOrder.offsiteAdFeeUsd.toFixed(2) }}
+                  {{ t('finance.accounting.modals.costEdit.offsiteBadge', { amount: selectedOrder.offsiteAdFeeUsd.toFixed(2) }) }}
                 </span>
-                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 TCMB Kuru: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
-                <span class="ctx-badge rate" *ngIf="selectedOrder.effectiveExchangeRate" [title]="'Etsy %2.5 döviz çevrim kesintisi sonrası fiili banka kuru'" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
-                  🏦 Etsy Fiili Kuru: ₺{{ selectedOrder.effectiveExchangeRate.toFixed(2) }}
+                <span class="ctx-badge rate" [title]="t('finance.accounting.modals.costEdit.tcmbTooltip', { date: selectedOrder.orderDate })">{{ t('finance.accounting.modals.costEdit.tcmbBadge', { rate: selectedOrder.exchangeRate.toFixed(2) }) }}</span>
+                <span class="ctx-badge rate" *ngIf="selectedOrder.effectiveExchangeRate" [title]="t('finance.accounting.modals.costEdit.effectiveTooltip')" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                  {{ t('finance.accounting.modals.costEdit.effectiveBadge', { rate: selectedOrder.effectiveExchangeRate.toFixed(2) }) }}
                 </span>
               </div>
               <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 10px 14px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; font-size: 12px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span><strong>💎 Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
+                  <span><strong>{{ t('finance.accounting.modals.costEdit.netPayoutTitle') }}</strong></span>
                   <span style="color: #34d399; font-weight: 800; font-size: 14px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.etsyNetPayoutUsd || (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0))).toFixed(2) }})</small></span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #94a3b8; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 6px;">
-                  <span>🔒 Fon Rezervi Dağılımı (%{{ reserveSnapshot.reservePercent }} Blokaj):</span>
+                  <span>{{ t('finance.accounting.modals.costEdit.reserveDist', { pct: reserveSnapshot.reservePercent }) }}</span>
                   <span>
-                    <strong class="text-warning">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry * (reserveSnapshot.reservePercent / 100)) }} Rezerve</strong> ({{ reserveSnapshot.reserveHoldDays }} gün)
+                    <strong class="text-warning">{{ t('finance.accounting.modals.costEdit.reservedAmount', { amount: formatNumber(selectedOrder.etsyNetPayoutTry * (reserveSnapshot.reservePercent / 100)) }) }}</strong>{{ t('finance.accounting.modals.costEdit.holdDays', { days: reserveSnapshot.reserveHoldDays }) }}
                     &nbsp;|&nbsp;
-                    <strong class="text-cyan">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry * ((100 - reserveSnapshot.reservePercent) / 100)) }} Kullanılabilir</strong>
+                    <strong class="text-cyan">{{ t('finance.accounting.modals.costEdit.availableAmount', { amount: formatNumber(selectedOrder.etsyNetPayoutTry * ((100 - reserveSnapshot.reservePercent) / 100)) }) }}</strong>
                   </span>
                 </div>
               </div>
               <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
-                <strong>📦 Taşıyıcı / Takip Notu:</strong> {{ selectedOrder.costNotes }}
+                <strong>{{ t('finance.accounting.modals.costEdit.carrierNote') }}</strong> {{ selectedOrder.costNotes }}
               </div>
             </div>
 
             <div class="cost-input-group">
-              <label>🧵 Birim Üretim & Filament Maliyeti ($):</label>
+              <label>{{ t('finance.accounting.modals.costEdit.prodLabel') }}</label>
               <input type="number" [(ngModel)]="costModalProduction" class="cost-input" step="0.01" />
-              <span class="hint-text">Filament gramajı (PLA/PETG) ve 3D yazıcı amortisman payı</span>
+              <span class="hint-text">{{ t('finance.accounting.modals.costEdit.prodHint') }}</span>
             </div>
             <div class="cost-input-group">
-              <label>🚚 Kargo Navlun Maliyeti ($):</label>
+              <label>{{ t('finance.accounting.modals.costEdit.shipLabel') }}</label>
               <input type="number" [(ngModel)]="costModalShipping" class="cost-input" step="0.01" />
-              <span class="hint-text">Aras Global, ShipEntegra veya Navlungo taşıma ücreti</span>
+              <span class="hint-text">{{ t('finance.accounting.modals.costEdit.shipHint') }}</span>
             </div>
             <div class="cost-input-group">
-              <label>📦 Paketleme & Kutu Maliyeti ($):</label>
+              <label>{{ t('finance.accounting.modals.costEdit.pkgLabel') }}</label>
               <input type="number" [(ngModel)]="costModalPackaging" class="cost-input" step="0.01" />
-              <span class="hint-text">Karton kutu, balonlu naylon ve barkod etiket gideri</span>
+              <span class="hint-text">{{ t('finance.accounting.modals.costEdit.pkgHint') }}</span>
             </div>
 
             <!-- Live Calculation Preview -->
             <div class="calculated-preview-box">
               <div class="calc-row">
-                <span>Toplam Sipariş Maliyeti:</span>
+                <span>{{ t('finance.accounting.modals.costEdit.totalCostLabel') }}</span>
                 <strong>&#36;{{ getCostModalPreviewTotalCostUsd().toFixed(2) }}</strong>
               </div>
               <div class="calc-row highlight">
-                <span>{{ getCostModalPreviewNetUsd() >= 0 ? 'Hesaplanan Net Kâr ($):' : 'Hesaplanan Net Zarar ($):' }}</span>
+                <span>{{ getCostModalPreviewNetUsd() >= 0 ? t('finance.accounting.modals.costEdit.calcNetProfitUsd') : t('finance.accounting.modals.costEdit.calcNetLossUsd') }}</span>
                 <strong [ngClass]="getCostModalPreviewNetUsd() >= 0 ? 'text-success' : 'text-danger'">
                   {{ getCostModalPreviewNetUsd() < 0 ? '-' : '' }}&#36;{{ (getCostModalPreviewNetUsd() < 0 ? -getCostModalPreviewNetUsd() : getCostModalPreviewNetUsd()).toFixed(2) }}
                 </strong>
               </div>
               <div class="calc-row highlight">
-                <span>{{ getCostModalPreviewNetTry() >= 0 ? 'Hesaplanan Net Kâr (₺):' : 'Hesaplanan Net Zarar (₺):' }}</span>
+                <span>{{ getCostModalPreviewNetTry() >= 0 ? t('finance.accounting.modals.costEdit.calcNetProfitTry') : t('finance.accounting.modals.costEdit.calcNetLossTry') }}</span>
                 <strong [ngClass]="getCostModalPreviewNetTry() >= 0 ? 'text-emerald' : 'text-danger'">
                   {{ getCostModalPreviewNetTry() < 0 ? '-₺' : '₺' }}{{ formatNumber(getCostModalPreviewNetTry() < 0 ? -getCostModalPreviewNetTry() : getCostModalPreviewNetTry()) }}
                 </strong>
               </div>
               <div class="calc-row reserve-calc-row">
-                <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>
+                <span>{{ t('finance.accounting.modals.costEdit.reserveBlock', { pct: reserveSnapshot.reservePercent, days: reserveSnapshot.reserveHoldDays }) }}</span>
                 <strong class="text-warning">₺{{ formatNumber(getCostModalPreviewNetTry() * (reserveSnapshot.reservePercent / 100)) }}</strong>
               </div>
               <div class="calc-row reserve-calc-row">
-                <span>🔓 Kullanılabilir Bakiye (%{{ 100 - reserveSnapshot.reservePercent }}):</span>
+                <span>{{ t('finance.accounting.modals.costEdit.availableBal', { pct: 100 - reserveSnapshot.reservePercent }) }}</span>
                 <strong class="text-cyan">₺{{ formatNumber(getCostModalPreviewNetTry() * ((100 - reserveSnapshot.reservePercent) / 100)) }}</strong>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" (click)="closeModals()">İptal</button>
-            <button class="btn-primary-modal" (click)="saveOrderCost()">💾 Kaydet & Kârı Güncelle</button>
+            <button class="btn-cancel" (click)="closeModals()">{{ t('finance.accounting.modals.cancel') }}</button>
+            <button class="btn-primary-modal" (click)="saveOrderCost()">{{ t('finance.accounting.modals.costEdit.saveBtn') }}</button>
           </div>
         </div>
       </div>
@@ -1449,27 +1445,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
-              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺{{ formatNumber(bankPayoutsTry) }}</strong></p>
+              <h3>{{ t('finance.accounting.modals.bankPayout.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.bankPayout.subtitlePrefix') }} <strong>₺{{ formatNumber(bankPayoutsTry) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Toplam Banka Yatırımı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.bankPayout.totalPayout') }}</span>
                 <span class="box-val text-emerald">+₺{{ formatNumber(bankPayoutsTry) }}</span>
-                <span class="box-sub">{{ bankPayoutRecords.length }} Transfer</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.bankPayout.transfersCount', { count: bankPayoutRecords.length }) }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">En Son Yatırılan Tarih</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.bankPayout.latestDate') }}</span>
                 <span class="box-val text-white">{{ latestPayoutDate }}</span>
-                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Son: ₺{{ formatNumber(latestPayoutAmount) }}</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">{{ t('finance.accounting.modals.bankPayout.latestPrefix') }} ₺{{ formatNumber(latestPayoutAmount) }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Ortalama Transfer</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.bankPayout.avgTransfer') }}</span>
                 <span class="box-val text-emerald">₺{{ formatNumber(averagePayoutTry) }}</span>
-                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Net Gelirin %{{ payoutRatio }}'i</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">{{ t('finance.accounting.modals.bankPayout.netIncomeRatio', { pct: payoutRatio }) }}</span>
               </div>
             </div>
 
@@ -1477,12 +1473,12 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Tarih</th>
-                    <th>İşlem / Ref No</th>
-                    <th>Tür</th>
-                    <th>Yatırılan Tutar</th>
-                    <th>Durum</th>
-                    <th>Açıklama / Kur Bilgisi</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colDate') }}</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colRefNo') }}</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colType') }}</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colAmount') }}</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colStatus') }}</th>
+                    <th>{{ t('finance.accounting.modals.bankPayout.colNote') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1499,11 +1495,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ İpucu: Etsy ödemeleri bankanıza gönderdikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer. ]
+              {{ t('finance.accounting.modals.bankPayout.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1513,32 +1509,32 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
-              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺{{ formatNumber(productCostsTry) }}</strong> (${{ formatNumber(productCostsUsd) }}) | Kargo Harcamaları ve Fatura Durumu</p>
+              <h3>{{ t('finance.accounting.modals.costBreakdown.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.costBreakdown.subtitlePrefix') }} <strong>₺{{ formatNumber(productCostsTry) }}</strong> (${{ formatNumber(productCostsUsd) }}){{ t('finance.accounting.modals.costBreakdown.subtitleSuffix') }}</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Kargo Maliyeti</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.costBreakdown.totalShipping') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(totalShippingCostTry) }}</span>
-                <span class="box-sub">Maliyetin %{{ shippingCostSharePct }}'i</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.costBreakdown.costShare', { pct: shippingCostSharePct }) }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Üretim / Hammadde</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.costBreakdown.production') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(totalProductionCostTry) }}</span>
-                <span class="box-sub">Filament & 3D Yazıcı Payı</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.costBreakdown.productionSub') }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Paketleme & Fatura</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.costBreakdown.packaging') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(totalPackagingCostTry) }}</span>
-                <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.costBreakdown.invoicesCount', { count: invoiceOrderCount }) }}</span>
               </div>
               <div class="drilldown-summary-box highlight-danger-box" *ngIf="canceledOrderCostLossTry > 0">
-                <span class="box-lbl">İptal/İade Maliyet Zararı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.costBreakdown.cancelLoss') }}</span>
                 <span class="box-val text-red-bold">-₺{{ formatNumber(canceledOrderCostLossTry) }}</span>
-                <span class="box-sub">{{ canceledCostedOrderCount }} Sipariş (COGS'a Dahil)</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.costBreakdown.cancelLossSub', { count: canceledCostedOrderCount }) }}</span>
               </div>
             </div>
 
@@ -1546,16 +1542,16 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Tarih</th>
-                    <th>Sipariş No</th>
-                    <th>Durum</th>
-                    <th>Adet</th>
-                    <th>Üretim Maliyeti</th>
-                    <th>Kargo Maliyeti</th>
-                    <th>Paketleme</th>
-                    <th>Toplam Maliyet</th>
-                    <th>Fatura</th>
-                    <th>Ürün / İlan Başlığı</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colDate') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colOrderNo') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colStatus') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colQty') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colProdCost') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colShipCost') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colPkgCost') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colTotalCost') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colInvoice') }}</th>
+                    <th>{{ t('finance.accounting.modals.costBreakdown.colProductTitle') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1582,7 +1578,7 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1592,27 +1588,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>{{ realNetProfitTry >= 0 ? '💵 Gerçek Net Kâr & Bilanço Analizi' : '🔴 Gerçek Net Zarar & Bilanço Analizi' }}</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış {{ realNetProfitTry >= 0 ? 'nihai net kâr' : 'nihai net zarar' }}: <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong> ({{ formatSignedUsd(realNetProfitUsd) }})</p>
+              <h3>{{ realNetProfitTry >= 0 ? t('finance.accounting.modals.balance.titleProfit') : t('finance.accounting.modals.balance.titleLoss') }}</h3>
+              <p class="modal-sub">{{ realNetProfitTry >= 0 ? t('finance.accounting.modals.balance.subtitleProfit') : t('finance.accounting.modals.balance.subtitleLoss') }} <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong> ({{ formatSignedUsd(realNetProfitUsd) }})</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Etsy Net Gelir</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.balance.etsyNetIncome') }}</span>
                 <span class="box-val" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(netIncomeTry) }}</span>
-                <span class="box-sub">Platform Hakedişi</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.balance.platformPayout') }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Ürün Maliyeti</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.balance.totalProdCost') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(productCostsTry) }}</span>
-                <span class="box-sub">Kargo, Hammadde & Paketleme</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.balance.totalProdCostSub') }}</span>
               </div>
               <div class="drilldown-summary-box" [ngClass]="realNetProfitTry >= 0 ? 'highlight-emerald' : 'highlight-danger-box'">
-                <span class="box-lbl">{{ realNetProfitTry >= 0 ? 'Gerçek Net Kâr' : 'Gerçek Net Zarar' }}</span>
+                <span class="box-lbl">{{ realNetProfitTry >= 0 ? t('finance.accounting.modals.balance.realNetProfit') : t('finance.accounting.modals.balance.realNetLoss') }}</span>
                 <span class="box-val" [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</span>
-                <span class="box-sub">%{{ realProfitMarginPct }} {{ realNetProfitTry >= 0 ? 'Net Kâr Marjı' : 'Net Zarar Marjı' }}</span>
+                <span class="box-sub">{{ realNetProfitTry >= 0 ? t('finance.accounting.modals.balance.marginProfit', { pct: realProfitMarginPct }) : t('finance.accounting.modals.balance.marginLoss', { pct: realProfitMarginPct }) }}</span>
               </div>
             </div>
 
@@ -1620,21 +1616,21 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Tür</th>
-                    <th>Kalem Adı</th>
-                    <th>Kategori / Detay</th>
-                    <th>Tutar</th>
-                    <th>Durum</th>
-                    <th>Açıklama / Muhasebe Mantığı</th>
+                    <th>{{ t('finance.accounting.modals.balance.colType') }}</th>
+                    <th>{{ t('finance.accounting.modals.balance.colItemName') }}</th>
+                    <th>{{ t('finance.accounting.modals.balance.colDetail') }}</th>
+                    <th>{{ t('finance.accounting.modals.balance.colAmount') }}</th>
+                    <th>{{ t('finance.accounting.modals.balance.colStatus') }}</th>
+                    <th>{{ t('finance.accounting.modals.balance.colExplanation') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="(b.type === 'KÂR' || b.name.includes('GERÇEK NET')) && b.isPositive" [class.highlight-danger-row]="(b.type === 'ZARAR' || b.name.includes('GERÇEK NET')) && !b.isPositive">
+                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="b.isFinalSummary && b.isPositive" [class.highlight-danger-row]="b.isFinalSummary && !b.isPositive">
                     <td class="type-cell"><strong>{{ b.type }}</strong></td>
                     <td class="item-name">{{ b.name }}</td>
                     <td class="detail-cell">{{ b.detail }}</td>
                     <td class="amount-cell" [ngClass]="b.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ (b.name.includes('GERÇEK NET') ? '=' : '') + formatSignedTry(b.amount) }}
+                      {{ (b.isFinalSummary ? '=' : '') + formatSignedTry(b.amount) }}
                     </td>
                     <td><span *ngIf="b.status" class="badge-status-payout" [ngClass]="b.isPositive ? 'badge-success' : 'badge-danger'">{{ b.status }}</span></td>
                     <td class="note-cell">{{ b.explanation }}</td>
@@ -1644,11 +1640,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Muhasebe Kuralı: Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti (Kargo + Ürün + Fatura). ]
+              {{ t('finance.accounting.modals.balance.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1658,27 +1654,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
-              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺{{ formatNumber(grossSalesTry) }}</strong> (${{ formatNumber(grossSalesUsd) }} USD) | {{ orders.length }} İşlem</p>
+              <h3>{{ t('finance.accounting.modals.sales.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.sales.subtitlePrefix') }} <strong>₺{{ formatNumber(grossSalesTry) }}</strong> (${{ formatNumber(grossSalesUsd) }} USD){{ t('finance.accounting.modals.sales.txCount', { count: orders.length }) }}</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Brüt Satış</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.sales.totalGross') }}</span>
                 <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
                 <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Sipariş Sayısı</span>
-                <span class="box-val text-primary">{{ orders.length }} Sipariş</span>
-                <span class="box-sub">{{ completedOrderCount }} Başarılı, {{ totalCanceledCount }} İptal</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.sales.orderCount') }}</span>
+                <span class="box-val text-primary">{{ t('finance.accounting.modals.sales.ordersCount', { count: orders.length }) }}</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.sales.successCancelSub', { completed: completedOrderCount, canceled: totalCanceledCount }) }}</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.sales.aov') }}</span>
                 <span class="box-val text-emerald">₺{{ formatNumber(averageOrderValueTry) }}</span>
-                <span class="box-sub">${{ formatNumber(averageOrderValueUsd) }} USD / Sipariş</span>
+                <span class="box-sub">${{ formatNumber(averageOrderValueUsd) }} {{ t('finance.accounting.modals.sales.perOrder') }}</span>
               </div>
             </div>
 
@@ -1686,13 +1682,13 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Tarih</th>
-                    <th>Sipariş No</th>
-                    <th>Alıcı</th>
-                    <th>Ürün</th>
-                    <th>Tutar ($)</th>
-                    <th>Tutar (₺)</th>
-                    <th>Ödeme Tipi</th>
+                    <th>{{ t('finance.accounting.modals.sales.colDate') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colOrderNo') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colBuyer') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colProduct') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colAmountUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colAmountTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.sales.colPayType') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1703,18 +1699,18 @@
                     <td class="title-cell" title="{{ s.item }}">{{ s.item }}</td>
                     <td class="amount-cell" [ngClass]="s.paymentType === 'canceled' ? 'text-danger' : 'text-emerald'">{{ '$' + s.amount.toFixed(2) }}</td>
                     <td class="amount-cell" [ngClass]="s.paymentType === 'canceled' ? 'text-danger' : 'text-emerald'">₺{{ formatNumber(s.tryAmount) }}</td>
-                    <td><span class="badge-status-payout" [class.badge-refund]="s.paymentType === 'canceled'">{{ s.paymentType === 'canceled' ? '🔴 İptal Edildi' : s.paymentType }}</span></td>
+                    <td><span class="badge-status-payout" [class.badge-refund]="s.paymentType === 'canceled'">{{ s.paymentType === 'canceled' ? t('finance.accounting.modals.sales.statusCanceled') : s.paymentType }}</span></td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Muhasebe Kuralı: Etsy Payments brüt tutarları müşterinin ödediği toplam sepet (ürün + kargo ücreti) bedelidir. ]
+              {{ t('finance.accounting.modals.sales.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1724,27 +1720,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
-              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺{{ formatNumber(etsyFeesTry) }}</strong> (-${{ formatNumber(etsyFeesUsd) }} USD)</p>
+              <h3>{{ t('finance.accounting.modals.fees.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.fees.subtitlePrefix') }} <strong>-₺{{ formatNumber(etsyFeesTry) }}</strong> (-${{ formatNumber(etsyFeesUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Kesinti Tutarı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.fees.totalFees') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(etsyFeesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.fees.feeGrossRatio') }}</span>
                 <span class="box-val text-orange">%{{ feeToGrossRatioPct }}</span>
-                <span class="box-sub">Standart Komisyon + KDV</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.fees.stdFeesVat') }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.fees.vatLabel') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(estimatedVatTry) }}</span>
-                <span class="box-sub">Kesintiler Üzerinden KDV</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.fees.vatSub') }}</span>
               </div>
             </div>
 
@@ -1752,12 +1748,12 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Kesinti Kalemi</th>
-                    <th>İşlem / Adet</th>
-                    <th>Matrah ($)</th>
-                    <th>Kesinti ($)</th>
-                    <th>Kesinti (₺)</th>
-                    <th>Açıklama / Formül</th>
+                    <th>{{ t('finance.accounting.modals.fees.colFeeItem') }}</th>
+                    <th>{{ t('finance.accounting.modals.fees.colTxCount') }}</th>
+                    <th>{{ t('finance.accounting.modals.fees.colBaseUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.fees.colFeeUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.fees.colFeeTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.fees.colFormula') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1774,11 +1770,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.1-%1.25 Düzenleyici İşletme Ücreti keser. İç ve Dış Reklam giderleri kendi özel kartlarında ayrı izlenir. ]
+              {{ t('finance.accounting.modals.fees.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1788,27 +1784,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>📢 Etsy Ads İç Reklam Analizi</h3>
-              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺{{ formatNumber(innerAdsTry) }}</strong> (-${{ formatNumber(innerAdsUsd) }} USD)</p>
+              <h3>{{ t('finance.accounting.modals.innerAds.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.innerAds.subtitlePrefix') }} <strong>-₺{{ formatNumber(innerAdsTry) }}</strong> (-${{ formatNumber(innerAdsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Reklam Harcaması</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.innerAds.totalSpend') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(innerAdsTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(innerAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Dönem Mağaza Brüt Satışı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.innerAds.periodGross') }}</span>
                 <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
-                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD ({{ completedOrderCount }} Sipariş)</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD {{ t('finance.accounting.modals.innerAds.ordersParen', { count: completedOrderCount }) }}</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Mağaza Geneli Verim (MER)</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.innerAds.merLabel') }}</span>
                 <span class="box-val text-emerald">{{ innerAdsStoreMer }}</span>
-                <span class="box-sub">Ciro İçi Pay: %{{ innerAdsShareOfGrossPct }}</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.innerAds.grossShare', { pct: innerAdsShareOfGrossPct }) }}</span>
               </div>
             </div>
 
@@ -1816,12 +1812,12 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Dönem</th>
-                    <th>Harcama ($)</th>
-                    <th>Harcama (₺)</th>
-                    <th>Mağaza Brüt Ciro ($)</th>
-                    <th>Ciro İçi Pay (%)</th>
-                    <th>Genel MER</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colPeriod') }}</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colSpendUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colSpendTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colGrossUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colGrossShare') }}</th>
+                    <th>{{ t('finance.accounting.modals.innerAds.colMer') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1838,11 +1834,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Defter Verisi Notu: Etsy Ödeme Defteri yalnızca net Etsy Ads tıklama harcamasını (-₺{{ formatNumber(innerAdsTry) }}) raporlar; gösterim/tıklama bazlı atıf bulunmadığından yukarıda dönem mağaza brüt cirosuna göre genel verim (MER: {{ innerAdsStoreMer }}) gösterilmektedir. ]
+              {{ t('finance.accounting.modals.innerAds.footnote', { spend: formatNumber(innerAdsTry), mer: innerAdsStoreMer }) }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1852,27 +1848,27 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
-              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺{{ formatNumber(offsiteAdsTry) }}</strong> (-${{ formatNumber(offsiteAdsUsd) }} USD)</p>
+              <h3>{{ t('finance.accounting.modals.offsiteAds.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.offsiteAds.subtitlePrefix') }} <strong>-₺{{ formatNumber(offsiteAdsTry) }}</strong> (-${{ formatNumber(offsiteAdsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.offsiteAds.totalOffsite') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(offsiteAdsTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(offsiteAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Dış Reklam Satış Adedi</span>
-                <span class="box-val text-primary">{{ offsiteAdsRecords.length }} Sipariş</span>
-                <span class="box-sub">Toplam Satışın %{{ offsiteOrderSharePct }}'i</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.offsiteAds.offsiteOrders') }}</span>
+                <span class="box-val text-primary">{{ t('finance.accounting.modals.offsiteAds.ordersCount', { count: offsiteAdsRecords.length }) }}</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.offsiteAds.totalSalesShare', { pct: offsiteOrderSharePct }) }}</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Komisyon Oranı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.offsiteAds.commissionRate') }}</span>
                 <span class="box-val text-warning">%15,00</span>
-                <span class="box-sub">Sadece Satış Olduğunda Kesilir</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.offsiteAds.onlyOnSale') }}</span>
               </div>
             </div>
 
@@ -1880,13 +1876,13 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Sipariş No</th>
-                    <th>Alıcı</th>
-                    <th>Satış Tutarı ($)</th>
-                    <th>Komisyon Oranı</th>
-                    <th>Kesinti ($)</th>
-                    <th>Kesinti (₺)</th>
-                    <th>Reklam Kanalı</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colOrderNo') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colBuyer') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colSaleUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colRate') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colFeeUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colFeeTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.offsiteAds.colChannel') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1904,11 +1900,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Offsite Ads Avantajı: Tıklama başına para ödemezsiniz; sadece sipariş gerçekleştiğinde %15 başarı komisyonu tahakkuk eder. ]
+              {{ t('finance.accounting.modals.offsiteAds.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -1918,37 +1914,37 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>🔴 İade ve Geri Ödeme Analizi</h3>
-              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺{{ formatNumber(refundsTry) }}</strong> (-${{ formatNumber(refundsUsd) }} USD)</p>
+              <h3>{{ t('finance.accounting.modals.refunds.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.refunds.subtitlePrefix') }} <strong>-₺{{ formatNumber(refundsTry) }}</strong> (-${{ formatNumber(refundsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam İade Tutarı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.refunds.totalRefund') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(modalTotalRefundTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(modalTotalRefundUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">İptal / İade Siparişleri</span>
-                <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
-                <span class="box-sub">{{ modalUnproducedCancelCount }} Zararsız | {{ modalCostLossCancelCount }} Maliyetli</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.refunds.cancelOrders') }}</span>
+                <span class="box-val text-danger">{{ t('finance.accounting.modals.refunds.ordersCount', { count: refundRecords.length }) }}</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.refunds.harmlessCosted', { harmless: modalUnproducedCancelCount, costed: modalCostLossCancelCount }) }}</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Geri Alınan Komisyon</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.refunds.feeRefunded') }}</span>
                 <span class="box-val text-emerald">+${{ formatNumber(modalTotalFeeRefundedUsd) }} USD</span>
-                <span class="box-sub">+₺{{ formatNumber(modalTotalFeeRefundedTry) }} (Hesaba Yatan)</span>
+                <span class="box-sub">+₺{{ formatNumber(modalTotalFeeRefundedTry) }} {{ t('finance.accounting.modals.refunds.creditedSub') }}</span>
               </div>
               <div class="drilldown-summary-box highlight-amber-box">
-                <span class="box-lbl">Net Bakiye Çıkışı (Kasa Kaybı)</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.refunds.netBalanceImpact') }}</span>
                 <span class="box-val text-amber-bold">-₺{{ formatNumber(modalNetBalanceImpactTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(modalNetBalanceImpactUsd) }} USD (Komisyon Düşülmüş)</span>
+                <span class="box-sub">-${{ formatNumber(modalNetBalanceImpactUsd) }} USD {{ t('finance.accounting.modals.refunds.afterFeeRefund') }}</span>
               </div>
               <div class="drilldown-summary-box highlight-danger-box">
-                <span class="box-lbl">Toplam İptal Zararı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.refunds.totalCancelLoss') }}</span>
                 <span class="box-val text-red-bold">-₺{{ formatNumber(modalTotalLossTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(modalTotalLossUsd) }} USD (Kargo/Hammadde)</span>
+                <span class="box-sub">-${{ formatNumber(modalTotalLossUsd) }} USD {{ t('finance.accounting.modals.refunds.shipMatSub') }}</span>
               </div>
             </div>
 
@@ -1956,17 +1952,17 @@
               <table class="drilldown-table refund-table">
                 <thead>
                   <tr>
-                    <th>İade Tarihi</th>
-                    <th>Sipariş Tarihi</th>
-                    <th>Sipariş No</th>
-                    <th>Alıcı / Müşteri</th>
-                    <th>Ürün / Başlık</th>
-                    <th>İade Tutarı ($)</th>
-                    <th>İade Tutarı (₺)</th>
-                    <th>Geri Alınan Komisyon</th>
-                    <th>Sipariş Maliyeti</th>
-                    <th>Net Zarar</th>
-                    <th>İptal Durumu</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colRefundDate') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colOrderDate') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colOrderNo') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colBuyer') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colProduct') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colRefundUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colRefundTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colFeeRefunded') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colOrderCost') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colNetLoss') }}</th>
+                    <th>{{ t('finance.accounting.modals.refunds.colCancelStatus') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1981,7 +1977,7 @@
                     <td class="amount-cell text-emerald">{{ r.feeRefundedUsd > 0 ? '+$' + r.feeRefundedUsd.toFixed(2) + ' (+₺' + formatNumber(r.feeRefundedTry) + ')' : '—' }}</td>
                     <td class="amount-cell font-mono" [class.text-danger]="r.costUsd > 0">{{ r.costUsd > 0 ? '-₺' + formatNumber(r.costTry) + ' (-$' + r.costUsd.toFixed(2) + ')' : '₺0,00' }}</td>
                     <td class="amount-cell font-bold" [ngClass]="{'text-danger': r.netLossUsd < 0, 'text-emerald': r.netLossUsd === 0}">
-                      {{ r.netLossUsd < 0 ? '-₺' + formatNumber(r.netLossTry * -1) + ' (-$' + (r.netLossUsd * -1).toFixed(2) + ')' : '₺0,00 (Zararsız)' }}
+                      {{ r.netLossUsd < 0 ? '-₺' + formatNumber(r.netLossTry * -1) + ' (-$' + (r.netLossUsd * -1).toFixed(2) + ')' : t('finance.accounting.modals.refunds.zeroHarmless') }}
                     </td>
                     <td class="note-cell">
                       <span [class]="'badge-cancel-status ' + r.cancelType">{{ r.cancelTypeLabel }}</span>
@@ -1992,11 +1988,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. Maliyeti girilen iptal/iade siparişlerinin üretim ve kargo zararı, üstteki Sipariş Maliyeti ve Gerçek Net Kâr/Zarar hesaplamasına otomatik olarak dahildir. ]
+              {{ t('finance.accounting.modals.refunds.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -2006,25 +2002,25 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
-              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>{{ formatSignedTry(netIncomeTry) }}</strong> ({{ formatSignedUsd(netIncomeUsd) }} USD)</p>
+              <h3>{{ t('finance.accounting.modals.netIncome.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.netIncome.subtitlePrefix') }} <strong>{{ formatSignedTry(netIncomeTry) }}</strong> ({{ formatSignedUsd(netIncomeUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Brüt Satış Geliri</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.netIncome.grossSales') }}</span>
                 <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
                 <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Platform Giderleri Toplamı</span>
+                <span class="box-lbl">{{ t('finance.accounting.modals.netIncome.totalPlatformExp') }}</span>
                 <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry + innerAdsTry + offsiteAdsTry + refundsTry) }}</span>
-                <span class="box-sub">Komisyon, Reklam & İadeler</span>
+                <span class="box-sub">{{ t('finance.accounting.modals.netIncome.feesAdsRefunds') }}</span>
               </div>
               <div class="drilldown-summary-box" [ngClass]="netIncomeTry >= 0 ? 'highlight-emerald' : 'highlight-danger-box'">
-                <span class="box-lbl">{{ netIncomeTry >= 0 ? 'Etsy Net Hakediş' : 'Etsy Net Borç / Eksi Bakiye' }}</span>
+                <span class="box-lbl">{{ netIncomeTry >= 0 ? t('finance.accounting.modals.netIncome.netPayout') : t('finance.accounting.modals.netIncome.netDebt') }}</span>
                 <span class="box-val" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(netIncomeTry) }}</span>
                 <span class="box-sub">{{ formatSignedUsd(netIncomeUsd) }} USD</span>
               </div>
@@ -2034,20 +2030,20 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Hesap Kalemi</th>
-                    <th>Tutar ($)</th>
-                    <th>Tutar (₺)</th>
-                    <th>Muhasebe Açıklaması</th>
+                    <th>{{ t('finance.accounting.modals.netIncome.colAccountItem') }}</th>
+                    <th>{{ t('finance.accounting.modals.netIncome.colAmountUsd') }}</th>
+                    <th>{{ t('finance.accounting.modals.netIncome.colAmountTry') }}</th>
+                    <th>{{ t('finance.accounting.modals.netIncome.colNote') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.category.includes('NET HAKEDİŞ') && n.isPositive" [class.highlight-danger-row]="n.category.includes('NET HAKEDİŞ') && !n.isPositive">
+                  <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.isFinalSummary && n.isPositive" [class.highlight-danger-row]="n.isFinalSummary && !n.isPositive">
                     <td><strong>{{ n.category }}</strong></td>
                     <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountUsd > 0 ? '+' : '')) + formatSignedUsd(n.amountUsd) }}
+                      {{ (n.isFinalSummary ? '=' : (n.amountUsd > 0 ? '+' : '')) + formatSignedUsd(n.amountUsd) }}
                     </td>
                     <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountTry > 0 ? '+' : '')) + formatSignedTry(n.amountTry) }}
+                      {{ (n.isFinalSummary ? '=' : (n.amountTry > 0 ? '+' : '')) + formatSignedTry(n.amountTry) }}
                     </td>
                     <td class="note-cell">{{ n.note }}</td>
                   </tr>
@@ -2056,11 +2052,11 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Hakediş Tanımı: Etsy Net Gelir, mağazanın kargo ve ürün maliyeti hariç, doğrudan banka hesabına gönderilecek saf Etsy bakiyesidir. ]
+              {{ t('finance.accounting.modals.netIncome.footnote') }}
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
           </div>
         </div>
       </div>
@@ -2075,8 +2071,8 @@
         <div class="modal-card sync-modal-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>⚡ Etsy Fon Rezervi & VDS Canlı Köprüsü (Sıfır Ban Riski)</h3>
-              <p class="modal-sub">Etsy mağazanız VDS'te açıkken, tek bir tıkla bakiye ve rezerv verisini anında buraya aktarın.</p>
+              <h3>{{ t('finance.accounting.modals.sync.title') }}</h3>
+              <p class="modal-sub">{{ t('finance.accounting.modals.sync.subtitle') }}</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -2084,52 +2080,53 @@
           <div class="modal-body">
             <!-- VDS 1-Click Bookmarklet Step -->
             <div class="sync-step-box">
-              <h4 class="step-title">1. VDS Chrome İçin 1-Tık Senkron Yer İmi (Bookmarklet)</h4>
+              <h4 class="step-title">{{ t('finance.accounting.modals.sync.step1Title') }}</h4>
               <p class="step-desc">
-                Bu yöntem <strong>%100 güvenlidir</strong> ve sıfır ban riski taşır; çünkü Etsy sunucularına harici hiçbir istek yapmaz, sadece VDS Chrome'da açık olan sekmenizdeki rakamları okuyup yerel VDS API'nize kaydeder.
+                {{ t('finance.accounting.modals.sync.step1DescBefore') }}<strong>{{ t('finance.accounting.modals.sync.step1DescStrong') }}</strong>{{ t('finance.accounting.modals.sync.step1DescAfter') }}
               </p>
               <div class="bookmarklet-action-row">
                 <button class="btn-copy-bookmarklet" (click)="copyBookmarkletCode()">
-                  📋 1-Tık Senkron Kodunu Kopyala
+                  {{ t('finance.accounting.modals.sync.copyBookmarkletBtn') }}
                 </button>
-                <span class="bookmarklet-hint">VDS Chrome'da Yer İmleri çubuğuna sağ tıklayın -> 'Sayfa Ekle' deyin ve URL alanına bu kodu yapıştırın. Etsy Finance sekmesindeyken tıklamanız yeterlidir.</span>
+                <span class="bookmarklet-hint">{{ t('finance.accounting.modals.sync.step1Hint') }}</span>
               </div>
             </div>
 
             <!-- Manual Value Override -->
             <div class="sync-step-box">
-              <h4 class="step-title">2. Değerleri Doğrudan Güncelleme (Manuel Düzenleme)</h4>
+              <h4 class="step-title">{{ t('finance.accounting.modals.sync.step2Title') }}</h4>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label>Kullanılabilir Bakiye (₺):</label>
+                  <label>{{ t('finance.accounting.modals.sync.availBalLabel') }}</label>
                   <input type="number" [(ngModel)]="reserveSnapshot.currentBalanceTry" step="0.01" class="form-input" />
                 </div>
                 <div class="form-group">
-                  <label>Rezervedeki Para (₺):</label>
+                  <label>{{ t('finance.accounting.modals.sync.reservedFundsLabel') }}</label>
                   <input type="number" [(ngModel)]="reserveSnapshot.pendingBalanceTry" step="0.01" class="form-input" />
                 </div>
                 <div class="form-group">
-                  <label>Rezerv Oranı (%):</label>
+                  <label>{{ t('finance.accounting.modals.sync.reservePctLabel') }}</label>
                   <input type="number" [(ngModel)]="reserveSnapshot.reservePercent" min="0" max="100" class="form-input" />
                 </div>
                 <div class="form-group">
-                  <label>Rezerv Tutma Süresi (Gün):</label>
+                  <label>{{ t('finance.accounting.modals.sync.holdDaysLabel') }}</label>
                   <input type="number" [(ngModel)]="reserveSnapshot.reserveHoldDays" class="form-input" />
                 </div>
                 <div class="form-group full-width">
-                  <label>Sonraki Etsy Denetim / İnceleme Tarihi:</label>
-                  <input type="text" [(ngModel)]="reserveSnapshot.reevaluationDate" placeholder="Örn: November 30" class="form-input" />
+                  <label>{{ t('finance.accounting.modals.sync.nextReviewLabel') }}</label>
+                  <input type="text" [(ngModel)]="reserveSnapshot.reevaluationDate" [placeholder]="t('finance.accounting.modals.sync.nextReviewPlaceholder')" class="form-input" />
                 </div>
               </div>
             </div>
           </div>
 
           <div class="modal-footer">
-            <button class="btn-cancel" (click)="closeModals()">Kapat</button>
+            <button class="btn-cancel" (click)="closeModals()">{{ t('finance.accounting.modals.close') }}</button>
             <button class="btn-primary-modal" (click)="saveReserveSnapshotManual()" [disabled]="isSavingReserve">
-              💾 {{ isSavingReserve ? 'Kaydediliyor...' : 'Değerleri Kaydet' }}
+              💾 {{ isSavingReserve ? t('finance.accounting.modals.sync.savingBtn') : t('finance.accounting.modals.sync.saveValuesBtn') }}
             </button>
           </div>
         </div>
       </div>
 </div>
+</ng-container>

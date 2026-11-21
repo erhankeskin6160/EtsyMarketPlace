@@ -1,30 +1,31 @@
+<ng-container *transloco="let t">
 <aside
   class="comp-flyout-panel notranslate"
   [class.open]="isOpen"
   [attr.aria-hidden]="!isOpen"
-  aria-label="Taranan Rakip Ürünler Paneli"
+  [attr.aria-label]="t('listings.competitorsDrawer.ariaLabel')"
   translate="no"
   (click)="$event.stopPropagation()">
 
   <div class="comp-flyout-header">
     <div class="comp-flyout-title-wrap">
       <div class="comp-flyout-title-row">
-        <h4>🔍 Taranan Rakip Ürünler ({{ allCompetitors.length }})</h4>
+        <h4>{{ t('listings.competitorsDrawer.title', { count: allCompetitors.length }) }}</h4>
         <span class="comp-source-badge">
-          📡 {{ benchmark?.sourceModule || 'Pazar Araştırması Modülü (Etsy API v3)' }}
+          📡 {{ benchmark?.sourceModule || t('listings.competitorsDrawer.defaultSourceModule') }}
         </span>
       </div>
       <p class="comp-flyout-sub" *ngIf="searchKeywordUsed">
-        Aktif sorgu: <code>{{ searchKeywordUsed }}</code>
-        <span *ngIf="benchmark?.filteredOutlierCount"> · {{ benchmark?.filteredOutlierCount }} aykırı medyan dışı</span>
+        {{ t('listings.competitorsDrawer.activeQuery') }} <code>{{ searchKeywordUsed }}</code>
+        <span *ngIf="benchmark?.filteredOutlierCount"> {{ t('listings.competitorsDrawer.outlierExcluded', { count: benchmark?.filteredOutlierCount }) }}</span>
       </p>
     </div>
     <button
       type="button"
       class="btn-close-comp-flyout"
       (click)="closePanel()"
-      aria-label="Rakip ürünler panelini kapat"
-      title="Paneli kapat">
+      [attr.aria-label]="t('listings.competitorsDrawer.closeAria')"
+      [title]="t('listings.competitorsDrawer.closeTitle')">
       ×
     </button>
   </div>
@@ -32,7 +33,7 @@
   <!-- Özel Anahtar Kelimeyle Yeniden Tarama -->
   <div class="comp-rescan-bar">
     <label for="compRescanInput" class="comp-rescan-label">
-      Doğru rakip çıkmadıysa özel sorguyla tara:
+      {{ t('listings.competitorsDrawer.rescanLabel') }}
     </label>
     <div class="comp-rescan-row">
       <input
@@ -41,41 +42,41 @@
         class="comp-rescan-input"
         [(ngModel)]="rescanKeywordInput"
         (keyup.enter)="submitRescan()"
-        placeholder="Örn: thinking alien figurine"
+        [placeholder]="t('listings.competitorsDrawer.rescanPlaceholder')"
       />
       <button
         type="button"
         class="btn-comp-rescan"
         [disabled]="isLoading || !rescanKeywordInput.trim()"
         (click)="submitRescan()">
-        {{ isLoading ? '⏳ Taranıyor...' : '🔄 Yeniden Tara' }}
+        {{ isLoading ? t('listings.competitorsDrawer.rescanLoading') : t('listings.competitorsDrawer.rescanBtn') }}
       </button>
     </div>
   </div>
 
   <!-- Kısa Piyasa Özeti -->
   <div class="comp-kpi-strip" *ngIf="benchmark as b">
-    <span>Min <strong>${{ b.minPriceUsd.toFixed(2) }}</strong></span>
-    <span>Medyan <strong>${{ b.medianPriceUsd.toFixed(2) }}</strong></span>
-    <span>P75 <strong>${{ b.p75PriceUsd.toFixed(2) }}</strong></span>
-    <span>Max <strong>${{ b.maxPriceUsd.toFixed(2) }}</strong></span>
-    <span>Ücr. Kargo <strong>%{{ b.freeShippingRatioPct.toFixed(0) }}</strong></span>
+    <span>{{ t('listings.competitorsDrawer.kpiMin') }} <strong>${{ b.minPriceUsd.toFixed(2) }}</strong></span>
+    <span>{{ t('listings.competitorsDrawer.kpiMedian') }} <strong>${{ b.medianPriceUsd.toFixed(2) }}</strong></span>
+    <span>{{ t('listings.competitorsDrawer.kpiP75') }} <strong>${{ b.p75PriceUsd.toFixed(2) }}</strong></span>
+    <span>{{ t('listings.competitorsDrawer.kpiMax') }} <strong>${{ b.maxPriceUsd.toFixed(2) }}</strong></span>
+    <span>{{ t('listings.competitorsDrawer.kpiFreeShipping') }} <strong>{{ b.freeShippingRatioPct.toFixed(0) }}%</strong></span>
   </div>
 
   <!-- Filtre & Sıralama -->
   <div class="comp-controls">
     <div class="comp-filter-pills">
       <button type="button" [class.active]="filterMode === 'all'" (click)="setFilter('all')">
-        Tümü ({{ allCompetitors.length }})
+        {{ t('listings.competitorsDrawer.filterAll', { count: allCompetitors.length }) }}
       </button>
       <button type="button" [class.active]="filterMode === 'free_shipping'" (click)="setFilter('free_shipping')">
-        Ücr. Kargo ({{ freeShippingCount }})
+        {{ t('listings.competitorsDrawer.filterFreeShipping', { count: freeShippingCount }) }}
       </button>
       <button type="button" [class.active]="filterMode === 'bestseller'" (click)="setFilter('bestseller')">
-        ⭐ Bestseller ({{ bestsellerCount }})
+        {{ t('listings.competitorsDrawer.filterBestseller', { count: bestsellerCount }) }}
       </button>
       <button type="button" *ngIf="outlierCount > 0" [class.active]="filterMode === 'outliers'" (click)="setFilter('outliers')">
-        ⚠️ Aykırı ({{ outlierCount }})
+        {{ t('listings.competitorsDrawer.filterOutliers', { count: outlierCount }) }}
       </button>
     </div>
 
@@ -84,14 +85,14 @@
         type="text"
         class="comp-filter-input"
         [(ngModel)]="textFilter"
-        placeholder="Başlık veya mağaza ara..."
+        [placeholder]="t('listings.competitorsDrawer.searchPlaceholder')"
       />
-      <select class="comp-sort-select" [(ngModel)]="sortBy" aria-label="Rakip sıralama">
-        <option value="score">Pazar Skoru</option>
-        <option value="price_asc">Fiyat (Artan)</option>
-        <option value="price_desc">Fiyat (Azalan)</option>
-        <option value="sales">Aylık Satış</option>
-        <option value="favorites">Favori</option>
+      <select class="comp-sort-select" [(ngModel)]="sortBy" [attr.aria-label]="t('listings.competitorsDrawer.sortAria')">
+        <option value="score">{{ t('listings.competitorsDrawer.sortScore') }}</option>
+        <option value="price_asc">{{ t('listings.competitorsDrawer.sortPriceAsc') }}</option>
+        <option value="price_desc">{{ t('listings.competitorsDrawer.sortPriceDesc') }}</option>
+        <option value="sales">{{ t('listings.competitorsDrawer.sortSales') }}</option>
+        <option value="favorites">{{ t('listings.competitorsDrawer.sortFavorites') }}</option>
       </select>
     </div>
   </div>
@@ -99,7 +100,7 @@
   <!-- Rakip İlan Listesi -->
   <div class="comp-cards-scroll">
     <div *ngIf="filteredCompetitors.length === 0" class="comp-empty-state">
-      Bu filtreyle eşleşen taranmış rakip ilan bulunamadı.
+      {{ t('listings.competitorsDrawer.emptyState') }}
     </div>
 
     <article
@@ -141,10 +142,10 @@
         </div>
 
         <div class="comp-card-badges">
-          <span class="badge-free-ship" *ngIf="comp.hasFreeShipping">Ücretsiz Kargo</span>
-          <span class="badge-bestseller" *ngIf="comp.isBestseller">⭐ Bestseller</span>
-          <span class="badge-outlier" *ngIf="comp.isOutlierFiltered" title="Aşırı düşük fiyatlı olduğundan medyan hesabından çıkarıldı">⚠️ Medyandan Elendi</span>
-          <span class="badge-score" *ngIf="(comp.marketScore || 0) > 0">Skor {{ comp.marketScore }}</span>
+          <span class="badge-free-ship" *ngIf="comp.hasFreeShipping">{{ t('listings.competitorsDrawer.badgeFreeShipping') }}</span>
+          <span class="badge-bestseller" *ngIf="comp.isBestseller">{{ t('listings.competitorsDrawer.badgeBestseller') }}</span>
+          <span class="badge-outlier" *ngIf="comp.isOutlierFiltered" [title]="t('listings.competitorsDrawer.badgeOutlierTitle')">{{ t('listings.competitorsDrawer.badgeOutlier') }}</span>
+          <span class="badge-score" *ngIf="(comp.marketScore || 0) > 0">{{ t('listings.competitorsDrawer.badgeScore', { score: comp.marketScore }) }}</span>
         </div>
 
         <div class="comp-card-meta">
@@ -154,23 +155,24 @@
             target="_blank"
             rel="noopener noreferrer"
             class="comp-shop-link">
-            🏪 {{ comp.shopName || 'Mağaza' }}
+            🏪 {{ comp.shopName || t('listings.competitorsDrawer.defaultShopName') }}
           </a>
           <ng-template #shopPlain>
-            <span>🏪 {{ comp.shopName || 'Mağaza' }}</span>
+            <span>🏪 {{ comp.shopName || t('listings.competitorsDrawer.defaultShopName') }}</span>
           </ng-template>
-          <span *ngIf="comp.shopSales > 0">· {{ comp.shopSales }} satış</span>
-          <span *ngIf="comp.estimatedMonthlySales > 0">· ~{{ comp.estimatedMonthlySales }}/ay</span>
+          <span *ngIf="comp.shopSales > 0">{{ t('listings.competitorsDrawer.shopSales', { count: comp.shopSales }) }}</span>
+          <span *ngIf="comp.estimatedMonthlySales > 0">{{ t('listings.competitorsDrawer.monthlySales', { count: comp.estimatedMonthlySales }) }}</span>
           <span *ngIf="(comp.favorites || 0) > 0">· ❤️ {{ comp.favorites }}</span>
           <span *ngIf="(comp.views || 0) > 0">· 👁️ {{ comp.views }}</span>
         </div>
 
         <div class="comp-card-actions" *ngIf="getEtsyUrl(comp) as etsyUrl">
           <a [href]="etsyUrl" target="_blank" rel="noopener noreferrer" class="btn-open-etsy">
-            🛍️ Etsy'de Aç ↗
+            {{ t('listings.competitorsDrawer.openOnEtsy') }}
           </a>
         </div>
       </div>
     </article>
   </div>
 </aside>
+</ng-container>

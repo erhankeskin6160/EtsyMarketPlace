@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto, AgentCarrierQuoteSummaryDto, CompetitorListingInventoryDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { ExtensionBridgeService } from '../../core/services/extension-bridge.service';
@@ -88,12 +89,14 @@ export interface VariationRow {
 @Component({
   selector: 'app-fast-creator',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent, PricingCompetitorsDrawerComponent],
+  imports: [CommonModule, FormsModule, TranslocoDirective, AiLogoComponent, PricingCompetitorsDrawerComponent],
+  providers: [provideTranslocoScope('listings')],
   templateUrl: './fast-creator.component.html',
   styleUrls: ['./fast-creator.component.css']
 })
 export class FastCreatorComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   extensionBridge = inject(ExtensionBridgeService);
@@ -274,7 +277,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           id: `cloned-${idx + 1}`,
           url,
           isCover: idx === 0,
-          name: idx === 0 ? 'Klonlanan Kapak Görseli' : `Klonlanan Görsel #${idx + 1}`
+          name: idx === 0
+            ? this.transloco.translate('listings.fastCreator.messages.clonedCoverName')
+            : this.transloco.translate('listings.fastCreator.messages.clonedImageName', { index: idx + 1 })
         }));
       }
 
@@ -320,8 +325,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.showVariationImportBox = true;
       }
 
-      const varCount = (this.variationRows && this.variationRows.length > 0) ? ` & ${this.variationRows.length} Varyasyon` : '';
-      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) — ${allUrls.length} Fotoğraf, ${this.tags.length} Etiket${varCount} Aktarıldı`;
+      const varCount = (this.variationRows && this.variationRows.length > 0)
+        ? this.transloco.translate('listings.fastCreator.messages.clonedVariationPart', { count: this.variationRows.length })
+        : '';
+      this.clonedNotice = this.transloco.translate('listings.fastCreator.messages.clonedNotice', {
+        id: cloned.id,
+        title: cloned.title.slice(0, 48),
+        shop: cloned.shopName,
+        images: allUrls.length,
+        tags: this.tags.length,
+        variations: varCount
+      });
       this.updatePriceTry();
       this.saveDraftToStorage();
     }
@@ -350,11 +364,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           id: 'imported-1',
           url: params['imageUrl'],
           isCover: true,
-          name: 'Aktarılan Ürün Görseli'
+          name: this.transloco.translate('listings.fastCreator.messages.importedImageName')
         }];
       }
       if (params['title'] || params['category']) {
-        this.clonedNotice = `Aktarılan Ürün: "${this.title.slice(0, 48)}..." - Kategori: ${this.selectedCategory}`;
+        this.clonedNotice = this.transloco.translate('listings.fastCreator.messages.importedNotice', {
+          title: this.title.slice(0, 48),
+          category: this.selectedCategory
+        });
         this.updatePriceTry();
       }
     });
@@ -389,7 +406,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   @HostListener('window:copilot_draft_updated')
   onCopilotDraftUpdated(): void {
     this.loadDraftFromStorage();
-    this.clonedNotice = '✨ Yapay Zeka Asistanı tarafından hazırlanan ürün taslağı forma aktarıldı!';
+    this.clonedNotice = this.transloco.translate('listings.fastCreator.messages.copilotDraftRestored');
   }
 
   @HostListener('document:keydown.escape')
@@ -793,7 +810,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.selectedTaxonomyId = cat.id;
     this.selectedCategory = cat.path;
     this.selectedCategoryCombo = `${cat.id}|${cat.path}`;
-    this.showToast(`📌 Kategori seçildi: #${cat.id} - ${cat.path}`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.categorySelected', { id: cat.id, path: cat.path }));
   }
 
   loadShippingProfiles(): void {
@@ -808,7 +825,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
               const id = Number(p.shippingProfileId ?? p.shipping_profile_id ?? p.id ?? 0);
               return {
                 id,
-                title: p.title || `Profil #${id}`,
+                title: p.title || this.transloco.translate('listings.fastCreator.messages.profileFallback', { id }),
                 minDays: p.minProcessingDays ?? p.min_processing_days ?? undefined,
                 maxDays: p.maxProcessingDays ?? p.max_processing_days ?? undefined,
                 processingDaysDisplay: p.processingDaysDisplay ?? p.processing_days_display ?? p.processing_days_display_label ?? undefined,
@@ -846,7 +863,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
               const id = Number(r.readinessStateId ?? r.readiness_state_id ?? r.id ?? 0);
               return {
                 id,
-                title: r.title || `Hazırlık Durumu #${id}`,
+                title: r.title || this.transloco.translate('listings.fastCreator.messages.readinessFallback', { id }),
                 minDays: r.minProcessingTime ?? r.min_processing_time ?? undefined,
                 maxDays: r.maxProcessingTime ?? r.max_processing_time ?? undefined,
                 state: r.readinessState ?? r.readiness_state ?? undefined,
@@ -878,7 +895,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
             acceptsReturns: !!(p.acceptsReturns ?? p.accepts_returns),
             acceptsExchanges: !!(p.acceptsExchanges ?? p.accepts_exchanges),
             returnDeadline: p.returnDeadline ?? p.return_deadline ?? null,
-            title: p.title || `İade Politikası #${p.returnPolicyId ?? p.return_policy_id}`
+            title: p.title || this.transloco.translate('listings.fastCreator.messages.returnPolicyFallback', { id: p.returnPolicyId ?? p.return_policy_id })
           }))
           .filter(p => p.returnPolicyId > 0);
 
@@ -909,18 +926,24 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   get newPolicyPreviewTitle(): string {
     const days = (this.newPolicyAcceptsReturns || this.newPolicyAcceptsExchanges) && this.newPolicyDeadline
-      ? ` (${this.newPolicyDeadline} Gün)`
+      ? this.transloco.translate('listings.fastCreator.messages.rpPreviewDays', { days: this.newPolicyDeadline })
       : '';
-    if (this.newPolicyAcceptsReturns && this.newPolicyAcceptsExchanges) return `İade ve Değişim Kabul Edilir${days}`;
-    if (this.newPolicyAcceptsReturns) return `Yalnızca İade Kabul Edilir${days}`;
-    if (this.newPolicyAcceptsExchanges) return `Yalnızca Değişim Kabul Edilir${days}`;
-    return 'İade ve Değişim Kabul Edilmez';
+    if (this.newPolicyAcceptsReturns && this.newPolicyAcceptsExchanges) {
+      return this.transloco.translate('listings.fastCreator.messages.rpPreviewBoth', { days });
+    }
+    if (this.newPolicyAcceptsReturns) {
+      return this.transloco.translate('listings.fastCreator.messages.rpPreviewReturns', { days });
+    }
+    if (this.newPolicyAcceptsExchanges) {
+      return this.transloco.translate('listings.fastCreator.messages.rpPreviewExchanges', { days });
+    }
+    return this.transloco.translate('listings.fastCreator.messages.rpPreviewNone');
   }
 
   submitCreateReturnPolicy(): void {
     const requiresDeadline = this.newPolicyAcceptsReturns || this.newPolicyAcceptsExchanges;
     if (requiresDeadline && (!this.newPolicyDeadline || this.newPolicyDeadline <= 0)) {
-      this.returnPolicyModalError = 'Lütfen geçerli bir iade/değişim süresi seçin.';
+      this.returnPolicyModalError = this.transloco.translate('listings.fastCreator.messages.rpSelectDeadlineError');
       return;
     }
 
@@ -952,7 +975,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           this.selectedReturnPolicyId = createdId;
           this.saveDraftToStorage();
           this.isReturnPolicyModalOpen = false;
-          this.showToast(`✅ İade politikası hazır: ${normalized.title} (#${createdId})`);
+          this.showToast(this.transloco.translate('listings.fastCreator.messages.rpCreatedToast', { title: normalized.title, id: createdId }));
         } else {
           this.isReturnPolicyModalOpen = false;
           this.loadReturnPolicies();
@@ -960,7 +983,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isCreatingReturnPolicy = false;
-        const parsed = extractClientValidationErrors(err, 'Etsy iade politikası oluşturulamadı.');
+        const parsed = extractClientValidationErrors(err, this.transloco.translate('listings.fastCreator.messages.rpCreateError'));
         this.returnPolicyModalError = parsed.summary;
       }
     });
@@ -1029,7 +1052,10 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   }
 
   saveCurrentAsTemplate(): void {
-    const name = prompt('Yeni şablon adını girin:', 'Özel Şablon ' + (this.templates.length + 1));
+    const name = prompt(
+      this.transloco.translate('listings.fastCreator.messages.promptTemplateName'),
+      this.transloco.translate('listings.fastCreator.messages.defaultTemplateName', { num: this.templates.length + 1 })
+    );
     if (!name) return;
     const newId = 'custom_' + Date.now();
     this.templates.push({
@@ -1043,19 +1069,19 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       materials: this.materials
     });
     this.selectedTemplateId = newId;
-    this.showToast('✅ Şablon başarıyla kaydedildi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.templateSaved'));
   }
 
   deleteCurrentTemplate(): void {
     if (this.templates.length === 0) {
-      alert('Silinecek şablon yok.');
+      alert(this.transloco.translate('listings.fastCreator.messages.noTemplateToDelete'));
       return;
     }
-    if (confirm('Seçili şablonu silmek istediğinize emin misiniz?')) {
+    if (confirm(this.transloco.translate('listings.fastCreator.messages.confirmDeleteTemplate'))) {
       this.templates = this.templates.filter(t => t.id !== this.selectedTemplateId);
       this.selectedTemplateId = '';
       this.resetForm();
-      this.showToast('🗑️ Şablon silindi.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.templateDeleted'));
     }
   }
 
@@ -1144,7 +1170,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.selectedTemplateId = '';
     this.clonedNotice = '';
 
-    this.showToast('🔄 Tüm form ve girdi alanları temizlendi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.formReset'));
   }
 
   // --- TAGS ---
@@ -1163,14 +1189,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   trimTags(): void {
     this.tags = this.tags.map(t => t.slice(0, 20).trim().toLowerCase()).filter(t => t.length > 0);
-    this.showToast('🧹 Etiketler 20 karaktere göre formatlandı.');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.tagsTrimmed'));
   }
 
   // --- AI SUGGESTIONS ---
   suggestAiTitle(): void {
     const input = this.title.trim() || this.description.trim();
     if (!input) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterBasicInfoForAi'));
       return;
     }
     this.isGeneratingTitle = true;
@@ -1182,7 +1208,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isGeneratingTitle = false;
-        this.showToast(err?.message || '❌ Canlı AI başlık önerisi oluşturulamadı.');
+        this.showToast(err?.message || this.transloco.translate('listings.fastCreator.messages.aiTitleError'));
       }
     });
   }
@@ -1235,12 +1261,18 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       res.categoryPath = match.path;
     } else if (candidates.length > 0) {
       const fallback = candidates[0];
-      const aiSaid = res.categoryPath || (res.taxonomyId ? `#${res.taxonomyId}` : 'geçersiz yanıt');
+      const aiSaid = res.categoryPath || (res.taxonomyId ? `#${res.taxonomyId}` : this.transloco.translate('listings.fastCreator.messages.invalidAiResponse'));
       res.taxonomyId = fallback.id;
       res.categoryPath = fallback.path;
       res.confidenceScore = Math.min(res.confidenceScore || 40, 40);
-      res.reasoning = `⚠️ AI'nın önerdiği kategori (${aiSaid}) resmi Etsy listesinde doğrulanamadı; anahtar kelimelere göre en uygun resmi kategori önerildi, lütfen kontrol edin. ${res.reasoning || ''}`.trim();
-      res.message = `⚠️ Düşük güven: AI kategorisi doğrulanamadı, en yakın resmi kategori seçildi: #${fallback.id} ${fallback.path}`;
+      res.reasoning = this.transloco.translate('listings.fastCreator.messages.lowConfidenceReasoning', {
+        aiSaid,
+        original: res.reasoning || ''
+      }).trim();
+      res.message = this.transloco.translate('listings.fastCreator.messages.lowConfidenceMessage', {
+        id: fallback.id,
+        path: fallback.path
+      });
     } else {
       // Doğrulanamadı ve aday yok → seçim yapılmasın
       res.taxonomyId = 0;
@@ -1288,7 +1320,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const images = this.galleryImages.map(img => img.url).filter(u => !!u);
 
     if (!title && !desc && images.length === 0) {
-      this.showToast('⚠️ Lütfen AI kategori analizi için bir başlık yazın, açıklama ekleyin veya orta panelden ürün görseli yükleyin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterInputForCategory'));
       return;
     }
 
@@ -1309,7 +1341,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         if (!grounded.taxonomyId) {
           this.categoryAiResult = grounded;
           this.categoryAlternatives = grounded.alternatives || [];
-          this.showToast('⚠️ AI geçerli bir resmi Etsy kategorisi döndürmedi. Lütfen listeden manuel seçin veya başlığı detaylandırıp tekrar deneyin.');
+          this.showToast(this.transloco.translate('listings.fastCreator.messages.invalidCategoryReturned'));
           return;
         }
 
@@ -1326,11 +1358,11 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         }
 
         this.filterCategories();
-        this.showToast(grounded.message || `✨ AI Kategoriyi belirledi: #${grounded.taxonomyId} ${grounded.categoryPath}`);
+        this.showToast(grounded.message || this.transloco.translate('listings.fastCreator.messages.aiCategoryDetected', { id: grounded.taxonomyId, path: grounded.categoryPath }));
       },
       error: (err) => {
         this.isGeneratingCategory = false;
-        this.showToast(err?.message || '❌ Kategori önerisi oluşturulamadı.');
+        this.showToast(err?.message || this.transloco.translate('listings.fastCreator.messages.aiCategoryError'));
       }
     });
   }
@@ -1365,13 +1397,13 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
 
     this.filterCategories();
-    this.showToast(`📌 Kategori güncellendi: #${alt.taxonomyId} ${alt.categoryPath}`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.categoryUpdated', { id: alt.taxonomyId, path: alt.categoryPath }));
   }
 
   suggestAiTags(): void {
     const input = this.title.trim() || this.description.trim();
     if (!input) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterBasicInfoForAi'));
       return;
     }
     this.isGeneratingTags = true;
@@ -1383,7 +1415,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isGeneratingTags = false;
-        this.showToast(err?.message || '❌ Canlı AI etiket önerisi oluşturulamadı.');
+        this.showToast(err?.message || this.transloco.translate('listings.fastCreator.messages.aiTagsError'));
       }
     });
   }
@@ -1394,7 +1426,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (!this.originalNotesBackup) return;
     this.description = this.originalNotesBackup;
     this.saveDraftToStorage();
-    this.showToast('↩️ Orijinal ham notlarınız geri yüklendi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.originalNotesRestored'));
   }
 
   applyDescriptionTemplate(): void {
@@ -1412,7 +1444,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     });
 
     this.saveDraftToStorage();
-    this.showToast('📐 Ferah Etsy paragraf şablonu açıklamaya uygulandı!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.descTemplateApplied'));
   }
 
   suggestAiDescription(): void {
@@ -1420,7 +1452,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const titleText = this.title.trim();
 
     if (!descText && !titleText) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına bir ürün adı/özelliği yazın.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterInfoForDesc'));
       return;
     }
 
@@ -1452,7 +1484,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isGeneratingDesc = false;
-        this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
+        this.showToast(err?.message || this.transloco.translate('listings.fastCreator.messages.aiDescError'));
       }
     });
   }
@@ -1550,7 +1582,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const input = titleInput || descInput;
 
     if (!input) {
-      this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı kutusuna birkaç kelime girin (Örn: El Yapımı Kadın Çantası).');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterTitleForFullAi'));
       return;
     }
 
@@ -1586,7 +1618,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isGeneratingAll = false;
-        this.showToast(err?.message || '❌ Canlı AI listeleme önerisi oluşturulamadı.');
+        this.showToast(err?.message || this.transloco.translate('listings.fastCreator.messages.fullAiError'));
       }
     });
   }
@@ -1603,7 +1635,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const files = Array.from(input.files);
     for (const file of files) {
       if (this.galleryImages.length >= 10) {
-        alert('Etsy en fazla 10 ürün görseline izin verir.');
+        alert(this.transloco.translate('listings.fastCreator.messages.maxImagesAlert'));
         break;
       }
       const reader = new FileReader();
@@ -1650,7 +1682,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const target = this.galleryImages.splice(index, 1)[0];
     this.galleryImages.unshift(target);
     this.updateCoverStatus();
-    this.showToast('⭐ #1 Kapak görseli güncellendi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.coverUpdated'));
   }
 
   updateCoverStatus(): void {
@@ -1669,17 +1701,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   pickFromStudio(url: string): void {
     if (this.galleryImages.length >= 10) {
-      alert('Maksimum 10 görsel sınırına ulaşıldı.');
+      alert(this.transloco.translate('listings.fastCreator.messages.maxImagesStudioAlert'));
       return;
     }
     this.galleryImages.push({
       id: 'studio_' + Date.now(),
       url: url,
       isCover: this.galleryImages.length === 0,
-      name: 'Stüdyo Görseli'
+      name: this.transloco.translate('listings.fastCreator.messages.studioImageName')
     });
     this.updateCoverStatus();
-    this.showToast('🎨 Görsel stüdyodan galeriye eklendi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.studioImageAdded'));
   }
 
   // --- AI IMAGE STUDIO ACTIONS ---
@@ -1690,7 +1722,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   fillPromptFromTitle(): void {
     if (!this.title.trim()) {
-      alert('Önce sol panelden bir ürün başlığı girin.');
+      alert(this.transloco.translate('listings.fastCreator.messages.enterTitleFirstAlert'));
       return;
     }
     this.aiPrompt = `Professional commercial product photography of ${this.title.trim()}, isolated on clean studio lighting, high detail, 8k render, etsy showcase`;
@@ -1701,24 +1733,24 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.fillPromptFromTitle();
     }
     this.isGeneratingAiImage = false;
-    this.showToast('AI görsel üretimi bu modülde bağlı değil. AI Studio üzerinden üretim yapın.');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.aiImageNotConnected'));
   }
 
   addGeneratedToGallery(): void {
     if (!this.lastGeneratedImage) return;
     if (this.galleryImages.length >= 10) {
-      alert('Etsy en fazla 10 ürün görseline izin verir.');
+      alert(this.transloco.translate('listings.fastCreator.messages.maxImagesAlert'));
       return;
     }
     this.galleryImages.push({
       id: 'ai_gen_' + Date.now(),
       url: this.lastGeneratedImage,
       isCover: this.galleryImages.length === 0,
-      name: 'AI Stüdyo Görseli'
+      name: this.transloco.translate('listings.fastCreator.messages.aiStudioImageName')
     });
     this.updateCoverStatus();
     this.lastGeneratedImage = null;
-    this.showToast('➕ Üretilen görsel 10\'lu galeriye eklendi!');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.generatedImageAdded'));
   }
 
   // --- VARIATIONS & PRICING LOCK LOGIC ---
@@ -1867,7 +1899,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0, this.usdTryRate);
     if (!parsed.hasVariations) {
       if (!silentOnMiss) {
-        this.showToast('⚠️ Varyasyon grubu tespit edilemedi. Etsy sayfasında 🔖 Yer İmini tıklayın veya Ctrl+U → Ctrl+A → Ctrl+C yapıp yapıştırın.');
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.noVariationDetected'));
       }
       return;
     }
@@ -1889,14 +1921,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     this.onVariationRowChange();
     this.saveDraftToStorage();
-    this.showToast(`✅ ${parsed.variationRows.length} varyasyon kombinasyonu (${parsed.sourceFormat.toUpperCase()}) başarıyla aktarıldı!`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.pastedVariationsSuccess', {
+      count: parsed.variationRows.length,
+      format: parsed.sourceFormat.toUpperCase()
+    }));
   }
 
   async fetchVariationsViaExtension(rawInput?: string): Promise<void> {
     const targetInput = (rawInput ?? this.extensionListingUrlInput ?? this.clonedSourceListingUrl).trim();
     const ref = extractEtsyListingRef(targetInput);
     if (!ref) {
-      this.showToast('⚠️ Lütfen geçerli bir Etsy ilan linki (etsy.com/listing/...) veya Listing ID girin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.invalidEtsyUrl'));
       return;
     }
 
@@ -1907,17 +1942,15 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     try {
       const bridgeReady = await this.extensionBridge.checkBridgeAvailable(600);
       if (!bridgeReady) {
-        this.variationImportWarning =
-          'Etsy Copilot 2.7.0 Chrome eklenti köprüsü algılanamadı. Eklentinin yüklü/aktif olduğundan emin olup bu sayfayı F5 ile yenileyin veya aşağıdaki Yer İmi / Ctrl+U yöntemini kullanın.';
-        this.showToast('⚠️ Chrome eklenti köprüsü algılanamadı (sayfayı F5 ile yenileyin).');
+        this.variationImportWarning = this.transloco.translate('listings.fastCreator.messages.extBridgeWarning');
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.extBridgeToast'));
         return;
       }
 
       const inv = await this.extensionBridge.fetchListingVariationsViaExtension(ref.listingId, ref.listingUrl);
       if (!inv || !inv.hasVariations) {
-        this.variationImportWarning =
-          'Eklenti bağlantısı kuruldu ancak bu ilanda varyasyon bulunamadı veya Etsy sayfasından okunamadı. İlanı tarayıcıda açıp Yer İmi (🔖) veya Ctrl+U ile aktarabilirsiniz.';
-        this.showToast('⚠️ Eklenti bu ilandan varyasyon okuyamadı.');
+        this.variationImportWarning = this.transloco.translate('listings.fastCreator.messages.extNoVariationsWarning');
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.extNoVariationsToast'));
         return;
       }
 
@@ -1955,7 +1988,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.showVariationImportBox = false;
     this.onVariationRowChange();
     this.saveDraftToStorage();
-    this.showToast(`🔌 Chrome eklentisiyle ${this.variationRows.length} varyasyon kombinasyonu başarıyla çekildi!`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.extVariationsSuccess', { count: this.variationRows.length }));
   }
 
   private parseVariationOptionGroup(raw: string) {
@@ -2101,7 +2134,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.variationRows = [];
         this.rebuildVariationGrid();
         this.saveDraftToStorage();
-        this.showToast('✕ 1. varyasyon grubu kaldırıldı; 2. grup 1. sıraya taşındı.');
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.group1RemovedPromoted'));
       } else {
         if (preservedBase > 0 && !(Number(this.priceUsd) > 0)) {
           this.priceUsd = preservedBase;
@@ -2117,7 +2150,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.variationAiAnalysis = null;
         this.selectedProfitVariationKey = '__base__';
         this.saveDraftToStorage();
-        this.showToast('✕ 1. varyasyon grubu kaldırıldı.');
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.group1Removed'));
       }
       return;
     }
@@ -2139,7 +2172,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.rebuildVariationGrid();
     }
     this.saveDraftToStorage();
-    this.showToast('✕ 2. varyasyon grubu kaldırıldı.');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.group2Removed'));
   }
 
   removeVariationOption(groupIndex: 1 | 2, optionIndex: number): void {
@@ -2308,14 +2341,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       }
     }
     if (p <= 0) {
-      this.showToast('⚠️ Lütfen önce taban fiyat veya en az bir varyasyon fiyatı girin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterBasePriceFirst'));
       return;
     }
     this.variationRows.forEach(row => {
       row.price = p;
     });
     this.onVariationRowChange();
-    this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.pricesSynced', { price: p.toFixed(2) }));
   }
 
   getSelectedImageForRank(rank?: number): GalleryImage | undefined {
@@ -2326,7 +2359,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   autoAssignVariationImages(): void {
     if (!this.variationRows || this.variationRows.length === 0) return;
     if (!this.galleryImages || this.galleryImages.length === 0) {
-      this.showToast('⚠️ Önce galeriye en az bir görsel yükleyin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.uploadImageFirst'));
       return;
     }
 
@@ -2339,7 +2372,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     });
 
     this.saveDraftToStorage();
-    this.showToast(`🎨 ${assigned} varyasyona galeri görselleri sırayla otomatik eşleştirildi!`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.imagesAutoAssigned', { count: assigned }));
   }
 
   clearVariationImages(): void {
@@ -2348,14 +2381,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       r.imageRank = undefined;
     });
     this.saveDraftToStorage();
-    this.showToast('✕ Tüm varyasyon görsel eşleştirmeleri temizlendi.');
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.variationImagesCleared'));
   }
 
   suggestAiVariations(): void {
     const cleanTitle = (this.title || '').trim();
     const cleanDesc = (this.description || '').trim();
     if (!cleanTitle && !cleanDesc) {
-      this.showToast('⚠️ AI varyasyon önerisi için lütfen önce ürün başlığı veya açıklaması girin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterInfoForVariations'));
       return;
     }
 
@@ -2421,15 +2454,15 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           if (res.warningMessage) {
             this.showToast(`⚠️ ${res.warningMessage}`);
           } else {
-            this.showToast(`✨ ${res.provider} ürüne özel varyasyonları oluşturdu (${groupLabel})`);
+            this.showToast(this.transloco.translate('listings.fastCreator.messages.aiVariationsSuccess', { provider: res.provider, groups: groupLabel }));
           }
         } else {
-          this.showToast('⚠️ Bu ürün için uygun varyasyon önerisi bulunamadı.');
+          this.showToast(this.transloco.translate('listings.fastCreator.messages.noVariationsFound'));
         }
       },
       error: (err) => {
         this.isGeneratingVariations = false;
-        const detail = err?.error?.message || err?.error?.detail || err?.message || 'AI varyasyon önerisi alınamadı.';
+        const detail = err?.error?.message || err?.error?.detail || err?.message || this.transloco.translate('listings.fastCreator.messages.aiVariationsError');
         this.variationAiAnalysis = {
           provider: s.provider,
           model: this.aiService.activeModelName(),
@@ -2539,7 +2572,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
             serviceType: q.serviceType || q.serviceCode || 'Standard',
             priceUsd: Number(priceUsd.toFixed(2)),
             priceTry: Number((Number(q.priceTry) || priceUsd * this.usdTryRate).toFixed(2)),
-            estimatedDays: q.estimatedDays || '3-6 İş Günü',
+            estimatedDays: q.estimatedDays || this.transloco.translate('listings.fastCreator.messages.defaultEstimatedDays'),
             isLive: Boolean(q.isLive)
           };
           const prev = bestByCarrier.get(key);
@@ -2550,7 +2583,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
         this.drawerCarrierQuotes = Array.from(bestByCarrier.values()).sort((a, b) => a.priceUsd - b.priceUsd);
         if (this.drawerCarrierQuotes.length === 0) {
-          this.carrierQuotesError = resp?.warningMessage || 'Bu ölçü ve ülke için taşıyıcı teklifi alınamadı.';
+          this.carrierQuotesError = resp?.warningMessage || this.transloco.translate('listings.fastCreator.messages.noCarrierQuotes');
         } else if (!this.selectedCarrierKey) {
           const cheapest = this.drawerCarrierQuotes[0];
           this.selectedCarrierKey = cheapest.carrierKey;
@@ -2564,7 +2597,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isLoadingCarrierQuotes = false;
-        this.carrierQuotesError = err?.error?.message || err?.message || '4 taşıyıcıdan canlı fiyat çekilemedi.';
+        this.carrierQuotesError = err?.error?.message || err?.message || this.transloco.translate('listings.fastCreator.messages.carrierQuotesError');
       }
     });
   }
@@ -2575,13 +2608,16 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.estimatedShippingCostUsd = Number(quote.priceUsd.toFixed(2));
     this.onVariationRowChange();
     this.saveDraftToStorage();
-    this.showToast(`🚚 ${quote.carrierName} ($${quote.priceUsd.toFixed(2)}) kargo maliyeti olarak uygulandı!`);
+    this.showToast(this.transloco.translate('listings.fastCreator.messages.carrierApplied', {
+      carrier: quote.carrierName,
+      price: quote.priceUsd.toFixed(2)
+    }));
   }
 
   runAiPricingAgent(customKeywordOverride?: string): void {
     const cleanTitle = (this.title || '').trim() || (this.description || '').trim();
     if (!cleanTitle) {
-      this.showToast('⚠️ Ajanı çalıştırmak için lütfen önce ürün başlığı veya açıklaması girin.');
+      this.showToast(this.transloco.translate('listings.fastCreator.messages.enterInfoForAgent'));
       return;
     }
 
@@ -2657,7 +2693,12 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           }
           this.saveDraftToStorage();
           this.showToast(
-            `🤖 AI Fiyat & Kargo Ajanı tamamlandı (Tekil Ürün): Önerilen $${res.recommendedBasePriceUsd.toFixed(2)} · Kargo (${res.shippingBenchmark.selectedCarrierName}): $${res.recommendedBaseShippingCostUsd.toFixed(2)} · Net Marj: %${res.averageNetMarginPercent.toFixed(1)}`
+            this.transloco.translate('listings.fastCreator.messages.agentSingleSuccess', {
+              price: res.recommendedBasePriceUsd.toFixed(2),
+              carrier: res.shippingBenchmark.selectedCarrierName,
+              shipping: res.recommendedBaseShippingCostUsd.toFixed(2),
+              margin: res.averageNetMarginPercent.toFixed(1)
+            })
           );
           return;
         }
@@ -2682,12 +2723,17 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.onVariationRowChange();
         this.saveDraftToStorage();
         this.showToast(
-          `🤖 AI Fiyat & Kargo Ajanı tamamlandı: ${res.pricedVariations.length} varyasyon · Kargo (${res.shippingBenchmark.selectedCarrierName}): $${res.recommendedBaseShippingCostUsd.toFixed(2)} · Taban: $${res.recommendedBasePriceUsd.toFixed(2)}`
+          this.transloco.translate('listings.fastCreator.messages.agentVariationSuccess', {
+            count: res.pricedVariations.length,
+            carrier: res.shippingBenchmark.selectedCarrierName,
+            shipping: res.recommendedBaseShippingCostUsd.toFixed(2),
+            price: res.recommendedBasePriceUsd.toFixed(2)
+          })
         );
       },
       error: (err) => {
         this.isRunningPricingAgent = false;
-        this.pricingAgentError = err?.error?.message || err?.message || 'AI Fiyatlandırma & Kargo Ajanı çalıştırılamadı.';
+        this.pricingAgentError = err?.error?.message || err?.message || this.transloco.translate('listings.fastCreator.messages.agentError');
         this.showToast(`❌ ${this.pricingAgentError}`);
       }
     });
@@ -2756,11 +2802,11 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         if (this.createdListingResult) {
           this.createdListingResult.state = 'active';
         }
-        this.showToast(`🎉 İlan başarıyla CANLI satışa açıldı! (ID: #${listingId})`);
+        this.showToast(this.transloco.translate('listings.fastCreator.messages.listingActivated', { id: listingId }));
       },
       error: (err) => {
         this.isActivatingListing = false;
-        this.applyClientValidationError(err, 'İlan canlıya alınırken doğrulama veya bağlantı hatası oluştu.');
+        this.applyClientValidationError(err, this.transloco.translate('listings.fastCreator.messages.activateError'));
       }
     });
   }
@@ -2768,9 +2814,13 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   publishListingToEtsy(): void {
     this.clearValidationErrors();
     if (!this.isTitleReady) {
-      this.validationErrorSummary = 'Lütfen formdaki doğrulama uyarılarını düzeltin.';
+      this.validationErrorSummary = this.transloco.translate('listings.fastCreator.banners.validationDefault');
       this.validationFieldErrors = [
-        { field: 'Title', label: 'Ürün Başlığı', messages: ['Lütfen geçerli bir ürün başlığı giriniz (1-140 karakter).'] }
+        {
+          field: 'Title',
+          label: this.transloco.translate('listings.fastCreator.messages.titleFieldLabel'),
+          messages: [this.transloco.translate('listings.fastCreator.messages.titleRequiredMsg')]
+        }
       ];
       return;
     }
@@ -2895,20 +2945,23 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           this.isPublishSuccessModalOpen = true;
           this.resetForm();
           const varCount = (res as any).variationsCount || 0;
-          const varText = varCount > 0 ? ` + ${varCount} varyasyon` : '';
+          const varText = varCount > 0 ? this.transloco.translate('listings.fastCreator.messages.publishVarPart', { count: varCount }) : '';
 
           if ((res as any).variationError) {
-            alert(`⚠️ İlan #${res.listingId} Etsy'ye aktarıldı, ANCAK varyasyonlar eklenemedi:\n${(res as any).variationError}`);
+            alert(this.transloco.translate('listings.fastCreator.messages.publishVarErrorAlert', { id: res.listingId, error: (res as any).variationError }));
           }
 
-          this.showToast(`🎉 Başarılı! İlan ${res.state === 'active' ? 'CANLI' : 'TASLAK'} olarak Etsy'ye aktarıldı! (ID: #${res.listingId}${varText})`);
+          const stateLabel = res.state === 'active'
+            ? this.transloco.translate('listings.fastCreator.messages.publishStateLive')
+            : this.transloco.translate('listings.fastCreator.messages.publishStateDraft');
+          this.showToast(this.transloco.translate('listings.fastCreator.messages.publishSuccess', { state: stateLabel, id: res.listingId, varText }));
         } else {
-          this.showToast('İlan aktarıldı ancak sunucu yanıtı doğrulanamadı.');
+          this.showToast(this.transloco.translate('listings.fastCreator.messages.publishUnverified'));
         }
       },
       error: (err) => {
         this.isSavingDraft = false;
-        this.applyClientValidationError(err, 'İlan gönderilirken doğrulama veya bağlantı hatası oluştu.');
+        this.applyClientValidationError(err, this.transloco.translate('listings.fastCreator.messages.publishError'));
       }
     });
   }

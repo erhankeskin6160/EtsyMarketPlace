@@ -1,6 +1,21 @@
+import { Injectable } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideTransloco, Translation, TranslocoLoader } from '@jsverse/transloco';
+import { Observable, of } from 'rxjs';
 import { PricingCompetitorsDrawerComponent } from './pricing-competitors-drawer.component';
 import { CompetitorPriceSampleDto, VariationMarketBenchmarkDto } from '../../../core/services/etsy-api.service';
+
+@Injectable()
+class ListingsTrTranslocoLoader implements TranslocoLoader {
+  getTranslation(): Observable<Translation> {
+    return of({
+      competitorsDrawer: {
+        badgeOutlier: '⚠️ Medyandan Elendi',
+        defaultSourceModule: 'Pazar Araştırması Modülü (Etsy API v3)'
+      }
+    });
+  }
+}
 
 describe('PricingCompetitorsDrawerComponent', () => {
   let fixture: ComponentFixture<PricingCompetitorsDrawerComponent>;
@@ -77,7 +92,18 @@ describe('PricingCompetitorsDrawerComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PricingCompetitorsDrawerComponent]
+      imports: [PricingCompetitorsDrawerComponent],
+      providers: [
+        provideTransloco({
+          config: {
+            availableLangs: ['en', 'tr'],
+            defaultLang: 'tr',
+            reRenderOnLangChange: true,
+            missingHandler: { logMissingKey: false }
+          },
+          loader: ListingsTrTranslocoLoader
+        })
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(PricingCompetitorsDrawerComponent);

@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, computed, DestroyRef } from '@angula
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, MarketListingItemDto, CreateListingPayload } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { buildEtsyDescriptionTemplate } from '../../core/utils/etsy-description-template.util';
@@ -38,12 +39,14 @@ export interface DiscoveryItem {
 @Component({
   selector: 'app-product-discovery',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('listings')],
   templateUrl: './product-discovery.component.html',
   styleUrls: ['./product-discovery.component.css']
 })
 export class ProductDiscoveryComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   router = inject(Router);
@@ -59,7 +62,7 @@ export class ProductDiscoveryComponent implements OnInit {
   isGeneratingFullAi = false;
   isGeneratingDesc = false;
   isSavingDraft = false;
-  statusText = 'Aramaya hazır — Etsy ürün linki yapıştırın veya anahtar kelime ile arayın';
+  statusText = '';
   toastMessage = '';
 
   // Main Data
@@ -128,7 +131,7 @@ export class ProductDiscoveryComponent implements OnInit {
                 ...p,
                 shippingProfileId: id,
                 shipping_profile_id: id,
-                title: p.title || `Profil #${id}`
+                title: p.title || this.transloco.translate('listings.discovery.profileFallback', { id })
               };
             })
             .filter((p: any) => p.shippingProfileId > 0);
@@ -145,32 +148,32 @@ export class ProductDiscoveryComponent implements OnInit {
   searchEtsy(): void {
     const kw = (this.keywordInput || '').trim();
     if (!kw) {
-      this.showToast('⚠️ Lütfen aranacak bir kelime veya niş girin.');
+      this.showToast(this.transloco.translate('listings.discovery.toastEnterKeyword'));
       return;
     }
 
     this.isLoading = true;
-    this.statusText = `"${kw}" için Etsy pazarında canlı ürünler taranıyor...`;
+    this.statusText = this.transloco.translate('listings.discovery.statusSearching', { keyword: kw });
 
     this.etsyApi.searchMarket(kw, this.limitInput, 'market_score').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoading = false;
         if (res && res.listings && res.listings.length > 0) {
           this.items = res.listings.map(l => this.mapToDiscoveryItem(l));
-          this.statusText = `"${kw}" için ${this.items.length} canlı Etsy ilanı listelendi.`;
+          this.statusText = this.transloco.translate('listings.discovery.statusSearchFound', { keyword: kw, count: this.items.length });
           this.selectItem(this.items[0]);
-          this.showToast(`✅ ${this.items.length} rakip ürün yüklendi.`);
+          this.showToast(this.transloco.translate('listings.discovery.toastSearchLoaded', { count: this.items.length }));
         } else {
           this.items = [];
           this.selectedItem = null;
-          this.statusText = `"${kw}" için sonuç bulunamadı.`;
-          this.showToast('ℹ️ Arama sonucunda ilan bulunamadı.');
+          this.statusText = this.transloco.translate('listings.discovery.statusSearchEmpty', { keyword: kw });
+          this.showToast(this.transloco.translate('listings.discovery.toastSearchEmpty'));
         }
       },
       error: (err) => {
         this.isLoading = false;
-        this.statusText = `⚠️ Hata: ${err?.message || 'Etsy araması başarısız'}`;
-        this.showToast('🚨 Etsy API arama hatası oluştu.');
+        this.statusText = this.transloco.translate('listings.discovery.statusSearchError', { error: err?.message || this.transloco.translate('listings.discovery.defaultSearchError') });
+        this.showToast(this.transloco.translate('listings.discovery.toastSearchError'));
       }
     });
   }
@@ -179,12 +182,12 @@ export class ProductDiscoveryComponent implements OnInit {
   importListingLink(): void {
     const link = (this.listingLinkInput || '').trim();
     if (!link) {
-      this.showToast('⚠️ Lütfen geçerli bir Etsy listing linki veya ürün numarası girin.');
+      this.showToast(this.transloco.translate('listings.discovery.toastEnterLink'));
       return;
     }
 
     this.isImporting = true;
-    this.statusText = '🔗 Etsy linki çözümleniyor, ürün detayları ve niş pazar verileri taranıyor...';
+    this.statusText = this.transloco.translate('listings.discovery.statusImportingLink');
 
     this.etsyApi.searchMarket(link, this.limitInput, 'market_score').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
@@ -194,18 +197,21 @@ export class ProductDiscoveryComponent implements OnInit {
           const target = this.items.find(i => i.isTargetListing) ?? this.items[0];
           this.selectItem(target);
           if (res.targetListingId) {
-            this.statusText = `🎯 Hedef ürün (#${res.targetListingId}) ve ${Math.max(0, this.items.length - 1)} rakip pazar ilanı başarıyla yüklendi.`;
+            this.statusText = this.transloco.translate('listings.discovery.statusLinkImported', {
+              id: res.targetListingId,
+              competitorCount: Math.max(0, this.items.length - 1)
+            });
           }
-          this.showToast('🎯 Hedef Etsy ürünü ve pazar verileri aktarıldı!');
+          this.showToast(this.transloco.translate('listings.discovery.toastLinkImported'));
         } else {
-          this.statusText = '⚠️ Belirtilen linkten ilan detayları alınamadı.';
-          this.showToast('⚠️ İlan bulunamadı. Linki kontrol edip tekrar deneyin.');
+          this.statusText = this.transloco.translate('listings.discovery.statusLinkNotFound');
+          this.showToast(this.transloco.translate('listings.discovery.toastLinkNotFound'));
         }
       },
       error: (err) => {
         this.isImporting = false;
-        this.statusText = `⚠️ Hata: ${err?.message || 'Linkten alma başarısız'}`;
-        this.showToast('🚨 İlan linki alınırken hata oluştu.');
+        this.statusText = this.transloco.translate('listings.discovery.statusSearchError', { error: err?.message || this.transloco.translate('listings.discovery.defaultImportError') });
+        this.showToast(this.transloco.translate('listings.discovery.toastImportError'));
       }
     });
   }
@@ -232,12 +238,12 @@ export class ProductDiscoveryComponent implements OnInit {
   // --- 🚀 1-TIK FULL AI LISTING ---
   generateFullAutoPilotListing(): void {
     if (!this.selectedItem && !this.draftTitle) {
-      this.showToast('⚠️ Lütfen önce tablodan bir ürün seçin veya başlık girin.');
+      this.showToast(this.transloco.translate('listings.discovery.toastSelectProductFirst'));
       return;
     }
 
     this.isGeneratingFullAi = true;
-    this.statusText = '🚀 1-Tık Full AI: 100/100 LQS SEO başlığı, 13 altın etiket ve satış odaklı açıklama üretiliyor...';
+    this.statusText = this.transloco.translate('listings.discovery.statusFullAiRunning');
 
     const cmd = {
       listingId: this.selectedItem?.id || 0,
@@ -268,16 +274,16 @@ export class ProductDiscoveryComponent implements OnInit {
           this.generateLocalImagePrompts();
           this.recalculateLqsChecks();
           this.activeTab = 'seo';
-          this.statusText = '✅ 1-Tık Full AI Listing başarıyla hazırlandı! İnceleyip "Etsy Taslak Ekle" ile gönderebilirsiniz.';
-          this.showToast('🎉 1-Tık Full AI: İlan 100/100 LQS seviyesinde optimize edildi!');
+          this.statusText = this.transloco.translate('listings.discovery.statusFullAiSuccess');
+          this.showToast(this.transloco.translate('listings.discovery.toastFullAiSuccess'));
         }
       },
       error: () => {
         this.isGeneratingFullAi = false;
         // Fallback: Yerel akıllı şablon ve optimizasyon motorunu devreye sok
         this.applyLocalOptimizationFallback();
-        this.statusText = '✅ Akıllı SEO motoru ile başlık, 13 tag ve ferah açıklama şablonu oluşturuldu.';
-        this.showToast('✨ Akıllı SEO motoru taslağı hazırladı!');
+        this.statusText = this.transloco.translate('listings.discovery.statusFullAiFallback');
+        this.showToast(this.transloco.translate('listings.discovery.toastFullAiFallback'));
       }
     });
   }
@@ -291,13 +297,13 @@ export class ProductDiscoveryComponent implements OnInit {
       listingType: 'physical'
     });
     this.recalculateLqsChecks();
-    this.showToast('📐 Ferah Etsy paragraf şablonu açıklamaya uygulandı!');
+    this.showToast(this.transloco.translate('listings.discovery.toastTemplateApplied'));
   }
 
   // --- AI AÇIKLAMA YENİLE ---
   generateDescriptionWithAi(): void {
     this.isGeneratingDesc = true;
-    this.statusText = '✨ Yapay zeka satış odaklı açıklama metnini yazıyor...';
+    this.statusText = this.transloco.translate('listings.discovery.statusAiDescRunning');
 
     const cmd = {
       listingId: this.selectedItem?.id || 0,
@@ -317,7 +323,7 @@ export class ProductDiscoveryComponent implements OnInit {
         this.isGeneratingDesc = false;
         if (res && res.optimizedDescription) {
           this.draftDescription = res.optimizedDescription;
-          this.showToast('✨ AI Açıklama başarıyla oluşturuldu!');
+          this.showToast(this.transloco.translate('listings.discovery.toastAiDescSuccess'));
         } else {
           this.applyDescriptionTemplate();
         }
@@ -332,7 +338,7 @@ export class ProductDiscoveryComponent implements OnInit {
   // --- RAKİP ETİKETLERİNİ KOPYALA ---
   copyCompetitorTags(): void {
     if (!this.selectedItem || !this.selectedItem.tags || this.selectedItem.tags.length === 0) {
-      this.showToast('⚠️ Seçili ürüne ait etiket bulunamadı.');
+      this.showToast(this.transloco.translate('listings.discovery.toastNoCompetitorTags'));
       return;
     }
 
@@ -343,7 +349,7 @@ export class ProductDiscoveryComponent implements OnInit {
 
     this.draftTags = cleaned;
     this.recalculateLqsChecks();
-    this.showToast(`📋 Rakibin ${cleaned.length} etiketi kopyalandı.`);
+    this.showToast(this.transloco.translate('listings.discovery.toastCopiedCompetitorTags', { count: cleaned.length }));
   }
 
   // --- ETİKET YÖNETİMİ ---
@@ -351,15 +357,15 @@ export class ProductDiscoveryComponent implements OnInit {
     const val = (this.newTagInput || '').trim().toLowerCase();
     if (!val) return;
     if (val.length > 20) {
-      this.showToast('⚠️ Etsy etiketleri en fazla 20 karakter olabilir!');
+      this.showToast(this.transloco.translate('listings.discovery.toastTagMaxLength'));
       return;
     }
     if (this.draftTags.length >= 13) {
-      this.showToast('⚠️ Etsy en fazla 13 etiket kabul eder!');
+      this.showToast(this.transloco.translate('listings.discovery.toastTagMaxCount'));
       return;
     }
     if (this.draftTags.includes(val)) {
-      this.showToast('ℹ️ Bu etiket zaten ekli.');
+      this.showToast(this.transloco.translate('listings.discovery.toastTagDuplicate'));
       return;
     }
 
@@ -376,16 +382,16 @@ export class ProductDiscoveryComponent implements OnInit {
   // --- 💾 ETSY TASLAK EKLE (Direct Draft to Shop) ---
   saveDraftToEtsy(): void {
     if (!this.draftTitle || this.draftTitle.trim().length < 5) {
-      this.showToast('⚠️ Lütfen en az 5 karakterlik bir başlık girin.');
+      this.showToast(this.transloco.translate('listings.discovery.toastMinTitle'));
       return;
     }
     if (this.draftPriceUsd <= 0) {
-      this.showToast('⚠️ Lütfen geçerli bir fiyat girin.');
+      this.showToast(this.transloco.translate('listings.discovery.toastInvalidPrice'));
       return;
     }
 
     this.isSavingDraft = true;
-    this.statusText = '💾 Etsy mağazanıza taslak listing gönderiliyor...';
+    this.statusText = this.transloco.translate('listings.discovery.statusSavingDraft');
 
     // Toplanan görseller
     const imagePayloads = (this.selectedItem?.imageUrls || [])
@@ -415,17 +421,17 @@ export class ProductDiscoveryComponent implements OnInit {
           this.createdListingId = res.listingId;
           this.createdListingUrl = res.url || `https://www.etsy.com/your/shops/me/listing-editor/edit/${res.listingId}`;
           this.showSuccessModal = true;
-          this.statusText = `✅ Taslak #${res.listingId} Etsy mağazanıza başarıyla eklendi!`;
-          this.showToast(`🎉 Taslak #${res.listingId} Etsy mağazanıza kaydedildi!`);
+          this.statusText = this.transloco.translate('listings.discovery.statusDraftSaved', { id: res.listingId });
+          this.showToast(this.transloco.translate('listings.discovery.toastDraftSaved', { id: res.listingId }));
         } else {
-          this.showToast('⚠️ Taslak oluşturuldu ancak ID alınamadı.');
+          this.showToast(this.transloco.translate('listings.discovery.toastDraftNoId'));
         }
       },
       error: (err) => {
         this.isSavingDraft = false;
-        const msg = err?.error?.message || err?.message || 'Etsy API taslak oluşturma hatası';
-        this.statusText = `🚨 Hata: ${msg}`;
-        this.showToast(`🚨 Taslak eklenemedi: ${msg}`);
+        const msg = err?.error?.message || err?.message || this.transloco.translate('listings.discovery.defaultDraftError');
+        this.statusText = this.transloco.translate('listings.discovery.statusDraftError', { error: msg });
+        this.showToast(this.transloco.translate('listings.discovery.toastDraftError', { error: msg }));
       }
     });
   }
@@ -433,7 +439,7 @@ export class ProductDiscoveryComponent implements OnInit {
   // --- ⚡ HIZLI ÜRÜN EKLE'YE AKTAR (Bridge to Fast Creator) ---
   transferToFastCreator(): void {
     if (!this.draftTitle) {
-      this.showToast('⚠️ Aktarılacak başlık bulunamadı.');
+      this.showToast(this.transloco.translate('listings.discovery.toastNoTitleToTransfer'));
       return;
     }
 
@@ -449,7 +455,7 @@ export class ProductDiscoveryComponent implements OnInit {
       imageUrls: this.selectedItem?.imageUrls || []
     });
 
-    this.showToast('⚡ İlan Hızlı Ürün Ekleme modülüne aktarılıyor...');
+    this.showToast(this.transloco.translate('listings.discovery.toastTransferring'));
     this.router.navigate(['/listings/fast-creator']);
   }
 
@@ -474,10 +480,11 @@ export class ProductDiscoveryComponent implements OnInit {
     this.zoomedImageUrl = null;
   }
 
-  copyToClipboard(text: string, label: string = 'Metin'): void {
+  copyToClipboard(text: string, label?: string): void {
     if (!text) return;
+    const resolvedLabel = label || this.transloco.translate('listings.discovery.defaultCopyLabel');
     navigator.clipboard.writeText(text).then(() => {
-      this.showToast(`📋 ${label} panoya kopyalandı!`);
+      this.showToast(this.transloco.translate('listings.discovery.toastCopiedClipboard', { label: resolvedLabel }));
     });
   }
 

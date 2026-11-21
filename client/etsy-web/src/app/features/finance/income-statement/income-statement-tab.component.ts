@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EMPTY, Observable, Subject, catchError, finalize, switchMap, tap, timeout } from 'rxjs';
 import {
   CanceledOrderCostTarget,
@@ -24,13 +25,15 @@ import { EtsyApiService } from '../../../core/services/etsy-api.service';
 @Component({
   selector: 'app-income-statement-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('finance')],
   templateUrl: './income-statement-tab.component.html',
   styleUrls: ['./income-statement-tab.component.css']
 })
 export class IncomeStatementTabComponent implements OnInit, OnChanges {
   private readonly etsyApi = inject(EtsyApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly transloco = inject(TranslocoService);
 
   @Input() shopId = '53236321';
   @Input() period = 'this_month';
@@ -115,7 +118,7 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
                 this.syncFormsFromResponse(res);
               }),
               catchError(err => {
-                const msg = this.extractHttpErrorMessage(err, 'Resmi Gelir Tablosu yüklenemedi.');
+                const msg = this.extractHttpErrorMessage(err, this.transloco.translate('finance.incomeStatement.loadError'));
                 this.setError(msg);
                 return EMPTY;
               })
@@ -159,10 +162,11 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
 
   persistYoungMode(enable: boolean): void {
     const updated: ShopAccountingProfileDto = { ...this.profileForm, youngEntrepreneurModeEnabled: enable };
+    const stateLabel = this.transloco.translate(enable ? 'finance.incomeStatement.stateActive' : 'finance.incomeStatement.stateInactive');
     this.executeSave(
       this.etsyApi.saveAccountingProfile(updated, this.shopId),
-      `✅ Genç Girişimci modu kalıcı olarak ${enable ? 'AKTİF' : 'KAPALI'} kaydedildi.`,
-      'Profil kaydedilemedi.',
+      this.transloco.translate('finance.incomeStatement.youngModeSaved', { state: stateLabel }),
+      this.transloco.translate('finance.incomeStatement.profileSaveError'),
       () => this.previewYoungOverride.set(null)
     );
   }
@@ -212,15 +216,15 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     this.errorMessage.set(null);
 
     if (this.isExpenseDateInvalid()) {
-      this.failClientValidation('expDate', 'Geçerli bir belge / gider tarihi seçiniz.');
+      this.failClientValidation('expDate', this.transloco.translate('finance.incomeStatement.valDate'));
       return;
     }
     if (this.isExpenseDescriptionInvalid()) {
-      this.failClientValidation('expDesc', 'En az 2 karakterlik açıklama girmelisiniz.');
+      this.failClientValidation('expDesc', this.transloco.translate('finance.incomeStatement.valDesc'));
       return;
     }
     if (this.isExpenseAmountInvalid()) {
-      this.failClientValidation('expAmount', 'Tutar 0\'dan büyük olmalıdır.');
+      this.failClientValidation('expAmount', this.transloco.translate('finance.incomeStatement.valAmount'));
       return;
     }
 
@@ -243,8 +247,8 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
         },
         this.shopId
       ),
-      '✅ Gider/KKEG fişi kaydedildi ve Gelir Tablosu güncellendi.',
-      'Gider fişi kaydedilemedi.',
+      this.transloco.translate('finance.incomeStatement.expenseSaved'),
+      this.transloco.translate('finance.incomeStatement.expenseSaveError'),
       () => {
         this.expenseSubmitted.set(false);
         this.expenseForm = this.freshExpenseForm();
@@ -255,8 +259,8 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   removeExpense(id: number): void {
     this.executeSave(
       this.etsyApi.deleteOperatingExpense(id, this.shopId),
-      '🗑️ Gider fişi silindi.',
-      'Gider fişi silinemedi.'
+      this.transloco.translate('finance.incomeStatement.expenseDeleted'),
+      this.transloco.translate('finance.incomeStatement.expenseDeleteError')
     );
   }
 
@@ -265,15 +269,15 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     this.errorMessage.set(null);
 
     if (this.isAssetNameInvalid()) {
-      this.failClientValidation('assetName', 'Varlık adı zorunludur.');
+      this.failClientValidation('assetName', this.transloco.translate('finance.incomeStatement.valAssetName'));
       return;
     }
     if (this.isAssetDateInvalid()) {
-      this.failClientValidation('assetDate', 'Aktife giriş (alış) tarihi zorunludur.');
+      this.failClientValidation('assetDate', this.transloco.translate('finance.incomeStatement.valAssetDate'));
       return;
     }
     if (this.isAssetCostInvalid()) {
-      this.failClientValidation('assetCost', 'Maliyet bedeli 0\'dan büyük olmalıdır.');
+      this.failClientValidation('assetCost', this.transloco.translate('finance.incomeStatement.valAssetCost'));
       return;
     }
 
@@ -281,11 +285,11 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     const salvage = Number(this.assetForm.salvageValueTry) || 0;
     const cost = Number(this.assetForm.acquisitionCostTry);
     if (!Number.isFinite(life) || life < 1 || life > 50) {
-      this.failClientValidation('assetLife', 'Ekonomik ömür 1 ile 50 yıl arasında olmalıdır.');
+      this.failClientValidation('assetLife', this.transloco.translate('finance.incomeStatement.valAssetLife'));
       return;
     }
     if (salvage < 0 || salvage >= cost) {
-      this.failClientValidation('assetLife', 'Hurda değer 0 ile maliyet bedelinin altında olmalıdır.');
+      this.failClientValidation('assetLife', this.transloco.translate('finance.incomeStatement.valAssetSalvage'));
       return;
     }
 
@@ -305,8 +309,8 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
         },
         this.shopId
       ),
-      '✅ Duran varlık ve amortisman kartı eklendi.',
-      'Sabit kıymet kaydedilemedi.',
+      this.transloco.translate('finance.incomeStatement.assetSaved'),
+      this.transloco.translate('finance.incomeStatement.assetSaveError'),
       () => {
         this.assetSubmitted.set(false);
         this.assetForm = this.freshAssetForm();
@@ -317,16 +321,16 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   removeAsset(id: number): void {
     this.executeSave(
       this.etsyApi.deleteFixedAsset(id, this.shopId),
-      '🗑️ Duran varlık kartı silindi.',
-      'Sabit kıymet silinemedi.'
+      this.transloco.translate('finance.incomeStatement.assetDeleted'),
+      this.transloco.translate('finance.incomeStatement.assetDeleteError')
     );
   }
 
   saveProfile(): void {
     this.executeSave(
       this.etsyApi.saveAccountingProfile(this.profileForm, this.shopId),
-      '✅ TDHP muhasebe politikası ve vergi ayarları kaydedildi.',
-      'Muhasebe politikası kaydedilemedi.',
+      this.transloco.translate('finance.incomeStatement.policySaved'),
+      this.transloco.translate('finance.incomeStatement.policySaveError'),
       () => this.previewYoungOverride.set(null)
     );
   }
@@ -334,8 +338,8 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   saveInventory(): void {
     this.executeSave(
       this.etsyApi.saveInventoryAdjustment({ ...this.invForm, shopId: this.shopId }, this.shopId),
-      '✅ Aralıklı envanter dönem sayımı kaydedildi.',
-      'Stok sayımı kaydedilemedi.'
+      this.transloco.translate('finance.incomeStatement.invSaved'),
+      this.transloco.translate('finance.incomeStatement.invSaveError')
     );
   }
 
@@ -356,9 +360,22 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     const num = (v: number): string => v.toFixed(2).replace('.', ',');
 
     const rows: string[] = [];
-    rows.push(['RESMİ MSUGT GELİR TABLOSU (TEKDÜZEN HESAP PLANI 600–692)', '', '', '', ''].map(esc).join(';'));
-    rows.push(['Mağaza', d.shopId, 'Tarih', `${d.startDate.slice(0, 10)} — ${d.endDate.slice(0, 10)}`, `Ort. Kur: ${num(d.averageExchangeRate)}`].map(esc).join(';'));
-    rows.push(['Hesap Kodu', 'MSUGT Hesap / Bölüm Adı', 'Tutar (TRY)', 'USD Karşılığı', 'Net Satış Payı (%)', 'Açıklama'].map(esc).join(';'));
+    rows.push([this.transloco.translate('finance.incomeStatement.csvTitle'), '', '', '', ''].map(esc).join(';'));
+    rows.push([
+      this.transloco.translate('finance.incomeStatement.csvShop'),
+      d.shopId,
+      this.transloco.translate('finance.incomeStatement.csvDate'),
+      `${d.startDate.slice(0, 10)} — ${d.endDate.slice(0, 10)}`,
+      this.transloco.translate('finance.incomeStatement.csvAvgRate', { rate: num(d.averageExchangeRate) })
+    ].map(esc).join(';'));
+    rows.push([
+      this.transloco.translate('finance.incomeStatement.csvColCode'),
+      this.transloco.translate('finance.incomeStatement.csvColAccount'),
+      this.transloco.translate('finance.incomeStatement.csvColTry'),
+      this.transloco.translate('finance.incomeStatement.csvColUsd'),
+      this.transloco.translate('finance.incomeStatement.csvColShare'),
+      this.transloco.translate('finance.incomeStatement.csvColNote')
+    ].map(esc).join(';'));
 
     for (const sec of d.sections) {
       if (!this.isSingleSubtotalSection(sec)) {
@@ -379,18 +396,26 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     }
 
     rows.push('');
-    rows.push(['VERGİ KÖPRÜSÜ (2026 GVK / GENÇ GİRİŞİMCİ)', '', '', '', '', ''].map(esc).join(';'));
-    rows.push(['690 Ticari Kâr', num(d.taxBridge.commercialProfit690Try), 'KKEG (950)', num(d.taxBridge.kkegAdditions950Try), 'Bağ-Kur (890)', num(d.taxBridge.bagkurDeductionTry)].map(esc).join(';'));
-    rows.push(['Genç Girişimci İstisnası', num(d.taxBridge.youngEntrepreneurAppliedInPeriodTry), 'Vergi Matrahı', num(d.taxBridge.taxableBaseTry), '691 Vergi Karşılığı', num(d.taxBridge.estimatedTax691Try)].map(esc).join(';'));
+    rows.push([this.transloco.translate('finance.incomeStatement.csvTaxBridgeTitle'), '', '', '', '', ''].map(esc).join(';'));
+    rows.push([
+      this.transloco.translate('finance.incomeStatement.csvCommercialProfit'), num(d.taxBridge.commercialProfit690Try),
+      this.transloco.translate('finance.incomeStatement.csvKkeg'), num(d.taxBridge.kkegAdditions950Try),
+      this.transloco.translate('finance.incomeStatement.csvBagkur'), num(d.taxBridge.bagkurDeductionTry)
+    ].map(esc).join(';'));
+    rows.push([
+      this.transloco.translate('finance.incomeStatement.csvYoungExemption'), num(d.taxBridge.youngEntrepreneurAppliedInPeriodTry),
+      this.transloco.translate('finance.incomeStatement.csvTaxBase'), num(d.taxBridge.taxableBaseTry),
+      this.transloco.translate('finance.incomeStatement.csvTax691'), num(d.taxBridge.estimatedTax691Try)
+    ].map(esc).join(';'));
 
     const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `resmi-gelir-tablosu-${d.shopId}-${d.startDate.slice(0, 10)}.csv`;
+    a.download = `${this.transloco.translate('finance.incomeStatement.csvFilenamePrefix')}-${d.shopId}-${d.startDate.slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('📊 Resmi MSUGT Gelir Tablosu Excel (CSV) dosyası indirildi.');
+    this.showToast(this.transloco.translate('finance.incomeStatement.csvDownloaded'));
   }
 
   formatAmount(tryVal: number, usdVal: number): string {
@@ -459,13 +484,13 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     const anyErr = err as Record<string, any> | null | undefined;
     if (!anyErr) return fallback;
     if (anyErr['name'] === 'TimeoutError') {
-      return 'Sunucu yanıtı zaman aşımına uğradı (20 sn). Ağ veya VDS durumunu kontrol edip tekrar deneyin.';
+      return this.transloco.translate('finance.incomeStatement.errTimeout');
     }
     if (anyErr['status'] === 0) {
-      return 'Sunucuya bağlanılamadı. VDS API erişimini veya internet bağlantınızı kontrol edin.';
+      return this.transloco.translate('finance.incomeStatement.errNetwork');
     }
     if (anyErr['status'] === 401) {
-      return 'Oturum süresi dolmuş veya yetki eksik (401). Sayfayı yenileyip yeniden oturum açın.';
+      return this.transloco.translate('finance.incomeStatement.errUnauthorized');
     }
     const body = anyErr['error'];
     if (typeof body === 'string' && body.trim()) return body.trim();

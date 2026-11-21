@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, provideTranslocoScope } from '@jsverse/transloco';
 import { CompetitorPriceSampleDto, VariationMarketBenchmarkDto } from '../../../core/services/etsy-api.service';
 
 export type CompetitorFilterMode = 'all' | 'free_shipping' | 'bestseller' | 'outliers';
@@ -9,7 +10,8 @@ export type CompetitorSortMode = 'score' | 'price_asc' | 'price_desc' | 'sales' 
 @Component({
   selector: 'app-pricing-competitors-drawer',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('listings')],
   templateUrl: './pricing-competitors-drawer.component.html',
   styleUrls: ['./pricing-competitors-drawer.component.css']
 })

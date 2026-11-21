@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { OrdersService } from '../../core/services/orders.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import {
@@ -17,12 +18,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 @Component({
   selector: 'app-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('orders')],
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.css'
 })
 export class OrdersComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   // STATE
   allOrders: OrderFulfillmentItem[] = [];
   selectedOrder: OrderFulfillmentItem | null = null;
@@ -54,10 +57,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // PACKAGE PRESETS (FAZ 4)
   readonly packagePresets = [
-    { id: 'envelope', label: '✉️ Zarf (22×15×4 • 0.15kg)', widthCm: 15, lengthCm: 22, heightCm: 4, weightKg: 0.15 },
-    { id: 'small', label: '📦 Küçük (15×15×10 • 0.25kg)', widthCm: 15, lengthCm: 15, heightCm: 10, weightKg: 0.25 },
-    { id: 'medium', label: '📦 Orta (20×20×15 • 0.50kg)', widthCm: 20, lengthCm: 20, heightCm: 15, weightKg: 0.50 },
-    { id: 'large', label: '📦 Büyük (30×25×20 • 1.20kg)', widthCm: 25, lengthCm: 30, heightCm: 20, weightKg: 1.20 }
+    { id: 'envelope', labelKey: 'orders.package.presets.envelope', widthCm: 15, lengthCm: 22, heightCm: 4, weightKg: 0.15 },
+    { id: 'small', labelKey: 'orders.package.presets.small', widthCm: 15, lengthCm: 15, heightCm: 10, weightKg: 0.25 },
+    { id: 'medium', labelKey: 'orders.package.presets.medium', widthCm: 20, lengthCm: 20, heightCm: 15, weightKg: 0.50 },
+    { id: 'large', labelKey: 'orders.package.presets.large', widthCm: 25, lengthCm: 30, heightCm: 20, weightKg: 1.20 }
   ];
 
   // EDITABLE COSTS
@@ -120,7 +123,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
   stmClientSecret: string = '';
-  stmStatusText: string = 'Durum: bilinmiyor';
+  stmStatusText: string = '';
   stmStatusKind: 'ok' | 'danger' | 'muted' | 'info' = 'muted';
   isTestingShiptomore: boolean = false;
   isSecretMasked: boolean = true;
@@ -199,7 +202,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
           this.selectedOrder.isCostMissing = this.editableProductCost <= 0 || cCost <= 0;
           this.calculateLiveProfit();
         }
-        this.saveSuccessMessage = `✓ Kargo Hub'ından "${cName}" ($${cCost.toFixed(2)}) seçildi ve sipariş maliyetine uygulandı.`;
+        this.saveSuccessMessage = this.transloco.translate('orders.messages.shippingHubApplied', {
+          name: cName,
+          cost: cCost.toFixed(2)
+        });
         setTimeout(() => {
           this.saveSuccessMessage = null;
         }, 5000);
@@ -252,27 +258,35 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     const checks = [
       {
-        label: 'Teslimat Adresi',
+        label: this.transloco.translate('orders.preflight.addressLabel'),
         ok: hasAddress,
-        hint: hasAddress ? 'Sokak, şehir ve ülke doğrulandı' : 'Sokak veya şehir eksik'
+        hint: hasAddress
+          ? this.transloco.translate('orders.preflight.addressOk')
+          : this.transloco.translate('orders.preflight.addressMissing')
       },
       {
-        label: 'Alıcı Telefonu',
+        label: this.transloco.translate('orders.preflight.phoneLabel'),
         ok: hasPhone,
-        hint: hasPhone ? this.selectedOrder.phone! : 'Ekspres kurye için telefon önerilir'
+        hint: hasPhone
+          ? this.selectedOrder.phone!
+          : this.transloco.translate('orders.preflight.phoneMissing')
       },
       {
-        label: 'GTİP / HS Kodu',
+        label: this.transloco.translate('orders.preflight.gtipLabel'),
         ok: hasGtip,
-        hint: hasGtip ? `${this.selectedOrder.gtipCode}` : 'Gümrük beyanı için GTİP seçin'
+        hint: hasGtip
+          ? `${this.selectedOrder.gtipCode}`
+          : this.transloco.translate('orders.preflight.gtipMissing')
       }
     ];
 
     if (isEu) {
       checks.push({
-        label: 'AB IOSS Kodu',
+        label: this.transloco.translate('orders.preflight.iossLabel'),
         ok: hasIoss,
-        hint: hasIoss ? this.selectedOrder.iossNumber! : 'AB gönderisi için IOSS (IM3720000224) eksik'
+        hint: hasIoss
+          ? this.selectedOrder.iossNumber!
+          : this.transloco.translate('orders.preflight.iossMissing')
       });
     }
 
@@ -341,7 +355,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       const aras = this.carrierSessions.find(s => s.id === 'aras');
       const val = this.ordersService.validateJwt(aras?.tokenOrKey || '');
       const detail = val.reason ? ` (${val.reason})` : ' (HTTP 401 Unauthorized)';
-      return `⚠️ Aras Global oturum tokeninizin süresi doldu!${detail} Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.`;
+      return this.transloco.translate('orders.messages.arasTokenExpiredWarning', { detail });
     }
     return null;
   }
@@ -360,11 +374,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeModalCarrier.id === 'aras') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
-        return `🟢 Canlı ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Geçerli'})`;
+        const info = val.timeLeftStr
+          ? this.transloco.translate('orders.messages.tokenRemainingPrefix', { time: val.timeLeftStr })
+          : this.transloco.translate('orders.messages.tokenValid');
+        return this.transloco.translate('orders.messages.tokenLiveActive', { info });
       }
-      return `⚠️ ${val.reason || 'Süresi Dolmuş (HTTP 401)'}`;
+      return `⚠️ ${val.reason || this.transloco.translate('orders.messages.tokenExpiredFallback')}`;
     }
-    return this.isCurrentModalTokenValid ? '🟢 Aktif' : '⚠️ Giriş Gerekli';
+    return this.isCurrentModalTokenValid
+      ? this.transloco.translate('orders.messages.tokenActiveSimple')
+      : this.transloco.translate('orders.messages.tokenLoginRequired');
   }
 
   get filteredQuotes(): CarrierQuote[] {
@@ -480,17 +499,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const ref = (selected && this.hasCustomsBreakdown(selected) ? selected : undefined)
       || this.carrierQuotes.find(q => this.hasCustomsBreakdown(q))
       || this.carrierQuotes[0];
-    if (!ref) return 'Genel Vergi %5.3 + ABD Ek Tarife 99030579 %12.5 = Toplam %17.8';
+    if (!ref) return this.transloco.translate('orders.gtip.taxDefaultSummary');
     const gen = ref.generalDutyRatePercent ?? 0;
     const add = ref.additionalDutyRatePercent ?? 0;
     const total = Number((gen + add).toFixed(2));
     const hts = ref.additionalDutyHtsCode ? ` ${ref.additionalDutyHtsCode}` : '';
     if (gen === 0 && add === 0) {
-      return 'Bu hedef ülke ve GTİP için ek gümrük vergisi %0 görünmektedir';
+      return this.transloco.translate('orders.gtip.taxZeroSummary');
     }
     return add > 0
-      ? `Genel Vergi %${gen} + ABD Ek Tarife${hts} %${add} = Toplam %${total}`
-      : `Tahmini Gümrük Vergisi / KDV %${gen}`;
+      ? this.transloco.translate('orders.gtip.taxCombinedSummary', { gen, hts, add, total })
+      : this.transloco.translate('orders.gtip.taxGeneralOnlySummary', { gen });
   }
 
   setCustomsDeclaredValue(val: number): void {
@@ -620,7 +639,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.selectedOrder) return;
     const best = this.ordersService.suggestGtipForOrder(this.selectedOrder);
     this.selectGtip(best);
-    this.saveSuccessMessage = `✨ Ürün başlığına göre GTİP otomatik eşleştirildi: ${best.code} (${best.category})`;
+    this.saveSuccessMessage = this.transloco.translate('orders.messages.gtipAutoMatched', {
+      code: best.code,
+      category: best.category
+    });
     setTimeout(() => this.saveSuccessMessage = null, 4000);
   }
 
@@ -663,8 +685,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
       Number(this.editableShippingCost) || 0
     ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(saved => {
       this.saveSuccessMessage = saved
-        ? '✓ Maliyet, paket ölçüleri ve GTİP kalıcı olarak SQLite veritabanına kaydedildi.'
-        : '⚠️ Maliyetler bu oturumda güncellendi (sunucu kaydı sırasında bağlantı uyarısı).';
+        ? this.transloco.translate('orders.messages.costsSavedDb')
+        : this.transloco.translate('orders.messages.costsSavedSessionOnly');
       setTimeout(() => this.saveSuccessMessage = null, 5000);
     });
   }
@@ -673,7 +695,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   executeCreateShipment(): void {
     if (!this.selectedOrder) return;
     if (this.selectedOrder.isAddressMissing) {
-      alert('Lütfen kargo oluşturmadan önce geçerli bir teslimat adresi girin (Adres Düzenle düğmesi).');
+      alert(this.transloco.translate('orders.messages.alertAddressRequired'));
       return;
     }
 
@@ -684,21 +706,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const subCarrier = quote?.subCarrier || 'FedEx';
 
     if (carrierKey === 'shiptomore' && this.notifyEtsyOnShipment && !this.selectedOrder.phone?.trim()) {
-      alert('⚠️ Canlı Etsy gönderiminde Ship to More (FedEx/UPS) uluslararası gümrük beyanı için alıcı telefon numarası zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak alıcı telefonunu girin.');
+      alert(this.transloco.translate('orders.messages.alertStmPhoneRequired'));
       this.openAddressModal();
       return;
     }
 
     const destCountry = (this.selectedOrder.countryCode || 'US').toUpperCase();
     if (carrierKey === 'shiptomore' && (destCountry === 'US' || destCountry === 'CA' || destCountry === 'IE') && !this.selectedOrder.state?.trim()) {
-      alert('⚠️ Ship to More ile ABD (US), Kanada (CA) ve İrlanda (IE) gönderimlerinde uluslararası gümrük beyanı için alıcı eyalet kodu (State) zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak eyalet kodunu (ör. FL, NY, CA) girin.');
+      alert(this.transloco.translate('orders.messages.alertStmStateRequired'));
       this.openAddressModal();
       return;
     }
 
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
-      alert('Geçersiz Sipariş ID (Receipt ID)');
+      alert(this.transloco.translate('orders.messages.alertInvalidReceiptId'));
       return;
     }
 
@@ -751,18 +773,25 @@ export class OrdersComponent implements OnInit, OnDestroy {
             this.ordersService.persistOrderFulfillmentMeta(this.selectedOrder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ next: () => {}, error: () => {} });
           }
           const etsyNote = this.notifyEtsyOnShipment
-            ? (res.etsyTrackingSubmitted ? 'Etsy mağazanıza takip numarası iletildi ve sipariş kargolandı yapıldı.' : (res.etsyTrackingMessage || 'Etsy bildirimi iletilemedi.'))
-            : '🛡️ Test modu: Etsy mağazanıza bildirilmedi, siparişiniz Etsy üzerinde güvende.';
-          this.saveSuccessMessage = `✅ Kargo başarıyla oluşturuldu! Takip No: ${res.trackingNumber}. ${etsyNote}`;
+            ? (res.etsyTrackingSubmitted
+                ? this.transloco.translate('orders.messages.etsyTrackingSubmitted')
+                : (res.etsyTrackingMessage || this.transloco.translate('orders.messages.etsyTrackingFailed')))
+            : this.transloco.translate('orders.messages.etsyTestModeNote');
+          this.saveSuccessMessage = this.transloco.translate('orders.messages.shipmentCreatedSuccess', {
+            tracking: res.trackingNumber,
+            note: etsyNote
+          });
           setTimeout(() => this.saveSuccessMessage = null, 9000);
         } else {
-          alert('Kargo oluşturulamadı: ' + (res?.message || res?.errorMessage || 'Bilinmeyen hata'));
+          alert(this.transloco.translate('orders.messages.shipmentCreateFailed', {
+            error: res?.message || res?.errorMessage || this.transloco.translate('orders.messages.unknownError')
+          }));
         }
       },
       error: (err: any) => {
         this.isGeneratingShipment = false;
-        const errMsg = err?.error?.errorMessage || err?.error?.message || err?.message || 'API Hatası';
-        alert('Kargo oluşturma hatası: ' + errMsg);
+        const errMsg = err?.error?.errorMessage || err?.error?.message || err?.message || this.transloco.translate('orders.messages.apiError');
+        alert(this.transloco.translate('orders.messages.shipmentCreateError', { error: errMsg }));
       }
     });
   }
@@ -785,19 +814,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
   async pasteFromClipboard(): Promise<void> {
     try {
       if (!navigator.clipboard || !navigator.clipboard.readText) {
-        alert('Tarayıcınız panodan otomatik okumayı desteklemiyor veya izin verilmedi. Lütfen metni kutuya Ctrl+V ile yapıştırın.');
+        alert(this.transloco.translate('orders.messages.clipboardUnsupported'));
         return;
       }
       const text = await navigator.clipboard.readText();
       if (text && text.trim()) {
         this.rawAddressInput = text.trim();
-        this.aiParseSuccessMessage = '✓ Panodaki adres yapıştırıldı ve ayrıştırılıyor...';
+        this.aiParseSuccessMessage = this.transloco.translate('orders.messages.clipboardPastedParsing');
         this.parseAddressWithAi();
       } else {
-        this.aiParseErrorMessage = '⚠️ Panoda yapıştırılacak metin bulunamadı.';
+        this.aiParseErrorMessage = this.transloco.translate('orders.messages.clipboardEmpty');
       }
     } catch (e: any) {
-      alert('Panoya erişim izni verilmedi: ' + (e?.message || 'Lütfen kutuya manuel Ctrl+V ile yapıştırın.'));
+      alert(this.transloco.translate('orders.messages.clipboardPermissionDenied', {
+        error: e?.message || this.transloco.translate('orders.messages.clipboardManualFallback')
+      }));
     }
   }
 
@@ -873,7 +904,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
               ].filter(p => Boolean(p && String(p).trim().length > 0));
 
               this.rawAddressInput = dbLines.join('\n');
-              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres getirildi ve kutucuklar dolduruldu.';
+              this.aiParseSuccessMessage = this.transloco.translate('orders.messages.dbAddressLoaded');
               this.cdr.detectChanges();
             }
           }
@@ -981,7 +1012,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
               ].filter(p => Boolean(p && String(p).trim().length > 0));
 
               this.rawAddressInput = dbLines.join('\n');
-              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres otomatik yüklendi.';
+              this.aiParseSuccessMessage = this.transloco.translate('orders.messages.dbAddressAutoLoaded');
               order.streetAddress = this.editAddressModel.streetAddress;
               order.city = this.editAddressModel.city;
               order.hasAddress = Boolean(order.streetAddress && order.city);
@@ -1004,7 +1035,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   parseAddressWithAi(): void {
     if (!this.rawAddressInput || !this.rawAddressInput.trim()) {
-      this.aiParseErrorMessage = 'Lütfen ayrıştırılacak adres metnini yapıştırın.';
+      this.aiParseErrorMessage = this.transloco.translate('orders.messages.aiPasteRequired');
       return;
     }
 
@@ -1016,7 +1047,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       next: (res: any) => {
         this.isAiParsing = false;
         if (!res) {
-          this.aiParseErrorMessage = 'Yapay zeka adres yanıtı oluşturamadı.';
+          this.aiParseErrorMessage = this.transloco.translate('orders.messages.aiNoResponse');
           return;
         }
 
@@ -1032,12 +1063,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
         if (res.countryCode) this.editAddressModel.countryCode = res.countryCode;
         if (res.iossNumber) this.editAddressModel.iossNumber = res.iossNumber;
 
-        this.aiParseSuccessMessage = `✨ Adres ${res.source || 'AI'} motoru ile başarıyla ayrıştırıldı ve kutucuklara yerleştirildi!`;
+        this.aiParseSuccessMessage = this.transloco.translate('orders.messages.aiParseSuccess', {
+          source: res.source || 'AI'
+        });
         setTimeout(() => this.aiParseSuccessMessage = null, 5000);
       },
       error: (err: any) => {
         this.isAiParsing = false;
-        this.aiParseErrorMessage = 'Yapay zeka ayrıştırması başarısız oldu: ' + (err?.error?.message || err?.message || 'Bilinmeyen hata');
+        this.aiParseErrorMessage = this.transloco.translate('orders.messages.aiParseFailed', {
+          error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.unknownError')
+        });
       }
     });
   }
@@ -1063,13 +1098,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.ordersService.uploadOrdersCsv(file).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         this.isUploadingCsv = false;
-        this.csvUploadSuccessMessage = `✅ ${res?.count || 0} sipariş adresi CSV'den başarıyla yüklendi ve eşitlendi!`;
+        this.csvUploadSuccessMessage = this.transloco.translate('orders.messages.csvUploadSuccess', {
+          count: res?.count || 0
+        });
         this.ordersService.loadOrders();
         setTimeout(() => this.csvUploadSuccessMessage = null, 6000);
       },
       error: (err: any) => {
         this.isUploadingCsv = false;
-        this.csvUploadErrorMessage = 'CSV yükleme hatası: ' + (err?.error?.message || err?.message || 'Bilinmeyen hata');
+        this.csvUploadErrorMessage = this.transloco.translate('orders.messages.csvUploadError', {
+          error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.unknownError')
+        });
         setTimeout(() => this.csvUploadErrorMessage = null, 6000);
       }
     });
@@ -1082,7 +1121,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.selectedOrder) return;
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
-      alert('Geçersiz Sipariş ID');
+      alert(this.transloco.translate('orders.messages.alertInvalidOrderId'));
       return;
     }
     this.ordersService.updateOrderAddress(rId, this.editAddressModel).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -1106,11 +1145,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
           this.selectedOrder.formattedAddress = parts.join(', ');
         }
         this.isAddressModalOpen = false;
-        this.saveSuccessMessage = '✅ Alıcı teslimat adresi kalıcı olarak SQLite veritabanına kaydedildi!';
+        this.saveSuccessMessage = this.transloco.translate('orders.messages.addressSavedDb');
         setTimeout(() => this.saveSuccessMessage = null, 4000);
       },
       error: (err: any) => {
-        alert('Adres kaydedilirken hata oluştu: ' + (err?.error?.message || err?.message || ''));
+        alert(this.transloco.translate('orders.messages.addressSaveError', {
+          error: err?.error?.message || err?.message || ''
+        }));
       }
     });
   }
@@ -1153,16 +1194,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
       if (jwt.expDate) expiryMs = jwt.expDate.getTime();
     }
     if (expiryMs === null) {
-      return carrier.isConnected ? 'Aktif (Çerez / Süre Bilinmiyor)' : 'Bağlı değil';
+      return carrier.isConnected
+        ? this.transloco.translate('orders.messages.validityActiveUnknown')
+        : this.transloco.translate('orders.messages.validityDisconnected');
     }
     const diffMs = expiryMs - Date.now();
     if (diffMs <= 0) {
-      return '⚠️ Süresi Doldu (Yenilenmeli)';
+      return this.transloco.translate('orders.messages.validityExpired');
     }
     const totalMinutes = Math.floor(diffMs / 60000);
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
-    return hours > 0 ? `🟢 Aktif · Kalan: ${hours} sa ${mins} dk` : `🟡 Aktif · Kalan: ${mins} dk`;
+    return hours > 0
+      ? this.transloco.translate('orders.messages.validityHoursMins', { hours, mins })
+      : this.transloco.translate('orders.messages.validityMins', { mins });
   }
 
   triggerNavlungoBrowserCapture(openBrowser: boolean = false): void {
@@ -1173,8 +1218,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     this.isCapturingBrowserToken = true;
     this.browserCaptureStatus = openBrowser
-      ? '🌐 Navlungo giriş penceresi açıldı. Giriş yaptığınız anda Bearer JWT + Çerezler otomatik yakalanacaktır...'
-      : '🔄 Kayıtlı Navlungo oturum profiliyle token sessizce yenileniyor...';
+      ? this.transloco.translate('orders.messages.navlungoBrowserOpened')
+      : this.transloco.translate('orders.messages.navlungoSilentRefreshing');
 
     this.ordersService.triggerCarrierBrowserLogin(
       targetId,
@@ -1197,20 +1242,22 @@ export class OrdersComponent implements OnInit, OnDestroy {
             navSession.tokenOrKey = res.bearerToken;
             if (res.expiresAtUtc) navSession.expiresAtUtc = res.expiresAtUtc;
           }
-          this.browserCaptureStatus = '✅ Navlungo oturum tokenı yenilendi ve canlı teklifler güncellendi!';
+          this.browserCaptureStatus = this.transloco.translate('orders.messages.navlungoRefreshedStatus');
           this.loadQuotesForSelected();
           this.calculateLiveProfit();
-          this.saveSuccessMessage = '✅ Navlungo oturumu yenilendi ve canlı portal teklifleri çekildi!';
+          this.saveSuccessMessage = this.transloco.translate('orders.messages.navlungoRefreshedToast');
           setTimeout(() => {
             this.saveSuccessMessage = null;
           }, 6000);
         } else {
-          this.browserCaptureStatus = '⚠️ ' + (res?.message || 'Oturum yenilenemedi. Tarayıcı ile giriş yapıp yakalamayı deneyin.');
+          this.browserCaptureStatus = '⚠️ ' + (res?.message || this.transloco.translate('orders.messages.navlungoRefreshFallback'));
         }
       },
       error: (err: any) => {
         this.isCapturingBrowserToken = false;
-        this.browserCaptureStatus = '❌ Navlungo yenileme hatası: ' + (err?.error?.message || err?.message || 'Sunucuya ulaşılamadı.');
+        this.browserCaptureStatus = this.transloco.translate('orders.messages.navlungoRefreshError', {
+          error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.serverUnreachable')
+        });
       }
     });
   }
@@ -1223,8 +1270,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     this.isCapturingBrowserToken = true;
     this.browserCaptureStatus = openBrowser
-      ? '🌐 Aras Global giriş penceresi açıldı. Giriş yaptığınız anda Bearer Token otomatik yakalanacaktır...'
-      : '🔄 Kayıtlı Refresh Token / kimlik bilgileriyle Aras Global oturumu yenileniyor...';
+      ? this.transloco.translate('orders.messages.arasBrowserOpened')
+      : this.transloco.translate('orders.messages.arasSilentRefreshing');
 
     this.ordersService.triggerCarrierBrowserLogin(
       this.activeModalCarrier.id,
@@ -1240,20 +1287,22 @@ export class OrdersComponent implements OnInit, OnDestroy {
             this.activeModalCarrier.isConnected = true;
             this.activeModalCarrier.tokenOrKey = res.bearerToken;
           }
-          this.browserCaptureStatus = '✅ Aras Global Bearer Token otomatik yakalandı, şifreli olarak kaydedildi ve aktif edildi!';
+          this.browserCaptureStatus = this.transloco.translate('orders.messages.arasCapturedStatus');
           this.loadQuotesForSelected();
           this.calculateLiveProfit();
-          this.saveSuccessMessage = '✅ Aras Global oturum tokenı otomatik yakalandı ve canlı fiyatlar güncellendi!';
+          this.saveSuccessMessage = this.transloco.translate('orders.messages.arasCapturedToast');
           setTimeout(() => {
             this.saveSuccessMessage = null;
           }, 6000);
         } else {
-          this.browserCaptureStatus = '⚠️ ' + (res?.message || 'Token yakalanamadı. Lütfen açılan pencerede giriş yapın veya tokenı yapıştırın.');
+          this.browserCaptureStatus = '⚠️ ' + (res?.message || this.transloco.translate('orders.messages.arasCaptureFallback'));
         }
       },
       error: (err: any) => {
         this.isCapturingBrowserToken = false;
-        this.browserCaptureStatus = '❌ Yakalama hatası: ' + (err?.error?.message || err?.message || 'Sunucuya ulaşılamadı.');
+        this.browserCaptureStatus = this.transloco.translate('orders.messages.captureError', {
+          error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.serverUnreachable')
+        });
       }
     });
   }
@@ -1266,6 +1315,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   saveCarrierSession(): void {
     if (!this.activeModalCarrier) return;
     const cid = this.activeModalCarrier.id;
+    const carrierName = this.activeModalCarrier.name;
     this.isConnectingCarrier = true;
 
     if (cid === 'shipentegra') {
@@ -1276,7 +1326,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.closeSessionModal();
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = '✅ ShipEntegra API anahtarları kaydedildi ve bağlandı!';
+      this.saveSuccessMessage = this.transloco.translate('orders.messages.seSavedToast');
       setTimeout(() => this.saveSuccessMessage = null, 5000);
       return;
     }
@@ -1286,7 +1336,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.closeSessionModal();
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-    this.saveSuccessMessage = `✅ ${this.activeModalCarrier.name} bağlantısı sunucuya kaydedildi!`;
+    this.saveSuccessMessage = this.transloco.translate('orders.messages.carrierSavedToast', { name: carrierName });
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -1295,16 +1345,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeModalCarrier.id === 'aras') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
-        const expStr = val.expDate ? val.expDate.toLocaleString('tr-TR') : 'Süresiz';
-        alert(`✅ Aras Global JWT Token Geçerli!\n\n• Durum: Canlı API Fiyatlandırması Aktif\n• Kalan Süre: ${val.timeLeftStr || 'Geçerli'}\n• Bitiş Zamanı: ${expStr}\n\nOturumu kaydederek doğrudan canlı API tekliflerini kullanabilirsiniz.`);
+        const locale = this.transloco.getActiveLang() === 'en' ? 'en-US' : 'tr-TR';
+        const expStr = val.expDate ? val.expDate.toLocaleString(locale) : this.transloco.translate('orders.messages.jwtUnlimited');
+        alert(this.transloco.translate('orders.messages.arasTestValid', {
+          remaining: val.timeLeftStr || this.transloco.translate('orders.messages.tokenValid'),
+          expires: expStr
+        }));
       } else {
-        alert(`⚠️ Aras Global Token Süresi Dolmuş / Geçersiz!\n\n• Hata: ${val.reason}\n• API Yanıtı: HTTP 401 Unauthorized\n\nBu token kullanıldığında API hata vereceğinden siparişlerin kilitlenmemesi için sistem otomatik olarak tahmini sözleşme fiyatlarına geçer.\nLütfen panel.arasglobalcargo.com adresinden güncel token'ınızı kopyalayıp buraya yapıştırın.`);
+        alert(this.transloco.translate('orders.messages.arasTestInvalid', { reason: val.reason || '' }));
       }
       return;
     }
     if (this.activeModalCarrier.id === 'shipentegra') {
       if (!this.seApiKey.trim() || !this.seApiSecret.trim()) {
-        alert('Lütfen ShipEntegra Client ID ve Client Secret alanlarını doldurun.');
+        alert(this.transloco.translate('orders.messages.seFieldsRequired'));
         return;
       }
       this.isConnectingCarrier = true;
@@ -1316,24 +1370,26 @@ export class OrdersComponent implements OnInit, OnDestroy {
       }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.isConnectingCarrier = false;
-          alert('✅ ShipEntegra API Bağlantısı Başarılı!\nPublic API kimlik doğrulaması tamamlandı. Canlı navlun ve gönderi oluşturma aktif.');
+          alert(this.transloco.translate('orders.messages.seTestSuccess'));
         },
         error: (err) => {
           this.isConnectingCarrier = false;
-          alert('❌ ShipEntegra Bağlantı Testi Başarısız:\n' + (err?.error?.message || err?.message || 'Bilinmeyen hata'));
+          alert(this.transloco.translate('orders.messages.seTestFailed', {
+            error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.unknownError')
+          }));
         }
       });
       return;
     }
-    alert(`${this.activeModalCarrier.name} için sunucu taraflı bağlantı testi henüz desteklenmiyor.`);
+    alert(this.transloco.translate('orders.messages.testNotSupported', { name: this.activeModalCarrier.name }));
   }
 
   disconnectSession(carrier: CarrierAccountSession): void {
-    if (confirm(`${carrier.name} oturumunu kapatmak ve sistem bağlantısını kesmek istediğinize emin misiniz?`)) {
+    if (confirm(this.transloco.translate('orders.messages.confirmDisconnect', { name: carrier.name }))) {
       this.ordersService.disconnectCarrier(carrier.id);
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = `⚠️ ${carrier.name} bağlantısı kesildi.`;
+      this.saveSuccessMessage = this.transloco.translate('orders.messages.carrierDisconnectedToast', { name: carrier.name });
       setTimeout(() => this.saveSuccessMessage = null, 3000);
     }
   }
@@ -1346,13 +1402,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.stmClientSecret = stm?.clientSecret || savedSec || '';
 
     if (this.stmClientId && this.stmClientSecret) {
-      this.stmStatusText = 'Durum: Anahtarlar hazır. Bağlantıyı Test Et butonuna basabilirsiniz.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusReady');
       this.stmStatusKind = 'ok';
     } else if (this.stmClientId) {
-      this.stmStatusText = 'Durum: Client ID tanımlı. Lütfen panelden aldığınız Client Secret bilgisini yapıştırın.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusNeedSecret');
       this.stmStatusKind = 'info';
     } else {
-      this.stmStatusText = 'Durum: API anahtarı girilmemiş.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusMissing');
       this.stmStatusKind = 'muted';
     }
     this.isShiptomoreModalOpen = true;
@@ -1364,13 +1420,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   openShiptomorePortal(): void {
     window.open('https://dev.shiptomore.com/portal/keys', '_blank');
-    this.stmStatusText = 'Geliştirici paneli açıldı. Oluşturduğunuz anahtarları yukarıdaki alanlara yapıştırın.';
+    this.stmStatusText = this.transloco.translate('orders.shiptomore.statusPortalOpened');
     this.stmStatusKind = 'info';
   }
 
   saveShiptomore(): void {
     if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-      this.stmStatusText = 'İki alan da doldurulmalıdır.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusBothRequired');
       this.stmStatusKind = 'danger';
       return;
     }
@@ -1378,7 +1434,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     localStorage.setItem('stm_client_id', this.stmClientId.trim());
     localStorage.setItem('stm_client_secret', this.stmClientSecret.trim());
     this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim(), this.stmClientId.trim(), this.stmClientSecret.trim());
-    this.stmStatusText = 'Anahtar kaydedildi. Bağlantı test ediliyor...';
+    this.stmStatusText = this.transloco.translate('orders.shiptomore.statusSavedTesting');
     this.stmStatusKind = 'info';
 
     this.etsyApi.connectCarrier({
@@ -1387,16 +1443,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
       apiSecret: this.stmClientSecret.trim()
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
-        this.stmStatusText = res?.message || '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
+        this.stmStatusText = res?.message || this.transloco.translate('orders.shiptomore.statusConnectedOk');
         this.stmStatusKind = 'ok';
         this.loadQuotesForSelected();
         this.calculateLiveProfit();
-        this.saveSuccessMessage = '✅ Ship to More bağlantısı başarıyla kaydedildi.';
+        this.saveSuccessMessage = this.transloco.translate('orders.shiptomore.toastSaved');
         setTimeout(() => this.saveSuccessMessage = null, 5000);
       },
       error: (err) => {
-        const msg = err?.error?.message || err?.message || 'Sunucu bağlantı uyarısı';
-        this.stmStatusText = '⚠️ Kaydedildi: ' + msg;
+        const msg = err?.error?.message || err?.message || this.transloco.translate('orders.shiptomore.statusServerWarnFallback');
+        this.stmStatusText = this.transloco.translate('orders.shiptomore.statusSavedWarning', { msg });
         this.stmStatusKind = 'ok';
         this.loadQuotesForSelected();
         this.calculateLiveProfit();
@@ -1406,13 +1462,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   testShiptomore(): void {
     if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-      this.stmStatusText = 'İki alan da doldurulmalıdır.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusBothRequired');
       this.stmStatusKind = 'danger';
       return;
     }
 
     this.isTestingShiptomore = true;
-    this.stmStatusText = 'Bağlantı deneniyor (dev.shiptomore.com/v1/providers)...';
+    this.stmStatusText = this.transloco.translate('orders.shiptomore.statusTestingEndpoint');
     this.stmStatusKind = 'info';
 
     this.etsyApi.connectCarrier({
@@ -1423,32 +1479,32 @@ export class OrdersComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.isTestingShiptomore = false;
         this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim(), this.stmClientId.trim(), this.stmClientSecret.trim());
-        this.stmStatusText = res?.message || '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
+        this.stmStatusText = res?.message || this.transloco.translate('orders.shiptomore.statusConnectedOk');
         this.stmStatusKind = 'ok';
         this.loadQuotesForSelected();
         this.calculateLiveProfit();
       },
       error: (err) => {
         this.isTestingShiptomore = false;
-        const msg = err?.error?.message || err?.message || 'Bağlantı başarısız';
-        this.stmStatusText = '❌ Bağlantı hatası: ' + msg;
+        const msg = err?.error?.message || err?.message || this.transloco.translate('orders.shiptomore.statusConnectFailedFallback');
+        this.stmStatusText = this.transloco.translate('orders.shiptomore.statusConnectError', { msg });
         this.stmStatusKind = 'danger';
       }
     });
   }
 
   forgetShiptomore(): void {
-    if (confirm('Kayıtlı Ship to More anahtarı silinsin mi?\n\nSilindikten sonra fiyat ve gönderi işlemleri çalışmaz.')) {
+    if (confirm(this.transloco.translate('orders.shiptomore.confirmForget'))) {
       this.ordersService.disconnectCarrier('shiptomore');
       localStorage.removeItem('stm_client_id');
       localStorage.removeItem('stm_client_secret');
       this.stmClientId = '';
       this.stmClientSecret = '';
-      this.stmStatusText = 'Anahtar silindi.';
+      this.stmStatusText = this.transloco.translate('orders.shiptomore.statusDeleted');
       this.stmStatusKind = 'danger';
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = '⚠️ Ship to More bağlantısı kesildi.';
+      this.saveSuccessMessage = this.transloco.translate('orders.shiptomore.toastDisconnected');
       setTimeout(() => this.saveSuccessMessage = null, 5000);
     }
   }
@@ -1463,7 +1519,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   syncCapturedTemplates(): void {
     this.closeArasTemplateModal();
-    this.saveSuccessMessage = 'Masaüstü şablonları senkronizasyonu web istemcisinde desteklenmiyor.';
+    this.saveSuccessMessage = this.transloco.translate('orders.messages.desktopTemplatesUnsupported');
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -1480,7 +1536,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openAddCarrierToast(): void {
-    alert('➕ Yeni Kargo Entegrasyonu:\nYakında özel API Key / Secret girerek DHL, PTT, UPS ve diğer taşıyıcıları doğrudan bu merkeze ekleyebileceksiniz.');
+    alert(this.transloco.translate('orders.messages.addCarrierComingSoon'));
   }
 
   // --- HELPERS ---

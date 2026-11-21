@@ -10,16 +10,39 @@ import { AppLanguage } from '../i18n/i18n.config';
   imports: [CommonModule, TranslocoDirective],
   template: `
     <div class="lang-switcher" role="group" *transloco="let t" [attr.aria-label]="t('common.languageSwitcherAria')">
-      <i class="fa-solid fa-globe lang-icon" aria-hidden="true"></i>
       <button
         *ngFor="let lang of languageService.supportedLanguages"
         type="button"
         class="lang-btn"
         [class.active]="languageService.activeLang() === lang.code"
         [attr.aria-pressed]="languageService.activeLang() === lang.code"
+        [attr.aria-label]="lang.nativeName"
         [title]="lang.nativeName"
         (click)="selectLanguage(lang.code)">
-        {{ lang.shortLabel }}
+        <!-- Turkish Flag (TR) -->
+        <svg *ngIf="lang.code === 'tr'" class="flag-svg" viewBox="0 0 30 20" aria-hidden="true">
+          <rect width="30" height="20" rx="2" fill="#E30A17" />
+          <circle cx="11.5" cy="10" r="5" fill="#FFFFFF" />
+          <circle cx="12.8" cy="10" r="4" fill="#E30A17" />
+          <polygon
+            fill="#FFFFFF"
+            points="17.8,10 20.6,10.9 18.9,8.5 18.9,11.5 20.6,9.1"
+            transform="rotate(-18 19.2 10)" />
+        </svg>
+
+        <!-- United Kingdom Flag (EN) -->
+        <svg *ngIf="lang.code === 'en'" class="flag-svg" viewBox="0 0 30 20" aria-hidden="true">
+          <clipPath id="en-flag-clip">
+            <rect width="30" height="20" rx="2" />
+          </clipPath>
+          <g clip-path="url(#en-flag-clip)">
+            <rect width="30" height="20" fill="#012169" />
+            <path d="M0,0 L30,20 M30,0 L0,20" stroke="#FFFFFF" stroke-width="4" />
+            <path d="M0,0 L30,20 M30,0 L0,20" stroke="#C8102E" stroke-width="2" />
+            <path d="M15,0 V20 M0,10 H30" stroke="#FFFFFF" stroke-width="6.5" />
+            <path d="M15,0 V20 M0,10 H30" stroke="#C8102E" stroke-width="3.8" />
+          </g>
+        </svg>
       </button>
     </div>
   `,
@@ -27,39 +50,42 @@ import { AppLanguage } from '../i18n/i18n.config';
     .lang-switcher {
       display: inline-flex;
       align-items: center;
-      gap: 2px;
-      padding: 3px 4px 3px 8px;
+      gap: 4px;
+      padding: 3px 4px;
       border-radius: 8px;
       background: rgba(15, 23, 42, 0.72);
       border: 1px solid rgba(148, 163, 184, 0.22);
       backdrop-filter: blur(8px);
     }
-    .lang-icon {
-      font-size: 0.72rem;
-      color: #94a3b8;
-      margin-right: 4px;
-    }
     .lang-btn {
-      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid transparent;
       background: transparent;
-      color: #94a3b8;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      padding: 4px 7px;
+      padding: 3px 5px;
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.18s ease;
-      line-height: 1;
+      opacity: 0.55;
+      line-height: 0;
     }
     .lang-btn:hover {
-      color: #f8fafc;
+      opacity: 0.92;
       background: rgba(148, 163, 184, 0.14);
     }
     .lang-btn.active {
-      color: #fff;
-      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      opacity: 1;
+      background: rgba(249, 115, 22, 0.22);
+      border-color: rgba(249, 115, 22, 0.8);
       box-shadow: 0 0 10px rgba(249, 115, 22, 0.35);
+    }
+    .flag-svg {
+      width: 22px;
+      height: 15px;
+      border-radius: 2px;
+      display: block;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
   `]
 })
