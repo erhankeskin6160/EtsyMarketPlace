@@ -1,0 +1,140 @@
+{
+  "common": {
+    "appTitle": "Etsy Enterprise Web Studio - Komuta Merkezi",
+    "languageSwitcherAria": "Uygulama dilini seçin",
+    "save": "Kaydet",
+    "cancel": "İptal",
+    "close": "Kapat",
+    "refresh": "Yenile",
+    "logout": "Çıkış Yap",
+    "logoutShort": "Çıkış",
+    "user": "Kullanıcı",
+    "noData": "Veri yok",
+    "loading": "Yükleniyor..."
+  },
+  "errors": {
+    "validationTitle": "Doğrulama Uyarısı",
+    "operationErrorTitle": "İşlem Hatası"
+  },
+  "shell": {
+    "brandSub": "Enterprise Web Studio",
+    "toggleSidebar": "Menüyü Daralt/Genişlet",
+    "adminPanel": "Yönetim & Admin Paneli",
+    "adminBadge": "YÖNETİCİ",
+    "lockedModuleTitle": "Bu modül {{plan}} paketi gerektirir",
+    "logoutTooltip": "Oturumu Kapat (Çıkış Yap)",
+    "headerTitle": "Etsy Mağaza Komuta Merkezi",
+    "headerSubtitle": "Canlı Mağaza İstatistikleri, Finansal Özet ve Akıllı Büyüme Paneli",
+    "subscriptionTooltip": "Aktif Abonelik Paketi & Kota Detayları",
+    "aiHubTooltip": "AI Model Ayarları & Sağlayıcı Merkezi",
+    "apiStatusTooltip": "{{details}} (Ayarlara gitmek için tıklayın)",
+    "apiStatus": {
+      "connected": "Etsy API Bağlı",
+      "expired": "Token Süresi Doldu",
+      "missing": "Etsy API Bağlı Değil",
+      "error": "VDS Bağlantı Hatası",
+      "checking": "Kontrol Ediliyor"
+    },
+    "exchangeRateTooltip": "Kuru değiştirmek için tıklayın",
+    "currencySwitchToUsd": "USD para birimine geç",
+    "currencySwitchToTry": "TRY para birimine geç",
+    "refreshTooltip": "Sayfayı Yenile",
+    "shopDropdown": {
+      "tooltip": "Mağaza Değiştir veya Yönet",
+      "title": "Bağlı Etsy Mağazaları",
+      "count": "{{count}} Mağaza",
+      "tokenExpired": "Token süresi dolmuş",
+      "tokenActive": "Token aktif ve bağlı",
+      "selected": "SEÇİLİ",
+      "connectNew": "Yeni Mağaza Bağla"
+    },
+    "apiWarning": {
+      "attention": "Dikkat:",
+      "expiredMessage": "Etsy v3 OAuth bağlantı token'ının süresi dolmuş. Canlı mağaza verilerinizin çekilebilmesi için token yenilemesi yapılması gerekmektedir.",
+      "missingMessage": "Etsy API bağlantısı kurulu değil. Sayfalarda asla sahte veri uydurulmaz; gerçek mağaza verilerinizi görüntülemek için lütfen Etsy ile bağlanın.",
+      "actionBtn": "Etsy API Yetkilendirme Sayfasına Git"
+    },
+    "rateModal": {
+      "title": "Canlı USD / TRY Döviz Kuru Ayarla",
+      "description": "Tüm finansal hesaplamalar, ciro ve net kâr raporlarında kullanılacak varsayılan döviz kurunu giriniz:",
+      "saveBtn": "Kuru Kaydet"
+    },
+    "categories": {
+      "general": "Genel",
+      "research": "Araştırma & Analiz",
+      "automationFinance": "Otomasyon & Finansal Araçlar",
+      "shippingHub": "Kargo Entegrasyonları Hub",
+      "systemSettings": "Sistem & Ayarlar"
+    },
+    "nav": {
+      "dashboard": "Kontrol Paneli",
+      "orders_shipping": "Sipariş & Kargo",
+      "fast_creator": "Hızlı Ürün Ekle (AI)",
+      "product_discovery": "Ürün Bul & Taslak",
+      "ai_image": "AI Görsel Stüdyosu",
+      "shop": "Mağazam Performansı",
+      "research_agent": "Mağaza Araştırma Ajanı",
+      "research": "Pazar Araştırması",
+      "viral_3d": "Viral 3D Model Avcısı",
+      "competitor_spy": "Rakip & Trend Casusu",
+      "external": "Dış Pazar Yeri Bulucu",
+      "ai_audit": "Mağaza AI Analizi",
+      "ab_test": "A/B Test Paneli",
+      "financial": "Finansal Raporlama",
+      "financial_ai": "Finansal AI Analiz",
+      "profit": "Kâr Simülatörü",
+      "automation": "Otomasyon Raporu",
+      "batch": "Toplu İşlem Kuyruğu",
+      "shop_vault": "Mağaza Yedek & Transfer",
+      "tracking": "Takip Geçmişi",
+      "ai_usage": "AI Token & Bakiye Takip",
+      "aras": "Aras Global Kargo",
+      "shipentegra": "ShipEntegra Kargo",
+      "navlungo": "Navlungo Kargo",
+      "shiptomore": "Shiptomore Kargo",
+      "subscription": "Abonelik & Paketler",
+      "ai_models": "AI Model & Optimizasyon",
+      "notifications": "Telegram Bildirim Botu",
+      "api": "Etsy API Ayarları",
+      "update": "Sürüm Güncelle (Client)",
+      "logs": "Uygulama Günlüğü"
+    }
+  },
+  "auth": {
+    "login": {
+      "badge": "🚀 ETSY ENTERPRISE",
+      "title": "Giriş Yap",
+      "subtitle": "Etsy Mağaza Yönetim & Komuta Merkezi",
+      "usernameLabel": "Kullanıcı Adı veya E-Posta",
+      "usernamePlaceholder": "örn: admin veya erhan@etsy.com",
+      "passwordLabel": "Şifre",
+      "submitBtn": "🔐 Güvenli Giriş Yap",
+      "submittingBtn": "Giriş Yapılıyor...",
+      "fillAdminHint": "⚡ Yönetici Girişini Doldur (admin / Admin123*!)",
+      "noAccount": "Hesabınız yok mu?",
+      "createAccountLink": "Yeni Mağaza Hesabı Aç",
+      "errorDefault": "Giriş başarısız.",
+      "errorNetwork": "Sunucuya bağlanılamadı (Ağ Hatası / Status 0). Lütfen tarayıcıyı Ctrl+F5 ile sert yenileyin. [Denenen URL: {{url}}]",
+      "errorHttp": "Hata (HTTP {{status}}): {{detail}}"
+    },
+    "register": {
+      "badge": "🏪 YENİ MAĞAZA KAYDI",
+      "title": "Hesap Oluştur",
+      "subtitle": "Etsy Enterprise Studio ile mağazanızı ölçekleyin",
+      "usernameLabel": "Kullanıcı Adı",
+      "usernamePlaceholder": "örn: seller_pro",
+      "emailLabel": "E-Posta Adresi",
+      "emailPlaceholder": "örn: magaza@alanadi.com",
+      "shopIdLabel": "Etsy Mağaza ID (İsteğe Bağlı)",
+      "shopIdPlaceholder": "Varsayılan: 53236321",
+      "passwordLabel": "Şifre",
+      "passwordPlaceholder": "En az 6 karakter",
+      "submitBtn": "✨ Mağaza Hesabımı Başlat",
+      "submittingBtn": "Kayıt Yapılıyor...",
+      "hasAccount": "Zaten hesabınız var mı?",
+      "signInLink": "Giriş Yap",
+      "errorDefault": "Kayıt başarısız.",
+      "errorGeneric": "Kayıt sırasında bir hata oluştu."
+    }
+  }
+}

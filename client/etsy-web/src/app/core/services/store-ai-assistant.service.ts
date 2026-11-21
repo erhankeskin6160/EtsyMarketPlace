@@ -5,6 +5,7 @@ import { map, catchError, switchMap } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto, MarketSearchResponseDto } from './etsy-api.service';
 import { CopilotToolRegistryService, ToolExecutionResult } from './copilot-tool-registry.service';
+import { LanguageService } from '../i18n/language.service';
 
 export interface ChatAttachment {
   id: string;
@@ -76,6 +77,7 @@ export class StoreAiAssistantService {
   private aiSettings = inject(AiSettingsService);
   private etsyApi = inject(EtsyApiService);
   private toolRegistry = inject(CopilotToolRegistryService);
+  private languageService = inject(LanguageService);
 
   private conversationHistory: {
     role: 'user' | 'assistant' | 'system';
@@ -1488,6 +1490,7 @@ Sen EtsyMarketPlace Enterprise platformunun resmi, zeki ve samimi "Kıdemli E-Ti
 Şu anda kullanıcının tercihi olan aktif yapay zeka altyapısı (${provider} - ${model}) üzerinde çalışıyorsun.
 
 KONUŞMA DİLİ VE ÜSLUP KURALLARI:
+0. ${this.languageService.getAiResponseLanguageInstruction()}
 1. Kesinlikle robotik, kalıp veya ezber bot gibi konuşma! "Ben bir yapay zeka modeliyim", "Harikayım sorduğunuz için çok teşekkür ederim" gibi basmakalıp laflar YASAKTIR.
 2. Kullanıcıyla sıcak, samimi, esnaf ruhunu ve global Etsy matematiğini çok iyi bilen bir iş ortağı gibi konuş.
 3. Yanıtlarında temiz Markdown formatı kullan (kalın başlıklar, anlaşılır madde işaretleri, kâr/fiyat hesap tabloları ve rozetler).

@@ -2,20 +2,26 @@ import { Component, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { TranslocoDirective } from '@jsverse/transloco';
 import { AuthService } from '../../core/services/auth.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { LanguageSwitcherComponent } from '../../core/components/language-switcher.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, TranslocoDirective, LanguageSwitcherComponent],
   template: `
-    <div class="auth-container">
+    <div class="auth-container" *transloco="let t">
       <div class="auth-card">
+        <div class="auth-top-bar">
+          <div class="brand-badge">{{ t('auth.login.badge') }}</div>
+          <app-language-switcher></app-language-switcher>
+        </div>
         <div class="auth-header">
-          <div class="brand-badge">🚀 ETSY ENTERPRISE</div>
-          <h2>Giriş Yap</h2>
-          <p class="auth-subtitle">Etsy Mağaza Yönetim & Komuta Merkezi</p>
+          <h2>{{ t('auth.login.title') }}</h2>
+          <p class="auth-subtitle">{{ t('auth.login.subtitle') }}</p>
         </div>
 
         <div class="alert-error" *ngIf="errorMessage">
@@ -24,27 +30,27 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
         <form (ngSubmit)="onLogin()" class="auth-form">
           <div class="form-group">
-            <label>Kullanıcı Adı veya E-Posta</label>
-            <input type="text" [(ngModel)]="username" name="username" class="form-input" placeholder="örn: admin veya erhan@etsy.com" required autofocus />
+            <label>{{ t('auth.login.usernameLabel') }}</label>
+            <input type="text" [(ngModel)]="username" name="username" class="form-input" [placeholder]="t('auth.login.usernamePlaceholder')" required autofocus />
           </div>
 
           <div class="form-group">
-            <label>Şifre</label>
+            <label>{{ t('auth.login.passwordLabel') }}</label>
             <input type="password" [(ngModel)]="password" name="password" class="form-input" placeholder="••••••••" required />
           </div>
 
           <button type="submit" class="btn btn-orange w-full" [disabled]="loading">
-            {{ loading ? 'Giriş Yapılıyor...' : '🔐 Güvenli Giriş Yap' }}
+            {{ loading ? t('auth.login.submittingBtn') : t('auth.login.submitBtn') }}
           </button>
 
           <div class="auth-hints">
-            <button type="button" class="btn-fill-hint" (click)="fillAdmin()">⚡ Yönetici Girişini Doldur (admin / Admin123*!)</button>
+            <button type="button" class="btn-fill-hint" (click)="fillAdmin()">{{ t('auth.login.fillAdminHint') }}</button>
           </div>
         </form>
 
         <div class="auth-footer">
-          <span>Hesabınız yok mu?</span>
-          <a routerLink="/auth/register" class="link-orange">Yeni Mağaza Hesabı Aç</a>
+          <span>{{ t('auth.login.noAccount') }}</span>
+          <a routerLink="/auth/register" class="link-orange">{{ t('auth.login.createAccountLink') }}</a>
         </div>
       </div>
     </div>
@@ -68,6 +74,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       padding: 36px 32px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
     }
+    .auth-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
     .brand-badge {
       display: inline-block;
       font-size: 0.72rem;
@@ -77,7 +90,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       border: 1px solid rgba(249, 115, 22, 0.3);
       padding: 3px 10px;
       border-radius: 9999px;
-      margin-bottom: 12px;
       letter-spacing: 0.06em;
     }
     .auth-header h2 {
@@ -176,6 +188,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class LoginComponent {
   private destroyRef = inject(DestroyRef);
+  private languageService = inject(LanguageService);
   authService = inject(AuthService);
   router = inject(Router);
 
@@ -210,16 +223,23 @@ export class LoginComponent {
         if (res.success) {
           this.router.navigate(['/finance/accounting']);
         } else {
-          this.errorMessage = res.message || 'Giriş başarısız.';
+          this.errorMessage = res.message || this.languageService.translate('auth.login.errorDefault');
         }
       },
       error: err => {
         this.loading = false;
         console.error('[Login] Error:', err);
         if (err.status === 0) {
-          this.errorMessage = `Sunucuya bağlanılamadı (Ağ Hatası / Status 0). Lütfen tarayıcıyı Ctrl+F5 ile sert yenileyin. [Denenen URL: ${err?.url || 'VDS/Proxy'}]`;
+          this.errorMessage = this.languageService.translate('auth.login.errorNetwork', {
+            url: err?.url || 'VDS/Proxy'
+          });
         } else {
-          this.errorMessage = err?.error?.message || `Hata (HTTP ${err.status}): ${err.statusText || 'Giriş yapılamadı.'}`;
+          this.errorMessage =
+            err?.error?.message ||
+            this.languageService.translate('auth.login.errorHttp', {
+              status: err.status,
+              detail: err.statusText || this.languageService.translate('auth.login.errorDefault')
+            });
         }
       }
     });

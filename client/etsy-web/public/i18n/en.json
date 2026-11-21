@@ -1,0 +1,140 @@
+{
+  "common": {
+    "appTitle": "Etsy Enterprise Web Studio - Command Center",
+    "languageSwitcherAria": "Select application language",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "refresh": "Refresh",
+    "logout": "Log out",
+    "logoutShort": "Exit",
+    "user": "User",
+    "noData": "No data",
+    "loading": "Loading..."
+  },
+  "errors": {
+    "validationTitle": "Validation Warning",
+    "operationErrorTitle": "Operation Error"
+  },
+  "shell": {
+    "brandSub": "Enterprise Web Studio",
+    "toggleSidebar": "Collapse/Expand Sidebar",
+    "adminPanel": "Admin & Management Panel",
+    "adminBadge": "ADMIN",
+    "lockedModuleTitle": "This module requires the {{plan}} plan",
+    "logoutTooltip": "Sign Out (Log out)",
+    "headerTitle": "Etsy Shop Command Center",
+    "headerSubtitle": "Live Shop Analytics, Financial Summary & Smart Growth Cockpit",
+    "subscriptionTooltip": "Active Subscription Plan & Quota Details",
+    "aiHubTooltip": "AI Model Settings & Provider Hub",
+    "apiStatusTooltip": "{{details}} (Click to open settings)",
+    "apiStatus": {
+      "connected": "Etsy API Connected",
+      "expired": "Token Expired",
+      "missing": "Etsy API Disconnected",
+      "error": "VDS Connection Error",
+      "checking": "Checking"
+    },
+    "exchangeRateTooltip": "Click to update exchange rate",
+    "currencySwitchToUsd": "Switch to USD currency",
+    "currencySwitchToTry": "Switch to TRY currency",
+    "refreshTooltip": "Refresh Page",
+    "shopDropdown": {
+      "tooltip": "Switch or Manage Shop",
+      "title": "Connected Etsy Shops",
+      "count": "{{count}} Shops",
+      "tokenExpired": "Token expired",
+      "tokenActive": "Token active and connected",
+      "selected": "ACTIVE",
+      "connectNew": "Connect New Shop"
+    },
+    "apiWarning": {
+      "attention": "Attention:",
+      "expiredMessage": "Your Etsy v3 OAuth token has expired. Please refresh your token to fetch live shop data.",
+      "missingMessage": "Etsy API is not connected. No mock data is ever generated; please connect your Etsy shop to view live metrics.",
+      "actionBtn": "Go to Etsy API Authorization"
+    },
+    "rateModal": {
+      "title": "Set Live USD / TRY Exchange Rate",
+      "description": "Enter the default exchange rate to use across all financial calculations, revenue, and net profit reports:",
+      "saveBtn": "Save Rate"
+    },
+    "categories": {
+      "general": "General",
+      "research": "Research & Analysis",
+      "automationFinance": "Automation & Financial Tools",
+      "shippingHub": "Shipping Integrations Hub",
+      "systemSettings": "System & Settings"
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "orders_shipping": "Orders & Shipping",
+      "fast_creator": "Fast Listing Creator (AI)",
+      "product_discovery": "Product Discovery & Draft",
+      "ai_image": "AI Image Studio",
+      "shop": "Shop Performance",
+      "research_agent": "Shop Research Agent",
+      "research": "Market Research",
+      "viral_3d": "Viral 3D Model Hunter",
+      "competitor_spy": "Competitor & Trend Spy",
+      "external": "External Marketplace Finder",
+      "ai_audit": "Shop AI Audit",
+      "ab_test": "A/B Test Panel",
+      "financial": "Financial Reporting",
+      "financial_ai": "Financial AI Analysis",
+      "profit": "Profit Simulator",
+      "automation": "Automation Report",
+      "batch": "Batch Processing Queue",
+      "shop_vault": "Shop Backup & Transfer",
+      "tracking": "Tracking History",
+      "ai_usage": "AI Token & Balance Tracker",
+      "aras": "Aras Global Shipping",
+      "shipentegra": "ShipEntegra Shipping",
+      "navlungo": "Navlungo Shipping",
+      "shiptomore": "Shiptomore Shipping",
+      "subscription": "Subscription & Plans",
+      "ai_models": "AI Model & Optimization",
+      "notifications": "Telegram Notification Bot",
+      "api": "Etsy API Settings",
+      "update": "Client Version Update",
+      "logs": "Application Logs"
+    }
+  },
+  "auth": {
+    "login": {
+      "badge": "🚀 ETSY ENTERPRISE",
+      "title": "Sign In",
+      "subtitle": "Etsy Shop Management & Command Center",
+      "usernameLabel": "Username or Email",
+      "usernamePlaceholder": "e.g., admin or seller@etsy.com",
+      "passwordLabel": "Password",
+      "submitBtn": "🔐 Secure Sign In",
+      "submittingBtn": "Signing in...",
+      "fillAdminHint": "⚡ Fill Admin Credentials (admin / Admin123*!)",
+      "noAccount": "Don't have an account?",
+      "createAccountLink": "Create New Shop Account",
+      "errorDefault": "Sign in failed.",
+      "errorNetwork": "Could not reach server (Network Error / Status 0). Please hard refresh with Ctrl+F5. [Target URL: {{url}}]",
+      "errorHttp": "Error (HTTP {{status}}): {{detail}}"
+    },
+    "register": {
+      "badge": "🏪 NEW SHOP REGISTRATION",
+      "title": "Create Account",
+      "subtitle": "Scale your Etsy shop with Etsy Enterprise Studio",
+      "usernameLabel": "Username",
+      "usernamePlaceholder": "e.g., seller_pro",
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "e.g., shop@domain.com",
+      "shopIdLabel": "Etsy Shop ID (Optional)",
+      "shopIdPlaceholder": "Default: 53236321",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "At least 6 characters",
+      "submitBtn": "✨ Launch My Shop Account",
+      "submittingBtn": "Creating account...",
+      "hasAccount": "Already have an account?",
+      "signInLink": "Sign In",
+      "errorDefault": "Registration failed.",
+      "errorGeneric": "An error occurred during registration."
+    }
+  }
+}

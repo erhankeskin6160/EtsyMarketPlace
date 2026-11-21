@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
 <div class="layout-wrapper">
   <!-- SIDEBAR NAVIGATION -->
   <aside class="sidebar" [class.collapsed]="apiService.isSidebarCollapsed()">
@@ -6,10 +7,10 @@
         <span class="brand-icon"><i class="fa-solid fa-store text-orange-500"></i></span>
         <div class="brand-text" *ngIf="!apiService.isSidebarCollapsed()">
           <span class="brand-title">EtsyMarketPlace</span>
-          <span class="brand-sub">Enterprise Web Studio</span>
+          <span class="brand-sub">{{ t('shell.brandSub') }}</span>
         </div>
       </div>
-      <button class="btn-toggle" (click)="apiService.toggleSidebar()" title="Menüyü Daralt/Genişlet">
+      <button class="btn-toggle" (click)="apiService.toggleSidebar()" [title]="t('shell.toggleSidebar')">
         <i [class]="apiService.isSidebarCollapsed() ? 'fa-solid fa-chevron-right text-xs' : 'fa-solid fa-chevron-left text-xs'"></i>
       </button>
     </div>
@@ -18,15 +19,15 @@
     <div class="admin-quick-strip" *ngIf="authService.isAdmin() && !apiService.isSidebarCollapsed()">
       <a routerLink="/admin" routerLinkActive="active-nav" class="admin-link">
         <span class="nav-icon"><i class="fa-solid fa-crown text-amber-400"></i></span>
-        <span class="nav-text">Yönetim & Admin Paneli</span>
-        <span class="badge badge-admin">YÖNETİCİ</span>
+        <span class="nav-text">{{ t('shell.adminPanel') }}</span>
+        <span class="badge badge-admin">{{ t('shell.adminBadge') }}</span>
       </a>
     </div>
 
     <div class="sidebar-scroll">
       <div class="nav-category" *ngFor="let cat of categories">
         <div class="category-title" *ngIf="!apiService.isSidebarCollapsed()">
-          {{ cat.title }}
+          {{ t(cat.titleKey) }}
         </div>
         <div class="category-divider" *ngIf="apiService.isSidebarCollapsed()"></div>
 
@@ -37,12 +38,12 @@
              (click)="onNavItemClick($event, item)"
              class="nav-item"
              [class.nav-locked]="!subscriptionService.isFeatureAllowed(item.id)"
-             [title]="item.title">
+             [title]="t(item.titleKey)">
             <span class="nav-icon"><i [class]="'fa-solid ' + item.icon"></i></span>
-            <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ item.title }}</span>
+            <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ t(item.titleKey) }}</span>
             <span class="nav-lock-tag"
                   *ngIf="!subscriptionService.isFeatureAllowed(item.id) && !apiService.isSidebarCollapsed()"
-                  [title]="'Bu modül ' + subscriptionService.getRequiredPlanBadge(item.id) + ' paketi gerektirir'">
+                  [title]="t('shell.lockedModuleTitle', { plan: subscriptionService.getRequiredPlanBadge(item.id) })">
               <i class="fa-solid fa-lock"></i>
               <span>{{ subscriptionService.getRequiredPlanBadge(item.id) }}</span>
             </span>
@@ -56,7 +57,7 @@
       <div class="user-info" *ngIf="!apiService.isSidebarCollapsed()">
         <div class="user-avatar">{{ authService.currentUser()?.username?.charAt(0)?.toUpperCase() || 'U' }}</div>
         <div class="user-details">
-          <div class="user-name">{{ authService.currentUser()?.username || 'Kullanıcı' }}</div>
+          <div class="user-name">{{ authService.currentUser()?.username || t('common.user') }}</div>
           <div class="user-role">{{ authService.currentUser()?.role || 'StoreOwner' }}</div>
         </div>
       </div>
@@ -65,10 +66,10 @@
         class="btn-logout"
         [class.compact]="apiService.isSidebarCollapsed()"
         (click)="authService.logout()"
-        title="Oturumu Kapat (Çıkış Yap)"
-        aria-label="Oturumu Kapat (Çıkış Yap)">
+        [title]="t('shell.logoutTooltip')"
+        [attr.aria-label]="t('shell.logoutTooltip')">
         <i class="fa-solid fa-right-from-bracket"></i>
-        <span *ngIf="!apiService.isSidebarCollapsed()">Çıkış</span>
+        <span *ngIf="!apiService.isSidebarCollapsed()">{{ t('common.logoutShort') }}</span>
       </button>
     </div>
   </aside>
@@ -78,21 +79,24 @@
     <!-- TOP HEADER BAR -->
     <header class="top-header">
       <div class="header-left">
-        <h1 class="page-title"><i class="fa-solid fa-layer-group text-orange-500 mr-2"></i>Etsy Mağaza Komuta Merkezi</h1>
-        <span class="page-subtitle">Canlı Mağaza İstatistikleri, Finansal Özet ve Akıllı Büyüme Paneli</span>
+        <h1 class="page-title"><i class="fa-solid fa-layer-group text-orange-500 mr-2"></i>{{ t('shell.headerTitle') }}</h1>
+        <span class="page-subtitle">{{ t('shell.headerSubtitle') }}</span>
       </div>
 
       <div class="header-right">
+        <!-- Language Switcher (EN | TR) -->
+        <app-language-switcher></app-language-switcher>
+
         <!-- Active SaaS Subscription Tier Pill -->
         <button class="header-control-btn"
                 (click)="router.navigate(['/settings/subscription'])"
-                title="Aktif Abonelik Paketi & Kota Detayları">
+                [title]="t('shell.subscriptionTooltip')">
           <span class="plan-dot"></span>
           <span>{{ subscriptionService.activePlanBadgeLabel() }}</span>
         </button>
 
         <!-- Active AI Model Hub Badge -->
-        <button class="header-control-btn" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi">
+        <button class="header-control-btn" (click)="aiService.openAiSettingsModal()" [title]="t('shell.aiHubTooltip')">
           <app-ai-logo [provider]="aiService.activeProvider()" [size]="15"></app-ai-logo>
           <span>{{ aiService.activeBadgeTextClean() }}</span>
           <i class="fa-solid fa-chevron-down header-chevron"></i>
@@ -102,33 +106,33 @@
         <button class="header-control-btn badge-status"
                 [ngClass]="apiService.tokenStatus()"
                 (click)="router.navigate(['/settings/etsy-api'])"
-                [title]="apiService.tokenDetails() + ' (Ayarlara gitmek için tıklayın)'">
+                [title]="t('shell.apiStatusTooltip', { details: apiService.tokenDetails() })">
           <span class="status-dot"></span>
           <span class="status-text">
             <ng-container [ngSwitch]="apiService.tokenStatus()">
-              <span *ngSwitchCase="'connected'">Etsy API Bağlı</span>
-              <span *ngSwitchCase="'expired'">Token Süresi Doldu</span>
-              <span *ngSwitchCase="'missing'">Etsy API Bağlı Değil</span>
-              <span *ngSwitchCase="'error'">VDS Bağlantı Hatası</span>
-              <span *ngSwitchDefault><i class="fa-solid fa-spinner fa-spin text-xs"></i> Kontrol Ediliyor</span>
+              <span *ngSwitchCase="'connected'">{{ t('shell.apiStatus.connected') }}</span>
+              <span *ngSwitchCase="'expired'">{{ t('shell.apiStatus.expired') }}</span>
+              <span *ngSwitchCase="'missing'">{{ t('shell.apiStatus.missing') }}</span>
+              <span *ngSwitchCase="'error'">{{ t('shell.apiStatus.error') }}</span>
+              <span *ngSwitchDefault><i class="fa-solid fa-spinner fa-spin text-xs"></i> {{ t('shell.apiStatus.checking') }}</span>
             </ng-container>
           </span>
         </button>
 
         <!-- Live Exchange Rate -->
-        <button class="header-control-btn" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
+        <button class="header-control-btn" (click)="openRateModal()" [title]="t('shell.exchangeRateTooltip')">
           <span>1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
           <i class="fa-solid fa-pen header-chevron"></i>
         </button>
 
         <!-- Currency Toggle -->
-        <button class="header-control-btn" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? 'USD para birimine geç' : 'TRY para birimine geç'">
+        <button class="header-control-btn" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? t('shell.currencySwitchToUsd') : t('shell.currencySwitchToTry')">
           {{ apiService.isTryCurrency() ? 'TRY (₺)' : 'USD ($)' }}
         </button>
 
         <!-- Store Switcher Dropdown -->
         <div class="store-dropdown-container">
-          <button class="store-badge-btn" (click)="toggleShopDropdown($event)" [class.active]="isShopDropdownOpen" title="Mağaza Değiştir veya Yönet">
+          <button class="store-badge-btn" (click)="toggleShopDropdown($event)" [class.active]="isShopDropdownOpen" [title]="t('shell.shopDropdown.tooltip')">
             <span class="store-icon"><i class="fa-solid fa-store text-orange-400"></i></span>
             <span class="store-id">{{ apiService.activeShopId() }}</span>
             <i class="fa-solid fa-chevron-down text-xs dropdown-chevron" [class.rotated]="isShopDropdownOpen"></i>
@@ -137,21 +141,21 @@
           <!-- Dropdown Menu -->
           <div class="store-dropdown-menu" *ngIf="isShopDropdownOpen" (click)="$event.stopPropagation()">
             <div class="dropdown-header">
-              <span class="hdr-title">Bağlı Etsy Mağazaları</span>
-              <span class="hdr-count">{{ apiService.connectedShops().length }} Mağaza</span>
+              <span class="hdr-title">{{ t('shell.shopDropdown.title') }}</span>
+              <span class="hdr-count">{{ t('shell.shopDropdown.count', { count: apiService.connectedShops().length }) }}</span>
             </div>
 
             <div class="shop-list">
-              <div 
-                *ngFor="let shop of apiService.connectedShops()" 
-                class="shop-item" 
+              <div
+                *ngFor="let shop of apiService.connectedShops()"
+                class="shop-item"
                 [class.selected]="shop.shopId === apiService.activeShopId()"
                 (click)="selectShop(shop.shopId, $event)">
-                <div class="shop-status-dot" [class.online]="!shop.isExpired" [class.expired]="shop.isExpired" [title]="shop.isExpired ? 'Token süresi dolmuş' : 'Token aktif ve bağlı'"></div>
+                <div class="shop-status-dot" [class.online]="!shop.isExpired" [class.expired]="shop.isExpired" [title]="shop.isExpired ? t('shell.shopDropdown.tokenExpired') : t('shell.shopDropdown.tokenActive')"></div>
                 <div class="shop-info">
                   <div class="shop-name-row">
                     <span class="shop-name">{{ shop.shopName || shop.shopId }}</span>
-                    <span *ngIf="shop.shopId === apiService.activeShopId()" class="active-tag">SEÇİLİ</span>
+                    <span *ngIf="shop.shopId === apiService.activeShopId()" class="active-tag">{{ t('shell.shopDropdown.selected') }}</span>
                   </div>
                   <span class="shop-id-sub">ID: {{ shop.shopId }}</span>
                 </div>
@@ -162,15 +166,15 @@
             <div class="dropdown-footer">
               <button class="btn-add-shop" (click)="goToConnectNewShop($event)">
                 <i class="fa-solid fa-plus plus-icon mr-1"></i>
-                <span>Yeni Mağaza Bağla</span>
+                <span>{{ t('shell.shopDropdown.connectNew') }}</span>
               </button>
             </div>
           </div>
         </div>
 
         <!-- Refresh Button -->
-        <button class="btn-refresh" (click)="router.navigate([router.url])" title="Sayfayı Yenile">
-          <i class="fa-solid fa-arrows-rotate mr-1"></i> Yenile
+        <button class="btn-refresh" (click)="router.navigate([router.url])" [title]="t('shell.refreshTooltip')">
+          <i class="fa-solid fa-arrows-rotate mr-1"></i> {{ t('common.refresh') }}
         </button>
 
         <!-- Logout Button -->
@@ -178,10 +182,10 @@
           type="button"
           class="btn-header-logout"
           (click)="authService.logout()"
-          title="Oturumu Kapat (Çıkış Yap)"
-          aria-label="Oturumu Kapat (Çıkış Yap)">
+          [title]="t('shell.logoutTooltip')"
+          [attr.aria-label]="t('shell.logoutTooltip')">
           <i class="fa-solid fa-right-from-bracket"></i>
-          <span>Çıkış Yap</span>
+          <span>{{ t('common.logout') }}</span>
         </button>
       </div>
     </header>
@@ -191,14 +195,14 @@
       <div class="warning-content">
         <i class="fa-solid fa-triangle-exclamation warning-icon text-amber-400"></i>
         <span class="warning-msg">
-          <strong>Dikkat:</strong> 
-          {{ apiService.tokenStatus() === 'expired' 
-             ? 'Etsy v3 OAuth bağlantı token\'ının süresi dolmuş. Canlı mağaza verilerinizin çekilebilmesi için token yenilemesi yapılması gerekmektedir.' 
-             : 'Etsy API bağlantısı kurulu değil. Sayfalarda asla sahte veri uydurulmaz; gerçek mağaza verilerinizi görüntülemek için lütfen Etsy ile bağlanın.' }}
+          <strong>{{ t('shell.apiWarning.attention') }}</strong>
+          {{ apiService.tokenStatus() === 'expired'
+             ? t('shell.apiWarning.expiredMessage')
+             : t('shell.apiWarning.missingMessage') }}
         </span>
       </div>
       <button class="btn-warning-action" (click)="router.navigate(['/settings/etsy-api'])">
-        <i class="fa-solid fa-link mr-1"></i> Etsy API Yetkilendirme Sayfasına Git
+        <i class="fa-solid fa-link mr-1"></i> {{ t('shell.apiWarning.actionBtn') }}
       </button>
     </div>
 
@@ -213,12 +217,12 @@
 <div class="modal-backdrop" *ngIf="isRateModalOpen" (click)="closeRateModal()">
   <div class="modal-dialog" (click)="$event.stopPropagation()">
     <div class="modal-header">
-      <h3><i class="fa-solid fa-coins mr-2 text-amber-400"></i>Canlı USD / TRY Döviz Kuru Ayarla</h3>
-      <button class="modal-close" (click)="closeRateModal()">&times;</button>
+      <h3><i class="fa-solid fa-coins mr-2 text-amber-400"></i>{{ t('shell.rateModal.title') }}</h3>
+      <button class="modal-close" (click)="closeRateModal()" [attr.aria-label]="t('common.close')">&times;</button>
     </div>
     <div class="modal-body">
       <p class="modal-desc">
-        Tüm finansal hesaplamalar, ciro ve net kâr raporlarında kullanılacak varsayılan döviz kurunu giriniz:
+        {{ t('shell.rateModal.description') }}
       </p>
       <div class="rate-input-group">
         <span class="currency-prefix">1 USD =</span>
@@ -227,8 +231,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" (click)="closeRateModal()">İptal</button>
-      <button class="btn btn-orange" (click)="saveRate()"><i class="fa-solid fa-floppy-disk mr-1"></i> Kuru Kaydet</button>
+      <button class="btn btn-secondary" (click)="closeRateModal()">{{ t('common.cancel') }}</button>
+      <button class="btn btn-orange" (click)="saveRate()"><i class="fa-solid fa-floppy-disk mr-1"></i> {{ t('shell.rateModal.saveBtn') }}</button>
     </div>
   </div>
 </div>
@@ -242,3 +246,4 @@
 
 <!-- GLOBAL FLOATING GEMINI COPILOT -->
 <app-floating-copilot></app-floating-copilot>
+</ng-container>

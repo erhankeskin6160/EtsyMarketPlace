@@ -3,20 +3,30 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective } from '@jsverse/transloco';
 import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
-import { NavItem } from '../../core/models/etsy.models';
 
 import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
 import { AiModelsSettingsComponent } from '../../features/settings/ai-models-settings.component';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { LanguageSwitcherComponent } from '../../core/components/language-switcher.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent, AiModelsSettingsComponent, AiLogoComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    TranslocoDirective,
+    FloatingCopilotComponent,
+    AiModelsSettingsComponent,
+    AiLogoComponent,
+    LanguageSwitcherComponent
+  ],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
@@ -73,59 +83,59 @@ export class ShellComponent implements OnInit {
 
   readonly categories = [
     {
-      title: 'Genel',
+      titleKey: 'shell.categories.general',
       items: [
-        { id: 'dashboard', title: 'Kontrol Paneli', icon: 'fa-chart-pie', route: '/dashboard' },
-        { id: 'orders_shipping', title: 'Sipariş & Kargo', icon: 'fa-truck-fast', route: '/orders' },
-        { id: 'fast_creator', title: 'Hızlı Ürün Ekle (AI)', icon: 'fa-bolt', route: '/listings/fast-creator' },
-        { id: 'product_discovery', title: 'Ürün Bul & Taslak', icon: 'fa-crosshairs', route: '/listings/discovery' },
-        { id: 'ai_image', title: 'AI Görsel Stüdyosu', icon: 'fa-wand-magic-sparkles', route: '/ai-studio' },
-        { id: 'shop', title: 'Mağazam Performansı', icon: 'fa-store', route: '/analytics/shop' }
+        { id: 'dashboard', titleKey: 'shell.nav.dashboard', icon: 'fa-chart-pie', route: '/dashboard' },
+        { id: 'orders_shipping', titleKey: 'shell.nav.orders_shipping', icon: 'fa-truck-fast', route: '/orders' },
+        { id: 'fast_creator', titleKey: 'shell.nav.fast_creator', icon: 'fa-bolt', route: '/listings/fast-creator' },
+        { id: 'product_discovery', titleKey: 'shell.nav.product_discovery', icon: 'fa-crosshairs', route: '/listings/discovery' },
+        { id: 'ai_image', titleKey: 'shell.nav.ai_image', icon: 'fa-wand-magic-sparkles', route: '/ai-studio' },
+        { id: 'shop', titleKey: 'shell.nav.shop', icon: 'fa-store', route: '/analytics/shop' }
       ]
     },
     {
-      title: 'Araştırma & Analiz',
+      titleKey: 'shell.categories.research',
       items: [
-        { id: 'research_agent', title: 'Mağaza Araştırma Ajanı', icon: 'fa-robot', route: '/research/agent' },
-        { id: 'research', title: 'Pazar Araştırması', icon: 'fa-magnifying-glass-chart', route: '/research/market' },
-        { id: 'viral_3d', title: 'Viral 3D Model Avcısı', icon: 'fa-cube', route: '/research/viral-3d' },
-        { id: 'competitor_spy', title: 'Rakip & Trend Casusu', icon: 'fa-user-secret', route: '/research/competitor' },
-        { id: 'external', title: 'Dış Pazar Yeri Bulucu', icon: 'fa-globe', route: '/research/external' },
-        { id: 'ai_audit', title: 'Mağaza AI Analizi', icon: 'fa-brain', route: '/analytics/ai-audit' },
-        { id: 'ab_test', title: 'A/B Test Paneli', icon: 'fa-chart-line', route: '/analytics/ab-test' }
+        { id: 'research_agent', titleKey: 'shell.nav.research_agent', icon: 'fa-robot', route: '/research/agent' },
+        { id: 'research', titleKey: 'shell.nav.research', icon: 'fa-magnifying-glass-chart', route: '/research/market' },
+        { id: 'viral_3d', titleKey: 'shell.nav.viral_3d', icon: 'fa-cube', route: '/research/viral-3d' },
+        { id: 'competitor_spy', titleKey: 'shell.nav.competitor_spy', icon: 'fa-user-secret', route: '/research/competitor' },
+        { id: 'external', titleKey: 'shell.nav.external', icon: 'fa-globe', route: '/research/external' },
+        { id: 'ai_audit', titleKey: 'shell.nav.ai_audit', icon: 'fa-brain', route: '/analytics/ai-audit' },
+        { id: 'ab_test', titleKey: 'shell.nav.ab_test', icon: 'fa-chart-line', route: '/analytics/ab-test' }
       ]
     },
     {
-      title: 'Otomasyon & Finansal Araçlar',
+      titleKey: 'shell.categories.automationFinance',
       items: [
-        { id: 'financial', title: 'Finansal Raporlama', icon: 'fa-file-invoice-dollar', route: '/finance/accounting' },
-        { id: 'financial_ai', title: 'Finansal AI Analiz', icon: 'fa-microchip', route: '/finance/ai-analysis' },
-        { id: 'profit', title: 'Kâr Simülatörü', icon: 'fa-sack-dollar', route: '/finance/profit' },
-        { id: 'automation', title: 'Otomasyon Raporu', icon: 'fa-gears', route: '/tools/automation' },
-        { id: 'batch', title: 'Toplu İşlem Kuyruğu', icon: 'fa-boxes-stacked', route: '/tools/batch' },
-        { id: 'shop_vault', title: 'Mağaza Yedek & Transfer', icon: 'fa-shield-halved', route: '/tools/vault' },
-        { id: 'tracking', title: 'Takip Geçmişi', icon: 'fa-location-crosshairs', route: '/tools/tracking' },
-        { id: 'ai_usage', title: 'AI Token & Bakiye Takip', icon: 'fa-chart-simple', route: '/tools/ai-usage' }
+        { id: 'financial', titleKey: 'shell.nav.financial', icon: 'fa-file-invoice-dollar', route: '/finance/accounting' },
+        { id: 'financial_ai', titleKey: 'shell.nav.financial_ai', icon: 'fa-microchip', route: '/finance/ai-analysis' },
+        { id: 'profit', titleKey: 'shell.nav.profit', icon: 'fa-sack-dollar', route: '/finance/profit' },
+        { id: 'automation', titleKey: 'shell.nav.automation', icon: 'fa-gears', route: '/tools/automation' },
+        { id: 'batch', titleKey: 'shell.nav.batch', icon: 'fa-boxes-stacked', route: '/tools/batch' },
+        { id: 'shop_vault', titleKey: 'shell.nav.shop_vault', icon: 'fa-shield-halved', route: '/tools/vault' },
+        { id: 'tracking', titleKey: 'shell.nav.tracking', icon: 'fa-location-crosshairs', route: '/tools/tracking' },
+        { id: 'ai_usage', titleKey: 'shell.nav.ai_usage', icon: 'fa-chart-simple', route: '/tools/ai-usage' }
       ]
     },
     {
-      title: 'Kargo Entegrasyonları Hub',
+      titleKey: 'shell.categories.shippingHub',
       items: [
-        { id: 'aras', title: 'Aras Global Kargo', icon: 'fa-truck', route: '/shipping/aras' },
-        { id: 'shipentegra', title: 'ShipEntegra Kargo', icon: 'fa-box', route: '/shipping/shipentegra' },
-        { id: 'navlungo', title: 'Navlungo Kargo', icon: 'fa-ship', route: '/shipping/navlungo' },
-        { id: 'shiptomore', title: 'Shiptomore Kargo', icon: 'fa-plane-departure', route: '/shipping/shiptomore' }
+        { id: 'aras', titleKey: 'shell.nav.aras', icon: 'fa-truck', route: '/shipping/aras' },
+        { id: 'shipentegra', titleKey: 'shell.nav.shipentegra', icon: 'fa-box', route: '/shipping/shipentegra' },
+        { id: 'navlungo', titleKey: 'shell.nav.navlungo', icon: 'fa-ship', route: '/shipping/navlungo' },
+        { id: 'shiptomore', titleKey: 'shell.nav.shiptomore', icon: 'fa-plane-departure', route: '/shipping/shiptomore' }
       ]
     },
     {
-      title: 'Sistem & Ayarlar',
+      titleKey: 'shell.categories.systemSettings',
       items: [
-        { id: 'subscription', title: 'Abonelik & Paketler', icon: 'fa-layer-group', route: '/settings/subscription' },
-        { id: 'ai_models', title: 'AI Model & Optimizasyon', icon: 'fa-sliders', route: '/settings/ai-models' },
-        { id: 'notifications', title: 'Telegram Bildirim Botu', icon: 'fa-paper-plane', route: '/settings/notifications' },
-        { id: 'api', title: 'Etsy API Ayarları', icon: 'fa-key', route: '/settings/etsy-api' },
-        { id: 'update', title: 'Sürüm Güncelle (Client)', icon: 'fa-arrows-rotate', route: '/settings/update' },
-        { id: 'logs', title: 'Uygulama Günlüğü', icon: 'fa-terminal', route: '/system/logs' }
+        { id: 'subscription', titleKey: 'shell.nav.subscription', icon: 'fa-layer-group', route: '/settings/subscription' },
+        { id: 'ai_models', titleKey: 'shell.nav.ai_models', icon: 'fa-sliders', route: '/settings/ai-models' },
+        { id: 'notifications', titleKey: 'shell.nav.notifications', icon: 'fa-paper-plane', route: '/settings/notifications' },
+        { id: 'api', titleKey: 'shell.nav.api', icon: 'fa-key', route: '/settings/etsy-api' },
+        { id: 'update', titleKey: 'shell.nav.update', icon: 'fa-arrows-rotate', route: '/settings/update' },
+        { id: 'logs', titleKey: 'shell.nav.logs', icon: 'fa-terminal', route: '/system/logs' }
       ]
     }
   ];

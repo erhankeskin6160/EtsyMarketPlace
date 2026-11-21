@@ -2,20 +2,26 @@ import { Component, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { TranslocoDirective } from '@jsverse/transloco';
 import { AuthService } from '../../core/services/auth.service';
+import { LanguageService } from '../../core/i18n/language.service';
+import { LanguageSwitcherComponent } from '../../core/components/language-switcher.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, TranslocoDirective, LanguageSwitcherComponent],
   template: `
-    <div class="auth-container">
+    <div class="auth-container" *transloco="let t">
       <div class="auth-card">
+        <div class="auth-top-bar">
+          <div class="brand-badge">{{ t('auth.register.badge') }}</div>
+          <app-language-switcher></app-language-switcher>
+        </div>
         <div class="auth-header">
-          <div class="brand-badge">🏪 YENİ MAĞAZA KAYDI</div>
-          <h2>Hesap Oluştur</h2>
-          <p class="auth-subtitle">Etsy Enterprise Studio ile mağazanızı ölçekleyin</p>
+          <h2>{{ t('auth.register.title') }}</h2>
+          <p class="auth-subtitle">{{ t('auth.register.subtitle') }}</p>
         </div>
 
         <div class="alert-error" *ngIf="errorMessage">
@@ -24,33 +30,33 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
         <form (ngSubmit)="onRegister()" class="auth-form">
           <div class="form-group">
-            <label>Kullanıcı Adı</label>
-            <input type="text" [(ngModel)]="username" name="username" class="form-input" placeholder="örn: seller_pro" required minlength="3" />
+            <label>{{ t('auth.register.usernameLabel') }}</label>
+            <input type="text" [(ngModel)]="username" name="username" class="form-input" [placeholder]="t('auth.register.usernamePlaceholder')" required minlength="3" />
           </div>
 
           <div class="form-group">
-            <label>E-Posta Adresi</label>
-            <input type="email" [(ngModel)]="email" name="email" class="form-input" placeholder="örn: magaza@alanadi.com" required />
+            <label>{{ t('auth.register.emailLabel') }}</label>
+            <input type="email" [(ngModel)]="email" name="email" class="form-input" [placeholder]="t('auth.register.emailPlaceholder')" required />
           </div>
 
           <div class="form-group">
-            <label>Etsy Mağaza ID (İsteğe Bağlı)</label>
-            <input type="text" [(ngModel)]="shopId" name="shopId" class="form-input" placeholder="Varsayılan: 53236321" />
+            <label>{{ t('auth.register.shopIdLabel') }}</label>
+            <input type="text" [(ngModel)]="shopId" name="shopId" class="form-input" [placeholder]="t('auth.register.shopIdPlaceholder')" />
           </div>
 
           <div class="form-group">
-            <label>Şifre</label>
-            <input type="password" [(ngModel)]="password" name="password" class="form-input" placeholder="En az 6 karakter" required minlength="6" />
+            <label>{{ t('auth.register.passwordLabel') }}</label>
+            <input type="password" [(ngModel)]="password" name="password" class="form-input" [placeholder]="t('auth.register.passwordPlaceholder')" required minlength="6" />
           </div>
 
           <button type="submit" class="btn btn-orange w-full" [disabled]="loading">
-            {{ loading ? 'Kayıt Yapılıyor...' : '✨ Mağaza Hesabımı Başlat' }}
+            {{ loading ? t('auth.register.submittingBtn') : t('auth.register.submitBtn') }}
           </button>
         </form>
 
         <div class="auth-footer">
-          <span>Zaten hesabınız var mı?</span>
-          <a routerLink="/auth/login" class="link-orange">Giriş Yap</a>
+          <span>{{ t('auth.register.hasAccount') }}</span>
+          <a routerLink="/auth/login" class="link-orange">{{ t('auth.register.signInLink') }}</a>
         </div>
       </div>
     </div>
@@ -74,6 +80,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       padding: 36px 32px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
     }
+    .auth-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
     .brand-badge {
       display: inline-block;
       font-size: 0.72rem;
@@ -83,7 +96,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       border: 1px solid rgba(6, 182, 212, 0.3);
       padding: 3px 10px;
       border-radius: 9999px;
-      margin-bottom: 12px;
       letter-spacing: 0.06em;
     }
     .auth-header h2 {
@@ -147,6 +159,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class RegisterComponent {
   private destroyRef = inject(DestroyRef);
+  private languageService = inject(LanguageService);
   authService = inject(AuthService);
   router = inject(Router);
 
@@ -173,12 +186,12 @@ export class RegisterComponent {
         if (res.success) {
           this.router.navigate(['/dashboard']);
         } else {
-          this.errorMessage = res.message || 'Kayıt başarısız.';
+          this.errorMessage = res.message || this.languageService.translate('auth.register.errorDefault');
         }
       },
       error: err => {
         this.loading = false;
-        this.errorMessage = err?.error?.message || 'Kayıt sırasında bir hata oluştu.';
+        this.errorMessage = err?.error?.message || this.languageService.translate('auth.register.errorGeneric');
       }
     });
   }

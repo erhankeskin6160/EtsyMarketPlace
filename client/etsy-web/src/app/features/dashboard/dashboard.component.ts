@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, DestroyRef
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, EtsyRateLimitSnapshot, FinancialPerformanceDto } from '../../core/services/etsy-api.service';
 import { DailyBrief } from '../../core/models/etsy.models';
 import { Chart, registerables } from 'chart.js';
@@ -11,60 +12,61 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, TranslocoDirective],
+  providers: [provideTranslocoScope('dashboard')],
   template: `
-    <div class="dashboard-root">
+    <div class="dashboard-root" *transloco="let t">
       <div *ngIf="rateLimitStatus && (rateLimitStatus.isDailyLimitExceeded || rateLimitStatus.dailyLimit)" style="margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.85rem;" [style.background]="rateLimitStatus.isDailyLimitExceeded ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.10)'" [style.border]="rateLimitStatus.isDailyLimitExceeded ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(16, 185, 129, 0.25)'">
         <span [ngClass]="rateLimitStatus.isDailyLimitExceeded ? 'text-danger' : 'text-emerald'">
           <ng-container *ngIf="rateLimitStatus.isDailyLimitExceeded">
-            ⛔ Etsy Günlük API Kotası Doldu ({{ rateLimitStatus.remainingToday ?? 0 }} / {{ rateLimitStatus.dailyLimit ?? 5000 }}) — {{ formatRetryAfter(rateLimitStatus.retryAfterSeconds) }}. Ekranda yedek özet gösteriliyor.
+            {{ t('dashboard.rateLimit.exceeded', { remaining: rateLimitStatus.remainingToday ?? 0, limit: rateLimitStatus.dailyLimit ?? 5000, retry: formatRetryAfter(rateLimitStatus.retryAfterSeconds) }) }}
           </ng-container>
           <ng-container *ngIf="!rateLimitStatus.isDailyLimitExceeded">
-            ✓ Etsy API Günlük Kota: {{ rateLimitStatus.remainingToday ?? '—' }} / {{ rateLimitStatus.dailyLimit ?? '—' }} kalan (Saniye limiti: {{ rateLimitStatus.perSecondLimit ?? '—' }}/sn)
+            {{ t('dashboard.rateLimit.available', { remaining: rateLimitStatus.remainingToday ?? '—', limit: rateLimitStatus.dailyLimit ?? '—', perSecond: rateLimitStatus.perSecondLimit ?? '—' }) }}
           </ng-container>
         </span>
       </div>
       <!-- HERO KPI STRIP (MATCHING WINFORMS DESKTOP) -->
       <section class="kpi-grid" [class.has-popover-open]="isExpensesPopoverOpen">
         <ng-template #noFinanceValue>—</ng-template>
-        <ng-template #noFinanceInsight>Finansal veriler yüklenemedi veya mevcut değil.</ng-template>
+        <ng-template #noFinanceInsight>{{ t('dashboard.kpi.noFinanceInsight') }}</ng-template>
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">💳 BU AYKI BRÜT CİRO</span>
-            <span class="kpi-tag text-emerald">{{ financialPerformance ? 'API' : 'Veri yok' }}</span>
+            <span class="kpi-label">{{ t('dashboard.kpi.grossRevenueLabel') }}</span>
+            <span class="kpi-tag text-emerald">{{ financialPerformance ? 'API' : t('common.noData') }}</span>
           </div>
           <div class="kpi-value text-emerald">
             <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ grossSalesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ grossSalesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
-          <div class="kpi-sub">{{ financialPerformance?.ledgerWarning ? financialPerformance?.ledgerWarning : 'Etsy Mağaza Satış Geliri' }}</div>
+          <div class="kpi-sub">{{ financialPerformance?.ledgerWarning ? financialPerformance?.ledgerWarning : t('dashboard.kpi.grossRevenueSub') }}</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">{{ netProfitUsd >= 0 ? '💰 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
-            <span class="kpi-tag" [ngClass]="netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') : 'Veri yok' }}</span>
+            <span class="kpi-label">{{ netProfitUsd >= 0 ? t('dashboard.kpi.netProfitLabel') : t('dashboard.kpi.netLossLabel') }}</span>
+            <span class="kpi-tag" [ngClass]="netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') : t('common.noData') }}</span>
           </div>
           <div class="kpi-value" [ngClass]="netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">
             <ng-container *ngIf="financialPerformance; else noFinanceValue">{{ netProfitUsd < 0 ? '-' : '' }}&#36;{{ (netProfitUsd < 0 ? -netProfitUsd : netProfitUsd) | number:'1.2-2' }} <span class="kpi-sub-try">({{ netProfitUsd < 0 ? '-₺' : '₺' }}{{ (netProfitUsd < 0 ? -netProfitUsd : netProfitUsd) * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
-          <div class="kpi-sub">Maliyet, Komisyonlar Düşülmüş</div>
+          <div class="kpi-sub">{{ t('dashboard.kpi.netProfitSub') }}</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">📦 BU AYKİ SİPARİŞ</span>
-            <span class="kpi-tag text-purple">{{ financialPerformance ? 'Canlı API' : 'Veri yok' }}</span>
+            <span class="kpi-label">{{ t('dashboard.kpi.ordersLabel') }}</span>
+            <span class="kpi-tag text-purple">{{ financialPerformance ? t('dashboard.kpi.liveApiTag') : t('common.noData') }}</span>
           </div>
           <div class="kpi-value text-purple">
-            <ng-container *ngIf="financialPerformance; else noFinanceValue">{{ (financialPerformance.receiptCount ?? liveOrders.length) }} Sipariş</ng-container>
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">{{ t('dashboard.kpi.ordersUnit', { count: financialPerformance.receiptCount ?? liveOrders.length }) }}</ng-container>
           </div>
-          <div class="kpi-sub">{{ dailyBrief ? (dailyBrief.unfulfilledCostAlertCount + ' açık sipariş bekliyor') : 'Bu ayki mağaza siparişleri' }}</div>
+          <div class="kpi-sub">{{ dailyBrief ? t('dashboard.kpi.openOrdersPending', { count: dailyBrief.unfulfilledCostAlertCount }) : t('dashboard.kpi.thisMonthOrders') }}</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">🏷️ AKTİF İLAN SAYISI</span>
-            <span class="kpi-tag text-orange">Portföy</span>
+            <span class="kpi-label">{{ t('dashboard.kpi.activeListingsLabel') }}</span>
+            <span class="kpi-tag text-orange">{{ t('dashboard.kpi.portfolioTag') }}</span>
           </div>
           <div class="kpi-value text-orange">{{ activeListingsText }}</div>
           <div class="kpi-sub">{{ activeListingsNote }}</div>
@@ -76,63 +78,63 @@ Chart.register(...registerables);
              (mouseenter)="onExpensesMouseEnter()"
              (mouseleave)="onExpensesMouseLeave()"
              (click)="toggleExpensesPopover()"
-             title="Maliyet detayını görmek için üzerinde birkaç saniye bekleyin veya tıklayın">
+             [title]="t('dashboard.kpi.deductionsTooltip')">
           <div class="kpi-header">
-            <span class="kpi-label">📢 ETSY KESİNTİLERİ / REKLAM</span>
+            <span class="kpi-label">{{ t('dashboard.kpi.deductionsLabel') }}</span>
             <div class="kpi-header-right">
               <!-- Animated mini circular countdown / loading badge -->
               <span class="hover-timer-badge" *ngIf="isHoveringExpenses && !isExpensesPopoverOpen">
                 <span class="pulse-dot"></span>
-                <span>Detay...</span>
+                <span>{{ t('dashboard.kpi.detailsLoading') }}</span>
               </span>
-              <span class="kpi-tag text-danger" *ngIf="!isHoveringExpenses || isExpensesPopoverOpen">Giderler</span>
+              <span class="kpi-tag text-danger" *ngIf="!isHoveringExpenses || isExpensesPopoverOpen">{{ t('dashboard.kpi.expensesTag') }}</span>
             </div>
           </div>
           <div class="kpi-value text-danger">
             <ng-container *ngIf="financialPerformance; else noFinanceValue">-&#36;{{ etsyDeductionsUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyDeductionsUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">
-            Reklam: &#36;{{ adsTotalUsd | number:'1.2-2' }} • Komisyon: &#36;{{ etsyFeesUsd | number:'1.2-2' }}
-            <span class="kpi-hint-text">💡 (Detay için durun)</span>
+            {{ t('dashboard.kpi.adsAndFeesSub', { ads: (adsTotalUsd | number:'1.2-2'), fees: (etsyFeesUsd | number:'1.2-2') }) }}
+            <span class="kpi-hint-text">{{ t('dashboard.kpi.hoverHint') }}</span>
           </div>
 
           <!-- DETAILED EXPENSES POPOVER (MATCHING WINFORMS ANIMATED TOOLTIP) -->
-          <div class="expenses-popover-box" 
+          <div class="expenses-popover-box"
                *ngIf="isExpensesPopoverOpen"
                (click)="$event.stopPropagation()"
                (mouseenter)="onPopoverMouseEnter()"
                (mouseleave)="onPopoverMouseLeave()">
-            
+
             <!-- Popover Header -->
             <div class="popover-header">
               <div class="popover-title-row">
                 <span class="popover-icon">📢</span>
                 <div>
-                  <h4 class="popover-title">Etsy Kesintileri & Reklam Harcamaları Analizi</h4>
+                  <h4 class="popover-title">{{ t('dashboard.popover.title') }}</h4>
                   <span class="popover-subtitle">
-                    Toplam kesinti & reklam: -₺{{ (etsyDeductionsUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyDeductionsUsd | number:'1.2-2' }})
+                    {{ t('dashboard.popover.subtitle', { tryAmount: ((etsyDeductionsUsd * apiService.exchangeRate()) | number:'1.2-2'), usdAmount: (etsyDeductionsUsd | number:'1.2-2') }) }}
                   </span>
                 </div>
               </div>
-              <button type="button" class="btn-close-popover" (click)="closeExpensesPopover()" title="Kapat">✕</button>
+              <button type="button" class="btn-close-popover" (click)="closeExpensesPopover()" [title]="t('common.close')">✕</button>
             </div>
 
             <!-- 3 KPI Cards Cluster -->
             <div class="popover-kpi-row">
               <div class="mini-kpi-card red">
-                <span class="mini-kpi-label">📢 İç Reklam (Etsy Ads)</span>
+                <span class="mini-kpi-label">{{ t('dashboard.popover.internalAds') }}</span>
                 <span class="mini-kpi-try">&#36;{{ internalAdsUsd | number:'1.2-2' }}</span>
                 <span class="mini-kpi-usd">₺{{ (internalAdsUsd * apiService.exchangeRate()) | number:'1.2-2' }}</span>
               </div>
               <div class="mini-kpi-card orange">
-                <span class="mini-kpi-label">🌐 Dış Reklam (Offsite)</span>
+                <span class="mini-kpi-label">{{ t('dashboard.popover.externalAds') }}</span>
                 <span class="mini-kpi-try">&#36;{{ externalAdsUsd | number:'1.2-2' }}</span>
                 <span class="mini-kpi-usd">₺{{ (externalAdsUsd * apiService.exchangeRate()) | number:'1.2-2' }}</span>
               </div>
               <div class="mini-kpi-card purple">
-                <span class="mini-kpi-label">📋 Etsy Komisyon & Harç</span>
+                <span class="mini-kpi-label">{{ t('dashboard.popover.platformFees') }}</span>
                 <span class="mini-kpi-try">&#36;{{ etsyFeesUsd | number:'1.2-2' }}</span>
-                <span class="mini-kpi-usd">Toplam platform ücretleri</span>
+                <span class="mini-kpi-usd">{{ t('dashboard.popover.platformFeesSub') }}</span>
               </div>
             </div>
 
@@ -141,15 +143,15 @@ Chart.register(...registerables);
               <table class="popover-breakdown-table">
                 <thead>
                   <tr>
-                    <th>Tür</th>
-                    <th>Kalem Adı</th>
-                    <th>Oran / Tür</th>
-                    <th>Tutar (TL / USD)</th>
-                    <th>Açıklama / Muhasebe Mantığı</th>
+                    <th>{{ t('dashboard.popover.colType') }}</th>
+                    <th>{{ t('dashboard.popover.colName') }}</th>
+                    <th>{{ t('dashboard.popover.colRate') }}</th>
+                    <th>{{ t('dashboard.popover.colAmount') }}</th>
+                    <th>{{ t('dashboard.popover.colDesc') }}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngIf="!financialPerformance"><td colspan="5">Finansal veri API’den henüz yüklenmedi.</td></tr>
+                  <tr *ngIf="!financialPerformance"><td colspan="5">{{ t('dashboard.popover.emptyTable') }}</td></tr>
                   <tr *ngFor="let item of expensesBreakdown" [class.total-row]="item.isTotal">
                     <td>
                       <span class="type-pill" [ngClass]="item.typeClass">{{ item.type }}</span>
@@ -165,9 +167,9 @@ Chart.register(...registerables);
 
             <!-- Popover Footer Action -->
             <div class="popover-footer">
-              <span class="footer-note">Detaylı işlem satırları API tarafından sunulmuyor.</span>
+              <span class="footer-note">{{ t('dashboard.popover.footerNote') }}</span>
               <a routerLink="/finance/accounting" class="btn-goto-accounting" (click)="closeExpensesPopover()">
-                💳 Finans & Muhasebe Detay Tablosu →
+                {{ t('dashboard.popover.gotoAccounting') }}
               </a>
             </div>
 
@@ -179,38 +181,38 @@ Chart.register(...registerables);
       <section class="action-hub-grid">
         <a routerLink="/finance/accounting" class="glass-card action-card">
           <div class="action-top">
-            <span class="action-badge badge-orange">FİNANS MODÜLÜ</span>
+            <span class="action-badge badge-orange">{{ t('dashboard.actions.financeBadge') }}</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">💳 Finans & Muhasebe</h4>
-          <p class="action-desc">Ödeme defteri, komisyonlar ve banka transferleri dökümü</p>
+          <h4 class="action-title">{{ t('dashboard.actions.financeTitle') }}</h4>
+          <p class="action-desc">{{ t('dashboard.actions.financeDesc') }}</p>
         </a>
 
         <a routerLink="/listings/fast-creator" class="glass-card action-card">
           <div class="action-top">
-            <span class="action-badge badge-cyan">TREND & TASLAK</span>
+            <span class="action-badge badge-cyan">{{ t('dashboard.actions.creatorBadge') }}</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">🛍️ AI Ürün Bul & Taslak</h4>
-          <p class="action-desc">Trend ürün araştırması ve tek tıkla taslak listeleme</p>
+          <h4 class="action-title">{{ t('dashboard.actions.creatorTitle') }}</h4>
+          <p class="action-desc">{{ t('dashboard.actions.creatorDesc') }}</p>
         </a>
 
         <a routerLink="/ai-studio" class="glass-card action-card">
           <div class="action-top">
-            <span class="action-badge badge-purple">AI GÖRSEL STÜDYO</span>
+            <span class="action-badge badge-purple">{{ t('dashboard.actions.studioBadge') }}</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">🎨 AI Görsel Studio</h4>
-          <p class="action-desc">AI ile stüdyo kalitesinde ürün fotoğrafları oluştur</p>
+          <h4 class="action-title">{{ t('dashboard.actions.studioTitle') }}</h4>
+          <p class="action-desc">{{ t('dashboard.actions.studioDesc') }}</p>
         </a>
 
         <a routerLink="/analytics/ai-audit" class="glass-card action-card">
           <div class="action-top">
-            <span class="action-badge badge-emerald">MAĞAZA DENETİMİ</span>
+            <span class="action-badge badge-emerald">{{ t('dashboard.actions.auditBadge') }}</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">🏬 Mağaza Git & AI Denetim</h4>
-          <p class="action-desc">Siparişler, SEO skoru ve AI mağaza denetim raporu</p>
+          <h4 class="action-title">{{ t('dashboard.actions.auditTitle') }}</h4>
+          <p class="action-desc">{{ t('dashboard.actions.auditDesc') }}</p>
         </a>
       </section>
 
@@ -220,24 +222,24 @@ Chart.register(...registerables);
         <div class="glass-card orders-card">
           <div class="card-header-flex">
             <div>
-              <h3 class="section-title">📦 Son Siparişler Canlı Satış Akışı</h3>
-              <span class="section-sub">{{ dailyBrief?.unfulfilledCostAlertCount ?? '—' }} açık sipariş (özet)</span>
+              <h3 class="section-title">{{ t('dashboard.recentOrders.title') }}</h3>
+              <span class="section-sub">{{ t('dashboard.recentOrders.openSummary', { count: dailyBrief?.unfulfilledCostAlertCount ?? '—' }) }}</span>
             </div>
-            <a routerLink="/orders" class="link-view-all">Sipariş modülüne git →</a>
+            <a routerLink="/orders" class="link-view-all">{{ t('dashboard.recentOrders.viewAll') }}</a>
           </div>
 
           <div class="table-container">
             <table class="desktop-orders-table">
               <thead>
                 <tr>
-                  <th>Tarih</th>
-                  <th>Sipariş No</th>
-                  <th>Satılan Ürün</th>
-                  <th>Adet</th>
-                  <th>Tutar ($)</th>
-                  <th>Net Kâr ($ / ₺)</th>
+                  <th>{{ t('dashboard.recentOrders.colDate') }}</th>
+                  <th>{{ t('dashboard.recentOrders.colOrderNo') }}</th>
+                  <th>{{ t('dashboard.recentOrders.colProduct') }}</th>
+                  <th>{{ t('dashboard.recentOrders.colQty') }}</th>
+                  <th>{{ t('dashboard.recentOrders.colAmount') }}</th>
+                  <th>{{ t('dashboard.recentOrders.colNetProfit') }}</th>
                 </tr>
-                <tr *ngIf="liveOrders.length === 0"><td colspan="6">{{ recentOrdersError ? 'Siparişler yüklenemedi.' : (recentOrdersWarning || 'Henüz sipariş yok.') }}</td></tr>
+                <tr *ngIf="liveOrders.length === 0"><td colspan="6">{{ recentOrdersError ? t('dashboard.recentOrders.loadError') : (recentOrdersWarning || t('dashboard.recentOrders.empty')) }}</td></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let o of liveOrders">
@@ -246,7 +248,7 @@ Chart.register(...registerables);
                   <td class="font-semibold">{{ o.title }}</td>
                   <td>{{ o.quantity }}</td>
                   <td class="text-emerald font-bold">&#36;{{ o.totalUsd | number:'1.2-2' }}</td>
-                  <td class="font-bold" [ngClass]="o.netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ o.netProfitUsd >= 0 ? '+' : '-' }}&#36;{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) | number:'1.2-2' }} <span class="text-xs text-muted">({{ o.netProfitUsd < 0 ? '-₺' : '₺' }}{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) * apiService.exchangeRate() | number:'1.0-0' }})</span> <span *ngIf="!o.hasCost" class="text-xs" title="Sipariş maliyeti girilmemiş — net kâr maliyet hariç hesaplandı">⚠</span></td>
+                  <td class="font-bold" [ngClass]="o.netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ o.netProfitUsd >= 0 ? '+' : '-' }}&#36;{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) | number:'1.2-2' }} <span class="text-xs text-muted">({{ o.netProfitUsd < 0 ? '-₺' : '₺' }}{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) * apiService.exchangeRate() | number:'1.0-0' }})</span> <span *ngIf="!o.hasCost" class="text-xs" [title]="t('dashboard.recentOrders.missingCostTooltip')">⚠</span></td>
                 </tr>
               </tbody>
             </table>
@@ -258,32 +260,32 @@ Chart.register(...registerables);
           <div class="copilot-header">
             <div class="spark-icon">💡</div>
             <div>
-              <h3 class="section-title">Akıllı Mağaza Asistanı (Store Copilot)</h3>
-              <span class="section-sub">Canlı Satış & Büyüme Analitiği</span>
+              <h3 class="section-title">{{ t('dashboard.copilot.title') }}</h3>
+              <span class="section-sub">{{ t('dashboard.copilot.subtitle') }}</span>
             </div>
           </div>
 
           <div class="copilot-insights">
             <div class="insight-item">
-              <span class="insight-label text-emerald">🌟 En Çok Ciro Getiren Ürün</span>
+              <span class="insight-label text-emerald">{{ t('dashboard.copilot.topProductLabel') }}</span>
               <p class="insight-body">
                 {{ topProductText }}
               </p>
             </div>
 
             <div class="insight-item">
-              <span class="insight-label text-cyan">📢 Reklam / Komisyon Durumu</span>
+              <span class="insight-label text-cyan">{{ t('dashboard.copilot.adsFeesLabel') }}</span>
               <p class="insight-body">
-                <ng-container *ngIf="financialPerformance; else noFinanceInsight">Net kâr marjı <b>{{ financialPerformance.netProfitMargin / 100 | percent:'1.0-1' }}</b>. Platform ücretleri: <b>&#36;{{ financialPerformance.platformFees | number:'1.2-2' }}</b>.</ng-container>
+                <ng-container *ngIf="financialPerformance; else noFinanceInsight">{{ t('dashboard.copilot.adsFeesSummary', { margin: (financialPerformance.netProfitMargin / 100 | percent:'1.0-1'), fees: (financialPerformance.platformFees | number:'1.2-2') }) }}</ng-container>
               </p>
             </div>
 
             <div class="insight-item">
-              <span class="insight-label text-purple">🚀 Büyüme / SEO Tavsiyesi</span>
+              <span class="insight-label text-purple">{{ t('dashboard.copilot.growthLabel') }}</span>
               <p class="insight-body">
-                Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi %25 artırabilirsiniz.
+                {{ t('dashboard.copilot.growthTip') }}
               </p>
-              <a routerLink="/research/market" class="btn-micro-action">🔍 Pazar Araştırması</a>
+              <a routerLink="/research/market" class="btn-micro-action">{{ t('dashboard.copilot.marketResearchBtn') }}</a>
             </div>
           </div>
         </div>
@@ -293,16 +295,16 @@ Chart.register(...registerables);
       <section class="glass-card chart-section">
         <div class="card-header-flex">
           <div>
-            <h3 class="section-title">📈 BU AYIN GÜNLÜK GELİR VE NET KÂR TRENDİ ($)</h3>
-            <span class="section-sub">Bu ayın günlük verisi • Kaynak: Canlı Etsy API</span>
+            <h3 class="section-title">{{ t('dashboard.chart.title') }}</h3>
+            <span class="section-sub">{{ t('dashboard.chart.subtitle') }}</span>
           </div>
           <div class="chart-badges">
-            <span class="legend-badge legend-revenue">● Brüt Satış ($)</span>
-            <span class="legend-badge legend-profit">● Net Kâr ($)</span>
+            <span class="legend-badge legend-revenue">{{ t('dashboard.chart.legendRevenue') }}</span>
+            <span class="legend-badge legend-profit">{{ t('dashboard.chart.legendProfit') }}</span>
           </div>
         </div>
         <div class="chart-wrapper">
-          <div *ngIf="!hasTrendSeries" class="chart-empty">{{ trendError ? 'Trend verisi alınamadı.' : 'Trend verisi yükleniyor…' }}</div>
+          <div *ngIf="!hasTrendSeries" class="chart-empty">{{ trendError ? t('dashboard.chart.loadError') : t('dashboard.chart.loading') }}</div>
           <canvas #trendChart *ngIf="hasTrendSeries"></canvas>
         </div>
       </section>
@@ -853,6 +855,7 @@ Chart.register(...registerables);
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   apiService = inject(EtsyApiService);
+  private transloco = inject(TranslocoService);
   private destroyRef = inject(DestroyRef);
 
   @ViewChild('trendChart') chartCanvas?: ElementRef<HTMLCanvasElement>;
@@ -879,8 +882,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   externalAdsUsd = 0;
   etsyDeductionsUsd = 0;
   adsTotalUsd = 0;
-  activeListingsText = '—';
-  activeListingsNote = 'Etsy portföyü yükleniyor...';
+  private activeListingsCount: number | null = null;
+  private activeListingsError = false;
 
   // EXPENSES HOVER TOOLTIP POPOVER
   isHoveringExpenses = false;
@@ -896,6 +899,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadRecentOrders();
     this.loadDailySeries();
     this.loadRateLimitStatus();
+
+    this.transloco.selectTranslation('dashboard').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this.financialPerformance) {
+        this.buildExpensesBreakdown(this.financialPerformance);
+      }
+      if (this.chartInstance) {
+        this.chartInstance.data.datasets[0].label = this.transloco.translate('dashboard.chart.datasetRevenue');
+        this.chartInstance.data.datasets[1].label = this.transloco.translate('dashboard.chart.datasetProfit');
+        this.chartInstance.update('none');
+      }
+    });
+  }
+
+  get activeListingsText(): string {
+    if (this.activeListingsCount === null) return '—';
+    return this.activeListingsCount >= 100
+      ? this.transloco.translate('dashboard.kpi.listingsCountPlus')
+      : this.transloco.translate('dashboard.kpi.listingsCount', { count: this.activeListingsCount });
+  }
+
+  get activeListingsNote(): string {
+    if (this.activeListingsError) return this.transloco.translate('dashboard.kpi.listingsAuthNote');
+    if (this.activeListingsCount === null) return this.transloco.translate('dashboard.kpi.listingsLoading');
+    return this.transloco.translate('dashboard.kpi.listingsLiveNote');
   }
 
   loadRateLimitStatus(): void {
@@ -906,10 +933,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   formatRetryAfter(seconds: number | null): string {
-    if (!seconds || seconds <= 0) return 'Sıfırlanma bekleniyor';
+    if (!seconds || seconds <= 0) return this.transloco.translate('dashboard.rateLimit.resetPending');
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
-    return hrs > 0 ? `Sıfırlanmaya ~${hrs} sa ${mins} dk` : `Sıfırlanmaya ~${mins} dk`;
+    return hrs > 0
+      ? this.transloco.translate('dashboard.rateLimit.resetHoursMins', { hrs, mins })
+      : this.transloco.translate('dashboard.rateLimit.resetMins', { mins });
   }
 
   loadRecentOrders(): void {
@@ -950,9 +979,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   get topProductText(): string {
     if (!this.topProductTitle) {
-      return this.seriesWarning ? `Etsy API uyarısı: ${this.seriesWarning}` : 'Bu ay henüz satış yok.';
+      return this.seriesWarning
+        ? this.transloco.translate('dashboard.copilot.topProductApiWarning', { warning: this.seriesWarning })
+        : this.transloco.translate('dashboard.copilot.topProductEmpty');
     }
-    return `«${this.topProductTitle}» bu ay $${this.topProductRevenueUsd.toFixed(2)} ciro sağlayarak mağazanızın yıldızı oldu.`;
+    return this.transloco.translate('dashboard.copilot.topProductSummary', {
+      title: this.topProductTitle,
+      revenue: this.topProductRevenueUsd.toFixed(2)
+    });
   }
 
   loadLiveKpis(): void {
@@ -995,13 +1029,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.apiService.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => {
-        const count = items?.length ?? 0;
-        this.activeListingsText = count >= 100 ? '100+ Aktif İlan' : `${count} Aktif İlan`;
-        this.activeListingsNote = 'Canlı Etsy portföyü';
+        this.activeListingsCount = items?.length ?? 0;
+        this.activeListingsError = false;
       },
       error: () => {
-        this.activeListingsText = '—';
-        this.activeListingsNote = 'Etsy bağlantısı gerekli (token yenileyin)';
+        this.activeListingsCount = null;
+        this.activeListingsError = true;
       }
     });
   }
@@ -1009,19 +1042,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private buildExpensesBreakdown(perf: FinancialPerformanceDto): void {
     const rate = this.apiService.exchangeRate() || 49.12;
     const gross = perf.grossSales || 0;
-    const pct = (value: number) => gross > 0 ? `%${((value / gross) * 100).toFixed(1)} (ciroya oran)` : '—';
+    const tr = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const pct = (value: number) =>
+      gross > 0 ? tr('dashboard.popover.ratioOfGross', { pct: ((value / gross) * 100).toFixed(1) }) : '—';
     const money = (value: number) => `-$${value.toFixed(2)} (-₺${(value * rate).toFixed(2)})`;
 
     const rows = [
-      { type: 'KOMİSYON', typeClass: 'badge-fee', name: 'Etsy Komisyon & İşlem Ücretleri', rate: pct(perf.platformFees), amountText: money(perf.platformFees), desc: 'Platform komisyonu, ödeme işlem ve listeleme ücretleri', isTotal: false },
-      { type: 'REKLAM', typeClass: 'badge-ad', name: 'Etsy Ads (İç Reklam)', rate: pct(perf.internalAdsCost), amountText: money(perf.internalAdsCost), desc: 'Mağaza içi arama reklamı harcaması', isTotal: false },
-      { type: 'REKLAM', typeClass: 'badge-ad', name: 'Offsite Ads (Dış Reklam)', rate: pct(perf.externalAdsCost), amountText: money(perf.externalAdsCost), desc: 'Etsy dışı pazarlama reklam harcaması', isTotal: false },
-      { type: 'MALİYET', typeClass: 'badge-cost', name: 'Ürün Maliyeti', rate: pct(perf.productCosts), amountText: money(perf.productCosts), desc: 'Sipariş bazında girilen ürün maliyetleri', isTotal: false },
-      { type: 'MALİYET', typeClass: 'badge-cost', name: 'Kargo Maliyeti', rate: pct(perf.shippingCosts), amountText: money(perf.shippingCosts), desc: 'Gönderi / kargo maliyetleri', isTotal: false },
-      { type: 'İADE', typeClass: 'badge-refund', name: 'İade & Geri Ödemeler', rate: pct(perf.refunds), amountText: money(perf.refunds), desc: 'Müşterilere yapılan iade ve geri ödemeler', isTotal: false }
+      { type: tr('dashboard.popover.rows.feeType'), typeClass: 'badge-fee', name: tr('dashboard.popover.rows.feeName'), rate: pct(perf.platformFees), amountText: money(perf.platformFees), desc: tr('dashboard.popover.rows.feeDesc'), isTotal: false },
+      { type: tr('dashboard.popover.rows.adType'), typeClass: 'badge-ad', name: tr('dashboard.popover.rows.internalAdName'), rate: pct(perf.internalAdsCost), amountText: money(perf.internalAdsCost), desc: tr('dashboard.popover.rows.internalAdDesc'), isTotal: false },
+      { type: tr('dashboard.popover.rows.adType'), typeClass: 'badge-ad', name: tr('dashboard.popover.rows.externalAdName'), rate: pct(perf.externalAdsCost), amountText: money(perf.externalAdsCost), desc: tr('dashboard.popover.rows.externalAdDesc'), isTotal: false },
+      { type: tr('dashboard.popover.rows.costType'), typeClass: 'badge-cost', name: tr('dashboard.popover.rows.productCostName'), rate: pct(perf.productCosts), amountText: money(perf.productCosts), desc: tr('dashboard.popover.rows.productCostDesc'), isTotal: false },
+      { type: tr('dashboard.popover.rows.costType'), typeClass: 'badge-cost', name: tr('dashboard.popover.rows.shippingCostName'), rate: pct(perf.shippingCosts), amountText: money(perf.shippingCosts), desc: tr('dashboard.popover.rows.shippingCostDesc'), isTotal: false },
+      { type: tr('dashboard.popover.rows.refundType'), typeClass: 'badge-refund', name: tr('dashboard.popover.rows.refundName'), rate: pct(perf.refunds), amountText: money(perf.refunds), desc: tr('dashboard.popover.rows.refundDesc'), isTotal: false }
     ];
     const total = perf.platformFees + perf.internalAdsCost + perf.externalAdsCost + perf.productCosts + perf.shippingCosts + perf.refunds;
-    rows.push({ type: 'TOPLAM', typeClass: 'badge-total', name: 'Genel Toplam Gider & Kesinti', rate: pct(total), amountText: money(total), desc: 'Kesinti, reklam, maliyet ve iade toplamı', isTotal: true });
+    rows.push({
+      type: tr('dashboard.popover.rows.totalType'),
+      typeClass: 'badge-total',
+      name: tr('dashboard.popover.rows.totalName'),
+      rate: pct(total),
+      amountText: money(total),
+      desc: tr('dashboard.popover.rows.totalDesc'),
+      isTotal: true
+    });
     this.expensesBreakdown = rows;
   }
 
@@ -1044,7 +1087,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           labels: days,
           datasets: [
             {
-              label: 'Brüt Satış ($)',
+              label: this.transloco.translate('dashboard.chart.datasetRevenue'),
               data: revenueData,
               borderColor: '#3b82f6',
               backgroundColor: 'rgba(59, 130, 246, 0.15)',
@@ -1055,7 +1098,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
               pointBackgroundColor: '#3b82f6'
             },
             {
-              label: 'Net Kâr ($)',
+              label: this.transloco.translate('dashboard.chart.datasetProfit'),
               data: profitData,
               borderColor: '#f97316',
               backgroundColor: 'rgba(249, 115, 22, 0.15)',

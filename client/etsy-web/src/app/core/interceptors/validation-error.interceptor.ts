@@ -1,5 +1,6 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { ToastrService } from 'ngx-toastr';
 import { catchError, throwError } from 'rxjs';
 import { extractClientValidationErrors, formatValidationToastHtml } from '../utils/validation-error.util';
@@ -18,7 +19,13 @@ export const validationErrorInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   const toastr = inject(ToastrService);
+  const transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
   const suppressToast = req.headers.has('X-Suppress-Error-Toast');
+
+  const resolveTitle = (key: string, fallback: string): string => {
+    const translated = transloco?.translate(key);
+    return translated && translated !== key ? translated : fallback;
+  };
 
   return next(req).pipe(
     catchError((err: unknown) => {
@@ -31,9 +38,9 @@ export const validationErrorInterceptor: HttpInterceptorFn = (req, next) => {
       if (!suppressToast && err.status !== 401) {
         const html = formatValidationToastHtml(parsed);
         if (err.status === 400 || parsed.isValidationError) {
-          toastr.warning(html, 'Doğrulama Uyarısı');
+          toastr.warning(html, resolveTitle('errors.validationTitle', 'Validation Warning'));
         } else if (req.method !== 'GET' || err.status >= 500 || err.status === 0) {
-          toastr.error(html, 'İşlem Hatası');
+          toastr.error(html, resolveTitle('errors.operationErrorTitle', 'Operation Error'));
         }
       }
 
