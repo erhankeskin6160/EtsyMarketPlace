@@ -317,6 +317,34 @@
       "navlungoPremiumTracking": "Premium Tracking: $5.00 · Signature Delivery: $5.00",
       "stmDoorDelivery": "Fast Door-to-Door Delivery",
       "stmDirectFedex": "Direct FedEx Integration"
+    },
+    "listingAi": {
+      "defaultProduct": "Product",
+      "offlineProvider": "Offline Rule Engine",
+      "strictKeyMissingTitle": "⚠️ Strict Live AI is enabled, but no {{provider}} API key is configured. Since 'Never Fall Back to Offline Rule Engine' is active, no synthetic template was generated. Please save your API key in AI Settings in the top bar.",
+      "strictKeyMissingCategory": "⚠️ Strict Live AI is enabled, but no {{provider}} API key is configured. Please enter your API key in AI Settings in the top bar.",
+      "strictKeyMissingTags": "⚠️ Strict Live AI is enabled, but no {{provider}} API key is configured. Since 'Never Fall Back to Offline Rule Engine' is active, no synthetic tags were generated. Please save your API key in AI Settings in the top bar.",
+      "strictKeyMissingDesc": "⚠️ Strict Live AI is enabled, but no {{provider}} API key is configured. Since 'Never Fall Back to Offline Rule Engine' is active, no synthetic description was generated. Please save your API key in AI Settings in the top bar.",
+      "strictKeyMissingComplete": "⚠️ Strict Live AI is enabled, but no {{provider}} API key is configured. Since 'Never Fall Back to Offline Rule Engine' is active, no synthetic listing was generated. Please save your API key in AI Settings in the top bar.",
+      "strictLiveApiError": "❌ Live AI API Error ({{provider}} - {{model}}): {{detail}}. Offline rule engine fallback was skipped because 'Strict Live AI' is enabled.",
+      "strictCategoryError": "❌ Live {{provider}} Category Error: {{detail}}. Offline engine fallback was skipped because 'Strict Live AI' is enabled.",
+      "providerNoResponse": "{{provider}} did not respond",
+      "modelNoResponse": "Model did not respond",
+      "titleLiveSuccess": "✨ {{provider}} optimized a live 140-character SEO title for '{{product}}'!",
+      "titleOfflineFallback": "⚡ Smart Rule Engine (Live AI did not respond; fell back to offline rule engine).",
+      "titleOfflineSuccess": "⚡ Smart Rule Engine generated a 140-character SEO title for '{{product}}'.",
+      "tagsLiveSuccess": "✨ {{provider}} populated all 13 high-intent search tags live!",
+      "tagsOfflineFallback": "⚡ Smart Rule Engine (Live AI did not respond; 13 search tags generated offline).",
+      "tagsOfflineSuccess": "⚡ Smart Rule Engine generated 13 search tags.",
+      "descLiveSuccess": "✨ {{provider}} generated a live professional description preserving your notes and dimensions!",
+      "descOfflineFallback": "⚡ Smart Rule Engine (Live AI did not respond; offline description generated).",
+      "descOfflineSuccess": "⚡ Smart Rule Engine prepared a rich product description preserving your notes.",
+      "completeLiveSuccess": "🎉 {{provider}} prepared the full Etsy listing (Live Title, Category, 13 Tags, Description) for '{{product}}'!",
+      "completeOfflineFallback": "⚡ Smart Rule Engine (Live AI did not respond; offline template listing generated).",
+      "deepSeekKeySuffix": "(Saved key ends with: ...{{suffix}})",
+      "deepSeekKeyEmpty": "(Saved key is empty)",
+      "deepSeekAuthError": "Authentication Error (401): The DeepSeek API key {{keySuffix}} was rejected! Please open AI Settings ⚙️ and save your full valid 'sk-...' key from platform.deepseek.com/api_keys.",
+      "deepSeekBalanceError": "Insufficient Balance (402): Your DeepSeek account does not have enough credits. Please top up at platform.deepseek.com."
     }
   }
 }

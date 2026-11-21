@@ -411,13 +411,24 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 app.UseCors();
 
 var supportedCultures = new[] { new CultureInfo("en"), new CultureInfo("tr") };
-app.UseRequestLocalization(new RequestLocalizationOptions
+var localizationOptions = new RequestLocalizationOptions
 {
     DefaultRequestCulture = new RequestCulture("en"),
     SupportedCultures = supportedCultures,
     SupportedUICultures = supportedCultures,
     ApplyCurrentCultureToResponseHeaders = true
-});
+};
+localizationOptions.RequestCultureProviders.Insert(0, new CustomRequestCultureProvider(ctx =>
+{
+    var header = ctx.Request.Headers["X-App-Language"].FirstOrDefault()?.Trim();
+    if (string.Equals(header, "tr", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(header, "en", StringComparison.OrdinalIgnoreCase))
+    {
+        return Task.FromResult<ProviderCultureResult?>(new ProviderCultureResult(header!.ToLowerInvariant()));
+    }
+    return Task.FromResult<ProviderCultureResult?>(null);
+}));
+app.UseRequestLocalization(localizationOptions);
 
 var staticFileOptions = new StaticFileOptions
 {

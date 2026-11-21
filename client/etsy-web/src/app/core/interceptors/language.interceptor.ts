@@ -19,15 +19,19 @@ export const languageInterceptor: HttpInterceptorFn = (req, next) => {
   const languageService = inject(LanguageService);
   const lang = languageService.activeLang();
 
-  if (req.headers.has('Accept-Language')) {
+  const headers: Record<string, string> = {};
+  if (!req.headers.has('Accept-Language')) {
+    headers['Accept-Language'] = lang;
+  }
+  if (!req.headers.has('X-App-Language')) {
+    headers['X-App-Language'] = lang;
+  }
+
+  if (Object.keys(headers).length === 0) {
     return next(req);
   }
 
-  const cloned = req.clone({
-    setHeaders: {
-      'Accept-Language': lang
-    }
-  });
+  const cloned = req.clone({ setHeaders: headers });
 
   return next(cloned);
 };

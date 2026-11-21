@@ -317,6 +317,34 @@
       "navlungoPremiumTracking": "Premium Takip: $5.00 · İmzalı Teslimat: $5.00",
       "stmDoorDelivery": "Hızlı Kapıdan Teslimat",
       "stmDirectFedex": "Doğrudan FedEx Entegrasyonu"
+    },
+    "listingAi": {
+      "defaultProduct": "Ürün",
+      "offlineProvider": "Offline Kural Motoru",
+      "strictKeyMissingTitle": "⚠️ Canlı AI Zorunlu aktif fakat {{provider}} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik şablon üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.",
+      "strictKeyMissingCategory": "⚠️ Canlı AI Zorunlu aktif fakat {{provider}} API anahtarı tanımlanmamış. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı giriniz.",
+      "strictKeyMissingTags": "⚠️ Canlı AI Zorunlu aktif fakat {{provider}} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik etiket üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.",
+      "strictKeyMissingDesc": "⚠️ Canlı AI Zorunlu aktif fakat {{provider}} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik açıklama üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.",
+      "strictKeyMissingComplete": "⚠️ Canlı AI Zorunlu aktif fakat {{provider}} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik listeleme üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.",
+      "strictLiveApiError": "❌ Canlı AI API Hatası ({{provider}} - {{model}}): {{detail}}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.",
+      "strictCategoryError": "❌ Canlı {{provider}} Kategori Hatası: {{detail}}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.",
+      "providerNoResponse": "{{provider}} yanıt vermedi",
+      "modelNoResponse": "Model yanıt vermedi",
+      "titleLiveSuccess": "✨ {{provider}} ile '{{product}}' için canlı 140 karakter SEO başlığı optimize edildi!",
+      "titleOfflineFallback": "⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline kural motoruna geçildi).",
+      "titleOfflineSuccess": "⚡ Akıllı Kural Motoru ile '{{product}}' için 140 karakter SEO başlığı oluşturuldu.",
+      "tagsLiveSuccess": "✨ {{provider}} 13 altın arama etiketini canlı olarak tam doldurdu!",
+      "tagsOfflineFallback": "⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, 13 arama etiketi offline oluşturuldu).",
+      "tagsOfflineSuccess": "⚡ Akıllı Kural Motoru ile 13 arama etiketi üretildi.",
+      "descLiveSuccess": "✨ {{provider}} satıcı ön bilgilerinizi ve ölçülerinizi koruyarak profesyonel açıklamayı canlı üretti!",
+      "descOfflineFallback": "⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline açıklama oluşturuldu).",
+      "descOfflineSuccess": "⚡ Akıllı Kural Motoru ile ön bilgileriniz korunarak zengin ürün açıklaması hazırlandı.",
+      "completeLiveSuccess": "🎉 {{provider}} ile '{{product}}' için tüm Etsy listelemesi (Canlı Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!",
+      "completeOfflineFallback": "⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline şablon listelemesi oluşturuldu).",
+      "deepSeekKeySuffix": "(Mevcut kayıtlı anahtar: ...{{suffix}})",
+      "deepSeekKeyEmpty": "(Kayıtlı anahtar boş)",
+      "deepSeekAuthError": "Yetkilendirme Hatası (401): DeepSeek'e gönderilen API anahtarı {{keySuffix}} geçersiz bulundu! Lütfen AI Ayarları ⚙️ menüsünü açıp platform.deepseek.com/api_keys adresindeki yeni ve tam 'sk-...' anahtarınızı yapıştırıp Kaydet'e basınız.",
+      "deepSeekBalanceError": "Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye (kredi) bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz."
     }
   }
 }

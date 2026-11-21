@@ -29,24 +29,27 @@ describe('languageInterceptor', () => {
     httpMock.verify();
   });
 
-  it('attaches Accept-Language header to VDS API requests', () => {
+  it('attaches Accept-Language and X-App-Language headers to VDS API requests', () => {
     activeLangSignal.set('tr');
     http.get('/api/etsy/financial/performance').subscribe();
 
     const req = httpMock.expectOne('/api/etsy/financial/performance');
     expect(req.request.headers.get('Accept-Language')).toBe('tr');
+    expect(req.request.headers.get('X-App-Language')).toBe('tr');
     req.flush({});
   });
 
-  it('skips Accept-Language header for static /i18n/ assets and external LLM APIs', () => {
+  it('skips language headers for static /i18n/ assets and external LLM APIs', () => {
     http.get('/i18n/en.json').subscribe();
     const i18nReq = httpMock.expectOne('/i18n/en.json');
     expect(i18nReq.request.headers.has('Accept-Language')).toBeFalse();
+    expect(i18nReq.request.headers.has('X-App-Language')).toBeFalse();
     i18nReq.flush({});
 
     http.post('https://api.openai.com/v1/chat/completions', {}).subscribe();
     const llmReq = httpMock.expectOne('https://api.openai.com/v1/chat/completions');
     expect(llmReq.request.headers.has('Accept-Language')).toBeFalse();
+    expect(llmReq.request.headers.has('X-App-Language')).toBeFalse();
     llmReq.flush({});
   });
 });

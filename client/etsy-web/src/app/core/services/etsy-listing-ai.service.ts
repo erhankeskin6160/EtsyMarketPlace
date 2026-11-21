@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService } from './etsy-api.service';
 import { TaxonomyNodeLike } from '../utils/taxonomy-shortlist';
@@ -99,6 +100,13 @@ export class EtsyListingAiService {
   private http = inject(HttpClient);
   private aiSettings = inject(AiSettingsService);
   private etsyApi = inject(EtsyApiService);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
+
+  private tr(key: string, fallback: string, params?: Record<string, unknown>): string {
+    if (!this.transloco) return fallback;
+    const translated = this.transloco.translate(key, params);
+    return translated && translated !== key ? translated : fallback;
+  }
 
   /**
    * Generates a 140-character Etsy-optimized SEO title.
@@ -114,7 +122,7 @@ export class EtsyListingAiService {
     const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
-      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik şablon üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+      return throwError(() => new Error(this.tr('core.listingAi.strictKeyMissingTitle', `⚠️ Strict Live AI is enabled, but no ${provider} API key is configured.`, { provider })));
     }
 
     if (hasLiveKey) {
@@ -131,22 +139,22 @@ export class EtsyListingAiService {
           value: this.normalizeTitleLength(title),
           isLive: true,
           provider: `${provider} (${activeModel})`,
-          message: `✨ ${provider} ile '${cleanInput || 'Ürün'}' için canlı 140 karakter SEO başlığı optimize edildi!`
+          message: this.tr('core.listingAi.titleLiveSuccess', `✨ ${provider} optimized a live 140-character SEO title!`, { provider, product: cleanInput || this.tr('core.listingAi.defaultProduct', 'Product') })
         })),
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} API hatası:`, err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            return throwError(() => new Error(this.tr('core.listingAi.strictLiveApiError', `❌ Live AI API Error (${provider} - ${activeModel}): ${detail}.`, { provider, model: activeModel, detail })));
           }
           const fallback = this.generateRuleBasedTitle(cleanInput, currentCategory);
           const msg = isSilentFallback
-            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline kural motoruna geçildi).`
-            : `⚡ Akıllı Kural Motoru ile '${cleanInput || 'Ürün'}' için 140 karakter SEO başlığı oluşturuldu.`;
+            ? this.tr('core.listingAi.titleOfflineFallback', '⚡ Smart Rule Engine (offline fallback).')
+            : this.tr('core.listingAi.titleOfflineSuccess', '⚡ Smart Rule Engine generated SEO title.', { product: cleanInput || this.tr('core.listingAi.defaultProduct', 'Product') });
           return of({
             value: fallback,
             isLive: false,
-            provider: 'Offline Kural Motoru',
+            provider: this.tr('core.listingAi.offlineProvider', 'Offline Rule Engine'),
             message: msg
           });
         })
@@ -208,8 +216,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Gemini kategori hatası:', err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Gemini yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı Gemini Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+            const detail = err?.error?.error?.message || err?.message || this.tr('core.listingAi.providerNoResponse', 'Gemini did not respond', { provider: 'Gemini' });
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live Gemini Category Error: ${detail}.`, { provider: 'Gemini', detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -223,8 +231,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı OpenAI kategori hatası:', err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'OpenAI yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı OpenAI Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+            const detail = err?.error?.error?.message || err?.message || this.tr('core.listingAi.providerNoResponse', 'OpenAI did not respond', { provider: 'OpenAI' });
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live OpenAI Category Error: ${detail}.`, { provider: 'OpenAI', detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -238,8 +246,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Claude kategori hatası:', err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Claude yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı Claude Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+            const detail = err?.error?.error?.message || err?.message || this.tr('core.listingAi.providerNoResponse', 'Claude did not respond', { provider: 'Claude' });
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live Claude Category Error: ${detail}.`, { provider: 'Claude', detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -253,8 +261,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Grok kategori hatası:', err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Grok yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı Grok Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+            const detail = err?.error?.error?.message || err?.message || this.tr('core.listingAi.providerNoResponse', 'Grok did not respond', { provider: 'Grok' });
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live Grok Category Error: ${detail}.`, { provider: 'Grok', detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -269,7 +277,7 @@ export class EtsyListingAiService {
           console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage('DeepSeek', activeModel, err);
-            return throwError(() => new Error(`❌ Canlı DeepSeek Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live DeepSeek Category Error: ${detail}.`, { provider: 'DeepSeek', detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -277,7 +285,7 @@ export class EtsyListingAiService {
     }
 
     if (isStrict && provider !== 'Offline') {
-      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı giriniz.`));
+      return throwError(() => new Error(this.tr('core.listingAi.strictKeyMissingCategory', `⚠️ Strict Live AI is enabled, but no ${provider} API key is configured.`, { provider })));
     }
 
     // Offline Fallback
@@ -312,7 +320,7 @@ export class EtsyListingAiService {
     const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
-      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik etiket üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+      return throwError(() => new Error(this.tr('core.listingAi.strictKeyMissingTags', `⚠️ Strict Live AI is enabled, but no ${provider} API key is configured.`, { provider })));
     }
 
     if (hasLiveKey) {
@@ -329,22 +337,22 @@ export class EtsyListingAiService {
           value: this.normalizeTagsList(tags),
           isLive: true,
           provider: `${provider} (${activeModel})`,
-          message: `✨ ${provider} 13 altın arama etiketini canlı olarak tam doldurdu!`
+          message: this.tr('core.listingAi.tagsLiveSuccess', `✨ ${provider} populated 13 search tags live!`, { provider })
         })),
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} tag hatası:`, err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            return throwError(() => new Error(this.tr('core.listingAi.strictLiveApiError', `❌ Live AI API Error (${provider} - ${activeModel}): ${detail}.`, { provider, model: activeModel, detail })));
           }
           const tags = this.generateRuleBasedTags(cleanInput);
           const msg = isSilentFallback
-            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, 13 arama etiketi offline oluşturuldu).`
-            : `⚡ Akıllı Kural Motoru ile 13 arama etiketi üretildi.`;
+            ? this.tr('core.listingAi.tagsOfflineFallback', '⚡ Smart Rule Engine (offline tags).')
+            : this.tr('core.listingAi.tagsOfflineSuccess', '⚡ Smart Rule Engine generated 13 tags.');
           return of({
             value: tags,
             isLive: false,
-            provider: 'Offline Kural Motoru',
+            provider: this.tr('core.listingAi.offlineProvider', 'Offline Rule Engine'),
             message: msg
           });
         })
@@ -380,7 +388,7 @@ export class EtsyListingAiService {
     const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
-      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik açıklama üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+      return throwError(() => new Error(this.tr('core.listingAi.strictKeyMissingDesc', `⚠️ Strict Live AI is enabled, but no ${provider} API key is configured.`, { provider })));
     }
 
     if (hasLiveKey) {
@@ -397,22 +405,22 @@ export class EtsyListingAiService {
           value: desc,
           isLive: true,
           provider: `${provider} (${activeModel})`,
-          message: `✨ ${provider} satıcı ön bilgilerinizi ve ölçülerinizi koruyarak profesyonel açıklamayı canlı üretti!`
+          message: this.tr('core.listingAi.descLiveSuccess', `✨ ${provider} generated a live description!`, { provider })
         })),
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} açıklama hatası:`, err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            return throwError(() => new Error(this.tr('core.listingAi.strictLiveApiError', `❌ Live AI API Error (${provider} - ${activeModel}): ${detail}.`, { provider, model: activeModel, detail })));
           }
           const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
           const msg = isSilentFallback
-            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline açıklama oluşturuldu).`
-            : `⚡ Akıllı Kural Motoru ile ön bilgileriniz korunarak zengin ürün açıklaması hazırlandı.`;
+            ? this.tr('core.listingAi.descOfflineFallback', '⚡ Smart Rule Engine (offline description).')
+            : this.tr('core.listingAi.descOfflineSuccess', '⚡ Smart Rule Engine generated description.');
           return of({
             value: desc,
             isLive: false,
-            provider: 'Offline Kural Motoru',
+            provider: this.tr('core.listingAi.offlineProvider', 'Offline Rule Engine'),
             message: msg
           });
         })
@@ -471,7 +479,7 @@ export class EtsyListingAiService {
     const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
-      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik listeleme üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+      return throwError(() => new Error(this.tr('core.listingAi.strictKeyMissingComplete', `⚠️ Strict Live AI is enabled, but no ${provider} API key is configured.`, { provider })));
     }
 
     if (hasLiveKey) {
@@ -492,17 +500,17 @@ export class EtsyListingAiService {
           materials: res.materials || materials || 'Handcrafted, Premium Materials',
           isLive: true,
           provider: `${provider} (${activeModel})`,
-          summaryMessage: `🎉 ${provider} ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Canlı Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
+          summaryMessage: this.tr('core.listingAi.completeLiveSuccess', `🎉 ${provider} prepared the full Etsy listing!`, { provider, product: cleanInput || this.tr('core.listingAi.defaultProduct', 'Product') })
         })),
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} tam paket hatası:`, err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            return throwError(() => new Error(this.tr('core.listingAi.strictLiveApiError', `❌ Live AI API Error (${provider} - ${activeModel}): ${detail}.`, { provider, model: activeModel, detail })));
           }
           const ruleRes = this.generateRuleBasedComplete(cleanInput, materials, options);
           if (isSilentFallback) {
-            ruleRes.summaryMessage = `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline şablon listelemesi oluşturuldu).`;
+            ruleRes.summaryMessage = this.tr('core.listingAi.completeOfflineFallback', '⚡ Smart Rule Engine (offline template listing).');
           }
           return of(ruleRes);
         })
@@ -513,16 +521,16 @@ export class EtsyListingAiService {
   }
 
   private formatAiErrorMessage(provider: string, model: string, err: any): string {
-    const rawDetail = err?.error?.error?.message || err?.error?.message || err?.message || 'Model yanıt vermedi';
+    const rawDetail = err?.error?.error?.message || err?.error?.message || err?.message || this.tr('core.listingAi.modelNoResponse', 'Model did not respond');
     if (provider === 'DeepSeek') {
       const lower = String(rawDetail).toLowerCase();
       const currentKey = this.getActiveApiKey(this.aiSettings.settings());
-      const keySuffix = currentKey ? `(Mevcut kayıtlı anahtar: ...${currentKey.slice(-4)})` : '(Kayıtlı anahtar boş)';
+      const keySuffix = currentKey ? this.tr('core.listingAi.deepSeekKeySuffix', `(Saved key ends with: ...${currentKey.slice(-4)})`, { suffix: currentKey.slice(-4) }) : this.tr('core.listingAi.deepSeekKeyEmpty', '(Saved key is empty)');
       if (err?.status === 401 || lower.includes('authentication') || lower.includes('invalid') || lower.includes('api key')) {
-        return `Yetkilendirme Hatası (401): DeepSeek'e gönderilen API anahtarı ${keySuffix} geçersiz bulundu! Lütfen AI Ayarları ⚙️ menüsünü açıp platform.deepseek.com/api_keys adresindeki yeni ve tam 'sk-...' anahtarınızı yapıştırıp Kaydet'e basınız.`;
+        return this.tr('core.listingAi.deepSeekAuthError', `Authentication Error (401): Invalid DeepSeek API key ${keySuffix}.`, { keySuffix });
       }
       if (err?.status === 402 || lower.includes('insufficient') || lower.includes('balance')) {
-        return `Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye (kredi) bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.`;
+        return this.tr('core.listingAi.deepSeekBalanceError', 'Insufficient Balance (402): Please top up your DeepSeek account.');
       }
     }
     return rawDetail;
@@ -1887,7 +1895,7 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
       description,
       materials: materials || (title.includes('Bag') ? 'Hakiki Deri, Kanvas Kumaş, Pirinç Toka' : 'Premium Handcrafted Materials'),
       isLive: false,
-      provider: 'Offline Kural Motoru',
+      provider: this.tr('core.listingAi.offlineProvider', 'Offline Rule Engine'),
       summaryMessage: `⚡ Akıllı Kural Motoru ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
     };
   }

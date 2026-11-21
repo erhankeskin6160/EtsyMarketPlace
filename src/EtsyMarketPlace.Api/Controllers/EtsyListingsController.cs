@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using MediatR;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Api.Services;
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
@@ -285,7 +286,13 @@ public class EtsyListingsController : BaseApiController
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Title))
         {
-            return BadRequest(new { success = false, message = "Fiyatlandırma ajanı için ürün başlığı gereklidir." });
+            return BadRequest(new
+        {
+            success = false,
+            message = ValidationMessageLocalizer.Pick(
+                "Fiyatlandırma ajanı için ürün başlığı gereklidir.",
+                "Product title is required for the pricing agent.")
+        });
         }
 
         var resolvedShopId = !string.IsNullOrWhiteSpace(request.ShopId)
@@ -321,7 +328,13 @@ public class EtsyListingsController : BaseApiController
     {
         if (request == null || (string.IsNullOrWhiteSpace(request.Title) && string.IsNullOrWhiteSpace(request.Description)))
         {
-            return BadRequest(new { success = false, message = "AI varyasyon önerisi için en az ürün başlığı veya açıklaması gereklidir." });
+            return BadRequest(new
+        {
+            success = false,
+            message = ValidationMessageLocalizer.Pick(
+                "AI varyasyon önerisi için en az ürün başlığı veya açıklaması gereklidir.",
+                "At least a product title or description is required for AI variation suggestions.")
+        });
         }
 
         var isGeminiOrDefault = string.IsNullOrWhiteSpace(request.Provider)
