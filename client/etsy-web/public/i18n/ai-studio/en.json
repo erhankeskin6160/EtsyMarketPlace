@@ -1,0 +1,64 @@
+{
+  "title": "AI Image Studio & Background Wizard",
+  "subtitle": "Anti-ban EXIF cleaning, AI background replacement, and 2000x2000px Etsy optimization",
+  "exifShieldBadge": "Anti-Ban EXIF Protection Active",
+  "canvas": {
+    "title": "Etsy Square Output (2000 x 2000 px)",
+    "ratioBadge": "1:1 Square",
+    "sceneBgAlt": "Scene Background",
+    "productAlt": "Product",
+    "activeScene": "Scene: {{name}}",
+    "clearSceneTitle": "Remove background",
+    "clearSceneBtn": "✕ Remove Backdrop",
+    "processingOverlay": "AI is Processing Background..."
+  },
+  "exif": {
+    "cameraLensLabel": "Camera & Lens Metadata:",
+    "cleaned": "Cleaned",
+    "gpsLabel": "GPS Location Signature:",
+    "reset": "Reset",
+    "pHashLabel": "pHash Protection:",
+    "uniquified": "Uniquified"
+  },
+  "actions": {
+    "uploadPhoto": "Upload New Photo",
+    "download2000": "Download 2000x2000px",
+    "sendToListing": "Send to Listing Creator"
+  },
+  "controls": {
+    "sceneSelectorTitle": "1. AI Background & Scene Selector",
+    "sceneSelectorHint": "Automatically cleans your product background and places it on luxury studio backdrops.",
+    "enhancementTitle": "2. Lighting & Vibrance Controls",
+    "brightness": "Brightness",
+    "contrast": "Contrast",
+    "saturation": "Saturation"
+  },
+  "scenes": {
+    "studio_white": {
+      "name": "Studio Infinity White",
+      "desc": "Seamless bright clean backdrop (Etsy Best Practice)"
+    },
+    "marble_surface": {
+      "name": "Luxury Carrara Marble Table",
+      "desc": "Modern natural veined marble surface"
+    },
+    "nordic_wood": {
+      "name": "Scandinavian Oak Wood Surface",
+      "desc": "Warm rustic natural wood texture"
+    },
+    "boho_shelf": {
+      "name": "Boho Living Room & Lifestyle",
+      "desc": "Warm home interior with green plant background"
+    },
+    "custom": "Custom Scene"
+  },
+  "toast": {
+    "sceneApplied": "Scene \"{{name}}\" applied to background! (Your product was preserved)",
+    "sceneCleared": "Background scene removed, restored original product backdrop.",
+    "photoUploaded": "Photo uploaded & EXIF metadata stripped!",
+    "photoDropped": "Dropped photo uploaded and EXIF cleared!",
+    "downloadedClean": "2000x2000px Etsy square downloaded!",
+    "downloadedComposite": "2000x2000px Etsy composite image downloaded!",
+    "downloadedProduct": "2000x2000px product image downloaded!"
+  }
+}

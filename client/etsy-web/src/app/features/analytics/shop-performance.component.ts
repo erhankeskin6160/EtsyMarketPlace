@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 
 interface PerformanceSnapshot {
   period: string;
@@ -30,21 +31,23 @@ interface ProductTraffic {
 @Component({
   selector: 'app-shop-performance',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, TranslocoDirective],
+  providers: [provideTranslocoScope('analytics')],
   template: `
+    <ng-container *transloco="let t">
     <div class="perf-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">🏬</div>
           <div>
-            <h1 class="page-title">Mağazam Performansı & Ziyaretçi Analitiği</h1>
-            <p class="page-subtitle">Ziyaretçi trafiği, görüntülenme, favori sayıları, CRO Niyet Skoru (0-100) ve ürün bazlı dönüşüm hunisi istatistikleri</p>
+            <h1 class="page-title">{{ t('analytics.shopPerformance.title') }}</h1>
+            <p class="page-subtitle">{{ t('analytics.shopPerformance.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-sync" (click)="refreshPerformance()">
-            ⚡ Canlı Metrikleri Yenile
+            {{ t('analytics.shopPerformance.refreshBtn') }}
           </button>
         </div>
       </div>
@@ -53,13 +56,13 @@ interface ProductTraffic {
       <div *ngIf="etsyApi.tokenStatus() !== 'connected'" class="alert-banner">
         <div class="alert-icon">⚠️</div>
         <div class="alert-body">
-          <span class="alert-title">Etsy v3 API Bağlantısı Aktif Değil (Token Süresi Dolmuş veya Bağlı Değil)</span>
+          <span class="alert-title">{{ t('analytics.shopPerformance.alert.title') }}</span>
           <p class="alert-desc">
-            Sistemde <strong>asla uydurma veri gösterilmez</strong>. Mağazanıza ait gerçek ciro ve sipariş verilerini çekmek için lütfen Etsy API ayarlarından token yetkilendirmesini tamamlayın.
+            {{ t('analytics.shopPerformance.alert.descBefore') }} <strong>{{ t('analytics.shopPerformance.alert.descBold') }}</strong>{{ t('analytics.shopPerformance.alert.descAfter') }}
           </p>
         </div>
         <button class="btn-alert-action" (click)="router.navigate(['/settings/etsy-api'])">
-          Etsy ile Yetkilendir
+          {{ t('analytics.shopPerformance.alert.authorizeBtn') }}
         </button>
       </div>
 
@@ -71,32 +74,32 @@ interface ProductTraffic {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">AYLIK BRÜT CİRO</span>
+          <span class="kpi-label">{{ t('analytics.shopPerformance.kpi.monthlyGrossRevenue') }}</span>
           <span class="kpi-val text-green">\${{ totalGrossRevenue | number:'1.2-2' }}</span>
           <span class="kpi-sub">₺{{ (totalGrossRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }} TRY</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">TOPLAM SİPARİŞ</span>
-          <span class="kpi-val text-blue">{{ totalOrders }} Sipariş</span>
-          <span class="kpi-sub">{{ totalUnitsSold }} Adet Satılan Ürün</span>
+          <span class="kpi-label">{{ t('analytics.shopPerformance.kpi.totalOrders') }}</span>
+          <span class="kpi-val text-blue">{{ t('analytics.shopPerformance.kpi.ordersCount', { count: totalOrders }) }}</span>
+          <span class="kpi-sub">{{ t('analytics.shopPerformance.kpi.unitsSold', { count: totalUnitsSold }) }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORTALAMA SEPET (AOV)</span>
+          <span class="kpi-label">{{ t('analytics.shopPerformance.kpi.avgOrderValue') }}</span>
           <span class="kpi-val text-purple">\${{ avgOrderValue | number:'1.2-2' }}</span>
-          <span class="kpi-sub">Sipariş Başı Gelir</span>
+          <span class="kpi-sub">{{ t('analytics.shopPerformance.kpi.revenuePerOrder') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORTALAMA DÖNÜŞÜM ORANI</span>
+          <span class="kpi-label">{{ t('analytics.shopPerformance.kpi.avgConversionRate') }}</span>
           <span class="kpi-val text-orange">%{{ avgConversionRate }}</span>
-          <span class="kpi-sub">Etsy Kategori Ortalaması: %2.1</span>
+          <span class="kpi-sub">{{ t('analytics.shopPerformance.kpi.categoryAvg') }}</span>
         </div>
       </div>
 
       <!-- REVENUE & ORDERS MONTHLY TIMELINE -->
       <div class="timeline-section glass-card">
         <div class="section-header">
-          <h2 class="section-title">Aylık Büyüme & Satış Trendi</h2>
-          <span class="currency-tag">USD ($) Bazlı</span>
+          <h2 class="section-title">{{ t('analytics.shopPerformance.timeline.title') }}</h2>
+          <span class="currency-tag">{{ t('analytics.shopPerformance.timeline.currencyTag') }}</span>
         </div>
 
         <div *ngIf="monthlyHistory.length > 0" class="bars-container">
@@ -111,9 +114,9 @@ interface ProductTraffic {
 
         <div *ngIf="monthlyHistory.length === 0" class="empty-state-box">
           <span class="empty-icon">📊</span>
-          <span class="empty-title">Aylık Satış Trendi Verisi Bulunamadı</span>
+          <span class="empty-title">{{ t('analytics.shopPerformance.timeline.emptyTitle') }}</span>
           <p class="empty-desc">
-            VDS veri tabanında bu mağazaya ait henüz geçmiş satış kaydı bulunmuyor. Etsy API bağlantısı sağlandığında ve senkronize edildikçe aylar otomatik listelenecektir.
+            {{ t('analytics.shopPerformance.timeline.emptyDesc') }}
           </p>
         </div>
       </div>
@@ -121,23 +124,23 @@ interface ProductTraffic {
       <!-- TOP LISTING TRAFFIC & PERFORMANCE TABLE -->
       <div class="traffic-section glass-card">
         <div class="section-header">
-          <h2 class="section-title">En Çok Satan & Trafik Çeken İlanlar (CRO & Niyet Skoru Matrisi)</h2>
-          <span class="badge-active">{{ topProducts.length > 0 ? (topProducts.length + ' İlan') : 'Canlı Veri Yok' }}</span>
+          <h2 class="section-title">{{ t('analytics.shopPerformance.table.title') }}</h2>
+          <span class="badge-active">{{ topProducts.length > 0 ? t('analytics.shopPerformance.table.listingsCount', { count: topProducts.length }) : t('analytics.shopPerformance.table.noLiveData') }}</span>
         </div>
 
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
-                <th>İlan Adı</th>
-                <th>Listing ID</th>
-                <th>Görüntülenme</th>
-                <th>Favori</th>
-                <th>CRO Niyet Skoru</th>
-                <th>Sipariş</th>
-                <th>Toplam Ciro</th>
-                <th>Dönüşüm Oranı (CR)</th>
-                <th>Huni Teşhisi & Güvenli Kupon</th>
+                <th>{{ t('analytics.shopPerformance.table.colListingName') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colListingId') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colViews') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colFavorites') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colIntentScore') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colOrders') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colRevenue') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colConversion') }}</th>
+                <th>{{ t('analytics.shopPerformance.table.colFunnel') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -161,21 +164,20 @@ interface ProductTraffic {
                   </div>
                 </td>
                 <td>
-                  <div><b>{{ p.funnelStage }}</b></div>
-                  <small class="text-blue">{{ p.recommendedCoupon }}</small>
+                  <div><b>{{ t(p.funnelStage) }}</b></div>
+                  <small class="text-blue">{{ t(p.recommendedCoupon) }}</small>
                 </td>
               </tr>
               <tr *ngIf="topProducts.length === 0">
                 <td colspan="9" class="empty-table-cell">
                   <div class="empty-state-box">
                     <span class="empty-icon">🏬</span>
-                    <span class="empty-title">Canlı Mağaza Ürün Verisi Bulunamadı</span>
+                    <span class="empty-title">{{ t('analytics.shopPerformance.table.emptyTitle') }}</span>
                     <p class="empty-desc">
-                      Etsy API bağlantısı aktif olmadığında veya henüz sipariş/trafik senkronizasyonu yapılmadığında <strong>asla sahte ürün uydurulmaz</strong>.
-                      Gerçek mağazanızdaki ilanların görüntülenme ve dönüşüm verilerini görmek için lütfen Etsy API ayarlarından bağlantınızı yenileyin.
+                      {{ t('analytics.shopPerformance.table.emptyDescBefore') }} <strong>{{ t('analytics.shopPerformance.table.emptyDescBold') }}</strong>{{ t('analytics.shopPerformance.table.emptyDescAfter') }}
                     </p>
                     <button class="btn-goto-api" (click)="router.navigate(['/settings/etsy-api'])">
-                      🔗 Etsy API Ayarlarına Git
+                      {{ t('analytics.shopPerformance.table.goToApiBtn') }}
                     </button>
                   </div>
                 </td>
@@ -185,6 +187,7 @@ interface ProductTraffic {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .perf-container {
@@ -409,6 +412,7 @@ interface ProductTraffic {
 })
 export class ShopPerformanceComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
   router = inject(Router);
 
@@ -450,7 +454,7 @@ export class ShopPerformanceComponent implements OnInit {
       next: (data) => {
         if (data && data.length > 0) {
           this.monthlyHistory = data.map((d: any) => ({
-            period: d.period || d.snapshot_period || 'Ay',
+            period: d.period || d.snapshot_period || this.transloco.translate('analytics.shopPerformance.timeline.defaultPeriod'),
             orderCount: d.orderCount || d.order_count || 0,
             unitsSold: d.unitsSold || d.units_sold || 0,
             grossRevenue: d.grossRevenue || d.gross_revenue || 0,
@@ -476,9 +480,9 @@ export class ShopPerformanceComponent implements OnInit {
             const visits = Math.max(1, Math.round(views * 0.62));
             const intentScore = Math.min(98, Math.max(15, Math.round(((favs / visits) * 300) + (cr * 8))));
             const funnelStage = favs >= 10 && orders === 0
-              ? '🛒 Sepet / Kargo Şoku'
-              : (views < 80 ? '🔍 Üst Huni (SEO Darboğazı)' : '✅ Dengeli Huni Akışı');
-            const recommendedCoupon = 'Fav: %8 (2sa) → Sepet: %15 (24sa)';
+              ? 'analytics.shopPerformance.funnel.cartShippingShock'
+              : (views < 80 ? 'analytics.shopPerformance.funnel.topFunnelSeo' : 'analytics.shopPerformance.funnel.balancedFlow');
+            const recommendedCoupon = 'analytics.shopPerformance.funnel.recommendedCoupon';
             return {
               listingId: String(l.listingId),
               title: l.title,
@@ -497,7 +501,7 @@ export class ShopPerformanceComponent implements OnInit {
     });
 
     this.etsyApi.verifyApiConnection();
-    this.toastMessage = '⚡ Mağaza verileri VDS sunucusundan sorgulandı.';
+    this.toastMessage = this.transloco.translate('analytics.shopPerformance.toast.queried');
     setTimeout(() => this.toastMessage = '', 3500);
   }
 }

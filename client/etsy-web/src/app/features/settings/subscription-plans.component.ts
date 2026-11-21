@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { SubscriptionService } from '../../core/services/subscription.service';
 import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
@@ -26,7 +27,8 @@ const ALLOWED_PAYMENT_IFRAME_ORIGINS = [
 @Component({
   selector: 'app-subscription-plans',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   templateUrl: './subscription-plans.component.html',
   styleUrls: ['./subscription-plans.component.css']
 })
@@ -35,6 +37,7 @@ export class SubscriptionPlansComponent implements OnInit {
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
   private sanitizer = inject(DomSanitizer);
+  private transloco = inject(TranslocoService);
 
   subscriptionService = inject(SubscriptionService);
   authService = inject(AuthService);
@@ -57,17 +60,17 @@ export class SubscriptionPlansComponent implements OnInit {
   statusType: 'success' | 'error' = 'success';
 
   readonly featureRows = [
-    { key: 'fast_creator', label: 'AI Hızlı Ürün Ekle (13 Etiket + SEO)' },
-    { key: 'ai_audit', label: 'Mağaza AI Analizi & Canlı Güncelleme' },
-    { key: 'shipping_hub', label: '4 Taşıyıcılı Kargo Hub & GTİP Barkod' },
-    { key: 'financial', label: 'Finansal Raporlama & TDHP Muhasebe' },
-    { key: 'batch', label: 'Toplu İşlem Kuyruğu (Batch Queue)' },
-    { key: 'ai_image', label: 'AI Görsel Stüdyosu (Dekupe & Mockup)' },
-    { key: 'viral_3d', label: 'Viral 3D Model Avcısı & Analizi' },
-    { key: 'ab_test', label: 'Listing A/B Test Paneli' },
-    { key: 'shop_vault', label: 'ShopVault (.etsyvault Şifreli Yedek)' },
-    { key: 'desktop_client', label: 'WinForms Masaüstü (ZPL + EXIF Kırma)' },
-    { key: 'mcp_api', label: 'MCP API & Kurumsal Çoklu Operatör' }
+    { key: 'fast_creator', labelKey: 'settings.subscription.features.fastCreator' },
+    { key: 'ai_audit', labelKey: 'settings.subscription.features.aiAudit' },
+    { key: 'shipping_hub', labelKey: 'settings.subscription.features.shippingHub' },
+    { key: 'financial', labelKey: 'settings.subscription.features.financial' },
+    { key: 'batch', labelKey: 'settings.subscription.features.batch' },
+    { key: 'ai_image', labelKey: 'settings.subscription.features.aiImage' },
+    { key: 'viral_3d', labelKey: 'settings.subscription.features.viral3d' },
+    { key: 'ab_test', labelKey: 'settings.subscription.features.abTest' },
+    { key: 'shop_vault', labelKey: 'settings.subscription.features.shopVault' },
+    { key: 'desktop_client', labelKey: 'settings.subscription.features.desktopClient' },
+    { key: 'mcp_api', labelKey: 'settings.subscription.features.mcpApi' }
   ];
 
   ngOnInit(): void {
@@ -91,8 +94,8 @@ export class SubscriptionPlansComponent implements OnInit {
         this.paymentError = null;
         this.statusType = 'success';
         this.statusMessage = providerParam
-          ? `${providerParam} 3D Secure ödemeniz tamamlandı. Paketiniz ve AI kotanız güncelleniyor.`
-          : 'Ödemeniz başarıyla tamamlandı. Paketiniz ve AI kotanız güncelleniyor.';
+          ? this.transloco.translate('settings.subscription.messages.paymentSuccessProvider', { provider: providerParam })
+          : this.transloco.translate('settings.subscription.messages.paymentSuccessGeneric');
         this.refreshAll();
         this.router.navigate([], {
           relativeTo: this.route,
@@ -103,7 +106,7 @@ export class SubscriptionPlansComponent implements OnInit {
       }
 
       if (paymentStatus === 'failed') {
-        this.paymentError = 'Ödeme işlemi tamamlanamadı veya banka tarafından onaylanmadı. Farklı bir kart ile tekrar deneyebilirsiniz.';
+        this.paymentError = this.transloco.translate('settings.subscription.messages.paymentFailed');
         this.refreshAll();
       }
 
@@ -162,12 +165,13 @@ export class SubscriptionPlansComponent implements OnInit {
   }
 
   formatMonthlyEquivalent(plan: SubscriptionPlan): string {
+    const unit = this.transloco.translate('settings.subscription.plans.perMonthShort');
     if (this.currency === 'TRY') {
       const monthly = Math.round(plan.yearlyPriceTry / 12);
-      return `₺${monthly.toLocaleString('tr-TR')}/ay`;
+      return `₺${monthly.toLocaleString('tr-TR')}/${unit}`;
     }
     const monthly = Math.round(plan.yearlyPriceUsd / 12);
-    return `$${monthly}/ay`;
+    return `$${monthly}/${unit}`;
   }
 
   formatSessionAmount(session: CheckoutSessionResponse): string {
@@ -179,10 +183,10 @@ export class SubscriptionPlansComponent implements OnInit {
 
   getProviderDisplayLabel(provider: string): string {
     switch ((provider || '').toLowerCase()) {
-      case 'paytr': return 'PayTR 3D Secure iFrame';
-      case 'iyzico': return 'iyzico 3D Secure Ödeme Formu';
-      case 'stripe': return 'Stripe Checkout';
-      default: return 'Sanal POS (Kurulum Bekliyor)';
+      case 'paytr': return this.transloco.translate('settings.subscription.providers.paytr');
+      case 'iyzico': return this.transloco.translate('settings.subscription.providers.iyzico');
+      case 'stripe': return this.transloco.translate('settings.subscription.providers.stripe');
+      default: return this.transloco.translate('settings.subscription.providers.unconfigured');
     }
   }
 
@@ -207,7 +211,7 @@ export class SubscriptionPlansComponent implements OnInit {
             return;
           }
           this.statusType = 'error';
-          this.statusMessage = 'Güvenlik doğrulaması nedeniyle harici ödeme bağlantısı açılamadı.';
+          this.statusMessage = this.transloco.translate('settings.subscription.messages.externalUrlBlocked');
           return;
         }
 
@@ -215,7 +219,7 @@ export class SubscriptionPlansComponent implements OnInit {
           const trusted = this.resolveTrustedIframeUrl(res.checkoutUrl);
           if (!trusted) {
             this.statusType = 'error';
-            this.statusMessage = `${res.provider} ödeme adresi güvenilir origin listesiyle eşleşmedi.`;
+            this.statusMessage = this.transloco.translate('settings.subscription.messages.iframeOriginMismatch', { provider: res.provider });
             return;
           }
           this.activeCheckoutSession = res;
@@ -238,7 +242,7 @@ export class SubscriptionPlansComponent implements OnInit {
       error: err => {
         this.startingCheckoutPlanId = null;
         this.statusType = 'error';
-        this.statusMessage = err?.error?.message || 'Ödeme oturumu başlatılamadı.';
+        this.statusMessage = err?.error?.message || this.transloco.translate('settings.subscription.messages.checkoutStartFailed');
       }
     });
   }
@@ -258,7 +262,10 @@ export class SubscriptionPlansComponent implements OnInit {
           this.trustedCheckoutIframeUrl = null;
           this.upgradeFeatureKey = null;
           this.statusType = 'success';
-          this.statusMessage = `${res.message} (Fatura: ${res.transaction.invoiceNumber})`;
+          this.statusMessage = this.transloco.translate('settings.subscription.messages.adminTestActivated', {
+            message: res.message,
+            invoice: res.transaction.invoiceNumber
+          });
           this.router.navigate([], {
             relativeTo: this.route,
             queryParams: { checkoutSessionId: null, upgrade: null },
@@ -268,7 +275,7 @@ export class SubscriptionPlansComponent implements OnInit {
         },
         error: err => {
           this.isPaying = false;
-          this.paymentError = err?.error?.message || err?.message || 'Yönetici test onayı gerçekleştirilemedi.';
+          this.paymentError = err?.error?.message || err?.message || this.transloco.translate('settings.subscription.messages.adminTestFailed');
         }
       });
   }

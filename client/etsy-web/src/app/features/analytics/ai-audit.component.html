@@ -1,3 +1,4 @@
+<ng-container *transloco="let t">
 <div class="ai-audit-container">
   <!-- TOAST NOTIFICATION -->
   <div *ngIf="toastMessage" class="toast-banner" [ngClass]="'toast-' + toastType">
@@ -19,11 +20,11 @@
       </div>
       <div>
         <div class="title-row">
-          <h1 class="page-title">Kendi Mağaza Listing AI Analizi & Optimizasyon</h1>
-          <span class="badge-tag">Masaüstü 1:1 Parite</span>
+          <h1 class="page-title">{{ t('analytics.aiAudit.header.title') }}</h1>
+          <span class="badge-tag">{{ t('analytics.aiAudit.header.parityBadge') }}</span>
         </div>
         <p class="page-subtitle">
-          Etsy mağazanızdaki canlı aktif ilanları çeker, yapısal SEO açıklarını tespit eder ve aktif yapay zeka modeliniz ({{ aiSettings.activeBadgeTextClean() }}) ile doğrudan Etsy'ye güncellenebilir başlık, etiket ve açıklama üretir.
+          {{ t('analytics.aiAudit.header.subtitle', { model: aiSettings.activeBadgeTextClean() }) }}
         </p>
       </div>
     </div>
@@ -31,16 +32,16 @@
     <div class="header-right">
       <div class="status-pill" [ngClass]="etsyApi.tokenStatus() === 'connected' ? 'status-connected' : 'status-warning'">
         <span class="pulse-dot"></span>
-        <span>{{ etsyApi.tokenStatus() === 'connected' ? 'Canlı Etsy v3 Bağlı (' + etsyApi.activeShopId() + ')' : 'Etsy Token: ' + etsyApi.tokenStatus() }}</span>
+        <span>{{ etsyApi.tokenStatus() === 'connected' ? t('analytics.aiAudit.header.connectedStatus', { shopId: etsyApi.activeShopId() }) : t('analytics.aiAudit.header.tokenStatus', { status: etsyApi.tokenStatus() }) }}</span>
       </div>
 
-      <div class="model-badge" (click)="aiSettings.openAiSettingsModal()" style="cursor: pointer;" title="Ana AI Modelini Değiştirmek İçin Tıklayın">
+      <div class="model-badge" (click)="aiSettings.openAiSettingsModal()" style="cursor: pointer;" [title]="t('analytics.aiAudit.header.modelBadgeTitle')">
         <span class="model-icon">🤖</span>
-        <span class="model-name">Model: {{ selectedAiModel }}</span>
+        <span class="model-name">{{ t('analytics.aiAudit.header.modelLabel', { model: selectedAiModel }) }}</span>
       </div>
 
-      <button class="btn-settings" (click)="showSettingsModal = true" title="AI Ayarları">
-        ⚙️ AI Ayarları
+      <button class="btn-settings" (click)="showSettingsModal = true" [title]="t('analytics.aiAudit.header.settingsTitle')">
+        {{ t('analytics.aiAudit.header.settingsBtn') }}
       </button>
     </div>
   </header>
@@ -50,36 +51,36 @@
     <div class="kpi-pill">
       <div class="kpi-icon-wrap bg-cyan-soft">📦</div>
       <div class="kpi-data">
-        <span class="kpi-label">AKTİF İLANLAR</span>
-        <div class="kpi-value text-cyan">{{ totalCount }} İlan</div>
-        <span class="kpi-sub">Etsy OpenAPI v3 Canlı</span>
+        <span class="kpi-label">{{ t('analytics.aiAudit.kpi.activeListings') }}</span>
+        <div class="kpi-value text-cyan">{{ t('analytics.aiAudit.kpi.listingsCount', { count: totalCount }) }}</div>
+        <span class="kpi-sub">{{ t('analytics.aiAudit.kpi.etsyLiveSub') }}</span>
       </div>
     </div>
 
     <div class="kpi-pill">
       <div class="kpi-icon-wrap bg-emerald-soft">🎯</div>
       <div class="kpi-data">
-        <span class="kpi-label">ORT. YAPISAL SEO</span>
+        <span class="kpi-label">{{ t('analytics.aiAudit.kpi.avgStructuralSeo') }}</span>
         <div class="kpi-value text-emerald">{{ averageSeoScore }} <small>/ 100</small></div>
-        <span class="kpi-sub">Etsy Algoritma Uyumu</span>
+        <span class="kpi-sub">{{ t('analytics.aiAudit.kpi.etsyAlgoMatch') }}</span>
       </div>
     </div>
 
     <div class="kpi-pill">
       <div class="kpi-icon-wrap bg-rose-soft">⚠️</div>
       <div class="kpi-data">
-        <span class="kpi-label">KRİTİK İLANLAR (&lt;60)</span>
-        <div class="kpi-value text-rose">{{ criticalCount }} İlan</div>
-        <span class="kpi-sub">Acil İyileştirme Gerekli</span>
+        <span class="kpi-label">{{ t('analytics.aiAudit.kpi.criticalListings') }}</span>
+        <div class="kpi-value text-rose">{{ t('analytics.aiAudit.kpi.listingsCount', { count: criticalCount }) }}</div>
+        <span class="kpi-sub">{{ t('analytics.aiAudit.kpi.urgentFixNeeded') }}</span>
       </div>
     </div>
 
     <div class="kpi-pill">
       <div class="kpi-icon-wrap bg-indigo-soft">✨</div>
       <div class="kpi-data">
-        <span class="kpi-label">AI ÖNERİSİ HAZIR</span>
+        <span class="kpi-label">{{ t('analytics.aiAudit.kpi.aiSuggestionReady') }}</span>
         <div class="kpi-value text-indigo">{{ optimizedCount }} / {{ totalCount }}</div>
-        <span class="kpi-sub">Yerel SQLite Arşivinde</span>
+        <span class="kpi-sub">{{ t('analytics.aiAudit.kpi.localSqliteArchive') }}</span>
       </div>
     </div>
   </section>
@@ -89,19 +90,19 @@
     <!-- Filter Chips -->
     <div class="filter-chips">
       <button class="chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
-        Tümü <span class="chip-count">{{ listings.length }}</span>
+        {{ t('analytics.aiAudit.toolbar.filterAll') }} <span class="chip-count">{{ listings.length }}</span>
       </button>
       <button class="chip chip-warn" [class.active]="activeFilter === 'lowSeo'" (click)="setFilter('lowSeo')">
-        Düşük SEO (&lt;60) <span class="chip-count">{{ lowSeoCount }}</span>
+        {{ t('analytics.aiAudit.toolbar.filterLowSeo') }} <span class="chip-count">{{ lowSeoCount }}</span>
       </button>
       <button class="chip chip-danger" [class.active]="activeFilter === 'missingTags'" (click)="setFilter('missingTags')">
-        Eksik Tag (&lt;13) <span class="chip-count">{{ missingTagCount }}</span>
+        {{ t('analytics.aiAudit.toolbar.filterMissingTags') }} <span class="chip-count">{{ missingTagCount }}</span>
       </button>
       <button class="chip chip-success" [class.active]="activeFilter === 'hasAudit'" (click)="setFilter('hasAudit')">
-        Önerisi Hazır <span class="chip-count">{{ optimizedCount }}</span>
+        {{ t('analytics.aiAudit.toolbar.filterHasAudit') }} <span class="chip-count">{{ optimizedCount }}</span>
       </button>
       <button class="chip chip-muted" [class.active]="activeFilter === 'zeroFav'" (click)="setFilter('zeroFav')">
-        0 Favori <span class="chip-count">{{ zeroFavCount }}</span>
+        {{ t('analytics.aiAudit.toolbar.filterZeroFav') }} <span class="chip-count">{{ zeroFavCount }}</span>
       </button>
     </div>
 
@@ -113,14 +114,14 @@
           type="text"
           [(ngModel)]="searchQuery"
           (input)="onSearchChange()"
-          placeholder="İlan başlığı veya ID ara..."
+          [placeholder]="t('analytics.aiAudit.toolbar.searchPlaceholder')"
           class="search-input"
         />
         <button *ngIf="searchQuery" class="clear-search" (click)="searchQuery = ''; onSearchChange()">✕</button>
       </div>
 
       <div class="limit-selector">
-        <label>Limit:</label>
+        <label>{{ t('analytics.aiAudit.toolbar.limitLabel') }}</label>
         <select [(ngModel)]="fetchLimit" (change)="loadListings()" class="select-box">
           <option [ngValue]="10">10</option>
           <option [ngValue]="25">25</option>
@@ -133,17 +134,17 @@
       <div class="action-btn-group">
         <button class="btn-action btn-refresh" (click)="loadListings()" [disabled]="isLoading">
           <span class="icon" [class.spin]="isLoading">🔄</span>
-          <span>Listingleri Yükle</span>
+          <span>{{ t('analytics.aiAudit.toolbar.loadListingsBtn') }}</span>
         </button>
 
         <button class="btn-action btn-batch" (click)="runBatchAiAudit()" [disabled]="isBatchAuditing || isLoading">
           <span class="icon">⚡</span>
-          <span>Tümünü AI ile Denetle</span>
+          <span>{{ t('analytics.aiAudit.toolbar.batchAuditBtn') }}</span>
         </button>
 
         <button class="btn-action btn-single-ai" (click)="runAiOptimizationForSelected()" [disabled]="!selectedListing || isAuditingSelected">
           <span class="icon" [class.spin]="isAuditingSelected">🎯</span>
-          <span>AI ile Puanla</span>
+          <span>{{ t('analytics.aiAudit.toolbar.scoreWithAiBtn') }}</span>
         </button>
       </div>
     </div>
@@ -152,11 +153,11 @@
   <!-- BATCH PROGRESS BAR -->
   <div *ngIf="isBatchAuditing" class="batch-progress-card">
     <div class="progress-info">
-      <span>Toplu AI Denetimi Yürütülüyor: {{ batchProgress.current }} / {{ batchProgress.total }}</span>
+      <span>{{ t('analytics.aiAudit.batch.running', { current: batchProgress.current, total: batchProgress.total }) }}</span>
       <div style="display: flex; align-items: center; gap: 10px;">
         <span>{{ Math.round((batchProgress.current / batchProgress.total) * 100) }}%</span>
         <button type="button" class="btn-settings" (click)="cancelBatchAudit()" style="padding: 4px 10px; font-size: 12px; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.45); color: #fca5a5;">
-          ⏹ Durdur
+          {{ t('analytics.aiAudit.batch.stopBtn') }}
         </button>
       </div>
     </div>
@@ -169,36 +170,36 @@
   <section class="table-section">
     <div class="table-card">
       <div class="table-header-info">
-        <span class="table-title">Mağaza Aktif İlanları ({{ filteredListings.length }} İlan Listelendi)</span>
-        <span class="table-subtitle">İncelemek ve optimize etmek istediğiniz ilana tıklayın</span>
+        <span class="table-title">{{ t('analytics.aiAudit.table.headerTitle', { count: filteredListings.length }) }}</span>
+        <span class="table-subtitle">{{ t('analytics.aiAudit.table.headerSubtitle') }}</span>
       </div>
 
       <div class="table-scroll-container">
         <table class="listings-table">
           <thead>
             <tr>
-              <th style="width: 54px;">Görsel</th>
+              <th style="width: 54px;">{{ t('analytics.aiAudit.table.colImage') }}</th>
               <th style="width: 50px;">#</th>
-              <th>İlan Başlığı</th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'seoScore'" style="width: 105px; text-align: center;" (click)="toggleSort('seoScore')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                SEO Skoru <span class="sort-indicator">{{ sortColumn === 'seoScore' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th>{{ t('analytics.aiAudit.table.colTitle') }}</th>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'seoScore'" style="width: 105px; text-align: center;" (click)="toggleSort('seoScore')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colSeoScore') }} <span class="sort-indicator">{{ sortColumn === 'seoScore' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'aiScore'" style="width: 95px; text-align: center;" (click)="toggleSort('aiScore')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                AI Skoru <span class="sort-indicator">{{ sortColumn === 'aiScore' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'aiScore'" style="width: 95px; text-align: center;" (click)="toggleSort('aiScore')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colAiScore') }} <span class="sort-indicator">{{ sortColumn === 'aiScore' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'tags'" style="width: 95px; text-align: center;" (click)="toggleSort('tags')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                Tag Sayısı <span class="sort-indicator">{{ sortColumn === 'tags' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'tags'" style="width: 95px; text-align: center;" (click)="toggleSort('tags')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colTagCount') }} <span class="sort-indicator">{{ sortColumn === 'tags' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'price'" style="width: 95px; text-align: right;" (click)="toggleSort('price')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                Fiyat <span class="sort-indicator">{{ sortColumn === 'price' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'price'" style="width: 95px; text-align: right;" (click)="toggleSort('price')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colPrice') }} <span class="sort-indicator">{{ sortColumn === 'price' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'favorites'" style="width: 85px; text-align: center;" (click)="toggleSort('favorites')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                Favori <span class="sort-indicator">{{ sortColumn === 'favorites' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'favorites'" style="width: 85px; text-align: center;" (click)="toggleSort('favorites')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colFavorites') }} <span class="sort-indicator">{{ sortColumn === 'favorites' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th class="sortable-th" [class.sort-active]="sortColumn === 'stock'" style="width: 78px; text-align: center;" (click)="toggleSort('stock')" title="Küçükten büyüğe / büyükten küçüğe sırala">
-                Stok <span class="sort-indicator">{{ sortColumn === 'stock' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+              <th class="sortable-th" [class.sort-active]="sortColumn === 'stock'" style="width: 78px; text-align: center;" (click)="toggleSort('stock')" [title]="t('analytics.aiAudit.table.sortTooltip')">
+                {{ t('analytics.aiAudit.table.colStock') }} <span class="sort-indicator">{{ sortColumn === 'stock' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
-              <th style="width: 95px; text-align: center;">Durum</th>
+              <th style="width: 95px; text-align: center;">{{ t('analytics.aiAudit.table.colStatus') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -235,7 +236,7 @@
                   <span class="listing-title-text" [title]="item.title">{{ item.title }}</span>
                   <div class="title-meta">
                     <span class="meta-id">ID: {{ item.listingId }}</span>
-                    <span class="meta-len">{{ item.title.length }}/140 krk</span>
+                    <span class="meta-len">{{ t('analytics.aiAudit.table.charCountShort', { count: item.title.length }) }}</span>
                   </div>
                 </div>
               </td>
@@ -262,7 +263,7 @@
                 >
                   ✨ {{ item.aiScore }}
                 </span>
-                <span *ngIf="!item.aiScore" class="text-muted" title="Henüz AI ile denetlenmedi">-</span>
+                <span *ngIf="!item.aiScore" class="text-muted" [title]="t('analytics.aiAudit.table.notAuditedTooltip')">-</span>
               </td>
 
               <!-- 6. Tag Sayısı -->
@@ -294,10 +295,10 @@
 
               <!-- 10. Durum -->
               <td class="col-status" style="text-align: center;">
-                <span *ngIf="item.status === '⚠️ AI: Risk Var' || (item.riskWarnings && item.riskWarnings.length > 0)" class="status-badge badge-risk">⚠️ AI: Risk Var</span>
-                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && (item.hasSavedAudit || item.status === '✨ AI: Hazır')" class="status-badge badge-audit-ready">✨ AI Hazır</span>
-                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore >= 80" class="status-badge badge-good">İyi</span>
-                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore < 80" class="status-badge badge-review">İncelenmeli</span>
+                <span *ngIf="item.status === '⚠️ AI: Risk Var' || (item.riskWarnings && item.riskWarnings.length > 0)" class="status-badge badge-risk">{{ t('analytics.aiAudit.table.statusRisk') }}</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && (item.hasSavedAudit || item.status === '✨ AI: Hazır')" class="status-badge badge-audit-ready">{{ t('analytics.aiAudit.table.statusReady') }}</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore >= 80" class="status-badge badge-good">{{ t('analytics.aiAudit.table.statusGood') }}</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore < 80" class="status-badge badge-review">{{ t('analytics.aiAudit.table.statusReview') }}</span>
               </td>
             </tr>
 
@@ -306,8 +307,8 @@
               <td colspan="10" class="empty-state">
                 <div class="empty-content">
                   <span class="empty-icon">🔍</span>
-                  <p>Filtreye uygun ilan bulunamadı.</p>
-                  <button class="btn-reset-filter" (click)="setFilter('all'); searchQuery = ''; applyFilter()">Filtreleri Sıfırla</button>
+                  <p>{{ t('analytics.aiAudit.table.emptyText') }}</p>
+                  <button class="btn-reset-filter" (click)="setFilter('all'); searchQuery = ''; applyFilter()">{{ t('analytics.aiAudit.table.resetFiltersBtn') }}</button>
                 </div>
               </td>
             </tr>
@@ -316,7 +317,7 @@
             <tr *ngIf="isLoading">
               <td colspan="10" class="loading-state">
                 <div class="loading-spinner"></div>
-                <p>Etsy API üzerinden canlı ilanlar getiriliyor...</p>
+                <p>{{ t('analytics.aiAudit.table.loadingText') }}</p>
               </td>
             </tr>
           </tbody>
@@ -326,20 +327,20 @@
       <!-- PAGINATION CONTROLS -->
       <div class="pagination-footer">
         <div class="pagination-info">
-          <span>Toplam <b>{{ filteredListings.length }}</b> ilandan <b>{{ startIndexDisplay }}-{{ endIndexDisplay }}</b> arası gösteriliyor</span>
+          <span>{{ t('analytics.aiAudit.table.paginationShowing', { total: filteredListings.length, start: startIndexDisplay, end: endIndexDisplay }) }}</span>
         </div>
 
         <div class="pagination-controls">
-          <button class="page-btn" (click)="firstPage()" [disabled]="currentPage === 1">« İlk</button>
-          <button class="page-btn" (click)="prevPage()" [disabled]="currentPage === 1">‹ Önceki</button>
+          <button class="page-btn" (click)="firstPage()" [disabled]="currentPage === 1">{{ t('analytics.aiAudit.table.firstBtn') }}</button>
+          <button class="page-btn" (click)="prevPage()" [disabled]="currentPage === 1">{{ t('analytics.aiAudit.table.prevBtn') }}</button>
 
-          <span class="page-current">Sayfa {{ currentPage }} / {{ totalPages }}</span>
+          <span class="page-current">{{ t('analytics.aiAudit.table.pageOf', { current: currentPage, total: totalPages }) }}</span>
 
-          <button class="page-btn" (click)="nextPage()" [disabled]="currentPage === totalPages">Sonraki ›</button>
-          <button class="page-btn" (click)="lastPage()" [disabled]="currentPage === totalPages">Son »</button>
+          <button class="page-btn" (click)="nextPage()" [disabled]="currentPage === totalPages">{{ t('analytics.aiAudit.table.nextBtn') }}</button>
+          <button class="page-btn" (click)="lastPage()" [disabled]="currentPage === totalPages">{{ t('analytics.aiAudit.table.lastBtn') }}</button>
 
           <div class="page-size-wrap">
-            <label>Sayfa Başına:</label>
+            <label>{{ t('analytics.aiAudit.table.perPageLabel') }}</label>
             <select [(ngModel)]="pageSize" (change)="currentPage = 1" class="select-page-size">
               <option [ngValue]="10">10</option>
               <option [ngValue]="15">15</option>
@@ -359,7 +360,7 @@
       <div class="col-hub">
         <div class="hub-card">
           <div class="hub-header">
-            <span class="hub-title">Görsel & Aksiyon Konsolu</span>
+            <span class="hub-title">{{ t('analytics.aiAudit.hub.title') }}</span>
             <span class="badge-listing-id">#{{ selectedListing.listingId }}</span>
           </div>
 
@@ -381,38 +382,38 @@
               (click)="openLightbox(activeFullPreviewUrl, $event)"
             />
             <div *ngIf="!activePreviewUrl" class="no-img-box">
-              <span>🖼️ Görsel Yok</span>
+              <span>{{ t('analytics.aiAudit.hub.noImage') }}</span>
             </div>
 
             <span *ngIf="listingImages.length > 0" class="cover-rank-badge" [class.is-cover]="activeImageIndex === 0">
-              {{ activeImageIndex === 0 ? 'KAPAK #1' : '#' + (activeImageIndex + 1) }}
+              {{ activeImageIndex === 0 ? t('analytics.aiAudit.hub.coverBadge') : '#' + (activeImageIndex + 1) }}
             </span>
 
             <div *ngIf="activePreviewUrl" class="img-overlay-actions">
               <button
                 type="button"
                 class="img-icon-btn"
-                title="Tam Boyutta Büyüt"
+                [title]="t('analytics.aiAudit.hub.zoomTitle')"
                 (click)="openLightbox(activeFullPreviewUrl, $event)"
               >🔍</button>
               <button
                 type="button"
                 class="img-icon-btn"
-                title="AI Görsel Stüdyosu'nda Düzenle"
+                [title]="t('analytics.aiAudit.hub.editInStudioTitle')"
                 (click)="openImageInAiStudio()"
               >✨</button>
               <button
                 *ngIf="activeImageIndex > 0"
                 type="button"
                 class="img-icon-btn"
-                title="Kapak Görseli Yap (#1)"
+                [title]="t('analytics.aiAudit.hub.setCoverTitle')"
                 (click)="setAsCover(activeImageIndex, $event)"
               >⭐</button>
               <button
                 *ngIf="listingImages.length > 1"
                 type="button"
                 class="img-icon-btn danger"
-                title="Bu Görseli Kaldır"
+                [title]="t('analytics.aiAudit.hub.removeImageTitle')"
                 (click)="removeImage(activeImageIndex, $event)"
               >🗑️</button>
             </div>
@@ -422,12 +423,12 @@
           <div class="gallery-strip-wrap">
             <div class="gallery-strip-header">
               <span class="gallery-count-label">
-                Ürün Galerisi ({{ listingImages.length }} / {{ maxListingImages }})
+                {{ t('analytics.aiAudit.hub.galleryTitle', { count: listingImages.length, max: maxListingImages }) }}
               </span>
               <span class="alt-summary-pill" [class.all-done]="listingImages.length > 0 && altTextFilledCount === listingImages.length">
                 ALT: {{ altTextFilledCount }}/{{ listingImages.length }}
               </span>
-              <span *ngIf="isLoadingImages" class="gallery-loading-hint">Yükleniyor...</span>
+              <span *ngIf="isLoadingImages" class="gallery-loading-hint">{{ t('analytics.aiAudit.hub.loadingHint') }}</span>
             </div>
 
             <div class="gallery-strip">
@@ -438,35 +439,35 @@
                 [class.is-new]="img.isNew"
                 (click)="selectImageIndex(idx)"
               >
-                <img [src]="img.url" [alt]="img.altText || ('Görsel #' + (idx + 1))" referrerpolicy="no-referrer" />
+                <img [src]="img.url" [alt]="img.altText || t('analytics.aiAudit.hub.imageAlt', { index: idx + 1 })" referrerpolicy="no-referrer" />
                 <span class="thumb-rank-pill">#{{ idx + 1 }}</span>
-                <span *ngIf="img.isNew" class="thumb-new-dot" title="Yeni eklendi">YENİ</span>
+                <span *ngIf="img.isNew" class="thumb-new-dot" [title]="t('analytics.aiAudit.hub.newBadgeTitle')">{{ t('analytics.aiAudit.hub.newBadge') }}</span>
                 <span
                   *ngIf="!img.isNew"
                   class="thumb-alt-pill"
                   [class.has-alt]="(img.altText || '').trim().length > 0"
-                  [title]="(img.altText || '').trim() ? img.altText : 'Alt-Text eksik'"
-                >{{ (img.altText || '').trim().length > 0 ? 'ALT ✓' : 'ALT !' }}</span>
+                  [title]="(img.altText || '').trim() ? img.altText : t('analytics.aiAudit.hub.altMissingTitle')"
+                >{{ (img.altText || '').trim().length > 0 ? t('analytics.aiAudit.hub.altOk') : t('analytics.aiAudit.hub.altMissing') }}</span>
 
                 <div class="thumb-hover-controls">
                   <button
                     type="button"
                     class="thumb-ctrl-btn"
-                    title="Sola Taşı"
+                    [title]="t('analytics.aiAudit.hub.moveLeftTitle')"
                     [disabled]="idx === 0"
                     (click)="moveImage(idx, -1, $event)"
                   >‹</button>
                   <button
                     type="button"
                     class="thumb-ctrl-btn"
-                    title="Sağa Taşı"
+                    [title]="t('analytics.aiAudit.hub.moveRightTitle')"
                     [disabled]="idx === listingImages.length - 1"
                     (click)="moveImage(idx, 1, $event)"
                   >›</button>
                   <button
                     type="button"
                     class="thumb-ctrl-btn danger"
-                    title="Görseli Sil"
+                    [title]="t('analytics.aiAudit.hub.deleteImageTitle')"
                     [disabled]="listingImages.length <= 1"
                     (click)="removeImage(idx, $event)"
                   >×</button>
@@ -477,7 +478,7 @@
               <label
                 *ngIf="listingImages.length < maxListingImages"
                 class="gallery-add-tile"
-                title="Yeni görsel yükle veya sürükle-bırak (Maks. 10)"
+                [title]="t('analytics.aiAudit.hub.addTileTitle')"
                 (dragover)="onImageDragOver($event)"
                 (dragleave)="onImageDragLeave($event)"
                 (drop)="onImageDrop($event)"
@@ -490,13 +491,13 @@
                   (change)="onImageFilesSelected($event)"
                 />
                 <span class="add-plus">+</span>
-                <span class="add-text">Görsel Ekle</span>
+                <span class="add-text">{{ t('analytics.aiAudit.hub.addImageText') }}</span>
               </label>
             </div>
 
             <!-- Anti-Ban Badge & Image Sync Actions -->
             <div class="antiban-pill">
-              <span>🛡️ EXIF & pHash Otomatik Temizlenir</span>
+              <span>{{ t('analytics.aiAudit.hub.antiBanPill') }}</span>
             </div>
 
             <div class="image-sync-actions">
@@ -510,10 +511,10 @@
                 <span>
                   {{
                     isSyncingImages
-                      ? "Görseller Etsy'ye Yükleniyor..."
+                      ? t('analytics.aiAudit.hub.syncingImages')
                       : pendingImageChangesCount > 0
-                        ? "✨ Görselleri Etsy'de Güncelle (" + pendingImageChangesCount + " Değişiklik)"
-                        : "✓ Görseller Etsy ile Güncel"
+                        ? t('analytics.aiAudit.hub.syncImagesPending', { count: pendingImageChangesCount })
+                        : t('analytics.aiAudit.hub.imagesUpToDate')
                   }}
                 </span>
               </button>
@@ -523,7 +524,7 @@
                 class="btn-ai-studio-inline"
                 (click)="openImageInAiStudio()"
               >
-                <span>🎨 AI Stüdyo'da Düzenle</span>
+                <span>{{ t('analytics.aiAudit.hub.editInAiStudioBtn') }}</span>
               </button>
 
               <button
@@ -533,7 +534,7 @@
                 (click)="analyzeImagesWithAi()"
               >
                 <span *ngIf="isAnalyzingImages" class="btn-spinner"></span>
-                <span>{{ isAnalyzingImages ? 'Görseller Analiz Ediliyor...' : '✨ AI Alt-Text & Kapak CTR Analizi' }}</span>
+                <span>{{ isAnalyzingImages ? t('analytics.aiAudit.hub.analyzingImages') : t('analytics.aiAudit.hub.aiAltCtrBtn') }}</span>
               </button>
 
               <button
@@ -542,7 +543,7 @@
                 [disabled]="listingImages.length === 0"
                 (click)="openAltTextModal()"
               >
-                <span>🏷️ Alt-Text Düzenle / Etsy'ye Kaydet ({{ altTextFilledCount }}/{{ listingImages.length }})</span>
+                <span>{{ t('analytics.aiAudit.hub.editAltTextBtn', { filled: altTextFilledCount, total: listingImages.length }) }}</span>
               </button>
             </div>
 
@@ -550,8 +551,8 @@
             <div *ngIf="coverCtrAudit" class="cover-ctr-card">
               <div class="cover-ctr-header">
                 <div class="cover-ctr-title-wrap">
-                  <span class="cover-ctr-title">🎯 Tahmini Görsel CTR Skoru</span>
-                  <span class="cover-ctr-mode">{{ coverCtrAudit.isVisionAnalyzed ? 'Vision AI' : 'Yerel Analiz' }}</span>
+                  <span class="cover-ctr-title">{{ t('analytics.aiAudit.hub.ctrTitle') }}</span>
+                  <span class="cover-ctr-mode">{{ coverCtrAudit.isVisionAnalyzed ? t('analytics.aiAudit.hub.ctrModeVision') : t('analytics.aiAudit.hub.ctrModeLocal') }}</span>
                 </div>
                 <span
                   class="cover-ctr-badge"
@@ -563,17 +564,17 @@
 
               <div class="cover-ctr-bars">
                 <div class="ctr-bar-row">
-                  <span class="ctr-bar-label">Kontrast &amp; Netlik</span>
+                  <span class="ctr-bar-label">{{ t('analytics.aiAudit.hub.ctrContrast') }}</span>
                   <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.contrastScore"></div></div>
                   <span class="ctr-bar-val">{{ coverCtrAudit.contrastScore }}</span>
                 </div>
                 <div class="ctr-bar-row">
-                  <span class="ctr-bar-label">Mobil Kırpma (1:1)</span>
+                  <span class="ctr-bar-label">{{ t('analytics.aiAudit.hub.ctrMobileCrop') }}</span>
                   <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.mobileCropScore"></div></div>
                   <span class="ctr-bar-val">{{ coverCtrAudit.mobileCropScore }}</span>
                 </div>
                 <div class="ctr-bar-row">
-                  <span class="ctr-bar-label">Arka Plan Ayrımı</span>
+                  <span class="ctr-bar-label">{{ t('analytics.aiAudit.hub.ctrBackground') }}</span>
                   <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.backgroundScore"></div></div>
                   <span class="ctr-bar-val">{{ coverCtrAudit.backgroundScore }}</span>
                 </div>
@@ -591,19 +592,19 @@
           <!-- Quick Stats Pill Box -->
           <div class="stats-mini-box">
             <div class="stat-mini">
-              <span class="stat-k">Fiyat:</span>
+              <span class="stat-k">{{ t('analytics.aiAudit.hub.statPrice') }}</span>
               <span class="stat-v">{{ (selectedListing.priceAmount != null ? selectedListing.priceAmount : selectedListing.price) | number:'1.2-2' }} {{ selectedListing.currencyCode || selectedListing.currency }}</span>
             </div>
             <div class="stat-mini">
-              <span class="stat-k">Stok:</span>
-              <span class="stat-v">{{ selectedListing.quantity }} Adet</span>
+              <span class="stat-k">{{ t('analytics.aiAudit.hub.statStock') }}</span>
+              <span class="stat-v">{{ t('analytics.aiAudit.hub.statStockUnit', { count: selectedListing.quantity }) }}</span>
             </div>
             <div class="stat-mini">
-              <span class="stat-k">Görüntüleme:</span>
+              <span class="stat-k">{{ t('analytics.aiAudit.hub.statViews') }}</span>
               <span class="stat-v">{{ selectedListing.views || 0 }}</span>
             </div>
             <div class="stat-mini">
-              <span class="stat-k">Favori:</span>
+              <span class="stat-k">{{ t('analytics.aiAudit.hub.statFavorites') }}</span>
               <span class="stat-v">❤️ {{ (selectedListing.numFavorers != null ? selectedListing.numFavorers : selectedListing.favorites) || 0 }}</span>
             </div>
           </div>
@@ -617,7 +618,7 @@
               [disabled]="isUpdatingEtsy"
             >
               <span *ngIf="isUpdatingEtsy" class="btn-spinner"></span>
-              <span>{{ isUpdatingEtsy ? "Etsy'ye Yükleniyor..." : "🚀 Etsy'de Güncelle" }}</span>
+              <span>{{ isUpdatingEtsy ? t('analytics.aiAudit.hub.updatingEtsy') : t('analytics.aiAudit.hub.updateOnEtsyBtn') }}</span>
             </button>
             <div *ngIf="inlineUpdateError" class="inline-update-error">
               ⚠️ {{ inlineUpdateError }}
@@ -630,27 +631,27 @@
               [disabled]="isAuditingSelected"
             >
               <span *ngIf="isAuditingSelected" class="btn-spinner"></span>
-              <span>{{ isAuditingSelected ? (aiSettings.activeProvider() + ' Üretiyor...') : '✨ AI ile Yeniden Üret' }}</span>
+              <span>{{ isAuditingSelected ? t('analytics.aiAudit.hub.aiGenerating', { provider: aiSettings.activeProvider() }) : t('analytics.aiAudit.hub.regenerateWithAiBtn') }}</span>
             </button>
 
             <!-- 3. Şablonla Paragrafla -->
             <button class="btn-hub-secondary" (click)="formatDescriptionTemplate()">
-              <span>📐 Şablonla Paragrafla</span>
+              <span>{{ t('analytics.aiAudit.hub.formatTemplateBtn') }}</span>
             </button>
 
             <!-- 4. Öneriyi Kopyala -->
             <button class="btn-hub-secondary" (click)="copySuggestionToClipboard()">
-              <span>📋 Öneriyi Kopyala</span>
+              <span>{{ t('analytics.aiAudit.hub.copySuggestionBtn') }}</span>
             </button>
 
             <!-- 5. Orijinale Dön -->
             <button class="btn-hub-secondary" (click)="resetToOriginal()">
-              <span>↩️ Orijinale Dön</span>
+              <span>{{ t('analytics.aiAudit.hub.resetToOriginalBtn') }}</span>
             </button>
           </div>
 
           <div *ngIf="selectedListing.savedAudit?.isAppliedToEtsy" class="applied-badge">
-            ✓ Bu öneri daha önce canlı Etsy mağazasına yüklendi.
+            {{ t('analytics.aiAudit.hub.appliedBadge') }}
           </div>
         </div>
       </div>
@@ -660,10 +661,10 @@
         <div class="panel-card before-card">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-tag tag-before">📌 MEVCUT LİSTİNG (BEFORE)</span>
+              <span class="panel-tag tag-before">{{ t('analytics.aiAudit.before.panelTag') }}</span>
             </div>
             <div class="score-display">
-              <span class="score-title-sub">Mevcut SEO Skoru:</span>
+              <span class="score-title-sub">{{ t('analytics.aiAudit.before.currentSeoScore') }}</span>
               <span
                 class="score-pill"
                 [ngClass]="{
@@ -680,9 +681,9 @@
           <!-- Mevcut Başlık -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">Mevcut İlan Başlığı</label>
+              <label class="field-label">{{ t('analytics.aiAudit.before.currentTitleLabel') }}</label>
               <span class="char-count" [class.text-danger]="selectedListing.title.length > 140">
-                {{ selectedListing.title.length }} / 140 Karakter
+                {{ t('analytics.aiAudit.before.charCount140', { count: selectedListing.title.length }) }}
               </span>
             </div>
             <div class="read-only-box title-box">
@@ -693,14 +694,14 @@
           <!-- Mevcut 13 Etiket -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">Mevcut Etiketler (Tags)</label>
+              <label class="field-label">{{ t('analytics.aiAudit.before.currentTagsLabel') }}</label>
               <span
                 class="tag-count-label"
                 [class.text-success]="selectedListing.tags.length === 13"
                 [class.text-danger]="selectedListing.tags.length < 13"
               >
-                {{ selectedListing.tags.length }} / 13 Etiket
-                <span *ngIf="selectedListing.tags.length < 13"> ({{ 13 - selectedListing.tags.length }} Eksik!)</span>
+                {{ t('analytics.aiAudit.before.tagCount13', { count: selectedListing.tags.length }) }}
+                <span *ngIf="selectedListing.tags.length < 13">{{ t('analytics.aiAudit.before.missingTags', { count: 13 - selectedListing.tags.length }) }}</span>
               </span>
             </div>
             <div class="tags-container">
@@ -708,7 +709,7 @@
                 {{ tag }}
               </span>
               <span *ngIf="selectedListing.tags.length === 0" class="no-tags-msg">
-                ⚠️ Hiç etiket tanımlanmamış!
+                {{ t('analytics.aiAudit.before.noTagsWarning') }}
               </span>
             </div>
           </div>
@@ -716,8 +717,8 @@
           <!-- Mevcut Açıklama -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">Mevcut Açıklama (Description)</label>
-              <span class="char-count">{{ selectedListing.description.length }} Karakter</span>
+              <label class="field-label">{{ t('analytics.aiAudit.before.currentDescLabel') }}</label>
+              <span class="char-count">{{ t('analytics.aiAudit.before.descCharCount', { count: selectedListing.description.length }) }}</span>
             </div>
             <div class="read-only-box desc-box">
               {{ selectedListing.description }}
@@ -726,7 +727,7 @@
 
           <!-- 🤖 YAPAY ZEKA SEO ELEŞTİRİSİ -->
           <div *ngIf="aiCritique" class="form-group">
-            <label class="field-label text-cyan">🤖 [YAPAY ZEKA SEO ELEŞTİRİSİ]</label>
+            <label class="field-label text-cyan">{{ t('analytics.aiAudit.before.aiCritiqueLabel') }}</label>
             <div class="critique-card">
               <p class="critique-text">{{ aiCritique }}</p>
             </div>
@@ -734,9 +735,9 @@
 
           <!-- 🚨 TELİF VE POLİTİKA RİSKLERİ -->
           <div *ngIf="(selectedListing.riskWarnings && selectedListing.riskWarnings.length > 0) || riskWarnings.length > 0" class="form-group">
-            <label class="field-label text-rose">🚨 [TELİF VE POLİTİKA RİSKLERİ]</label>
+            <label class="field-label text-rose">{{ t('analytics.aiAudit.before.riskWarningsLabel') }}</label>
             <div class="risk-warnings-box">
-              <span class="risk-title">⚠️ Etsy Kapatma & Marka/Telif (DMCA) Riski Tespit Edildi:</span>
+              <span class="risk-title">{{ t('analytics.aiAudit.before.riskWarningsTitle') }}</span>
               <ul>
                 <li *ngFor="let w of (selectedListing.riskWarnings && selectedListing.riskWarnings.length > 0 ? selectedListing.riskWarnings : riskWarnings)">{{ w }}</li>
               </ul>
@@ -745,14 +746,14 @@
 
           <!-- 📐 TESPİT EDİLEN EKSİKLER & ALGORİTMA ANALİZİ -->
           <div class="form-group">
-            <label class="field-label text-rose">📐 [TESPİT EDİLEN EKSİKLER & ALGORİTMA ANALİZİ]</label>
+            <label class="field-label text-rose">{{ t('analytics.aiAudit.before.flawsLabel') }}</label>
             <div class="flaws-list">
               <div *ngFor="let need of selectedListing.structuralNeeds" class="flaw-item">
                 <span class="flaw-bullet">⚠️</span>
                 <span>{{ need }}</span>
               </div>
               <div *ngIf="!selectedListing.structuralNeeds || selectedListing.structuralNeeds.length === 0" class="flaw-clean">
-                ✓ Yapısal hata veya eksik tespit edilmedi.
+                {{ t('analytics.aiAudit.before.noFlawsClean') }}
               </div>
             </div>
           </div>
@@ -764,12 +765,12 @@
         <div class="panel-card after-card">
           <div class="panel-header">
             <div class="panel-title-wrap">
-              <span class="panel-tag tag-after">✨ AI İYİLEŞTİRİLMİŞ LİSTİNG (AFTER)</span>
+              <span class="panel-tag tag-after">{{ t('analytics.aiAudit.after.panelTag') }}</span>
               <span class="ai-model-pill">{{ aiModelUsed }}</span>
-              <span class="ai-model-pill" [style.background]="aiProviderUsed.includes('Canlı') ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'" [style.color]="aiProviderUsed.includes('Canlı') ? '#34d399' : '#fbbf24'">{{ aiProviderUsed }}</span>
+              <span class="ai-model-pill" [style.background]="(aiProviderUsed.includes('Canlı') || aiProviderUsed.includes('Live')) ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'" [style.color]="(aiProviderUsed.includes('Canlı') || aiProviderUsed.includes('Live')) ? '#34d399' : '#fbbf24'">{{ aiProviderUsed }}</span>
             </div>
             <div class="score-display">
-              <span class="score-title-sub">Hedef AI Skoru:</span>
+              <span class="score-title-sub">{{ t('analytics.aiAudit.after.targetAiScore') }}</span>
               <span class="score-pill score-high">
                 {{ aiScoreAfter || 96 }} / 100
               </span>
@@ -779,16 +780,16 @@
           <!-- AI Optimize Başlık -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">AI Tarafından Optimize Edilmiş Başlık</label>
+              <label class="field-label">{{ t('analytics.aiAudit.after.optimizedTitleLabel') }}</label>
               <span class="char-count" [class.text-danger]="afterTitle.length > 140" [class.text-success]="afterTitle.length >= 100 && afterTitle.length <= 140">
-                {{ afterTitle.length }} / 140 Karakter
+                {{ t('analytics.aiAudit.before.charCount140', { count: afterTitle.length }) }}
               </span>
             </div>
             <input
               type="text"
               [(ngModel)]="afterTitle"
               class="editable-input title-input"
-              placeholder="AI optimize başlık..."
+              [placeholder]="t('analytics.aiAudit.after.optimizedTitlePlaceholder')"
             />
             <div *ngIf="titleSuggestions.length > 1" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
               <button
@@ -800,7 +801,7 @@
                 style="font-size: 11px; padding: 5px 9px; border-radius: 6px; border: 1px solid; color: #cbd5e1; cursor: pointer; text-align: left;"
                 [title]="sug"
               >
-                Başlık #{{ i + 1 }} ({{ sug.length }} krk)
+                {{ t('analytics.aiAudit.after.titleSuggestionBtn', { index: i + 1, length: sug.length }) }}
               </button>
             </div>
           </div>
@@ -808,14 +809,14 @@
           <!-- AI Optimize 13 Etiket -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">AI Tarafından Üretilen 13 Etiket</label>
+              <label class="field-label">{{ t('analytics.aiAudit.after.optimizedTagsLabel') }}</label>
               <span
                 class="tag-count-label"
                 [class.text-success]="afterTags.length === 13"
                 [class.text-warn]="afterTags.length < 13"
                 [class.text-danger]="afterTags.length > 13"
               >
-                {{ afterTags.length }} / 13 Etiket
+                {{ t('analytics.aiAudit.before.tagCount13', { count: afterTags.length }) }}
               </span>
             </div>
 
@@ -825,10 +826,10 @@
                 *ngFor="let tag of afterTags; let i = index"
                 class="tag-chip tag-chip-after"
                 [style.borderColor]="tag.length > 20 ? '#ef4444' : ''"
-                [title]="tag + ' (' + tag.length + '/20 krk)'"
+                [title]="t('analytics.aiAudit.after.tagTooltip', { tag: tag, length: tag.length })"
               >
                 <span>{{ tag }} <small style="opacity: 0.65; font-size: 10px;">({{ tag.length }})</small></span>
-                <button class="tag-remove-btn" (click)="removeTag(i)" title="Etiketi Sil">×</button>
+                <button class="tag-remove-btn" (click)="removeTag(i)" [title]="t('analytics.aiAudit.after.removeTagTitle')">×</button>
               </span>
             </div>
 
@@ -838,60 +839,60 @@
                 type="text"
                 [(ngModel)]="newTagInput"
                 (keyup.enter)="addTag()"
-                placeholder="Yeni etiket yazıp Enter'a basın (maks 20 krk)..."
+                [placeholder]="t('analytics.aiAudit.after.addTagPlaceholder')"
                 class="add-tag-input"
               />
-              <button class="btn-add-tag" (click)="addTag()" [disabled]="!newTagInput.trim()">+ Ekle</button>
+              <button class="btn-add-tag" (click)="addTag()" [disabled]="!newTagInput.trim()">{{ t('analytics.aiAudit.after.addBtn') }}</button>
             </div>
           </div>
 
           <!-- Malzemeler (Materials) -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">Malzemeler (Materials)</label>
+              <label class="field-label">{{ t('analytics.aiAudit.after.materialsLabel') }}</label>
               <span class="char-count">{{ afterMaterials.length }} / 13</span>
             </div>
             <div class="tags-container">
               <span *ngFor="let mat of afterMaterials; let i = index" class="tag-chip tag-chip-after">
                 <span>{{ mat }}</span>
-                <button class="tag-remove-btn" (click)="removeMaterial(i)" title="Malzemeyi Sil">×</button>
+                <button class="tag-remove-btn" (click)="removeMaterial(i)" [title]="t('analytics.aiAudit.after.removeMaterialTitle')">×</button>
               </span>
-              <span *ngIf="afterMaterials.length === 0" class="no-tags-msg" style="font-size: 12px; opacity: 0.7;">Henüz malzeme eklenmedi.</span>
+              <span *ngIf="afterMaterials.length === 0" class="no-tags-msg" style="font-size: 12px; opacity: 0.7;">{{ t('analytics.aiAudit.after.noMaterialsYet') }}</span>
             </div>
             <div *ngIf="afterMaterials.length < 13" class="add-tag-box">
               <input
                 type="text"
                 [(ngModel)]="newMaterialInput"
                 (keyup.enter)="addMaterial()"
-                placeholder="Yeni malzeme ekle (ör. PLA Filament)..."
+                [placeholder]="t('analytics.aiAudit.after.addMaterialPlaceholder')"
                 class="add-tag-input"
               />
-              <button class="btn-add-tag" (click)="addMaterial()" [disabled]="!newMaterialInput.trim()">+ Ekle</button>
+              <button class="btn-add-tag" (click)="addMaterial()" [disabled]="!newMaterialInput.trim()">{{ t('analytics.aiAudit.after.addBtn') }}</button>
             </div>
           </div>
 
           <!-- AI Optimize Açıklama -->
           <div class="form-group">
             <div class="label-row">
-              <label class="field-label">AI Optimize Açıklama Metni</label>
-              <span class="char-count">{{ afterDescription.length }} Karakter</span>
+              <label class="field-label">{{ t('analytics.aiAudit.after.optimizedDescLabel') }}</label>
+              <span class="char-count">{{ t('analytics.aiAudit.before.descCharCount', { count: afterDescription.length }) }}</span>
             </div>
             <textarea
               [(ngModel)]="afterDescription"
               rows="12"
               class="editable-textarea desc-textarea"
-              placeholder="AI tarafından yapılandırılmış ürün açıklaması..."
+              [placeholder]="t('analytics.aiAudit.after.optimizedDescPlaceholder')"
             ></textarea>
           </div>
 
           <!-- AI Eleştirisi & Risk Uyarıları -->
           <div *ngIf="aiCritique || riskWarnings.length > 0" class="form-group">
-            <label class="field-label text-cyan">AI Analizi & Risk Kontrolü</label>
+            <label class="field-label text-cyan">{{ t('analytics.aiAudit.after.analysisAndRiskLabel') }}</label>
             <div class="critique-card">
               <p *ngIf="aiCritique" class="critique-text">{{ aiCritique }}</p>
 
               <div *ngIf="riskWarnings.length > 0" class="risk-warnings-box">
-                <span class="risk-title">⚠️ Dikkat Edilmesi Gereken Noktalar:</span>
+                <span class="risk-title">{{ t('analytics.aiAudit.after.attentionPointsTitle') }}</span>
                 <ul>
                   <li *ngFor="let w of riskWarnings">{{ w }}</li>
                 </ul>
@@ -901,7 +902,7 @@
 
           <!-- Kontrol Listesi (Checklist) -->
           <div *ngIf="checklist.length > 0" class="form-group">
-            <label class="field-label text-emerald">Optimizasyon Kontrol Listesi</label>
+            <label class="field-label text-emerald">{{ t('analytics.aiAudit.after.checklistLabel') }}</label>
             <div class="checklist-box">
               <div *ngFor="let check of checklist" class="check-item">
                 <span class="check-icon">✓</span>
@@ -918,16 +919,16 @@
   <div *ngIf="showSettingsModal" class="modal-backdrop" (click)="showSettingsModal = false">
     <div class="modal-card" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3 class="modal-title">⚙️ AI Model & Optimizasyon Ayarları</h3>
+        <h3 class="modal-title">{{ t('analytics.aiAudit.settings.title') }}</h3>
         <button class="modal-close-btn" (click)="showSettingsModal = false">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="modal-field">
-          <label>Yapay Zeka Modeli</label>
+          <label>{{ t('analytics.aiAudit.settings.aiModelLabel') }}</label>
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.35);">
-            <span style="font-weight: 600; color: #e2e8f0;">🤖 Aktif Ana AI: {{ aiSettings.activeBadgeTextClean() }}</span>
-            <button type="button" class="btn-settings" (click)="openGlobalAiModelHub()" style="padding: 6px 12px; font-size: 12px;">🔄 Ana AI Değiştir</button>
+            <span style="font-weight: 600; color: #e2e8f0;">{{ t('analytics.aiAudit.settings.activeMainAi', { model: aiSettings.activeBadgeTextClean() }) }}</span>
+            <button type="button" class="btn-settings" (click)="openGlobalAiModelHub()" style="padding: 6px 12px; font-size: 12px;">{{ t('analytics.aiAudit.settings.changeMainAiBtn') }}</button>
           </div>
           <select *ngIf="false" class="modal-select">
 
@@ -937,38 +938,38 @@
         </div>
 
         <div class="modal-field">
-          <label>Hedef Alıcı Personası (Target Buyer)</label>
+          <label>{{ t('analytics.aiAudit.settings.buyerPersonaLabel') }}</label>
           <textarea
             [(ngModel)]="targetBuyerPersona"
             rows="3"
             class="modal-input"
-            placeholder="Örn: Hediye arayanlar, düğün ve doğum günü organizatörleri..."
+            [placeholder]="t('analytics.aiAudit.settings.buyerPersonaPlaceholder')"
           ></textarea>
         </div>
 
         <div class="modal-field">
-          <label>Özel Odak Anahtar Kelimeleri (Virgülle ayırın)</label>
+          <label>{{ t('analytics.aiAudit.settings.focusKeywordsLabel') }}</label>
           <input
             type="text"
             [(ngModel)]="focusKeywords"
             class="modal-input"
-            placeholder="Örn: personalized gift, handmade wooden, custom decor"
+            [placeholder]="t('analytics.aiAudit.settings.focusKeywordsPlaceholder')"
           />
         </div>
 
         <div class="modal-field">
-          <label>Yazım Dili & Tonu</label>
+          <label>{{ t('analytics.aiAudit.settings.toneLabel') }}</label>
           <select [(ngModel)]="aiTone" class="modal-select">
-            <option value="Profesyonel & İkna Edici">Profesyonel & İkna Edici</option>
-            <option value="Samimi & Sıcak (Boutique)">Samimi & Sıcak (Boutique)</option>
-            <option value="Lüks & Premium">Lüks & Premium</option>
-            <option value="Minimalist & Bilgilendirici">Minimalist & Bilgilendirici</option>
+            <option value="Profesyonel & İkna Edici">{{ t('analytics.aiAudit.settings.toneProfessional') }}</option>
+            <option value="Samimi & Sıcak (Boutique)">{{ t('analytics.aiAudit.settings.toneBoutique') }}</option>
+            <option value="Lüks & Premium">{{ t('analytics.aiAudit.settings.toneLuxury') }}</option>
+            <option value="Minimalist & Bilgilendirici">{{ t('analytics.aiAudit.settings.toneMinimalist') }}</option>
           </select>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-modal-save" (click)="showSettingsModal = false">Ayarları Kaydet</button>
+        <button class="btn-modal-save" (click)="showSettingsModal = false">{{ t('analytics.aiAudit.settings.saveBtn') }}</button>
       </div>
     </div>
   </div>
@@ -977,7 +978,7 @@
   <div *ngIf="lightboxImageUrl" class="modal-backdrop lightbox-backdrop" (click)="closeLightbox()">
     <div class="lightbox-card" (click)="$event.stopPropagation()">
       <button type="button" class="lightbox-close" (click)="closeLightbox()">✕</button>
-      <img [src]="lightboxImageUrl" alt="Tam Boyut Görsel Önizleme" class="lightbox-img" referrerpolicy="no-referrer" />
+      <img [src]="lightboxImageUrl" [alt]="t('analytics.aiAudit.lightbox.imgAlt')" class="lightbox-img" referrerpolicy="no-referrer" />
     </div>
   </div>
 
@@ -985,25 +986,25 @@
   <div *ngIf="showConfirmPushModal && selectedListing" class="modal-backdrop" (click)="showConfirmPushModal = false">
     <div class="modal-card" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3 class="modal-title">🚀 Canlı Etsy Güncellemesini Onayla</h3>
+        <h3 class="modal-title">{{ t('analytics.aiAudit.confirmPush.title') }}</h3>
         <button type="button" class="modal-close-btn" (click)="showConfirmPushModal = false">✕</button>
       </div>
       <div class="modal-body confirm-push-summary">
-        <p><strong>İlan #{{ selectedListing.listingId }}</strong> doğrudan canlı Etsy mağazanızda güncellenecektir.</p>
+        <p><strong>{{ t('analytics.aiAudit.confirmPush.bodyBefore', { listingId: selectedListing.listingId }) }}</strong> {{ t('analytics.aiAudit.confirmPush.bodyAfter') }}</p>
         <div *ngIf="afterTags.length < 13" class="confirm-push-warn">
-          ⚠️ Etiket sayısı 13'ün altında ({{ afterTags.length }}/13). Etsy SEO için 13 etiket önerilir.
+          {{ t('analytics.aiAudit.confirmPush.tagsUnder13Warn', { count: afterTags.length }) }}
         </div>
         <div class="confirm-push-row">
-          <div><strong>Yeni Başlık:</strong> {{ afterTitle }}</div>
+          <div><strong>{{ t('analytics.aiAudit.confirmPush.newTitleLabel') }}</strong> {{ afterTitle }}</div>
           <div style="margin-top: 6px;">
-            <strong>Etiketler:</strong> {{ afterTags.length }}/13 &nbsp;|&nbsp;
-            <strong>Malzemeler:</strong> {{ afterMaterials.length }}/13
+            <strong>{{ t('analytics.aiAudit.confirmPush.tagsLabel') }}</strong> {{ afterTags.length }}/13 &nbsp;|&nbsp;
+            <strong>{{ t('analytics.aiAudit.confirmPush.materialsLabel') }}</strong> {{ afterMaterials.length }}/13
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-modal-cancel" (click)="showConfirmPushModal = false">Vazgeç</button>
-        <button type="button" class="btn-modal-confirm-etsy" (click)="confirmUpdateListingOnEtsy()">Evet, Etsy'ye Gönder</button>
+        <button type="button" class="btn-modal-cancel" (click)="showConfirmPushModal = false">{{ t('analytics.aiAudit.confirmPush.cancelBtn') }}</button>
+        <button type="button" class="btn-modal-confirm-etsy" (click)="confirmUpdateListingOnEtsy()">{{ t('analytics.aiAudit.confirmPush.confirmBtn') }}</button>
       </div>
     </div>
   </div>
@@ -1012,32 +1013,32 @@
   <div *ngIf="showAltTextModal && selectedListing" class="modal-backdrop" (click)="closeAltTextModal()">
     <div class="modal-card alt-text-modal-card" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3 class="modal-title">🏷️ Görsel Alt-Text SEO Düzenleyici (Maks. 250 Karakter)</h3>
+        <h3 class="modal-title">{{ t('analytics.aiAudit.altTextModal.title') }}</h3>
         <button type="button" class="modal-close-btn" (click)="closeAltTextModal()">✕</button>
       </div>
       <div class="modal-body alt-text-modal-body">
         <div class="alt-modal-toolbar">
-          <span class="alt-modal-hint">Google Görseller &amp; Etsy erişilebilirlik SEO'su için doğal İngilizce açıklama girin.</span>
+          <span class="alt-modal-hint">{{ t('analytics.aiAudit.altTextModal.hint') }}</span>
           <button
             type="button"
             class="btn-alt-ai-gen"
             [disabled]="isAnalyzingImages"
             (click)="analyzeImagesWithAi()"
           >
-            {{ isAnalyzingImages ? 'Üretiliyor...' : '✨ AI ile Tümünü Doldur' }}
+            {{ isAnalyzingImages ? t('analytics.aiAudit.altTextModal.generating') : t('analytics.aiAudit.altTextModal.aiFillAllBtn') }}
           </button>
         </div>
 
         <div class="alt-text-list">
           <div *ngFor="let img of listingImages; let idx = index" class="alt-text-row">
             <div class="alt-row-thumb-wrap">
-              <img [src]="img.url" [alt]="'Görsel #' + (idx + 1)" class="alt-row-thumb" referrerpolicy="no-referrer" />
+              <img [src]="img.url" [alt]="t('analytics.aiAudit.hub.imageAlt', { index: idx + 1 })" class="alt-row-thumb" referrerpolicy="no-referrer" />
               <span class="alt-row-rank">#{{ idx + 1 }}</span>
             </div>
             <div class="alt-row-editor">
               <div class="alt-row-meta">
                 <span class="alt-row-angle" *ngIf="img.angleLabel">{{ img.angleLabel }}</span>
-                <span class="alt-row-new-warn" *ngIf="!img.listingImageId">Önce görseli Etsy'ye yükleyin</span>
+                <span class="alt-row-new-warn" *ngIf="!img.listingImageId">{{ t('analytics.aiAudit.altTextModal.uploadFirstWarn') }}</span>
                 <span class="alt-char-count" [class.over]="(img.altText || '').trim().length > 250">
                   {{ (img.altText || '').trim().length }} / 250
                 </span>
@@ -1048,23 +1049,24 @@
                 maxlength="260"
                 [(ngModel)]="img.altText"
                 [disabled]="!img.listingImageId"
-                placeholder="Örn: Handmade 3D printed green and silver cosplay wrist watch prop on wooden desk..."
+                [placeholder]="t('analytics.aiAudit.altTextModal.placeholder')"
               ></textarea>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-modal-cancel" (click)="closeAltTextModal()">Kapat</button>
+        <button type="button" class="btn-modal-cancel" (click)="closeAltTextModal()">{{ t('analytics.aiAudit.altTextModal.closeBtn') }}</button>
         <button
           type="button"
           class="btn-modal-confirm-etsy"
           [disabled]="isSavingAltText"
           (click)="saveAltTextsToEtsy()"
         >
-          {{ isSavingAltText ? 'Etsy\'ye Kaydediliyor...' : '🚀 Alt-Text\'leri Etsy\'ye Kaydet' }}
+          {{ isSavingAltText ? t('analytics.aiAudit.altTextModal.saving') : t('analytics.aiAudit.altTextModal.saveBtn') }}
         </button>
       </div>
     </div>
   </div>
 </div>
+</ng-container>

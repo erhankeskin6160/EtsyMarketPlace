@@ -2,6 +2,7 @@ import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto, TrackedKeywordDto } from '../../core/services/etsy-api.service';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
@@ -65,12 +66,14 @@ export interface CompareResult {
 @Component({
   selector: 'app-market-research',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent],
+  imports: [CommonModule, FormsModule, AiLogoComponent, TranslocoDirective],
+  providers: [provideTranslocoScope('research')],
   templateUrl: './market-research.component.html',
   styleUrl: './market-research.component.css'
 })
 export class MarketResearchComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   extensionBridge = inject(ExtensionBridgeService);
@@ -83,7 +86,7 @@ export class MarketResearchComponent implements OnInit {
   searchKeyword = '3D Printed Articulated Dragon';
   limit = 25;
   sortBy = 'market_score';
-  statusText = 'Aramaya hazır — canlı Etsy pazar verisi';
+  statusText = this.transloco.translate('research.marketResearch.status.ready');
   isLoading = false;
   isGeneratingReport = false;
   aiReport = '';
@@ -244,12 +247,12 @@ export class MarketResearchComponent implements OnInit {
   clearHistory(): void {
     this.searchHistory = [];
     this.persistHistory();
-    this.showToastMsg('🕘 Arama geçmişi temizlendi.');
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.historyCleared'));
   }
 
   onSearch(): void {
     if (!this.searchKeyword || !this.searchKeyword.trim()) {
-      this.showToastMsg('⚠️ Lütfen aranacak bir kelime girin.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.enterKeyword'));
       return;
     }
 
@@ -257,8 +260,8 @@ export class MarketResearchComponent implements OnInit {
     this.isLoading = true;
     const isListingUrl = /etsy\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?listing\/(\d+)/i.test(this.searchKeyword) || /^#?\d{7,14}$/.test(this.searchKeyword.trim());
     this.statusText = isListingUrl
-      ? '🎯 Etsy ürün linki tespit edildi. Ürün detayları çekiliyor ve niş pazar rekabeti analiz ediliyor...'
-      : `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
+      ? this.transloco.translate('research.marketResearch.status.scanningUrl')
+      : this.transloco.translate('research.marketResearch.status.scanningKeyword', { keyword: this.searchKeyword });
 
     this.etsyApi.searchMarket(this.searchKeyword, this.limit, this.sortBy).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
@@ -268,7 +271,7 @@ export class MarketResearchComponent implements OnInit {
           this.selectedItem = this.items.find(i => i.isTargetListing) ?? this.items[0];
           if (res.targetListingId) {
             const compCount = Math.max(0, this.items.length - 1);
-            this.statusText = `🎯 Hedef ürün (#${res.targetListingId}) ve ${compCount} rakip ürün pazar analizi yüklendi.`;
+            this.statusText = this.transloco.translate('research.marketResearch.status.loadedTarget', { id: res.targetListingId, count: compCount });
           }
           this.currentImageIndex = 0;
           this.totalEtsyCount = res.total || this.items.length;
@@ -297,24 +300,35 @@ export class MarketResearchComponent implements OnInit {
           this.lastUpdatedLabel = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
           if (res.targetListingId) {
             const compCount = Math.max(0, this.items.length - 1);
-            this.statusText = `🎯 Hedef ürün (#${res.targetListingId}) ve ${compCount} rakip pazar ilanı inceleniyor. (Niş: "${res.keyword}") • Son güncelleme ${this.lastUpdatedLabel}`;
+            this.statusText = this.transloco.translate('research.marketResearch.status.loadedTargetUpdated', {
+              id: res.targetListingId,
+              count: compCount,
+              niche: res.keyword,
+              time: this.lastUpdatedLabel
+            });
           } else {
-            this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam Etsy havuzu: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
+            this.statusText = this.transloco.translate('research.marketResearch.status.loadedKeywordUpdated', {
+              keyword: this.searchKeyword,
+              count: this.items.length,
+              total: res.total.toLocaleString(),
+              sort: this.getSortLabel(),
+              time: this.lastUpdatedLabel
+            });
           }
-          this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
+          this.showToastMsg(this.transloco.translate('research.marketResearch.messages.loadedSuccess', { count: this.items.length }));
         } else {
           this.items = [];
           this.selectedItem = undefined;
           this.resetKpis();
-          this.statusText = `"${this.searchKeyword}" için Etsy'de aktif ilan bulunamadı.`;
-          this.showToastMsg('ℹ️ Bu anahtar kelime için aktif Etsy ilanı bulunamadı.');
+          this.statusText = this.transloco.translate('research.marketResearch.status.noResults', { keyword: this.searchKeyword });
+          this.showToastMsg(this.transloco.translate('research.marketResearch.messages.noActiveListings'));
         }
       },
       error: (err) => {
         this.isLoading = false;
-        const msg = err?.error?.error || err?.message || 'Etsy API ile iletişim kurulamadı.';
-        this.statusText = `⚠️ Hata: ${msg}`;
-        this.showToastMsg(`🚨 Hata: ${msg}`);
+        const msg = err?.error?.error || err?.message || this.transloco.translate('research.marketResearch.messages.apiError');
+        this.statusText = this.transloco.translate('research.marketResearch.status.errorPrefix', { msg });
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.errorToast', { msg }));
       }
     });
   }
@@ -343,15 +357,15 @@ export class MarketResearchComponent implements OnInit {
 
   getSortLabel(): string {
     switch (this.sortBy) {
-      case 'market_score': return 'Pazar Puanı';
-      case 'estimated_revenue': return 'Tahmini Ciro';
-      case 'estimated_sales': return 'Tahmini Satış';
-      case 'seo_score': return 'SEO Puanı';
-      case 'favorites': return 'Favori';
-      case 'views': return 'Görüntülenme';
-      case 'shop_sales': return 'Mağaza Satışı';
-      case 'price_asc': return 'Fiyat (Artan)';
-      case 'price_desc': return 'Fiyat (Azalan)';
+      case 'market_score': return this.transloco.translate('research.marketResearch.sortLabels.market_score');
+      case 'estimated_revenue': return this.transloco.translate('research.marketResearch.sortLabels.estimated_revenue');
+      case 'estimated_sales': return this.transloco.translate('research.marketResearch.sortLabels.estimated_sales');
+      case 'seo_score': return this.transloco.translate('research.marketResearch.sortLabels.seo_score');
+      case 'favorites': return this.transloco.translate('research.marketResearch.sortLabels.favorites');
+      case 'views': return this.transloco.translate('research.marketResearch.sortLabels.views');
+      case 'shop_sales': return this.transloco.translate('research.marketResearch.sortLabels.shop_sales');
+      case 'price_asc': return this.transloco.translate('research.marketResearch.sortLabels.price_asc');
+      case 'price_desc': return this.transloco.translate('research.marketResearch.sortLabels.price_desc');
       default: return this.sortBy;
     }
   }
@@ -404,55 +418,55 @@ export class MarketResearchComponent implements OnInit {
 
   filterOnlyTopOpportunity(): void {
     if (!this.hasResults) {
-      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.searchFirstFilter'));
       return;
     }
     this.filterOnlyOpportunity = !this.filterOnlyOpportunity;
     if (this.filterOnlyOpportunity) {
-      this.statusText = `Filtre açık: Fırsat skoru %85+ olan ${this.displayItems.length} ürün gösteriliyor.`;
-      this.showToastMsg(`⚡ Yüksek fırsatlı ${this.displayItems.length} ürün filtrelendi.`);
+      this.statusText = this.transloco.translate('research.marketResearch.status.filterOppOn', { count: this.displayItems.length });
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filteredOpp', { count: this.displayItems.length }));
     } else {
-      this.statusText = `"${this.searchKeyword}" aramasındaki ${this.items.length} ilan gösteriliyor.`;
-      this.showToastMsg('Filtre kaldırıldı.');
+      this.statusText = this.transloco.translate('research.marketResearch.status.filterOppOff', { keyword: this.searchKeyword, count: this.items.length });
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filterRemoved'));
     }
   }
 
   toggleWeakSeoOpportunityFilter(): void {
     if (!this.hasResults) {
-      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.searchFirstFilter'));
       return;
     }
     this.filterOnlyWeakSeoOpportunity = !this.filterOnlyWeakSeoOpportunity;
     if (this.filterOnlyWeakSeoOpportunity) {
-      this.showToastMsg(`🎯 Yüksek talep / zayıf rakip SEO fırsatı olan ${this.displayItems.length} ürün filtrelendi.`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filteredWeakSeo', { count: this.displayItems.length }));
     } else {
-      this.showToastMsg('SEO zafiyeti filtresi kaldırıldı.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.weakSeoRemoved'));
     }
   }
 
   toggleBestsellerFilter(): void {
     if (!this.hasResults) {
-      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.searchFirstFilter'));
       return;
     }
     this.filterOnlyBestseller = !this.filterOnlyBestseller;
     if (this.filterOnlyBestseller) {
-      this.showToastMsg(`🔥 Çok satan (Bestseller) ${this.displayItems.length} ürün filtrelendi.`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filteredBestseller', { count: this.displayItems.length }));
     } else {
-      this.showToastMsg('Bestseller filtresi kaldırıldı.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.bestsellerRemoved'));
     }
   }
 
   toggleFreeShippingFilter(): void {
     if (!this.hasResults) {
-      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.searchFirstFilter'));
       return;
     }
     this.filterOnlyFreeShipping = !this.filterOnlyFreeShipping;
     if (this.filterOnlyFreeShipping) {
-      this.showToastMsg(`🚚 Ücretsiz kargo avantajlı ${this.displayItems.length} ürün filtrelendi.`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filteredFreeShipping', { count: this.displayItems.length }));
     } else {
-      this.showToastMsg('Ücretsiz kargo filtresi kaldırıldı.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.freeShippingRemoved'));
     }
   }
 
@@ -464,7 +478,7 @@ export class MarketResearchComponent implements OnInit {
     this.filterOnlyWeakSeoOpportunity = false;
     this.filterOnlyBestseller = false;
     this.filterOnlyFreeShipping = false;
-    this.showToastMsg('🎛️ Tüm filtreler sıfırlandı.');
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.filtersReset'));
   }
 
   selectItem(item: MarketItem): void {
@@ -511,27 +525,27 @@ export class MarketResearchComponent implements OnInit {
       checks.push({
         icon: '✅',
         statusClass: 'ok',
-        title: `Başlık Uzunluğu (${titleLen} / 140 Karakter)`,
+        title: this.transloco.translate('research.marketResearch.audit.titleIdeal', { len: titleLen }),
         detail: inFirst55
-          ? 'İdeal uzunlukta ve ana anahtar kelime mobil görünümde (ilk 55 karakter) yer alıyor.'
-          : 'Uzunluk ideal ancak aranan anahtar kelime ilk 55 karakterde tam eşleşmiyor.'
+          ? this.transloco.translate('research.marketResearch.audit.titleIdealInFirst55')
+          : this.transloco.translate('research.marketResearch.audit.titleIdealNotFirst55')
       });
     } else if (titleLen >= 60) {
       checks.push({
         icon: '⚠️',
         statusClass: 'warn',
-        title: `Başlık Uzunluğu (${titleLen} / 140 Karakter)`,
-        detail: `${140 - titleLen} karakterlik SEO alanı boş bırakılmış; ek long-tail kelimeler eklenebilir.`
+        title: this.transloco.translate('research.marketResearch.audit.titleIdeal', { len: titleLen }),
+        detail: this.transloco.translate('research.marketResearch.audit.titleMidDetail', { remaining: 140 - titleLen })
       });
-      gaps.push(`Rakip başlıkta ${140 - titleLen} karakteri boş bırakmış. Siz 120–140 karakterlik tam long-tail başlık kurgulayarak daha fazla arama sorgusu yakalayabilirsiniz.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.titleMidGap', { remaining: 140 - titleLen }));
     } else {
       checks.push({
         icon: '❌',
         statusClass: 'bad',
-        title: `Başlık Çok Kısa (${titleLen} / 140 Karakter)`,
-        detail: 'Başlık 60 karakterin altında; Etsy arama algoritmasında ciddi görünürlük kaybı yaşıyor.'
+        title: this.transloco.translate('research.marketResearch.audit.titleShortTitle', { len: titleLen }),
+        detail: this.transloco.translate('research.marketResearch.audit.titleShortDetail')
       });
-      gaps.push(`Rakibin başlığı çok kısa (${titleLen} kr). İlk 55 karakterde "${this.searchKeyword}" geçen 130+ karakterlik bir başlıkla bu ilanı sıralamada kolayca geçebilirsiniz.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.titleShortGap', { len: titleLen, keyword: this.searchKeyword }));
     }
 
     // 2. 13 Altın Etiket Doluluğu & 20 Karakter Kuralı
@@ -542,25 +556,25 @@ export class MarketResearchComponent implements OnInit {
       checks.push({
         icon: '✅',
         statusClass: 'ok',
-        title: `Etiket Doluluğu (${tagCount} / 13 Etiket)`,
-        detail: `13 altın etiket kotası tam dolu (${multiWordTags.length} tanesi long-tail/çok kelimeli).`
+        title: this.transloco.translate('research.marketResearch.audit.tagFullTitle', { count: tagCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.tagFullDetail', { multiWord: multiWordTags.length })
       });
     } else if (tagCount >= 9) {
       checks.push({
         icon: '⚠️',
         statusClass: 'warn',
-        title: `Etiket Doluluğu (${tagCount} / 13 Etiket)`,
-        detail: `${13 - tagCount} adet etiket slotu boş bırakılmış (${multiWordTags.length} long-tail etiket mevcut).`
+        title: this.transloco.translate('research.marketResearch.audit.tagFullTitle', { count: tagCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.tagMidDetail', { missing: 13 - tagCount, multiWord: multiWordTags.length })
       });
-      gaps.push(`Rakip ${13 - tagCount} etiket hakkını kullanmamış! Pazarın en güçlü 13 altın etiketini eksiksiz girerek indeksleme üstünlüğü sağlayın.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.tagMidGap', { missing: 13 - tagCount }));
     } else {
       checks.push({
         icon: '❌',
         statusClass: 'bad',
-        title: `Eksik Etiket Kullanımı (${tagCount} / 13 Etiket)`,
-        detail: `Sadece ${tagCount} etiket kullanılmış; ${13 - tagCount} potansiyel trafik kapısı tamamen kapalı.`
+        title: this.transloco.translate('research.marketResearch.audit.tagLowTitle', { count: tagCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.tagLowDetail', { count: tagCount, missing: 13 - tagCount })
       });
-      gaps.push(`Rakip yalnızca ${tagCount}/13 etiket kullanıyor. Eksik ${13 - tagCount} etiketi ve eksik altın etiketleri ekleyerek organik trafiği doğrudan çekebilirsiniz.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.tagLowGap', { count: tagCount, missing: 13 - tagCount }));
     }
 
     // 3. Görsel Galeri Derinliği
@@ -569,25 +583,25 @@ export class MarketResearchComponent implements OnInit {
       checks.push({
         icon: '✅',
         statusClass: 'ok',
-        title: `Görsel Galeri Derinliği (${imgCount} / 10 Görsel)`,
-        detail: 'Çoklu açı ve detay fotoğrafları ile alıcı güveni desteklenmiş.'
+        title: this.transloco.translate('research.marketResearch.audit.imgGoodTitle', { count: imgCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.imgGoodDetail')
       });
     } else if (imgCount >= 2) {
       checks.push({
         icon: '⚠️',
         statusClass: 'warn',
-        title: `Görsel Sayısı Sınırlı (${imgCount} / 10 Görsel)`,
-        detail: 'Etsy dönüşüm algoritması en az 5–10 görsel (ölçek, paketleme, kullanım anı) önerir.'
+        title: this.transloco.translate('research.marketResearch.audit.imgMidTitle', { count: imgCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.imgMidDetail')
       });
-      gaps.push(`Rakip sadece ${imgCount} görsel yüklemiş. Ölçek tablosu, hediye paketi ve yaşam alanı (lifestyle) görselleriyle 8+ fotoğraf yükleyerek dönüşüm oranınızı artırın.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.imgMidGap', { count: imgCount }));
     } else {
       checks.push({
         icon: '❌',
         statusClass: 'bad',
-        title: `Yetersiz Görsel (${imgCount} / 10 Görsel)`,
-        detail: 'Tek görselli ilanlar alıcı güvenini ve dönüşüm oranını düşürür.'
+        title: this.transloco.translate('research.marketResearch.audit.imgLowTitle', { count: imgCount }),
+        detail: this.transloco.translate('research.marketResearch.audit.imgLowDetail')
       });
-      gaps.push(`Rakip tek görselle satış yapıyor. AI Görsel Stüdyosu ile 5+ farklı sahne ve açı üreterek tıklama/satın alma oranında fark yaratın.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.imgLowGap'));
     }
 
     // 4. Açıklama Metni Derinliği
@@ -596,25 +610,25 @@ export class MarketResearchComponent implements OnInit {
       checks.push({
         icon: '✅',
         statusClass: 'ok',
-        title: `Açıklama Zenginliği (${descLen} Karakter)`,
-        detail: 'Detaylı ürün hikayesi, malzeme/ölçü bilgisi ve Google SEO indekslemesi için yeterli uzunlukta.'
+        title: this.transloco.translate('research.marketResearch.audit.descGoodTitle', { len: descLen }),
+        detail: this.transloco.translate('research.marketResearch.audit.descGoodDetail')
       });
     } else if (descLen >= 200) {
       checks.push({
         icon: '⚠️',
         statusClass: 'warn',
-        title: `Açıklama Orta Seviyede (${descLen} Karakter)`,
-        detail: '500+ karakterlik yapılandırılmış açıklama (SSS, boyutlar, bakım) dönüşümü artırır.'
+        title: this.transloco.translate('research.marketResearch.audit.descMidTitle', { len: descLen }),
+        detail: this.transloco.translate('research.marketResearch.audit.descMidDetail')
       });
-      gaps.push(`Rakip açıklaması kısa (${descLen} kr). Ölçü, kargo süresi ve hediye notu detaylarını içeren zengin bir açıklama yazın.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.descMidGap', { len: descLen }));
     } else {
       checks.push({
         icon: '❌',
         statusClass: 'bad',
-        title: `Zayıf Açıklama Metni (${descLen} Karakter)`,
-        detail: 'Açıklama çok kısa; alıcıların aklındaki soru işaretlerini gidermiyor.'
+        title: this.transloco.translate('research.marketResearch.audit.descLowTitle', { len: descLen }),
+        detail: this.transloco.translate('research.marketResearch.audit.descLowDetail')
       });
-      gaps.push(`Rakip neredeyse hiç açıklama yazmamış (${descLen} kr). Fast Creator'da Hikaye + Teknik Özellik şablonuyla güven kazanın.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.descLowGap', { len: descLen }));
     }
 
     // 5. Sosyal Kanıt, Fiyat & Dönüşüm Sinyali
@@ -624,25 +638,38 @@ export class MarketResearchComponent implements OnInit {
       checks.push({
         icon: '✅',
         statusClass: 'ok',
-        title: `Talep & Dönüşüm Sinyali (~${sales} Satış/Ay • ${favs} Favori)`,
-        detail: `Tahmini dönüşüm oranı %${target.conversionRateEst || 2.5} ve mağaza puanı ${target.reviewAverage || 4.8}★ (${target.reviewCount || 0} yorum).`
+        title: this.transloco.translate('research.marketResearch.audit.demandTitle', { sales, favs }),
+        detail: this.transloco.translate('research.marketResearch.audit.demandGoodDetail', {
+          cvr: target.conversionRateEst || 2.5,
+          rating: target.reviewAverage || 4.8,
+          reviews: target.reviewCount || 0
+        })
       });
     } else {
       checks.push({
         icon: '⚠️',
         statusClass: 'warn',
-        title: `Talep & Dönüşüm Sinyali (~${sales} Satış/Ay • ${favs} Favori)`,
-        detail: `Orta/düşük etkileşim hızı; fiyat ($${target.priceUsd.toFixed(2)}) pazar ortalaması ($${this.avgPriceUsd.toFixed(2)}) ile kıyaslanmalı.`
+        title: this.transloco.translate('research.marketResearch.audit.demandTitle', { sales, favs }),
+        detail: this.transloco.translate('research.marketResearch.audit.demandLowDetail', {
+          price: target.priceUsd.toFixed(2),
+          avgPrice: this.avgPriceUsd.toFixed(2)
+        })
       });
     }
 
     if (target.priceUsd > this.avgPriceUsd * 1.15 && this.avgPriceUsd > 0) {
-      gaps.push(`Rakip pazar ortalamasının ($${this.avgPriceUsd.toFixed(2)}) üzerinde ($${target.priceUsd.toFixed(2)}) fiyatlandırılmış. $${(this.avgPriceUsd * 0.95).toFixed(2)} lansman fiyatıyla fiyat/performans lideri olabilirsiniz.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.priceGap', {
+        avgPrice: this.avgPriceUsd.toFixed(2),
+        price: target.priceUsd.toFixed(2),
+        suggested: (this.avgPriceUsd * 0.95).toFixed(2)
+      }));
     }
 
     const missingGold = this.getMissingGoldTags();
     if (missingGold.length > 0) {
-      gaps.push(`Rakip şu popüler pazar etiketlerini kullanmıyor: ${missingGold.slice(0, 4).map(t => '"' + t + '"').join(', ')}.`);
+      gaps.push(this.transloco.translate('research.marketResearch.audit.missingGoldGap', {
+        tags: missingGold.slice(0, 4).map(t => '"' + t + '"').join(', ')
+      }));
     }
 
     const totalScore = Math.round((target.seoScore * 0.55) + (target.marketScore * 0.45));
@@ -706,7 +733,7 @@ export class MarketResearchComponent implements OnInit {
           return;
         }
 
-        cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Chrome eklentisini yenileyin veya aşağıdaki panelden 1 saniyede aktarın.';
+        cloned.variationWarning = inv?.warningMessage || this.transloco.translate('research.marketResearch.messages.variationWarningApi');
         this.finalizeMarketClone(cloned, item.id);
       },
       error: async () => {
@@ -720,7 +747,7 @@ export class MarketResearchComponent implements OnInit {
           return;
         }
 
-        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Chrome eklentisi veya aşağıdaki yapıştırma kutusu ile aktarabilirsiniz.';
+        cloned.variationWarning = this.transloco.translate('research.marketResearch.messages.variationWarningError');
         this.finalizeMarketClone(cloned, item.id);
       }
     });
@@ -745,8 +772,10 @@ export class MarketResearchComponent implements OnInit {
 
   private finalizeMarketClone(cloned: ClonedMarketListing, listingId: number): void {
     this.aiService.setClonedListing(cloned);
-    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` (+${cloned.variationRows.length} varyasyon)` : '';
-    this.showToastMsg(`🚀 #${listingId} ürünü${varText} Fast Creator'a klonlandı, yönlendiriliyorsunuz...`);
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0)
+      ? this.transloco.translate('research.marketResearch.messages.variationSuffix', { count: cloned.variationRows.length })
+      : '';
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.clonedToCreator', { id: listingId, varText }));
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 350);
@@ -755,7 +784,10 @@ export class MarketResearchComponent implements OnInit {
   // 2. ✨ AI Optimizasyon
   optimizeWithAi(): void {
     if (!this.selectedItem) return;
-    this.showToastMsg(`✨ ${this.aiService.activeBadgeText()} ile #${this.selectedItem.id} optimizasyonu başlatılıyor...`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.aiOptimizeStarting', {
+      badge: this.aiService.activeBadgeText(),
+      id: this.selectedItem.id
+    }));
     this.cloneSelectedListing();
   }
 
@@ -775,10 +807,16 @@ export class MarketResearchComponent implements OnInit {
     };
     this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.showToastMsg(`📌 #${item.id} (${item.title.slice(0, 25)}...) VDS SQLite takip tablosuna eklendi!`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.trackedVds', {
+          id: item.id,
+          title: item.title.slice(0, 25)
+        }));
       },
       error: () => {
-        this.showToastMsg(`📌 #${item.id} (${item.title.slice(0, 25)}...) takip merkezine eklendi!`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.trackedFallback', {
+          id: item.id,
+          title: item.title.slice(0, 25)
+        }));
       }
     });
   }
@@ -807,11 +845,11 @@ export class MarketResearchComponent implements OnInit {
     if (!this.selectedItem) return;
     const missing = this.getMissingGoldTags();
     if (missing.length === 0) {
-      this.showToastMsg('✅ İlan, pazarın ilk 10 altın etiketinin tamamını kullanıyor.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.allGoldTagsOwned'));
       return;
     }
     navigator.clipboard.writeText(missing.join(', '));
-    this.showToastMsg(`📋 ${missing.length} eksik altın etiket panoya kopyalandı!`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.missingGoldCopied', { count: missing.length }));
   }
 
   // 5. 🕵️ Rakip Analizi
@@ -824,7 +862,7 @@ export class MarketResearchComponent implements OnInit {
       const list: any[] = existingRaw ? (JSON.parse(existingRaw) || []) : [];
       const shopEntry = {
         shopName: item.shopName,
-        niche: this.searchKeyword || 'Genel',
+        niche: this.searchKeyword || this.transloco.translate('research.marketResearch.messages.defaultNiche'),
         sales30d: item.estimatedMonthlySales || Math.max(1, Math.round((item.shopSales || 0) / 24)),
         revenueEstUsd: item.estimatedMonthlyRevenue || Math.round((item.estimatedMonthlySales || 1) * item.priceUsd),
         activeListings: this.items.filter(x => x.shopName === item.shopName).length || 1,
@@ -842,7 +880,7 @@ export class MarketResearchComponent implements OnInit {
     } catch {
       // localStorage yazımı başarısız olsa da yönlendirme devam eder
     }
-    this.showToastMsg(`🕵️ ${item.shopName} mağazasının rakip analizi açılıyor...`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.openingCompetitor', { shopName: item.shopName }));
     this.router.navigate(['/research/competitor'], { queryParams: { shop: item.shopName } });
   }
 
@@ -862,7 +900,7 @@ export class MarketResearchComponent implements OnInit {
   copySelectedTags(): void {
     if (this.selectedItem) {
       navigator.clipboard.writeText(this.selectedItem.tags.join(', '));
-      this.showToastMsg(`🏷️ ${this.selectedItem.tags.length} adet arama etiketi panoya kopyalandı!`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.selectedTagsCopied', { count: this.selectedItem.tags.length }));
     }
   }
 
@@ -870,7 +908,7 @@ export class MarketResearchComponent implements OnInit {
   copySelectedTitle(): void {
     if (this.selectedItem) {
       navigator.clipboard.writeText(this.selectedItem.title);
-      this.showToastMsg(`📝 Ürün başlığı panoya kopyalandı!`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.titleCopied'));
     }
   }
 
@@ -885,7 +923,7 @@ export class MarketResearchComponent implements OnInit {
   // 11. 📊 CSV Aktar
   exportCsv(): void {
     if (this.displayItems.length === 0) {
-      this.showToastMsg('⚠️ Dışa aktarılacak (filtrelenmiş) veri yok — önce canlı bir arama yapın veya filtreleri gevşetin.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.exportNoData'));
       return;
     }
     const headers = 'Sira;ListingId;Baslik;Fiyat_USD;Magaza;Magaza_Satisi;Aylik_Tahmini_Satis;Aylik_Tahmini_Ciro_USD;Favori;Goruntulenme;SEO_Puani;Pazar_Puani;Tagler\n';
@@ -900,21 +938,21 @@ export class MarketResearchComponent implements OnInit {
     a.download = `Etsy_Pazar_Arastirmasi_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToastMsg('📊 Pazar verileri CSV formatında indirildi.');
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.csvExported'));
   }
 
   // 12. 🔗 Linki Kopyala
   copyListingLink(): void {
     if (this.selectedItem) {
       navigator.clipboard.writeText(this.selectedItem.listingUrl);
-      this.showToastMsg(`🔗 Etsy linki kopyalandı: ${this.selectedItem.listingUrl}`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.linkCopied', { url: this.selectedItem.listingUrl }));
     }
   }
 
   sendToImageStudio(): void {
     if (this.selectedItem) {
       const activeImg = this.selectedItem.imageUrls[this.currentImageIndex] || this.selectedItem.imageUrl || '';
-      this.showToastMsg(`📸 Görsel AI Stüdyosuna aktarılıyor...`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.sendingToStudio'));
       this.router.navigate(['/ai-studio'], {
         queryParams: {
           imageUrl: activeImg,
@@ -935,25 +973,25 @@ export class MarketResearchComponent implements OnInit {
     if (this.topTags && this.topTags.length > 0) {
       const tagList = this.topTags.map(t => t.tag).join(', ');
       navigator.clipboard.writeText(tagList);
-      this.showToastMsg(`📋 İlk ${this.topTags.length} Altın Etiket kopyalandı!`);
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.topTagsCopied', { count: this.topTags.length }));
       return;
     }
     const allTags = Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 13);
     if (allTags.length === 0) {
-      this.showToastMsg('⚠️ Kopyalanacak etiket bulunamadı — önce canlı bir arama yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.noTagsToCopy'));
       return;
     }
     navigator.clipboard.writeText(allTags.join(', '));
-    this.showToastMsg(`📋 İlk 13 Ortak Altın Etiket kopyalandı!`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.top13CommonCopied'));
   }
 
   generateAiMarketReport(): void {
     if (!this.hasResults) {
-      this.showToastMsg('⚠️ AI raporu için önce canlı bir pazar araması yapın.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.searchFirstReport'));
       return;
     }
     this.isGeneratingReport = true;
-    const kw = this.searchKeyword.trim() || 'Pazar Trendi';
+    const kw = this.searchKeyword.trim() || this.transloco.translate('research.marketResearch.messages.defaultTrendKeyword');
     const topCompetitorTitles = this.items.slice(0, 6).map(i => i.title);
     const topTagList = (this.topTags && this.topTags.length > 0)
       ? this.topTags.slice(0, 15).map(t => t.tag)
@@ -982,12 +1020,12 @@ export class MarketResearchComponent implements OnInit {
       next: (res) => {
         this.isGeneratingReport = false;
         this.aiReport = res.reportHtml;
-        this.showToastMsg(`✨ "${kw}" için pazar strateji raporu hazırlandı.`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.reportReady', { keyword: kw }));
       },
       error: (err) => {
         this.isGeneratingReport = false;
-        const msg = err?.error?.error || err?.message || 'Pazar raporu oluşturulamadı.';
-        this.showToastMsg(`🚨 Hata: ${msg}`);
+        const msg = err?.error?.error || err?.message || this.transloco.translate('research.marketResearch.messages.reportError');
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.errorToast', { msg }));
       }
     });
   }
@@ -995,7 +1033,7 @@ export class MarketResearchComponent implements OnInit {
   trackCurrentKeyword(): void {
     const kw = (this.searchKeyword || '').trim();
     if (!kw) {
-      this.showToastMsg('⚠️ Takibe almak için önce bir kelime girin.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.enterKeywordTrack'));
       return;
     }
 
@@ -1003,14 +1041,16 @@ export class MarketResearchComponent implements OnInit {
     this.etsyApi.trackMarketKeyword(kw).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isTrackingKeyword = false;
-        this.showToastMsg(`📌 "${kw}" takibe alındı — pazar snapshot'ı kaydedildi.`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.keywordTracked', { keyword: kw }));
         if (this.showTrackingModal) {
           this.loadTrackedKeywords();
         }
       },
       error: (err) => {
         this.isTrackingKeyword = false;
-        this.showToastMsg(`🚨 Takip kaydedilemedi: ${err?.error?.error || err?.message || 'Sunucu hatası'}`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.trackSaveError', {
+          msg: err?.error?.error || err?.message || this.transloco.translate('research.marketResearch.messages.serverError')
+        }));
       }
     });
   }
@@ -1029,7 +1069,7 @@ export class MarketResearchComponent implements OnInit {
       },
       error: () => {
         this.isLoadingTracked = false;
-        this.showToastMsg('🚨 Takip listesi alınamadı (sunucuya ulaşılamıyor).');
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.trackedLoadError'));
       }
     });
   }
@@ -1037,24 +1077,24 @@ export class MarketResearchComponent implements OnInit {
   refreshTrackedKeyword(keyword: string): void {
     this.etsyApi.trackMarketKeyword(keyword).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.showToastMsg(`🔄 "${keyword}" için yeni snapshot kaydedildi.`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.snapshotRefreshed', { keyword }));
         this.loadTrackedKeywords();
       },
-      error: () => this.showToastMsg('🚨 Snapshot güncellenemedi.')
+      error: () => this.showToastMsg(this.transloco.translate('research.marketResearch.messages.snapshotRefreshError'))
     });
   }
 
   deleteTrackedKeyword(keyword: string): void {
-    if (!confirm(`"${keyword}" takibini ve tüm snapshot geçmişini silmek istediğinize emin misiniz?`)) {
+    if (!confirm(this.transloco.translate('research.marketResearch.messages.confirmDeleteTracked', { keyword }))) {
       return;
     }
 
     this.etsyApi.deleteTrackedMarketKeyword(keyword).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.trackedKeywords = this.trackedKeywords.filter(t => t.item.displayName !== keyword);
-        this.showToastMsg(`🗑 "${keyword}" takipten çıkarıldı.`);
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.trackedDeleted', { keyword }));
       },
-      error: () => this.showToastMsg('🚨 Silme başarısız.')
+      error: () => this.showToastMsg(this.transloco.translate('research.marketResearch.messages.deleteFailed'))
     });
   }
 
@@ -1103,7 +1143,7 @@ export class MarketResearchComponent implements OnInit {
       .filter(k => k.length > 0);
     const unique = Array.from(new Set(kws)).slice(0, 4);
     if (unique.length < 2) {
-      this.showToastMsg('⚠️ En az 2 kelime girin (virgülle ayırın).');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.compareMinTwo'));
       return;
     }
 
@@ -1117,7 +1157,7 @@ export class MarketResearchComponent implements OnInit {
             keyword: k,
             ok: false,
             res: null,
-            error: err?.error?.error || err?.message || 'Veri alınamadı'
+            error: err?.error?.error || err?.message || this.transloco.translate('research.marketResearch.messages.compareFetchError')
           }))
         )
       )
@@ -1126,8 +1166,8 @@ export class MarketResearchComponent implements OnInit {
       this.compareResults = results;
       const failCount = results.filter(r => !r.ok).length;
       this.showToastMsg(failCount === 0
-        ? `📊 ${results.length} kelime karşılaştırıldı.`
-        : `📊 Karşılaştırma tamamlandı — ${failCount} kelimede veri alınamadı.`);
+        ? this.transloco.translate('research.marketResearch.messages.compareDone', { count: results.length })
+        : this.transloco.translate('research.marketResearch.messages.compareDonePartial', { failed: failCount }));
     });
   }
 
@@ -1143,18 +1183,19 @@ export class MarketResearchComponent implements OnInit {
     const fmtInt = (n?: number | null) => (n === null || n === undefined) ? '—' : Math.round(n).toLocaleString('tr-TR');
     const fmtUsd = (n?: number | null, d: number = 2) => (n === null || n === undefined) ? '—' : '$' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d });
     const cell = (fn: (r: CompareResult) => string) => rs.map(r => (r.ok && r.res) ? fn(r) : '—');
+    const unitsSuffix = this.transloco.translate('research.marketResearch.compareModal.unitsSuffix');
 
     return [
-      { label: "Etsy'de Toplam İlan", values: cell(r => fmtInt(r.res!.total)) },
-      { label: 'İncelenen Örneklem', values: cell(r => fmtInt(r.res!.kpis.totalListings)) },
-      { label: 'Ortalama Fiyat (AOV)', values: cell(r => fmtUsd(r.res!.kpis.averagePrice)) },
-      { label: 'Fiyat Aralığı', values: cell(r => fmtUsd(r.res!.kpis.minPrice) + ' – ' + fmtUsd(r.res!.kpis.maxPrice)) },
-      { label: 'Ortalama Favori', values: cell(r => fmtInt(r.res!.kpis.averageFavorites)) },
-      { label: 'Pazar Fırsat Skoru', values: cell(r => '%' + Math.round(r.res!.kpis.opportunityScore)) },
-      { label: 'Ort. Tahmini Aylık Satış', values: cell(r => fmtInt(r.res!.kpis.averageEstimatedMonthlySales) + ' adet') },
-      { label: 'Tahmini Pazar Cirosu (ay)', values: cell(r => fmtUsd(r.res!.kpis.totalEstimatedMarketRevenue, 0)) },
-      { label: 'Lider Mağaza', values: cell(r => r.res!.kpis.topShopName || '—') },
-      { label: 'İlk 3 Altın Etiket', values: cell(r => (r.res!.kpis.topTags || []).slice(0, 3).map(t => t.tag).join(' • ') || '—') }
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowTotalListings'), values: cell(r => fmtInt(r.res!.total)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowSampleSize'), values: cell(r => fmtInt(r.res!.kpis.totalListings)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowAvgPrice'), values: cell(r => fmtUsd(r.res!.kpis.averagePrice)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowPriceRange'), values: cell(r => fmtUsd(r.res!.kpis.minPrice) + ' – ' + fmtUsd(r.res!.kpis.maxPrice)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowAvgFavorites'), values: cell(r => fmtInt(r.res!.kpis.averageFavorites)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowOpportunityScore'), values: cell(r => '%' + Math.round(r.res!.kpis.opportunityScore)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowAvgMonthlySales'), values: cell(r => fmtInt(r.res!.kpis.averageEstimatedMonthlySales) + unitsSuffix) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowEstMarketRevenue'), values: cell(r => fmtUsd(r.res!.kpis.totalEstimatedMarketRevenue, 0)) },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowTopShop'), values: cell(r => r.res!.kpis.topShopName || '—') },
+      { label: this.transloco.translate('research.marketResearch.compareModal.rowTop3Tags'), values: cell(r => (r.res!.kpis.topTags || []).slice(0, 3).map(t => t.tag).join(' • ') || '—') }
     ];
   }
 
@@ -1186,7 +1227,7 @@ export class MarketResearchComponent implements OnInit {
       this.selectedTagsSet.delete(tag);
     } else {
       if (this.selectedTagsSet.size >= 13) {
-        this.showToastMsg('⚠️ Etsy ilanı başına en fazla 13 etiket seçebilirsiniz.');
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.max13Tags'));
         return;
       }
       this.selectedTagsSet.add(tag);
@@ -1197,12 +1238,12 @@ export class MarketResearchComponent implements OnInit {
     this.selectedTagsSet.clear();
     const top13 = this.topTags.slice(0, 13);
     top13.forEach(t => this.selectedTagsSet.add(t.tag));
-    this.showToastMsg(`🎯 En popüler ilk ${top13.length} altın etiket seçildi!`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.top13Selected', { count: top13.length }));
   }
 
   clearSelectedTags(): void {
     this.selectedTagsSet.clear();
-    this.showToastMsg('Temizlendi: Seçili etiketler sıfırlandı.');
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.selectedTagsCleared'));
   }
 
   getSelectedCount(): number {
@@ -1225,7 +1266,7 @@ export class MarketResearchComponent implements OnInit {
         this.selectedTagsSet.add(t.tag);
       }
       if (this.selectedTagsSet.size >= 13) {
-        this.showToastMsg('ℹ️ Etsy maksimum 13 etiket sınırına ulaşıldı.');
+        this.showToastMsg(this.transloco.translate('research.marketResearch.messages.max13Reached'));
       }
     }
   }
@@ -1233,25 +1274,25 @@ export class MarketResearchComponent implements OnInit {
   copySingleTag(tag: string, ev?: MouseEvent): void {
     if (ev) ev.stopPropagation();
     navigator.clipboard.writeText(tag);
-    this.showToastMsg(`🏷️ "${tag}" panoya kopyalandı!`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.singleTagCopied', { tag }));
   }
 
   copySelectedTagsToClipboard(): void {
     if (this.selectedTagsSet.size === 0) return;
     const tagsArr = Array.from(this.selectedTagsSet);
     navigator.clipboard.writeText(tagsArr.join(', '));
-    this.showToastMsg(`📋 ${tagsArr.length} adet seçilen etiket panoya kopyalandı!`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.selectedMatrixTagsCopied', { count: tagsArr.length }));
   }
 
   sendSelectedTagsToFastCreator(): void {
     const selected = Array.from(this.selectedTagsSet);
     if (selected.length === 0) {
-      this.showToastMsg('⚠️ Lütfen önce en az 1 etiket seçin.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.selectAtLeastOneTag'));
       return;
     }
     const base = this.selectedItem || this.items[0];
     if (!base) {
-      this.showToastMsg('⚠️ Etiketleri aktarmak için önce canlı bir arama yapıp bir ilan seçin.');
+      this.showToastMsg(this.transloco.translate('research.marketResearch.messages.selectListingForTags'));
       return;
     }
     const cloned: ClonedMarketListing = {
@@ -1269,7 +1310,7 @@ export class MarketResearchComponent implements OnInit {
       marketScore: base.marketScore
     };
     this.aiService.setClonedListing(cloned);
-    this.showToastMsg(`🚀 Seçilen ${selected.length} etiket Fast Creator'a aktarıldı, yönlendiriliyorsunuz...`);
+    this.showToastMsg(this.transloco.translate('research.marketResearch.messages.tagsSentToCreator', { count: selected.length }));
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 500);

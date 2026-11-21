@@ -1,24 +1,35 @@
 import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { AiSettingsService, AiOptimizationSettings } from '../../core/services/ai-settings.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+
+interface TerminalLogEntry {
+  time: string;
+  key?: string;
+  params?: Record<string, unknown>;
+  rawMessage?: string;
+  level?: 'success' | 'error' | 'info';
+}
 
 @Component({
   selector: 'app-ai-models-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent],
+  imports: [CommonModule, FormsModule, AiLogoComponent, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   template: `
+    <ng-container *transloco="let t">
     <div class="ai-hub-container" [class.is-modal-view]="isModal">
       <!-- HEADER -->
       <div class="hub-header">
         <div class="header-titles">
-          <h2 class="hub-title">⚡ Yapay Zeka Optimizasyon & Model Merkezi</h2>
+          <h2 class="hub-title">{{ t('settings.aiModels.title') }}</h2>
           <p class="hub-subtitle">
-            Birincil LLM motoru, API anahtarları, görsel tasarım entegrasyonları ve kesintisiz çalışma politikaları.
+            {{ t('settings.aiModels.subtitle') }}
           </p>
         </div>
-        <button *ngIf="isModal" class="btn-close-modal" (click)="closeModal()" title="Kapat">✕</button>
+        <button *ngIf="isModal" class="btn-close-modal" (click)="closeModal()" [title]="t('settings.aiModels.closeTitle')">✕</button>
       </div>
 
       <!-- SCROLLABLE BODY -->
@@ -27,13 +38,13 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
         <!-- CARD 1: BİRİNCİL METİN / AKIL YÜRÜTME MOTORU (LLM) -->
         <div class="hub-card">
           <div class="card-head">
-            <h3 class="card-title">🧠 Birincil Metin / Akıl Yürütme Motoru (LLM)</h3>
-            <p class="card-desc">Etsy ürün başlığı, açıklaması ve anahtar kelime üretiminde kullanılan birincil zeka motoru.</p>
+            <h3 class="card-title">{{ t('settings.aiModels.llmCard.title') }}</h3>
+            <p class="card-desc">{{ t('settings.aiModels.llmCard.desc') }}</p>
           </div>
 
           <!-- Aktif Sağlayıcı Seçimi (Buttons Bar) -->
           <div class="form-row">
-            <label class="row-label">Aktif Sağlayıcı:</label>
+            <label class="row-label">{{ t('settings.aiModels.llmCard.activeProvider') }}</label>
             <div class="provider-pill-grid">
               <button 
                 type="button"
@@ -91,7 +102,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 [class.active]="formSettings.provider === 'Offline'"
                 (click)="selectProvider('Offline')">
                 <app-ai-logo provider="Offline" [size]="18"></app-ai-logo>
-                <span class="pill-name">Offline Motor</span>
+                <span class="pill-name">{{ t('settings.aiModels.llmCard.offlineProvider') }}</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'Offline'">✓</span>
               </button>
             </div>
@@ -100,18 +111,18 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
           <!-- Model & Özel Model Girişi -->
           <div class="form-row model-row" *ngIf="formSettings.provider !== 'Offline'">
             <div class="field-group">
-              <label class="row-label">LLM Model:</label>
+              <label class="row-label">{{ t('settings.aiModels.llmCard.llmModel') }}</label>
               <select [(ngModel)]="currentSelectedModel" (change)="onModelDropdownChange()" class="hub-select">
                 <option *ngFor="let m of getAvailableModels()" [value]="m">{{ m }}</option>
               </select>
             </div>
 
             <div class="field-group custom-field">
-              <label class="row-label">veya Özel Model:</label>
+              <label class="row-label">{{ t('settings.aiModels.llmCard.customModel') }}</label>
               <input 
                 type="text" 
                 [(ngModel)]="formSettings.customModel" 
-                placeholder="Örn: gemini-2.5-flash, grok-3, o3-mini..." 
+                [placeholder]="t('settings.aiModels.llmCard.customModelPlaceholder')" 
                 class="hub-input" />
             </div>
           </div>
@@ -119,7 +130,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
           <!-- Görsel Modeli -->
           <div class="form-row" *ngIf="formSettings.provider !== 'Offline'">
             <div class="field-group">
-              <label class="row-label">Görsel Modeli:</label>
+              <label class="row-label">{{ t('settings.aiModels.llmCard.imageModel') }}</label>
               <select [(ngModel)]="currentSelectedImageModel" class="hub-select">
                 <option *ngFor="let im of getAvailableImageModels()" [value]="im">{{ im }}</option>
               </select>
@@ -129,9 +140,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
           <!-- API Anahtarı -->
           <div class="form-row" *ngIf="formSettings.provider !== 'Offline'">
             <div class="key-header-row">
-              <label class="row-label">API Anahtarı:</label>
+              <label class="row-label">{{ t('settings.aiModels.llmCard.apiKey') }}</label>
               <span class="db-persisted-badge" *ngIf="hasActiveKeySaved">
-                💾 Merkezi Veritabanında Kayıtlı (Kalıcı)
+                {{ t('settings.aiModels.llmCard.dbPersistedBadge') }}
               </span>
             </div>
             <div class="input-with-toggle">
@@ -141,21 +152,21 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 autocomplete="new-password"
                 data-lpignore="true"
                 name="ai_model_api_key_input"
-                placeholder="sk-... veya AIzaSy... API anahtarını girin"
+                [placeholder]="t('settings.aiModels.llmCard.apiKeyPlaceholder')"
                 class="hub-input key-input" />
-              <button type="button" class="btn-eye" (click)="showKey = !showKey" [title]="showKey ? 'Anahtarı Gizle' : 'Anahtarı Göster'">
+              <button type="button" class="btn-eye" (click)="showKey = !showKey" [title]="showKey ? t('settings.aiModels.llmCard.hideKey') : t('settings.aiModels.llmCard.showKey')">
                 {{ showKey ? '🙈' : '👁️' }}
               </button>
             </div>
             <div class="db-info-subtext" *ngIf="hasActiveKeySaved">
-              ✅ Bu anahtar VDS SQLite veritabanına kaydedilmiştir. Sayfayı yenilediğinizde veya <code>ng serve</code> yaptığınızda silinmez; tekrar girmenize gerek yoktur.
+              {{ t('settings.aiModels.llmCard.dbInfoPrefix') }} <code>ng serve</code> {{ t('settings.aiModels.llmCard.dbInfoSuffix') }}
             </div>
             <div class="key-hint-box deepseek-hint" *ngIf="formSettings.provider === 'DeepSeek'">
               <span class="hint-icon">💡</span>
               <span class="hint-text">
-                DeepSeek anahtarları <code>sk-</code> ile başlar. Anahtarınızı ve bakiye durumunu 
-                <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">platform.deepseek.com/api_keys</a> 
-                üzerinden yönetebilirsiniz.
+                {{ t('settings.aiModels.llmCard.deepseekHintPrefix') }} <code>sk-</code> {{ t('settings.aiModels.llmCard.deepseekHintMiddle') }}
+                <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">platform.deepseek.com/api_keys</a>
+                {{ t('settings.aiModels.llmCard.deepseekHintSuffix') }}
               </span>
             </div>
           </div>
@@ -164,13 +175,13 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
         <!-- CARD 2: GÖRSEL ÜRETİM & ARKA PLAN AI MOTORLARI (VISION STUDIO) -->
         <div class="hub-card">
           <div class="card-head">
-            <h3 class="card-title">📸 Görsel Üretim & Arka Plan AI Motorları (Vision Studio)</h3>
-            <p class="card-desc">Ürün fotoğraflarının arka planını şeffaflaştırmak (dekupe) veya 3D modelleri fotoğrafik renderlamak için kullanılır.</p>
+            <h3 class="card-title">{{ t('settings.aiModels.visionCard.title') }}</h3>
+            <p class="card-desc">{{ t('settings.aiModels.visionCard.desc') }}</p>
           </div>
 
           <div class="vision-grid">
             <div class="vision-field">
-              <label class="vision-label">PhotoRoom API Key (Dekupe & Arka Plan):</label>
+              <label class="vision-label">{{ t('settings.aiModels.visionCard.photoRoomLabel') }}</label>
               <div class="input-with-toggle">
                 <input 
                   [type]="showPhotoRoomKey ? 'text' : 'password'" 
@@ -178,7 +189,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                   autocomplete="new-password"
                   data-lpignore="true"
                   name="photoroom_api_key_input"
-                  placeholder="pr_live_... veya PhotoRoom anahtarı"
+                  [placeholder]="t('settings.aiModels.visionCard.photoRoomPlaceholder')"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showPhotoRoomKey = !showPhotoRoomKey">
                   {{ showPhotoRoomKey ? '🙈' : '👁️' }}
@@ -187,7 +198,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
             </div>
 
             <div class="vision-field">
-              <label class="vision-label">Black Forest Labs (FLUX 1.1 Pro):</label>
+              <label class="vision-label">{{ t('settings.aiModels.visionCard.bflLabel') }}</label>
               <div class="input-with-toggle">
                 <input 
                   [type]="showBflKey ? 'text' : 'password'" 
@@ -195,7 +206,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                   autocomplete="new-password"
                   data-lpignore="true"
                   name="bfl_api_key_input"
-                  placeholder="bfl_... FLUX API anahtarı"
+                  [placeholder]="t('settings.aiModels.visionCard.bflPlaceholder')"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showBflKey = !showBflKey">
                   {{ showBflKey ? '🙈' : '👁️' }}
@@ -204,7 +215,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
             </div>
 
             <div class="vision-field">
-              <label class="vision-label">Ideogram v4 (Tipografi & Logo):</label>
+              <label class="vision-label">{{ t('settings.aiModels.visionCard.ideogramLabel') }}</label>
               <div class="input-with-toggle">
                 <input 
                   [type]="showIdeogramKey ? 'text' : 'password'" 
@@ -212,7 +223,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                   autocomplete="new-password"
                   data-lpignore="true"
                   name="ideogram_api_key_input"
-                  placeholder="ideogram_... API anahtarı"
+                  [placeholder]="t('settings.aiModels.visionCard.ideogramPlaceholder')"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showIdeogramKey = !showIdeogramKey">
                   {{ showIdeogramKey ? '🙈' : '👁️' }}
@@ -225,24 +236,24 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
         <!-- CARD 3: SİSTEM GÜVENLİĞİ & FALLBACK DAVRANIŞI -->
         <div class="hub-card">
           <div class="card-head">
-            <h3 class="card-title">🛡️ Çevrimdışı (Offline) / Kotasız Hata Davranışı</h3>
-            <p class="card-desc">API kotası bittiğinde veya bağlantı kesildiğinde sistemin nasıl tepki vereceğini yapılandırın.</p>
+            <h3 class="card-title">{{ t('settings.aiModels.fallbackCard.title') }}</h3>
+            <p class="card-desc">{{ t('settings.aiModels.fallbackCard.desc') }}</p>
           </div>
 
           <div class="checkbox-group">
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="formSettings.allowSilentOfflineFallback" (change)="onAllowSilentFallbackChange()" />
               <span class="checkbox-text">
-                <strong>Hata Anında Sessizce Çevrimdışı (Offline) Kural Motoruna Geç</strong>
-                <small>Canlı AI yanıt vermezse veya 503/429 hatası alınırsa kesintisiz çalışmayı sürdürür.</small>
+                <strong>{{ t('settings.aiModels.fallbackCard.silentFallbackTitle') }}</strong>
+                <small>{{ t('settings.aiModels.fallbackCard.silentFallbackDesc') }}</small>
               </span>
             </label>
 
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="formSettings.strictNeverOffline" (change)="onStrictNeverOfflineChange()" />
               <span class="checkbox-text">
-                <strong>Canlı AI Zorunlu: Asla Offline Kural Motoruna Düşme</strong>
-                <small>Canlı AI yanıt vermezse kullanıcıya açıkça hata bildirir; asla sentetik offline şablon kullanmaz.</small>
+                <strong>{{ t('settings.aiModels.fallbackCard.strictTitle') }}</strong>
+                <small>{{ t('settings.aiModels.fallbackCard.strictDesc') }}</small>
               </span>
             </label>
           </div>
@@ -253,16 +264,16 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       <div class="hub-footer">
         <div class="footer-left-buttons">
           <button type="button" class="btn-save-ai" [disabled]="isSaving" (click)="saveAndActivate()">
-            <span *ngIf="!isSaving">💾 Kaydet & Aktifleştir</span>
-            <span *ngIf="isSaving">⏳ Kaydediliyor...</span>
+            <span *ngIf="!isSaving">{{ t('settings.aiModels.actions.saveAndActivate') }}</span>
+            <span *ngIf="isSaving">{{ t('settings.aiModels.actions.saving') }}</span>
           </button>
           
           <button type="button" class="btn-test-ai" [disabled]="isTesting || isSaving" (click)="runQuickApiTest()">
-            <span>{{ isTesting ? '⏳ Test Ediliyor...' : '⚡ Hızlı API Testi' }}</span>
+            <span>{{ isTesting ? t('settings.aiModels.actions.testing') : t('settings.aiModels.actions.quickTest') }}</span>
           </button>
 
           <span class="save-toast" *ngIf="showToast">
-            ✅ Ayarlar başarıyla kaydedildi ve tüm sisteme aktarıldı!
+            {{ t('settings.aiModels.actions.saveSuccessToast') }}
           </span>
 
           <span class="save-toast error-toast" *ngIf="saveErrorMessage">
@@ -273,17 +284,18 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
         <!-- Terminal Log Box (Matching Desktop Green Monospace Console) -->
         <div class="terminal-log-box">
           <div class="terminal-header">
-            <span class="terminal-title">📟 SİSTEM GÜNLÜĞÜ & BAĞLANTI KONSOLU</span>
+            <span class="terminal-title">{{ t('settings.aiModels.terminal.title') }}</span>
             <span class="terminal-dot green"></span>
           </div>
           <div class="terminal-content">
-            <div *ngFor="let log of terminalLogs" class="terminal-line" [class.success]="log.includes('başarıyla')" [class.error]="log.includes('Hata:')">
-              {{ log }}
+            <div *ngFor="let log of terminalLogs" class="terminal-line" [class.success]="log.level === 'success'" [class.error]="log.level === 'error'">
+              {{ log.time }} - {{ log.key ? t(log.key, log.params) : log.rawMessage }}
             </div>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .ai-hub-container {
@@ -701,6 +713,7 @@ export class AiModelsSettingsComponent implements OnInit {
   @Output() modalClosed = new EventEmitter<void>();
 
   private aiService = inject(AiSettingsService);
+  private transloco = inject(TranslocoService);
 
   formSettings: AiOptimizationSettings = { ...this.aiService.settings() };
 
@@ -713,7 +726,12 @@ export class AiModelsSettingsComponent implements OnInit {
   isSaving = false;
   saveErrorMessage = '';
 
-  terminalLogs: string[] = [];
+  terminalLogs: TerminalLogEntry[] = [];
+
+  private getCurrentTime(): string {
+    const locale = this.transloco.getActiveLang() === 'tr' ? 'tr-TR' : 'en-US';
+    return new Date().toLocaleTimeString(locale);
+  }
 
   readonly geminiModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
   readonly openAiModels = ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o3-mini', 'gpt-4-turbo'];
@@ -735,11 +753,15 @@ export class AiModelsSettingsComponent implements OnInit {
     if (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner') {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
-    const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - 🗄️ Merkezi Veritabanı (VDS SQLite) bağlantısı aktif: API ayarları kalıcı olarak yüklendi.`);
-    this.terminalLogs.push(`${now} - Aktif Sağlayıcı: ${this.formSettings.provider} (${this.aiService.activeModelName()})`);
+    const now = this.getCurrentTime();
+    this.terminalLogs.push({ time: now, key: 'settings.aiModels.logs.dbConnected' });
+    this.terminalLogs.push({
+      time: now,
+      key: 'settings.aiModels.logs.activeProvider',
+      params: { provider: this.formSettings.provider, model: this.aiService.activeModelName() }
+    });
     if (this.hasActiveKeySaved) {
-      this.terminalLogs.push(`${now} - 🔑 Aktif API Anahtarı: Veritabanında kayıtlı ve kullanıma hazır.`);
+      this.terminalLogs.push({ time: now, key: 'settings.aiModels.logs.activeKeyReady' });
     }
   }
 
@@ -748,8 +770,12 @@ export class AiModelsSettingsComponent implements OnInit {
     if (prov === 'DeepSeek' && (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner')) {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
-    const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - Sağlayıcı seçildi: ${prov}`);
+    const now = this.getCurrentTime();
+    this.terminalLogs.push({
+      time: now,
+      key: 'settings.aiModels.logs.providerSelected',
+      params: { provider: prov }
+    });
   }
 
   get currentSelectedModel(): string {
@@ -829,38 +855,56 @@ export class AiModelsSettingsComponent implements OnInit {
   }
 
   onModelDropdownChange(): void {
-    const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - Model seçildi: ${this.currentSelectedModel}`);
+    const now = this.getCurrentTime();
+    this.terminalLogs.push({
+      time: now,
+      key: 'settings.aiModels.logs.modelSelected',
+      params: { model: this.currentSelectedModel }
+    });
   }
 
   async runQuickApiTest(): Promise<void> {
     this.isTesting = true;
-    const now = new Date().toLocaleTimeString('tr-TR');
+    const now = this.getCurrentTime();
     const prov = this.formSettings.provider;
     const key = this.currentSelectedApiKey;
     const model = this.formSettings.customModel || this.currentSelectedModel;
 
-    this.terminalLogs.push(`${now} - [TEST BAŞLATILDI] ${prov} (${model}) ping isteği gönderiliyor...`);
+    this.terminalLogs.push({
+      time: now,
+      key: 'settings.aiModels.logs.testStarted',
+      params: { provider: prov, model }
+    });
 
     const result = await this.aiService.testApiConnection(prov, key, model);
-    const endNow = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${endNow} - ${result.message}`);
+    const endNow = this.getCurrentTime();
+    this.terminalLogs.push({
+      time: endNow,
+      rawMessage: result.message,
+      level: result.success ? 'success' : 'error'
+    });
     this.isTesting = false;
   }
 
   onAllowSilentFallbackChange(): void {
     if (this.formSettings.allowSilentOfflineFallback) {
       this.formSettings.strictNeverOffline = false;
-      const now = new Date().toLocaleTimeString('tr-TR');
-      this.terminalLogs.push(`${now} - [POLİTİKA] Kesintisiz çalışma modu: Canlı AI hata verirse sessizce offline kural motoruna geçilecek.`);
+      const now = this.getCurrentTime();
+      this.terminalLogs.push({
+        time: now,
+        key: 'settings.aiModels.logs.policySilentFallback'
+      });
     }
   }
 
   onStrictNeverOfflineChange(): void {
     if (this.formSettings.strictNeverOffline) {
       this.formSettings.allowSilentOfflineFallback = false;
-      const now = new Date().toLocaleTimeString('tr-TR');
-      this.terminalLogs.push(`${now} - [POLİTİKA] Canlı AI Zorunlu modu: Asla sentetik offline kural motoruna düşülmeyecek.`);
+      const now = this.getCurrentTime();
+      this.terminalLogs.push({
+        time: now,
+        key: 'settings.aiModels.logs.policyStrictLive'
+      });
     }
   }
 
@@ -868,22 +912,43 @@ export class AiModelsSettingsComponent implements OnInit {
     if (this.isSaving) return;
     this.isSaving = true;
     this.saveErrorMessage = '';
-    const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - ⏳ Ayarlar VDS SQLite veritabanına kaydediliyor...`);
+    const now = this.getCurrentTime();
+    this.terminalLogs.push({
+      time: now,
+      key: 'settings.aiModels.logs.savingToDb'
+    });
 
     const result = await this.aiService.saveSettings(this.formSettings);
-    const endNow = new Date().toLocaleTimeString('tr-TR');
+    const endNow = this.getCurrentTime();
 
     if (result.success) {
-      this.terminalLogs.push(`${endNow} - ✅ [BAŞARILI] AI konfigürasyonu VDS SQLite veritabanına kalıcı olarak yazıldı.`);
-      this.terminalLogs.push(`${endNow} - Yeni Aktif Rozet: ${this.aiService.activeBadgeText()}`);
+      this.terminalLogs.push({
+        time: endNow,
+        key: 'settings.aiModels.logs.saveSuccess',
+        level: 'success'
+      });
+      this.terminalLogs.push({
+        time: endNow,
+        key: 'settings.aiModels.logs.newActiveBadge',
+        params: { badge: this.aiService.activeBadgeText() }
+      });
       if (this.formSettings.strictNeverOffline) {
-        this.terminalLogs.push(`${endNow} - [AKTİF KURAL] Canlı AI Zorunlu: Asla offline kural motoruna düşme devrede.`);
+        this.terminalLogs.push({
+          time: endNow,
+          key: 'settings.aiModels.logs.activeRuleStrict'
+        });
       } else if (this.formSettings.allowSilentOfflineFallback) {
-        this.terminalLogs.push(`${endNow} - [AKTİF KURAL] Sessizce offline kural motoruna geçiş devrede.`);
+        this.terminalLogs.push({
+          time: endNow,
+          key: 'settings.aiModels.logs.activeRuleSilent'
+        });
       }
       if (this.hasActiveKeySaved) {
-        this.terminalLogs.push(`${endNow} - 🔑 Aktif API Anahtarı doğrulandı ve veritabanında saklandı.`);
+        this.terminalLogs.push({
+          time: endNow,
+          key: 'settings.aiModels.logs.keyVerified',
+          level: 'success'
+        });
       }
 
       this.showToast = true;
@@ -896,8 +961,13 @@ export class AiModelsSettingsComponent implements OnInit {
       }, 1500);
     } else {
       this.isSaving = false;
-      this.saveErrorMessage = result.message || 'Kayıt sırasında hata oluştu.';
-      this.terminalLogs.push(`${endNow} - ❌ [HATA] ${this.saveErrorMessage}`);
+      this.saveErrorMessage = result.message || this.transloco.translate('settings.aiModels.errors.saveFailed');
+      this.terminalLogs.push({
+        time: endNow,
+        key: 'settings.aiModels.logs.saveError',
+        params: { message: this.saveErrorMessage },
+        level: 'error'
+      });
     }
   }
 

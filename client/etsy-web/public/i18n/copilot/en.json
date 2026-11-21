@@ -1,0 +1,81 @@
+{
+  "fab": {
+    "title": "{{ provider }} Shop Advisor",
+    "label": "{{ provider }} Advisor"
+  },
+  "dragDrop": {
+    "title": "Drop File Here",
+    "subtitle": "Image, Excel, PDF, CSV, or Document"
+  },
+  "header": {
+    "defaultTitle": "{{ provider }} AI Assistant",
+    "newChatTitle": "Start New Chat",
+    "newChatBtn": "New",
+    "historyTitle": "Chat History",
+    "settingsTitle": "AI & Model Settings (DeepSeek, OpenAI, Claude, Grok, Gemini)",
+    "clearTitle": "Clear Chat (/clear)",
+    "closeTitle": "Close"
+  },
+  "history": {
+    "title": "📜 Chat History ({{ count }})",
+    "empty": "You don't have any saved chat history yet.",
+    "messageCount": "💬 {{ count }} messages",
+    "generating": "Generating response...",
+    "deleteTitle": "Delete this chat"
+  },
+  "messages": {
+    "authorUser": "You",
+    "authorAssistant": "{{ provider }} Assistant",
+    "zoomTitle": "Click to enlarge full size",
+    "attachedImageAlt": "Attached Image",
+    "zoomBadge": "🔍 Zoom",
+    "defaultImageName": "Image.png",
+    "thinkingFallback": "{{ provider }} is thinking and analyzing your shop..."
+  },
+  "quickChips": {
+    "liveMarket": "⚡ Live Market & Shipping Module",
+    "netProfit": "💰 Net Profit & Status",
+    "missingCosts": "⚠️ Missing Costs",
+    "productViability": "🔍 Will This Product Sell?",
+    "pricingAdvice": "🏷️ Pricing & Profit Advice",
+    "trendingModels": "🔥 Trending 3D Models"
+  },
+  "quickPrompts": {
+    "liveMarket": "How much does this product sell for on Etsy and what are the live shipping quotes? Can you run the market research and shipping engine?",
+    "netProfit": "What is my net profit, revenue, and shop status today?",
+    "missingCosts": "Are there any orders missing cost or shipping invoice data?",
+    "productViability": "Will this product sell on Etsy? Can you perform a market demand and competition analysis?",
+    "pricingAdvice": "Can you give retail pricing, shipping, and net profit advice for a new product we plan to list?",
+    "trendingModels": "What are the most profitable viral 3D models on Etsy and MakerWorld and their margins?"
+  },
+  "attachments": {
+    "removeTitle": "Remove",
+    "clearAllTitle": "Clear all attachments",
+    "clearAllBtn": "✕ Clear All",
+    "clipboardTableName": "Clipboard_Table.tsv",
+    "singlePrompt": "📎 Could you analyze the file {{ name }}?",
+    "multiPrompt": "📎 Could you analyze these {{ count }} attached documents/images?"
+  },
+  "input": {
+    "attachTitle": "Attach Image, Excel, PDF, or Document (You can also paste with Ctrl+V)",
+    "placeholder": "Type your question or paste an image/document (Ctrl+V)..."
+  },
+  "session": {
+    "newChatTitle": "New Chat",
+    "defaultReviewTitle": "Product Review"
+  },
+  "welcome": {
+    "html": "Hello! I am your shop's live <strong>{{ provider }} AI</strong> advisor. 🚀<br><br>All your orders, profitability breakdowns, and the live USD exchange rate (<strong>1$ = {{ rate }} ₺</strong>) from the VDS financial engine are loaded into my memory in the background.<br><br>How can I help you today?<br>• <strong>📸 Image Analysis:</strong> Paste (Ctrl+V) or upload a product photo to check if it will sell on Etsy and at what price.<br>• <strong>📊 Excel & PDF Audit:</strong> Upload a shipping invoice, cost sheet, or order report to start an analysis.<br>• <strong>💰 Finance & Net Profit:</strong> We can review your shop's profitability breakdown and missing costs."
+  },
+  "errors": {
+    "connectionDelay": "Sorry, a connection delay occurred while generating the response. Please try again."
+  },
+  "extract": {
+    "csvTruncated": "*(Showing first 50 rows of table, {{ total }} rows total)*",
+    "pdfContent": "[PDF Content: {{ fileName }}]",
+    "pdfAttached": "[PDF Document Attached: {{ fileName }}]",
+    "excelTable": "[Excel Table: {{ fileName }} — {{ rows }} Rows Total]",
+    "excelCells": "[Excel Cell Data: {{ fileName }}]",
+    "excelAttached": "[Excel Document Attached: {{ fileName }}]"
+  }
+}

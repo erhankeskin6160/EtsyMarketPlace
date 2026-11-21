@@ -15,6 +15,7 @@ import {
 } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 
 type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
 type SortColumn = 'seoScore' | 'aiScore' | 'tags' | 'price' | 'favorites' | 'stock';
@@ -33,13 +34,15 @@ export interface EditableListingImage {
 @Component({
   selector: 'app-ai-audit',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('analytics')],
   templateUrl: './ai-audit.component.html',
   styleUrls: ['./ai-audit.component.css']
 })
 export class AiAuditComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private router = inject(Router);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
   aiSettings = inject(AiSettingsService);
   readonly Math = Math;
@@ -183,7 +186,7 @@ export class AiAuditComponent implements OnInit {
 
   loadListings(): void {
     this.isLoading = true;
-    this.showToast('Canlı Etsy aktif ilanları yükleniyor...', 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.loadingListings'), 'info');
 
     this.etsyApi.getShopActiveListings(undefined, this.fetchLimit).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
@@ -193,17 +196,17 @@ export class AiAuditComponent implements OnInit {
 
         if (this.listings.length > 0) {
           this.selectListing(this.listings[0]);
-          this.showToast(`${this.listings.length} adet canlı Etsy ilanı başarıyla çekildi.`, 'success');
+          this.showToast(this.transloco.translate('analytics.aiAudit.messages.listingsLoaded', { count: this.listings.length }), 'success');
         } else {
           this.selectedListing = null;
-          this.showToast('Aktif ilan bulunamadı veya mağaza boş.', 'info');
+          this.showToast(this.transloco.translate('analytics.aiAudit.messages.noActiveListings'), 'info');
         }
       },
       error: (err) => {
         this.isLoading = false;
         console.error('Listings fetch error:', err);
-        const errDetail = err?.error?.error || err?.message || 'Bağlantı hatası';
-        this.showToast(`İlanlar yüklenemedi: ${errDetail}`, 'error');
+        const errDetail = err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.connectionError');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.listingsLoadFailed', { detail: errDetail }), 'error');
       }
     });
   }
@@ -230,13 +233,13 @@ export class AiAuditComponent implements OnInit {
       this.afterMaterials = [...(listing.materials || [])];
       this.afterDescription = listing.description;
       this.aiCritique = listing.riskWarnings && listing.riskWarnings.length > 0
-        ? 'Mevcut listing algoritmik olarak taranmış ve potansiyel marka/telif riskleri tespit edilmiştir. "AI ile Puanla" butonuna basarak yapay zeka ile tam SEO optimizasyonu ve temiz başlık/etiket seti üretebilirsiniz.'
+        ? this.transloco.translate('analytics.aiAudit.messages.critiqueRiskDetected')
         : '';
       this.riskWarnings = [...(listing.riskWarnings || [])];
       this.checklist = [];
       this.aiScoreAfter = null;
       this.aiModelUsed = this.aiSettings.activeModelName();
-      this.aiProviderUsed = `${this.aiSettings.activeProvider()} (Canlı API)`;
+      this.aiProviderUsed = this.transloco.translate('analytics.aiAudit.messages.liveApiProvider', { provider: this.aiSettings.activeProvider() });
     }
   }
 
@@ -285,7 +288,7 @@ export class AiAuditComponent implements OnInit {
     this.afterDescription = audit.optimizedDescription || descDraft || '';
     this.aiScoreAfter = scoreAfter > 0 ? scoreAfter : null;
     this.aiModelUsed = audit.aiModel || audit.model || parsedResult?.ExecutedModel || this.selectedAiModel;
-    this.aiProviderUsed = audit.provider || parsedResult?.ExecutedProvider || `${this.aiSettings.activeProvider()} (Canlı API)`;
+    this.aiProviderUsed = audit.provider || parsedResult?.ExecutedProvider || this.transloco.translate('analytics.aiAudit.messages.liveApiProvider', { provider: this.aiSettings.activeProvider() });
 
     if (audit.riskWarningsJson) {
       try {
@@ -311,7 +314,7 @@ export class AiAuditComponent implements OnInit {
       this.checklist = [];
     }
 
-    this.aiCritique = critique || 'Önceki yapay zeka denetim kaydından başarıyla yüklendi.';
+    this.aiCritique = critique || this.transloco.translate('analytics.aiAudit.messages.critiqueLoadedFromAudit');
   }
 
   setFilter(filter: FilterType): void {
@@ -399,12 +402,15 @@ export class AiAuditComponent implements OnInit {
     const apiKey = this.getActiveApiKey();
 
     if (isStrict && !apiKey && settings.provider !== 'Offline') {
-      this.showToast(`⚠️ Canlı AI Zorunlu aktif fakat ${settings.provider} API anahtarı boş. Lütfen üst menüdeki AI Model Merkezinden anahtarınızı kaydedin.`, 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.strictApiKeyMissing', { provider: settings.provider }), 'error');
       return;
     }
 
     this.isAuditingSelected = true;
-    this.showToast(`${this.selectedListing.listingId} nolu ilan ${this.aiSettings.activeBadgeTextClean()} ile optimize ediliyor...`, 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.optimizingListing', {
+      listingId: this.selectedListing.listingId,
+      model: this.aiSettings.activeBadgeTextClean()
+    }), 'info');
 
     const payload = {
       shopId: this.etsyApi.activeShopId(),
@@ -432,12 +438,12 @@ export class AiAuditComponent implements OnInit {
             ? [...res.materialSuggestions]
             : [...(this.selectedListing?.materials || [])];
           this.afterDescription = res.optimizedDescription;
-          this.aiCritique = res.critique || 'Optimizasyon başarıyla tamamlandı.';
+          this.aiCritique = res.critique || this.transloco.translate('analytics.aiAudit.messages.critiqueCompleted');
           this.riskWarnings = res.riskWarnings || [];
           this.checklist = res.checklist || [];
           this.aiScoreAfter = res.seoScoreAfter;
           this.aiModelUsed = res.aiModel || res.model || this.selectedAiModel;
-          this.aiProviderUsed = res.provider || `${this.aiSettings.activeProvider()} (Canlı API)`;
+          this.aiProviderUsed = res.provider || this.transloco.translate('analytics.aiAudit.messages.liveApiProvider', { provider: this.aiSettings.activeProvider() });
 
           // Update in-memory item
           if (this.selectedListing) {
@@ -465,16 +471,22 @@ export class AiAuditComponent implements OnInit {
             };
           }
 
-          this.showToast(`Listing ${res.listingId} [${this.aiProviderUsed}] ile başarıyla optimize edildi! Skor: ${res.seoScoreAfter}/100`, 'success');
+          this.showToast(this.transloco.translate('analytics.aiAudit.messages.optimizeSuccess', {
+            listingId: res.listingId,
+            provider: this.aiProviderUsed,
+            score: res.seoScoreAfter
+          }), 'success');
         } else {
-          this.showToast(`AI optimizasyon tamamlanamadı: ${res.message || 'Bilinmeyen hata'}`, 'error');
+          this.showToast(this.transloco.translate('analytics.aiAudit.messages.optimizeIncomplete', {
+            message: res.message || this.transloco.translate('analytics.aiAudit.messages.unknownError')
+          }), 'error');
         }
       },
       error: (err) => {
         this.isAuditingSelected = false;
         console.error('AI optimize error:', err);
-        const msg = err?.error?.error || err?.message || 'AI servisi yanıt vermedi';
-        this.showToast(`AI Optimizasyon Hatası: ${msg}`, 'error');
+        const msg = err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.aiServiceNoResponse');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.optimizeError', { message: msg }), 'error');
       }
     });
   }
@@ -485,7 +497,7 @@ export class AiAuditComponent implements OnInit {
 
     const targets = this.filteredListings.filter(l => !l.hasSavedAudit || (l.seoScore || 0) < 70);
     if (targets.length === 0) {
-      this.showToast('Filtredeki tüm ilanlar zaten optimize edilmiş durumda.', 'info');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.allFilteredAlreadyOptimized'), 'info');
       return;
     }
 
@@ -494,11 +506,14 @@ export class AiAuditComponent implements OnInit {
     const apiKey = this.getActiveApiKey();
 
     if (isStrict && !apiKey && settings.provider !== 'Offline') {
-      this.showToast(`⚠️ Canlı AI Zorunlu aktif fakat ${settings.provider} API anahtarı boş. Lütfen üst menüdeki AI Model Merkezinden anahtarınızı kaydedin.`, 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.strictApiKeyMissing', { provider: settings.provider }), 'error');
       return;
     }
 
-    if (!confirm(`${targets.length} adet ilan sırayla ${this.aiSettings.activeBadgeTextClean()} ile denetlenecek ve optimize edilecek. Devam edilsin mi?`)) {
+    if (!confirm(this.transloco.translate('analytics.aiAudit.batch.confirmPrompt', {
+      count: targets.length,
+      model: this.aiSettings.activeBadgeTextClean()
+    }))) {
       return;
     }
 
@@ -509,12 +524,15 @@ export class AiAuditComponent implements OnInit {
     const processNext = (index: number) => {
       if (this.batchCancelRequested) {
         this.isBatchAuditing = false;
-        this.showToast(`Toplu denetim durduruldu (${this.batchProgress.current}/${targets.length}).`, 'info');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.batchStopped', {
+          current: this.batchProgress.current,
+          total: targets.length
+        }), 'info');
         return;
       }
       if (index >= targets.length) {
         this.isBatchAuditing = false;
-        this.showToast(`${targets.length} ilan başarıyla toplu AI denetiminden geçirildi!`, 'success');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.batchCompleted', { count: targets.length }), 'success');
         return;
       }
 
@@ -585,28 +603,28 @@ export class AiAuditComponent implements OnInit {
 
     // Validation matching Etsy API constraints
     if (!this.afterTitle || this.afterTitle.trim().length === 0) {
-      const msg = 'Başlık boş olamaz!';
+      const msg = this.transloco.translate('analytics.aiAudit.messages.titleEmpty');
       this.inlineUpdateError = msg;
       this.showToast(msg, 'error');
       return;
     }
 
     if (this.afterTitle.length > 140) {
-      const msg = `Başlık 140 karakterden uzun olamaz! (Mevcut: ${this.afterTitle.length})`;
+      const msg = this.transloco.translate('analytics.aiAudit.messages.titleTooLong', { length: this.afterTitle.length });
       this.inlineUpdateError = msg;
       this.showToast(msg, 'error');
       return;
     }
 
     if ((this.afterTitle.match(/&/g) || []).length > 1) {
-      const msg = "Etsy API başlıkta birden fazla '&' karakterini reddeder! Lütfen 'and' veya virgül kullanın.";
+      const msg = this.transloco.translate('analytics.aiAudit.messages.titleMultipleAmpersands');
       this.inlineUpdateError = msg;
       this.showToast(msg, 'error');
       return;
     }
 
     if (this.afterTags.length > 13) {
-      const msg = `Etsy en fazla 13 etikete izin verir! (Mevcut: ${this.afterTags.length})`;
+      const msg = this.transloco.translate('analytics.aiAudit.messages.tagsTooMany', { count: this.afterTags.length });
       this.inlineUpdateError = msg;
       this.showToast(msg, 'error');
       return;
@@ -614,7 +632,7 @@ export class AiAuditComponent implements OnInit {
 
     const invalidTag = this.afterTags.find(t => t.length > 20);
     if (invalidTag) {
-      const msg = `Etiketler en fazla 20 karakter olabilir: "${invalidTag}" (${invalidTag.length} karakter). Lütfen bu etiketi kısaltın veya silin.`;
+      const msg = this.transloco.translate('analytics.aiAudit.messages.tagTooLong', { tag: invalidTag, length: invalidTag.length });
       this.inlineUpdateError = msg;
       this.showToast(msg, 'error');
       return;
@@ -628,7 +646,7 @@ export class AiAuditComponent implements OnInit {
     this.showConfirmPushModal = false;
     this.inlineUpdateError = null;
     this.isUpdatingEtsy = true;
-    this.showToast('Değişiklikler canlı Etsy mağazasına yükleniyor...', 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.uploadingToEtsy'), 'info');
 
     const payload = {
       title: this.afterTitle.trim(),
@@ -640,7 +658,7 @@ export class AiAuditComponent implements OnInit {
     this.etsyApi.updateEtsyListing(this.selectedListing.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isUpdatingEtsy = false;
-        this.showToast(`🎉 İlan #${this.selectedListing?.listingId} başarıyla Etsy'de güncellendi!`, 'success');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.etsyUpdateSuccess', { listingId: this.selectedListing?.listingId }), 'success');
 
         if (this.selectedListing) {
           this.selectedListing.title = this.afterTitle;
@@ -657,9 +675,10 @@ export class AiAuditComponent implements OnInit {
       error: (err) => {
         this.isUpdatingEtsy = false;
         console.error('Update Etsy listing error:', err);
-        const msg = err?.error?.message || err?.error?.error || err?.message || 'Etsy API güncelleme isteğini reddetti';
-        this.inlineUpdateError = `Etsy Güncelleme Hatası: ${msg}`;
-        this.showToast(this.inlineUpdateError, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.etsyUpdateRejected');
+        const updateError = this.transloco.translate('analytics.aiAudit.messages.etsyUpdateError', { message: msg });
+        this.inlineUpdateError = updateError;
+        this.showToast(updateError, 'error');
       }
     });
   }
@@ -667,18 +686,18 @@ export class AiAuditComponent implements OnInit {
   // ── Helper Actions ────────────────────────────────────────────────────────
   selectTitleSuggestion(title: string): void {
     this.afterTitle = title;
-    this.showToast('Alternatif başlık seçildi.', 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.altTitleSelected'), 'info');
   }
 
   addMaterial(): void {
     const mat = this.newMaterialInput.trim();
     if (!mat) return;
     if (this.afterMaterials.length >= 13) {
-      this.showToast('En fazla 13 malzeme ekleyebilirsiniz!', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.materialsTooMany'), 'error');
       return;
     }
     if (mat.length > 45) {
-      this.showToast(`Malzeme 45 karakteri aşamaz! (${mat.length} karakter)`, 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.materialTooLong', { length: mat.length }), 'error');
       return;
     }
     if (!this.afterMaterials.some(m => m.toLowerCase() === mat.toLowerCase())) {
@@ -697,7 +716,7 @@ export class AiAuditComponent implements OnInit {
     this.afterTags = [...(this.selectedListing.tags || [])];
     this.afterMaterials = [...(this.selectedListing.materials || [])];
     this.afterDescription = this.selectedListing.description;
-    this.showToast('Editör alanları mevcut Etsy ilanına sıfırlandı.', 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.resetToOriginal'), 'info');
   }
 
   formatDescriptionTemplate(): void {
@@ -723,21 +742,24 @@ ${baseDesc}
 - Wipe gently with a soft, dry or slightly damp cloth. Avoid harsh chemicals.`;
 
     this.afterDescription = formatted;
-    this.showToast('İngilizce profesyonel Etsy paragraf şablonu uygulandı.', 'success');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.templateApplied'), 'success');
   }
 
   copySuggestionToClipboard(): void {
     if (!this.afterTitle) {
-      this.showToast('Kopyalanacak optimize içerik bulunamadı.', 'info');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.nothingToCopy'), 'info');
       return;
     }
 
-    const textToCopy = `=== BAŞLIK (TITLE) ===\n${this.afterTitle}\n\n=== ETİKETLER (TAGS - ${this.afterTags.length}/13) ===\n${this.afterTags.join(', ')}\n\n=== AÇIKLAMA (DESCRIPTION) ===\n${this.afterDescription}`;
+    const titleHeader = this.transloco.translate('analytics.aiAudit.messages.clipboardTitleHeader');
+    const tagsHeader = this.transloco.translate('analytics.aiAudit.messages.clipboardTagsHeader', { count: this.afterTags.length });
+    const descHeader = this.transloco.translate('analytics.aiAudit.messages.clipboardDescHeader');
+    const textToCopy = `${titleHeader}\n${this.afterTitle}\n\n${tagsHeader}\n${this.afterTags.join(', ')}\n\n${descHeader}\n${this.afterDescription}`;
 
     navigator.clipboard.writeText(textToCopy).then(() => {
-      this.showToast('📋 AI Başlık, Etiketler ve Açıklama panoya kopyalandı!', 'success');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.copiedToClipboard'), 'success');
     }).catch(() => {
-      this.showToast('Panoya kopyalama başarısız oldu.', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.copyFailed'), 'error');
     });
   }
 
@@ -746,17 +768,17 @@ ${baseDesc}
     if (!tag) return;
 
     if (this.afterTags.length >= 13) {
-      this.showToast('En fazla 13 etiket ekleyebilirsiniz!', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.tagMax13'), 'error');
       return;
     }
 
     if (tag.length > 20) {
-      this.showToast(`Etiket 20 karakteri aşamaz! ("${tag}" - ${tag.length} karakter)`, 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.tagMax20', { tag, length: tag.length }), 'error');
       return;
     }
 
     if (this.afterTags.includes(tag)) {
-      this.showToast('Bu etiket zaten ekli!', 'info');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.tagDuplicate'), 'info');
       return;
     }
 
@@ -900,7 +922,7 @@ ${baseDesc}
   removeImage(index: number, event?: Event): void {
     event?.stopPropagation();
     if (this.listingImages.length <= 1) {
-      this.showToast('Etsy ilanında en az 1 görsel bulunmalıdır.', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.minOneImage'), 'error');
       return;
     }
     this.listingImages = this.listingImages.filter((_, i) => i !== index);
@@ -938,7 +960,7 @@ ${baseDesc}
   private processImageFiles(files: File[]): void {
     const remaining = this.maxListingImages - this.listingImages.length;
     if (remaining <= 0) {
-      this.showToast(`En fazla ${this.maxListingImages} görsel ekleyebilirsiniz.`, 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.maxImagesReached', { max: this.maxListingImages }), 'error');
       return;
     }
 
@@ -947,7 +969,7 @@ ${baseDesc}
       .slice(0, remaining);
 
     if (validFiles.length === 0) {
-      this.showToast('Lütfen geçerli bir görsel dosyası (JPG, PNG, WEBP) seçin.', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.invalidImageFile'), 'error');
       return;
     }
 
@@ -979,7 +1001,7 @@ ${baseDesc}
   syncImagesToEtsy(): void {
     if (!this.selectedListing || this.isSyncingImages) return;
     if (this.listingImages.length === 0) {
-      this.showToast('Etsy ilanında en az 1 görsel bulunmalıdır.', 'error');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.minOneImage'), 'error');
       return;
     }
 
@@ -992,7 +1014,7 @@ ${baseDesc}
 
     this.isSyncingImages = true;
     const targetListing = this.selectedListing;
-    this.showToast(`#${targetListing.listingId} görselleri Anti-Ban EXIF/pHash temizliği ile Etsy'ye yükleniyor...`, 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.syncingImagesToast', { listingId: targetListing.listingId }), 'info');
 
     this.etsyApi.syncListingImages(targetListing.listingId, items).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
@@ -1016,14 +1038,18 @@ ${baseDesc}
           }
         }
         this.showToast(
-          `✅ Görseller Etsy'de güncellendi! (${res.uploadedCount} yüklendi, ${res.reorderedCount} sıralandı, ${res.deletedCount} silindi)`,
+          this.transloco.translate('analytics.aiAudit.messages.syncImagesSuccess', {
+            uploaded: res.uploadedCount,
+            reordered: res.reorderedCount,
+            deleted: res.deletedCount
+          }),
           'success'
         );
       },
       error: (err) => {
         this.isSyncingImages = false;
-        const msg = err?.error?.message || err?.error?.error || err?.message || 'Görseller güncellenemedi.';
-        this.showToast(`❌ Görsel güncelleme hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.syncImagesFallbackError');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.syncImagesError', { message: msg }), 'error');
       }
     });
   }
@@ -1032,7 +1058,7 @@ ${baseDesc}
     if (!this.selectedListing) return;
     const url = this.activeFullPreviewUrl;
     if (!url || url.startsWith('data:')) {
-      this.showToast('AI Stüdyoya aktarmak için önce görseli Etsy\'ye yükleyin veya mevcut bir Etsy görseli seçin.', 'info');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.studioRequiresUploadedImage'), 'info');
       return;
     }
     this.router.navigate(['/ai-studio'], {
@@ -1066,7 +1092,7 @@ ${baseDesc}
     const apiKey = this.getActiveApiKey();
 
     this.isAnalyzingImages = true;
-    this.showToast('✨ Görseller için AI Alt-Text ve Kapak CTR analizi başlatıldı...', 'info');
+    this.showToast(this.transloco.translate('analytics.aiAudit.messages.analyzingImagesToast'), 'info');
 
     this.etsyApi.analyzeListingImages(targetListing.listingId, {
       shopId: this.etsyApi.activeShopId(),
@@ -1096,15 +1122,15 @@ ${baseDesc}
 
         this.showToast(
           res.coverCtr?.isVisionAnalyzed
-            ? `✅ Görsel AI Analizi tamamlandı! Tahmini Kapak CTR: ${res.coverCtr.overallScore}/100`
-            : `✅ Alt-Text taslakları oluşturuldu! (Tahmini Kapak CTR: ${res.coverCtr?.overallScore ?? 0}/100)`,
+            ? this.transloco.translate('analytics.aiAudit.messages.visionAnalysisSuccess', { score: res.coverCtr.overallScore })
+            : this.transloco.translate('analytics.aiAudit.messages.altTextDraftsSuccess', { score: res.coverCtr?.overallScore ?? 0 }),
           'success'
         );
       },
       error: (err) => {
         this.isAnalyzingImages = false;
-        const msg = err?.error?.message || err?.error?.error || err?.message || 'Görsel analizi başarısız.';
-        this.showToast(`❌ Görsel analiz hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.imageAnalysisFallbackError');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.imageAnalysisError', { message: msg }), 'error');
       }
     });
   }
@@ -1128,7 +1154,7 @@ ${baseDesc}
       if (!img.listingImageId) continue;
       const trimmed = (img.altText || '').trim();
       if (trimmed.length > 250) {
-        this.showToast(`❌ Görsel #${i + 1} Alt-Text 250 karakteri aşamaz (${trimmed.length}/250).`, 'error');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.altTextTooLong', { index: i + 1, length: trimmed.length }), 'error');
         return;
       }
       items.push({
@@ -1139,7 +1165,7 @@ ${baseDesc}
     }
 
     if (items.length === 0) {
-      this.showToast('Etsy\'ye kaydedilecek mevcut bir görsel bulunamadı. Yeni görselleri önce Etsy\'de güncelleyin.', 'info');
+      this.showToast(this.transloco.translate('analytics.aiAudit.messages.noExistingImagesForAltText'), 'info');
       return;
     }
 
@@ -1156,12 +1182,12 @@ ${baseDesc}
           }
         }
         this.showAltTextModal = false;
-        this.showToast(`✅ ${res.updatedCount} görselin Alt-Text SEO açıklaması Etsy'ye kaydedildi!`, 'success');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.altTextSaved', { count: res.updatedCount }), 'success');
       },
       error: (err) => {
         this.isSavingAltText = false;
-        const msg = err?.error?.message || err?.error?.error || err?.message || 'Alt-Text kaydedilemedi.';
-        this.showToast(`❌ Alt-Text kayıt hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || this.transloco.translate('analytics.aiAudit.messages.altTextFallbackError');
+        this.showToast(this.transloco.translate('analytics.aiAudit.messages.altTextSaveError', { message: msg }), 'error');
       }
     });
   }

@@ -1,0 +1,552 @@
+{
+  "aiUsage": {
+    "title": "AI Token, Model & Bakiye Takip Merkezi",
+    "subtitle": "DeepSeek, Gemini, OpenAI, Claude ve Grok resmi logoları, sıfır-mock canlı bakiyeleri ve analitik grafikleri",
+    "refreshingBalances": "⏳ Bakiye Çekiliyor...",
+    "refreshBalances": "⚡ Canlı Bakiyeleri Yenile",
+    "selectedBrandLabel": "🎯 İNCELENEN MARKA:",
+    "allProviders": "🌐 Tüm Markalar (5 Sağlayıcı)",
+    "activeOnlyProviders": "⚡ Sadece Tanımlı Markalar (DeepSeek, Gemini)",
+    "activePrimarySuffix": "⭐ (Aktif Birincil Motor)",
+    "unconfiguredSuffix": "⚪ (Tanımlanmadı)",
+    "periodLabel": "📅 DÖNEM:",
+    "periods": {
+      "30dOption": "🗓️ Son 30 Gün",
+      "thisMonthOption": "📅 Bu Ay (Cari Dönem)",
+      "lastMonthOption": "⏮️ Geçen Ay (Önceki Dönem)",
+      "90dOption": "📊 Son 90 Gün (Son 3 Ay)",
+      "allOption": "🌐 Tüm Zamanlar (Arşiv)",
+      "30d": "Son 30 Gün",
+      "thisMonth": "Bu Ay",
+      "lastMonth": "Geçen Ay",
+      "90d": "Son 90 Gün",
+      "all": "Tüm Zamanlar"
+    },
+    "activePrimaryEngine": "Aktif Birincil Motor:",
+    "kpi": {
+      "tokensUsed": "HARCANAN TOKEN ({{ period }})",
+      "inputOutput": "Girdi: {{ prompt }} / Çıktı: {{ completion }}",
+      "costSpent": "HARCANAN MALİYET ({{ period }})",
+      "remainingBalance": "KALAN BAKİYE (USD & TRY)",
+      "totalCalls": "TOPLAM AI İSTEK / ÇAĞRISI",
+      "callsCount": "{{ count }} Çağrı",
+      "selectedProvidersTotal": "Seçili sağlayıcılar toplamı",
+      "brandTotalCalls": "{{ brand }} toplam çağrısı"
+    },
+    "charts": {
+      "donutTitle": "🤖 Yapay Zeka Sağlayıcı Token Dağılımı",
+      "donutSubtitle": "Seçili dönem ({{ period }}) içindeki token tüketim oranları",
+      "donutEmpty": "Bu dönem için harcanan token kaydı yok (0 Token / ₺0.00 TRY)",
+      "donutNoDataLabel": "Veri Yok",
+      "barTitle": "📈 Modül Bazlı AI Tüketim Analizi",
+      "barSubtitleAll": "Tüm modüllerin token tüketimi",
+      "barSubtitleBrand": "{{ brand }} markasının modül tüketimi",
+      "barTag": "Modül Analitiği",
+      "barEmpty": "Bu dönemde modül bazlı tüketim kaydı oluşmadı (0 Çağrı)",
+      "barNoDataLabel": "Modül Verisi Yok",
+      "barDatasetLabel": "Harcanan Token",
+      "tokenUnit": "Token",
+      "defaultModule": "Genel"
+    },
+    "focus": {
+      "activePrimaryTag": "⭐ SİSTEMİN AKTİF BİRİNCİL MOTORU",
+      "onlineReady": "● Çevrimiçi & Hazır",
+      "notConfigured": "⚪ Tanımlanmadı / Kullanılmıyor",
+      "activeModel": "Kullanılan Model:",
+      "unitTariff": "Birim Tarife:",
+      "topUpBtn": "💳 {{ provider }} Bakiye Yükle (Top Up) ↗",
+      "setupKeyBtn": "⚙️ {{ provider }} API Anahtarı Tanımla ↗",
+      "remainingUsd": "KALAN BAKİYE ($ USD)",
+      "spentAmount": "HARCANAN TUTAR ({{ period }})",
+      "periodicSqliteSpend": "Dönemsel SQLite harcaması",
+      "tokensUsed": "KULLANILAN TOKEN ({{ period }})",
+      "inputLabel": "Girdi:",
+      "outputLabel": "Çıktı:",
+      "actualSqliteUsage": "Gerçek SQLite tüketimi",
+      "totalApiCalls": "TOPLAM API ÇAĞRISI",
+      "requestsCount": "{{ count }} İstek",
+      "apiKeyLabel": "API Key:",
+      "storedInSqlite": "VDS SQLite güvencesinde kayıtlı"
+    },
+    "card": {
+      "activeEngine": "⭐ Aktif Motor",
+      "notConfigured": "⚪ Tanımlanmadı",
+      "remainingBalance": "Kalan Bakiye:",
+      "modelLabel": "Model:",
+      "unconfiguredHint": "API anahtarı tanımlanmadı. Kullanılmıyor.",
+      "tokensUsed": "Harcanan Token:",
+      "totalRequests": "Toplam İstek:",
+      "callsCount": "{{ count }} Çağrı",
+      "cost": "Maliyet:",
+      "topUp": "Bakiye Yükle (Top Up) ↗",
+      "addKey": "⚙️ Anahtar Ekle",
+      "inspectDetails": "Detayları İncele →"
+    },
+    "history": {
+      "titleAll": "Son AI Çağrı Günlüğü (Tüm Markalar - {{ period }})",
+      "titleBrand": "{{ brand }} Markasına Ait Çağrı Günlüğü ({{ period }})",
+      "subtitle": "VDS SQLite veritabanında depolanan her bir AI token tüketimi, model ve yanıt süresi",
+      "filterAll": "Tüm Sağlayıcılar",
+      "filterActiveOnly": "Sadece Tanımlı Markalar",
+      "colTime": "Zaman",
+      "colModule": "Modül",
+      "colProvider": "Sağlayıcı",
+      "colModel": "Model",
+      "colPromptCompletion": "Girdi / Çıktı Token",
+      "colTotalTokens": "Toplam Token",
+      "colCostUsd": "Maliyet ($)",
+      "colCostTry": "Maliyet (₺)",
+      "colStatus": "Durum",
+      "emptyAll": "Seçili dönemde ({{ period }}) kayıtlı AI çağrı günlüğü bulunmuyor (0 Çağrı / 0 Token).",
+      "emptyBrand": "{{ brand }} markası için bu dönemde kayıtlı çağrı günlüğü bulunmuyor.",
+      "defaultStatus": "Başarılı"
+    }
+  },
+  "automation": {
+    "title": "Otomasyon & Arka Plan Görev Zamanlayıcı (Cron)",
+    "subtitle": "VDS üzerinde 7/24 çalışan arka plan senkronizasyonu, CRO teklif merdiveni, C_max marj kalkanı ve kargo takip botları",
+    "saveBtn": "💾 Zamanlayıcıyı VDS'e Kaydet",
+    "kpi": {
+      "activeSchedulers": "AKTİF ZAMANLAYICILAR",
+      "tasksCount": "{{ count }} Görev",
+      "systemdService": "VDS Systemd Servisi",
+      "last24h": "SON 24 SAAT ÇALIŞMA",
+      "triggersValue": "144 Tetiklenme",
+      "errorRate": "Hata Oranı: %0.0",
+      "heartbeat": "CANLI KALP ATIŞI (HEARTBEAT)",
+      "heartbeatValue": "12 sn",
+      "sqliteSynced": "VDS SQLite Senkronize",
+      "shieldTitle": "CRO & C_MAX KALKANI",
+      "shieldValue": "Aktif Koruma",
+      "shieldSub": "Kupon + Offsite Ads Denetimi"
+    },
+    "sectionTitle": "Otomasyon Görev Listesi",
+    "lastRun": "Son Çalışma:",
+    "nextRun": "Sonraki Çalışma:",
+    "runNow": "⚡ Şimdi Çalıştır",
+    "justNow": "Şimdi",
+    "jobs": {
+      "job-1": {
+        "name": "Otomatik Etsy Sipariş & Ödeme Senkronizasyonu",
+        "schedule": "0 */1 * * * (Her 1 Saatte)",
+        "lastRun": "15 dakika önce",
+        "nextRun": "45 dakika sonra",
+        "desc": "Etsy Open API v3 üzerinden yeni siparişleri çeker ve VDS SQLite veritabanına işler."
+      },
+      "job-2": {
+        "name": "Çoklu Taşıyıcı Kargo Fiyat & Takip Kontrolü",
+        "schedule": "*/15 * * * * (Her 15 Dakikada)",
+        "lastRun": "4 dakika önce",
+        "nextRun": "11 dakika sonra",
+        "desc": "Aras Global, ShipEntegra ve Navlungo kargo takip durumlarını günceller ve teslimat bildirimlerini hazırlar."
+      },
+      "job-3": {
+        "name": "Gece Yarısı Finansal Kapanış & Telegram Brifingi",
+        "schedule": "59 23 * * * (Her Gece 23:59)",
+        "lastRun": "Dün 23:59",
+        "nextRun": "Bugün 23:59",
+        "desc": "Günün brüt cirosunu, kargo masraflarını ve tahmini net kârını hesaplayıp Telegram kanalına raporlar."
+      },
+      "job-4": {
+        "name": "Haftalık A/B Test Kazanan Belirleyici",
+        "schedule": "0 0 * * 0 (Pazar 00:00)",
+        "lastRun": "6 gün önce",
+        "nextRun": "1 gün sonra",
+        "desc": "7 günü tamamlayan A/B testlerini istatistiksel üstünlük kriterine göre otomatik sonlandırıp kazananı mağazaya uygular."
+      },
+      "job-5": {
+        "name": "🪜 CRO Terk Edilmiş Sepet & Favori 3 Kademeli Teklif Merdiveni",
+        "schedule": "0 */2 * * * (Her 2 Saatte)",
+        "lastRun": "32 dakika önce",
+        "nextRun": "1 saat 28 dk sonra",
+        "desc": "Favorileyenlere 2 saatte %8 nazik dürtme, sepete ekleyip çıkana 24 saatte %15 kurtarma kuponu ve 72. saatte Ücretsiz Kargo VIP teklifi tetikler."
+      },
+      "job-6": {
+        "name": "🛡️ Kupon + Offsite Ads (%15) C_max Marj Koruma Kalkanı",
+        "schedule": "*/30 * * * * (Her 30 Dakikada)",
+        "lastRun": "8 dakika önce",
+        "nextRun": "22 dakika sonra",
+        "desc": "Aktif mağaza kuponlarının (örn. %30 DSFJY25) %15 Offsite Ads komisyonuyla çakışarak birim net kârı hedef eşik altına düşürmesini denetler ve uyarır."
+      }
+    },
+    "toasts": {
+      "syncStarted": "⚡ \"{{ name }}\" görevi VDS sunucusunda başlatıldı. Siparişler taranıyor...",
+      "syncCompleted": "✓ \"{{ name }}\" başarıyla tamamlandı: {{ orderCount }} sipariş, {{ transactionCount }} hareket senkronize edildi.",
+      "syncTriggered": "✓ \"{{ name }}\" görevi tetiklendi (VDS API bağlandı).",
+      "runImmediate": "⚡ \"{{ name }}\" görevi VDS sunucusunda anında çalıştırıldı!",
+      "savedAll": "✓ Tüm otomasyon zamanlama kuralları VDS cron servisine kaydedildi!"
+    }
+  },
+  "batchQueue": {
+    "title": "Toplu İlan Optimizasyonu & Batch Kuyruğu",
+    "subtitle": "Tüm mağaza listinglerini topluca yapay zeka ile denetleyin, SEO başlıklarını zenginleştirin ve Etsy'ye aktarın",
+    "clearCompletedBtn": "Tamamlananları Temizle",
+    "processingBtn": "İşleniyor ({{ progress }}%)...",
+    "optimizeAllBtn": "⚡ Bekleyen Tümünü Optimize Et",
+    "kpi": {
+      "queuedListings": "KUYRUKTAKİ İLANLAR",
+      "listingsCount": "{{ count }} İlan",
+      "pendingCount": "Bekleyen: {{ count }}",
+      "avgSeoScore": "ORTALAMA SEO SKORU",
+      "preOptScore": "Optimizasyon Öncesi: %62",
+      "syncedToEtsy": "ETSY'YE SENKRONİZE",
+      "activeInLiveShop": "Canlı Mağazada Aktif",
+      "riskPolicyCheck": "RİSK & POLİTİKA KONTROLÜ",
+      "zeroWarnings": "0 Uyarı",
+      "antiBanVerified": "Anti-Ban Onaylı"
+    },
+    "tableTitle": "İşlem Listesi & Kuyruk Sıralaması",
+    "filters": {
+      "all": "Tümü ({{ count }})",
+      "pending": "Bekleyenler ({{ count }})",
+      "completed": "Optimize Edilenler"
+    },
+    "columns": {
+      "listingId": "Listing ID",
+      "currentTitle": "Mevcut Başlık",
+      "targetKeyword": "Hedef Niche / Anahtar Kelime",
+      "seoScore": "SEO Skoru",
+      "status": "Durum",
+      "optimizedTitle": "Optimize Edilmiş Başlık",
+      "action": "İşlem"
+    },
+    "status": {
+      "Pending": "Bekliyor",
+      "Processing": "İşleniyor",
+      "Completed": "Tamamlandı",
+      "RiskWarning": "Risk Uyarısı",
+      "SyncedToEtsy": "Etsy'ye Yüklendi"
+    },
+    "notOptimizedYet": "— Henüz optimize edilmedi —",
+    "optimizeBtn": "Optimize Et",
+    "pushToEtsyBtn": "Etsy'ye Yükle",
+    "liveBadge": "✓ Canlıda",
+    "emptyTitle": "Kuyrukta İşlem Bulunmuyor",
+    "emptyDescPrefix": "Şu anda toplu optimizasyon veya yükleme kuyruğunda bekleyen ilan yok.",
+    "emptyDescStrong": "Asla sahte veri uydurulmaz",
+    "emptyDescSuffix": "İlan ekleme veya pazar araştırma modüllerinden ilanları toplu işleme aktarabilirsiniz.",
+    "toasts": {
+      "optimizedAi": "✓ #{{ listingId }} ilanı ({{ keyword }}) yapay zeka ile optimize edildi!",
+      "optimizedLocal": "✓ #{{ listingId }} ilanı yerel olarak optimize edildi!",
+      "noPending": "Kuyrukta bekleyen optimize edilecek ilan bulunmuyor.",
+      "batchDone": "✓ {{ count }} adet ilan başarıyla optimize edildi ve VDS SQLite kuyruğu güncellendi!",
+      "syncedEtsy": "✓ #{{ listingId }} ilanı Etsy API'ye taslak olarak yüklendi!",
+      "cleared": "✓ Tamamlanan ilanlar kuyruktan temizlendi."
+    }
+  },
+  "liveTracking": {
+    "title": "Canlı Kargo, Rakip & İlan Takip Radarı",
+    "subtitle": "Rakip ilanların fiyat değişikliklerini, favori artış hızlarını ve anahtar kelime sıralamalarını SQLite ile kaydedin",
+    "addBtn": "+ Yeni Takip Ekle",
+    "kpi": {
+      "trackedListings": "TAKİP EDİLEN İLANLAR",
+      "listingsCount": "{{ count }} İlan",
+      "priceVolumeRadar": "Fiyat & Hacim Radarı",
+      "priceChanges24h": "SON 24 SAAT FİYAT DEĞİŞİMİ",
+      "priceChangesVal": "3 İlan",
+      "priceChangesSub": "2 İndirim, 1 Artış",
+      "favoriteSurge": "FAVORİ PATLAMASI",
+      "favoriteSurgeVal": "+340 Favori",
+      "viralTrendAlert": "Viral Trend Alarmı",
+      "radarStatus": "RADAR DURUMU",
+      "active": "Aktif",
+      "snapshotInterval": "Her 4 Saatte Bir Snapshot"
+    },
+    "tableTitle": "İzlenen Ürün & Rakip Listesi ({{ count }})",
+    "searchPlaceholder": "İlan ara...",
+    "columns": {
+      "type": "Tür",
+      "name": "İlan Adı / Mağaza",
+      "key": "Listing ID / URL",
+      "price": "Güncel Fiyat",
+      "favorites": "Favori",
+      "seoScore": "SEO Skoru",
+      "trend": "Fiyat Eğilimi",
+      "actions": "İşlemler"
+    },
+    "entityTypes": {
+      "Shop": "Mağaza",
+      "Listing": "İlan"
+    },
+    "trends": {
+      "down": "📉 %12 İndirim",
+      "up": "📈 %5 Artış",
+      "stable": "⏸️ Sabit"
+    },
+    "scanNowBtn": "Anlık Tara",
+    "deleteBtn": "Sil",
+    "emptyTitle": "Takip Edilen Öğe Bulunmuyor",
+    "emptyDescPrefix": "Henüz radara veya takip listesine bir ürün, kargo ya da rakip eklemediniz.",
+    "emptyDescStrong": "Asla sahte veri uydurulmaz",
+    "emptyDescSuffix": "Yukarıdaki \"+ Yeni Takip Ekle\" butonuna basarak dilediğiniz ilanı canlı izlemeye alabilirsiniz.",
+    "modal": {
+      "title": "📡 Yeni Takip Öğesi Ekle",
+      "nameLabel": "İlan / Ürün Başlığı:",
+      "namePlaceholder": "Rakip 3D Ejderha Figürü",
+      "keyLabel": "Listing ID / Kod:",
+      "priceLabel": "Fiyat ($):",
+      "urlLabel": "Etsy Ürün URL'si:",
+      "cancelBtn": "Vazgeç",
+      "saveBtn": "Takibe Başla"
+    },
+    "toasts": {
+      "savedDb": "✓ \"{{ name }}\" VDS SQLite veri tabanına kaydedildi ve radara alındı!",
+      "addedLocal": "✓ \"{{ name }}\" takip radarına eklendi!",
+      "snapshotDb": "⚡ \"{{ name }}\" için anlık tarama VDS SQLite'a kaydedildi! (Fiyat: ${{ price }})",
+      "snapshotLocal": "⚡ \"{{ name }}\" için anlık fiyat & rank taraması tamamlandı! (Güncel Fiyat: ${{ price }})",
+      "deleted": "✓ Takip öğesi silindi."
+    }
+  },
+  "shopVault": {
+    "title": "Mağaza Kasası & Anti-Ban Yedekleme (.etsyvault)",
+    "subtitle": "Tek tıkla tüm mağazanızı şifreli yedekleyin, olası kapanmalara karşı yeni mağazaya anti-ban ile taşıyın",
+    "vaultStatusBadge": "🛡️ Kasa Durumu: Güvenli",
+    "backupCard": {
+      "label": "1. Tam Mağaza Yedeği Oluştur (.etsyvault)",
+      "shopPill": "Mağaza: {{ shopId }}",
+      "descPrefix": "Aktif mağazanızdaki tüm ",
+      "descStrong": "ilanlar, başlıklar, 13 etiketler, fiyatlar, varyasyonlar, stoklar ve HD fotoğraf bağlantıları",
+      "descSuffix": " tek bir şifreli dosya olarak paketlenir.",
+      "includeImages": "Yüksek Çözünürlüklü Fotoğraf Manifestini Dahil Et",
+      "includeInactive": "Taslak ve Pasif İlanları da Yedekle",
+      "statListings": "Yedeklenecek İlan",
+      "statTags": "Toplam Etiket",
+      "statEncryption": "Şifreleme (AES-256)",
+      "btnPackaging": "Paketleniyor...",
+      "btnCreate": "💾 .etsyvault Dosyası Oluştur ve İndir"
+    },
+    "restoreCard": {
+      "label": "2. Yedekten Geri Yükle & Anti-Ban Taşıma (Migration)",
+      "shieldPill": "Anti-Ban Destekli",
+      "descPrefix": "Eski mağazanız kapandıysa veya yeni bir mağaza açtıysanız, ",
+      "descSuffix": " dosyasını yükleyerek tüm ürünleri tek hamlede aktarabilirsiniz.",
+      "dropTitle": ".etsyvault Dosyasını Sürükleyin veya Seçin",
+      "dropSub": "Otomatik pHash ve EXIF temizleyici uygulanır",
+      "autoRewriteSeo": "Yapay Zeka ile Başlık ve Açıklamaları Yeniden İfade Et (Anti-Duplicate)",
+      "asDraft": "Ürünleri Taslak (Draft) Olarak Aç (Güvenli Mod)",
+      "btnRestore": "🚀 Yeni Mağazaya Taşıma Başlat"
+    },
+    "toasts": {
+      "backupSuccess": "Mağaza yedeği ({{ listings }} ilan, {{ tags }} etiket) başarıyla .etsyvault formatında şifrelendi ve indirildi!",
+      "backupError": "Yedekleme dosyası hazırlanırken hata oluştu.",
+      "fileVerified": "✓ \"{{ fileName }}\" doğrulandı: {{ listings }} ilan ve {{ tags }} etiket bulundu.",
+      "restoreCountInfo": "({{ listings }} ilan ve {{ tags }} etiket)",
+      "restoreSuccess": "🎉 \"{{ fileName }}\" yedeği {{ countInfo }} başarıyla yeni mağazaya aktarıldı ve taslaklar oluşturuldu!"
+    }
+  },
+  "moduleViewer": {
+    "liveSynced": "Canlı Senkronize",
+    "featureDesc": "Masaüstü motoru ile tam uyumlu çalışan optimize edilmiş bulut algoritması.",
+    "runNow": "⚡ Şimdi Çalıştır",
+    "apiStatusTitle": "VDS API & Gemini Spark Motoru Bağlı",
+    "shopIdLabel": "Mağaza ID:",
+    "endpointLabel": "Uç Nokta:",
+    "backToDashboard": "← Kontrol Paneline Dön",
+    "actionAlert": "⚡ \"{{ feature }}\" işlemi başarıyla VDS API kuyruğuna iletildi!",
+    "badges": {
+      "new": "YENİ",
+      "pro": "PRO"
+    },
+    "categories": {
+      "general": "Genel",
+      "research": "Araştırma & Analiz",
+      "automationFinance": "Otomasyon & Finans",
+      "shipping": "Kargo",
+      "system": "Sistem"
+    },
+    "modules": {
+      "orders": {
+        "title": "Sipariş & Kargo Karşılama Studio",
+        "summary": "Etsy siparişlerinin takibi, eksik maliyet tespiti, otomatik kargo konşimentosu oluşturma ve kâr marjı hesaplama.",
+        "kpiTitle": "BEKLEYEN SİPARİŞ",
+        "kpiValue": "18 Adet",
+        "features": {
+          "f1": "Eksik Maliyetli Siparişler için Kırmızı Alarm & Bildirim",
+          "f2": "Aras Global, ShipEntegra, Navlungo & Shiptomore Canlı Fiyatlandırma",
+          "f3": "Tek Tıkla Siparişe Maliyet & Takip Kodu Atama",
+          "f4": "Gerçekleşen Kâr Marjı (Gross vs Net Profit) Analizi"
+        }
+      },
+      "fast-creator": {
+        "title": "Hızlı Ürün Ekle (AI Fast Creator)",
+        "summary": "Tek tıklamayla AI destekli SEO başlık, açıklama ve 13 algoritma etiketini saniyeler içinde mağazanıza aktarma.",
+        "kpiTitle": "ŞABLON SAYISI",
+        "kpiValue": "12 Şablon",
+        "features": {
+          "f1": "Gemini Spark AI ile Kusursuz Başlık ve Açıklama Üretimi",
+          "f2": "13 Yüksek Hacimli Etsy Arama Etiketi (Tags) Optimizasyonu",
+          "f3": "Önceden Tanımlı Şablonlar (3D Model, Hediyelik, Takı)",
+          "f4": "Doğrudan Mağazaya Taslak (Draft) Olarak Yükleme"
+        }
+      },
+      "creator": {
+        "title": "Ürün Bul & Taslak Listeleme",
+        "summary": "Trend ürün radarı, pazar hacmi tahminleme ve tek tıkla taslak listeleme stüdyosu.",
+        "features": {
+          "f1": "Global Trendlerdeki Ürünlerin Keşfi",
+          "f2": "Hedef Kitle ve Kategori Uygunluk Skoru",
+          "f3": "Dinamik Fiyat Öneri Simülatörü",
+          "f4": "Taslak Envanter Yönetimi"
+        }
+      },
+      "ai-studio": {
+        "title": "AI Görsel Stüdyosu & Arka Plan Temizleyici",
+        "summary": "Yapay zeka ile stüdyo kalitesinde mockup üretimi, fon değiştirme ve anti-ban EXIF temizleme.",
+        "kpiTitle": "İŞLENEN GÖRSEL",
+        "kpiValue": "142 Görsel",
+        "features": {
+          "f1": "AI ile Ürün Sahnesi ve Stüdyo Arka Planı Üretimi",
+          "f2": "Arka Plan Kaldırma (Background Removal)",
+          "f3": "Anti-Ban EXIF Metadata ve Görsel Parmak İzi Temizleme",
+          "f4": "Etsy Ölçülerine (2000x2000px) Uygun Otomatik Ölçekleme"
+        }
+      },
+      "analytics-shop": {
+        "title": "Mağazam Performansı & Ziyaretçi Analitiği",
+        "summary": "Görüntülenme, favori sayıları, dönüşüm oranları (Conversion Rate %) ve ürün bazlı trafik grafikleri.",
+        "features": {
+          "f1": "Günlük ve Aylık Ziyaretçi & Favori Sayısı Trendi",
+          "f2": "Dönüşüm Oranı En Yüksek İlk 10 İlan",
+          "f3": "Hareketsiz / Trafik Almayan İlanlar için Uyarı Sistemi",
+          "f4": "Aylık İlan Trafik Veri Tabanı (listing_traffic_daily)"
+        }
+      },
+      "market-search": {
+        "title": "Pazar Araştırması & Anahtar Kelime Radarı",
+        "summary": "Anahtar kelime arama hacmi, rekabet skoru ve en çok satan listelemelerin detaylı pazar dökümü.",
+        "features": {
+          "f1": "Arama Hacmi ve Tıklama Başı Maliyet (CPC) Matrisi",
+          "f2": "Düşük Rekabet / Yüksek Talep Niche Keşif Motoru",
+          "f3": "Rakiplerin Kullandığı Ortak Etiket Dağılımı",
+          "f4": "Arama Trendi Mevsimsellik Değerlendirmesi"
+        }
+      },
+      "viral-3d": {
+        "title": "Viral 3D Model Avcısı & Arbitraj Radarı",
+        "summary": "MakerWorld, Printables, CrealityCloud ve Thingiverse üzerinde viral olan modellerin Etsy kâr arbitrajı.",
+        "kpiTitle": "VİRAL MODEL",
+        "kpiValue": "28 Model",
+        "features": {
+          "f1": "MakerWorld & Printables Popüler İndirme Taraması",
+          "f2": "Model Gramajı ve Filament Maliyeti Hesaplama",
+          "f3": "Etsy Benzer Ürün Fiyat Karşılaştırması",
+          "f4": "Potansiyel Net Kâr Marjı Radarı (%300+ Fırsatlar)"
+        }
+      },
+      "competitor": {
+        "title": "Rakip & Trend Casusu",
+        "summary": "Rakip mağazaların günlük satış hızları, fiyat değişiklikleri ve en çok satan listing tespiti.",
+        "features": {
+          "f1": "Rakip Mağazanın 30 Günlük Satış Hızı Projeksiyonu",
+          "f2": "Fiyat Artışı / İndirimi Canlı Alarmı",
+          "f3": "En Son Eklenen Başarılı İlanların Bildirimi",
+          "f4": "Pazar Payı ve Satıcı Sıralaması Değerlendirmesi"
+        }
+      },
+      "external": {
+        "title": "Dış Pazar Yeri Bulucu (Arbitraj)",
+        "summary": "Amazon, eBay, AliExpress ve Walmart üzerinden çapraz arbitraj ve fırsat tespiti.",
+        "features": {
+          "f1": "Amazon Handmade vs Etsy Fiyat Karşılaştırması",
+          "f2": "AliExpress Tedarik Fiyatı ve Kargo Süresi Analizi",
+          "f3": "Görsel Arama ile Çapraz Pazar Eşleme",
+          "f4": "İthalat ve Gümrük Masrafı Simülasyonu"
+        }
+      },
+      "ai-audit": {
+        "title": "Mağaza AI Analizi & Denetim",
+        "summary": "Yapay zeka ile mağazadaki tüm listinglerin taranması, eksik etiket ve zayıf açıklamaların raporlanması.",
+        "features": {
+          "f1": "Fotoğraf Kontrol Listesi (Işık, Mockup, Açı Değerlendirmesi)",
+          "f2": "Eksik Etiket ve Zayıf Başlık Tespiti",
+          "f3": "Müşteri Gözünden Listing İnceleme Raporu",
+          "f4": "Tek Tıkla Toplu Optimizasyon Önerisi"
+        }
+      },
+      "ab-test": {
+        "title": "A/B Test Paneli",
+        "summary": "Başlık, ana görsel ve fiyat A/B testlerinin takibi, istatistiksel üstünlük ölçümü.",
+        "features": {
+          "f1": "İki Farklı Başlık Varyasyonunun Tıklama Oranı Karşılaştırması",
+          "f2": "Görsel Testinde Dönüşüm Oranı Artışı",
+          "f3": "İstatistiksel Anlamlılık (Statistical Significance %) Göstergesi",
+          "f4": "Kazanan Varyasyonun Otomatik Olarak Canlıya Alınması"
+        }
+      },
+      "accounting": {
+        "title": "Finansal Muhasebe & Banka Ödemeleri",
+        "summary": "Çift para birimi (₺ TRY / $ USD) ile tam kapsamlı Etsy ödeme defteri, komisyonlar ve banka transferleri.",
+        "kpiTitle": "NET KÂR ORANI",
+        "kpiValue": "%43.8",
+        "features": {
+          "f1": "Canlı Güncel Dolar Kuru ile Çift Para Birimi Hesaplaması",
+          "f2": "Etsy Komisyonları, İşlem Ücreti ve Reklam Giderleri Dökümü",
+          "f3": "Hesaba Yatan Banka Transferleri (Payouts) Listesi",
+          "f4": "Excel / CSV Formatında Dışa Aktarma (Export)"
+        }
+      },
+      "financial-ai": {
+        "title": "Finansal AI Analiz & Gelecek Projeksiyonu",
+        "summary": "Kural tabanlı finansal yapay zeka öneri motoru, marj uyarıları ve 30 günlük nakit akışı tahmini.",
+        "features": {
+          "f1": "Gider Kalemlerinde Anormal Artış Tespiti",
+          "f2": "Kârlılığı Düşen Ürünler için Fiyat Artışı Önerisi",
+          "f3": "Gelecek Ay Tahmini Banka Girişi Projeksiyonu",
+          "f4": "Vergi ve Muhasebe Ön Hazırlık Raporu"
+        }
+      },
+      "profit": {
+        "title": "Kâr Simülatörü & Fiyat Hesaplayıcı",
+        "summary": "Hammadde, kargo, Etsy komisyonu ve reklam payını girerek ideal satış fiyatını hesaplayın.",
+        "features": {
+          "f1": "Etsy %6.5 İşlem Ücreti + Sabit Ücret Hesaplaması",
+          "f2": "Kargo Firması (Aras, ShipEntegra, Navlungo) Entegre Fiyatı",
+          "f3": "Hedeflenen Net Kâr Marjına Göre Fiyat Tavsiyesi",
+          "f4": "Dolar Kuru Değişimine Duyarlı Dinamik Tablo"
+        }
+      },
+      "vault": {
+        "title": "Mağaza Yedekleme & Anti-Ban Transfer (.etsyvault)",
+        "summary": "Tüm mağazayı tek tıkla `.etsyvault` olarak yedekleme, anti-ban resim işleme ve kurtarma.",
+        "kpiTitle": "YEDEK DURUMU",
+        "kpiValue": "84 İlan Hazır",
+        "features": {
+          "f1": "Tüm Başlık, Açıklama, Etiket ve Resimlerin Şifreli Yedeklenmesi",
+          "f2": "Resimlerin EXIF ve pHash Bilgilerini Sıfırlama (Anti-Ban)",
+          "f3": "Başka Bir Etsy Mağazasına Tek Tıkla Geri Yükleme (Restore)",
+          "f4": "SQLite Tabanlı Yerel Arşivleme Güvencesi"
+        }
+      },
+      "ai-usage": {
+        "title": "AI Token, Model & Bakiye Takip",
+        "summary": "Gemini, OpenAI ve Claude API tüketimlerinin canlı takibi, maliyet dökümü ve kullanıcı kotaları.",
+        "features": {
+          "f1": "Model Bazlı Token Tüketim Grafiği (gemini-2.5-flash)",
+          "f2": "Kullanıcı Başına Kalan Aylık Sorgu Kotası",
+          "f3": "Sorgu Başına Ortalama Yanıt Süresi (Latency ms)",
+          "f4": "Maliyet Tasarrufu ve Prompt Optimizasyon İpuçları"
+        }
+      },
+      "shipping": {
+        "title": "Çoklu Taşıyıcı Kargo Entegrasyonları Hub",
+        "summary": "Aras Global, ShipEntegra, Navlungo ve Shiptomore hesaplarınızı tek merkezden yönetin.",
+        "features": {
+          "f1": "Tüm Kargo Taşıyıcılarının Anlık Fiyat Karşılaştırması",
+          "f2": "Otomatik Koli Hacmi (Desi) ve Ağırlık Hesaplama",
+          "f3": "Siparişe Doğrudan Kargo Etiketi Oluşturma",
+          "f4": "Takip Numarasının Etsy Üzerine Otomatik İşlenmesi"
+        }
+      },
+      "system": {
+        "title": "Sistem, API Ayarları & Günlükler",
+        "summary": "Etsy OAuth bağlantıları, Telegram bildirim botu, VDS otomatik güncelleme ve sistem logları.",
+        "features": {
+          "f1": "Canlı Etsy API Token Yenileme (Refresh Token)",
+          "f2": "Telegram Kanalına Anlık Sipariş & Ciro Bildirimleri",
+          "f3": "GitHub Actions VDS Derleme ve Sürüm Takibi",
+          "f4": "Uygulama Hata Günlüğü (Application Logs)"
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 
 interface AbTestCard {
   id: number;
@@ -24,21 +25,23 @@ interface AbTestCard {
 @Component({
   selector: 'app-ab-test-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('analytics')],
   template: `
+    <ng-container *transloco="let t">
     <div class="ab-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">📈</div>
           <div>
-            <h1 class="page-title">A/B Test Paneli & Varyasyon Laboratuvarı</h1>
-            <p class="page-subtitle">Başlık, etiket ve açıklama varyasyonlarını test ederek istatistiksel dönüşüm oranını maksimize edin</p>
+            <h1 class="page-title">{{ t('analytics.abTest.title') }}</h1>
+            <p class="page-subtitle">{{ t('analytics.abTest.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-create" (click)="openCreateModal()">
-            ⚡ Yeni A/B Test Başlat
+            {{ t('analytics.abTest.startNewBtn') }}
           </button>
         </div>
       </div>
@@ -46,24 +49,24 @@ interface AbTestCard {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">AKTİF TESTLER</span>
+          <span class="kpi-label">{{ t('analytics.abTest.kpi.activeTests') }}</span>
           <span class="kpi-val text-indigo">{{ getActiveCount() }}</span>
-          <span class="kpi-sub">Canlı İzlenen</span>
+          <span class="kpi-sub">{{ t('analytics.abTest.kpi.liveMonitored') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORT. DÖNÜŞÜM ARTIŞI</span>
-          <span class="kpi-val text-green">+%24.6</span>
-          <span class="kpi-sub">B Varyantı Üstünlüğü</span>
+          <span class="kpi-label">{{ t('analytics.abTest.kpi.avgConversionLift') }}</span>
+          <span class="kpi-val text-green">{{ t('analytics.abTest.kpi.avgConversionLiftValue') }}</span>
+          <span class="kpi-sub">{{ t('analytics.abTest.kpi.variantBSupremacy') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">KAZANAN VARYANTLAR</span>
-          <span class="kpi-val text-purple">19 İlan</span>
-          <span class="kpi-sub">Canlıya Alındı</span>
+          <span class="kpi-label">{{ t('analytics.abTest.kpi.winningVariants') }}</span>
+          <span class="kpi-val text-purple">{{ t('analytics.abTest.kpi.winningVariantsValue') }}</span>
+          <span class="kpi-sub">{{ t('analytics.abTest.kpi.pushedLive') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">GÜVEN ARALIĞI</span>
-          <span class="kpi-val text-orange">%95.2</span>
-          <span class="kpi-sub">İstatistiksel Anlamlılık</span>
+          <span class="kpi-label">{{ t('analytics.abTest.kpi.confidenceInterval') }}</span>
+          <span class="kpi-val text-orange">{{ t('analytics.abTest.kpi.confidenceIntervalValue') }}</span>
+          <span class="kpi-sub">{{ t('analytics.abTest.kpi.statisticalSignificance') }}</span>
         </div>
       </div>
 
@@ -75,11 +78,11 @@ interface AbTestCard {
       <!-- EXPERIMENTS LIST -->
       <div class="experiments-section">
         <div class="section-top">
-          <h2 class="section-title">Canlı & Tamamlanan Deneyler ({{ experiments.length }})</h2>
+          <h2 class="section-title">{{ t('analytics.abTest.section.experimentsTitle', { count: experiments.length }) }}</h2>
           <div class="filter-pills">
-            <button [class.active]="filterStatus === 'ALL'" (click)="filterStatus = 'ALL'">Tümü</button>
-            <button [class.active]="filterStatus === 'Active'" (click)="filterStatus = 'Active'">Aktif</button>
-            <button [class.active]="filterStatus === 'Completed'" (click)="filterStatus = 'Completed'">Tamamlanan</button>
+            <button [class.active]="filterStatus === 'ALL'" (click)="filterStatus = 'ALL'">{{ t('analytics.abTest.section.filterAll') }}</button>
+            <button [class.active]="filterStatus === 'Active'" (click)="filterStatus = 'Active'">{{ t('analytics.abTest.section.filterActive') }}</button>
+            <button [class.active]="filterStatus === 'Completed'" (click)="filterStatus = 'Completed'">{{ t('analytics.abTest.section.filterCompleted') }}</button>
           </div>
         </div>
 
@@ -87,12 +90,12 @@ interface AbTestCard {
           <div *ngFor="let exp of filteredExperiments" class="exp-card glass-card">
             <div class="exp-header">
               <div class="exp-badge-row">
-                <span class="status-pill" [ngClass]="exp.status.toLowerCase()">{{ exp.status }}</span>
-                <span class="exp-id">ID: #{{ exp.id }}</span>
-                <span class="exp-date">Başlangıç: {{ exp.startDate | slice:0:10 }}</span>
+                <span class="status-pill" [ngClass]="exp.status.toLowerCase()">{{ t('analytics.abTest.status.' + exp.status.toLowerCase()) }}</span>
+                <span class="exp-id">{{ t('analytics.abTest.card.idPrefix', { id: exp.id }) }}</span>
+                <span class="exp-date">{{ t('analytics.abTest.card.startedLabel', { date: (exp.startDate | slice:0:10) }) }}</span>
               </div>
               <h3 class="exp-title">{{ exp.experimentName }}</h3>
-              <p class="listing-ref">İlan: <b>{{ exp.listingTitle }}</b> ({{ exp.listingId }})</p>
+              <p class="listing-ref">{{ t('analytics.abTest.card.listingRefLabel') }} <b>{{ exp.listingTitle }}</b> ({{ exp.listingId }})</p>
             </div>
 
             <!-- COMPARISON BOXES -->
@@ -100,39 +103,39 @@ interface AbTestCard {
               <!-- VARIANT A -->
               <div class="variant-box variant-a">
                 <div class="var-header">
-                  <span class="var-tag">A Varyantı (Orijinal)</span>
-                  <span class="var-views">{{ exp.beforeViews }} Görüntülenme</span>
+                  <span class="var-tag">{{ t('analytics.abTest.card.variantALabel') }}</span>
+                  <span class="var-views">{{ t('analytics.abTest.card.viewsCount', { count: exp.beforeViews }) }}</span>
                 </div>
                 <div class="var-content">
                   <p class="var-title-text">{{ exp.variantA_Title }}</p>
                   <div class="tags-cloud">
-                    <span *ngFor="let t of exp.variantA_Tags" class="mini-tag">{{ t }}</span>
+                    <span *ngFor="let tag of exp.variantA_Tags" class="mini-tag">{{ tag }}</span>
                   </div>
                 </div>
                 <div class="var-stat">
-                  <span>Satış: <b>{{ exp.beforeSales }} adet</b></span>
-                  <span>Dönüşüm: <b>{{ calculateCr(exp.beforeSales, exp.beforeViews) }}%</b></span>
+                  <span>{{ t('analytics.abTest.card.salesLabel') }} <b>{{ t('analytics.abTest.card.salesUnit', { count: exp.beforeSales }) }}</b></span>
+                  <span>{{ t('analytics.abTest.card.conversionLabel') }} <b>{{ calculateCr(exp.beforeSales, exp.beforeViews) }}%</b></span>
                 </div>
               </div>
 
               <!-- VS BADGE -->
-              <div class="vs-divider">VS</div>
+              <div class="vs-divider">{{ t('analytics.abTest.card.vs') }}</div>
 
               <!-- VARIANT B -->
               <div class="variant-box variant-b">
                 <div class="var-header">
-                  <span class="var-tag winner">B Varyantı (AI Optimize)</span>
-                  <span class="var-views">{{ exp.afterViews }} Görüntülenme</span>
+                  <span class="var-tag winner">{{ t('analytics.abTest.card.variantBLabel') }}</span>
+                  <span class="var-views">{{ t('analytics.abTest.card.viewsCount', { count: exp.afterViews }) }}</span>
                 </div>
                 <div class="var-content">
                   <p class="var-title-text">{{ exp.variantB_Title }}</p>
                   <div class="tags-cloud">
-                    <span *ngFor="let t of exp.variantB_Tags" class="mini-tag green">{{ t }}</span>
+                    <span *ngFor="let tag of exp.variantB_Tags" class="mini-tag green">{{ tag }}</span>
                   </div>
                 </div>
                 <div class="var-stat">
-                  <span>Satış: <b class="text-green">{{ exp.afterSales }} adet</b></span>
-                  <span>Dönüşüm: <b class="text-green">{{ calculateCr(exp.afterSales, exp.afterViews) }}%</b></span>
+                  <span>{{ t('analytics.abTest.card.salesLabel') }} <b class="text-green">{{ t('analytics.abTest.card.salesUnit', { count: exp.afterSales }) }}</b></span>
+                  <span>{{ t('analytics.abTest.card.conversionLabel') }} <b class="text-green">{{ calculateCr(exp.afterSales, exp.afterViews) }}%</b></span>
                 </div>
               </div>
             </div>
@@ -141,14 +144,14 @@ interface AbTestCard {
             <div class="exp-footer">
               <div class="significance-info">
                 <span class="sig-dot green"></span>
-                <span>İstatistiksel Güven: <b>%96 Güvenli</b> (+%38 Dönüşüm)</span>
+                <span>{{ t('analytics.abTest.card.significanceLabel') }} <b>{{ t('analytics.abTest.card.significanceValue') }}</b> {{ t('analytics.abTest.card.significanceLift') }}</span>
               </div>
               <div class="card-btns">
                 <button *ngIf="exp.status === 'Active'" class="btn-declare-winner" (click)="declareWinner(exp)">
-                  ✓ B'yi Kazanan Yap & Canlıya Al
+                  {{ t('analytics.abTest.card.declareWinnerBtn') }}
                 </button>
                 <button class="btn-delete" (click)="deleteExperiment(exp.id)">
-                  Sil
+                  {{ t('analytics.abTest.card.deleteBtn') }}
                 </button>
               </div>
             </div>
@@ -157,10 +160,9 @@ interface AbTestCard {
 
         <div *ngIf="filteredExperiments.length === 0" class="empty-state-box glass-card">
           <span class="empty-icon">📈</span>
-          <span class="empty-title">Kayıtlı A/B Testi Bulunmuyor</span>
+          <span class="empty-title">{{ t('analytics.abTest.empty.title') }}</span>
           <p class="empty-desc">
-            VDS veri tabanında henüz kayıtlı bir A/B deneyi bulunmuyor. <strong>Asla sahte veri uydurulmaz</strong>.
-            Yukarıdaki "+ Yeni A/B Testi Başlat" butonuna tıklayarak ilk ilan testinizi oluşturabilirsiniz.
+            {{ t('analytics.abTest.empty.descBefore') }} <strong>{{ t('analytics.abTest.empty.descBold') }}</strong>{{ t('analytics.abTest.empty.descAfter') }}
           </p>
         </div>
       </div>
@@ -169,44 +171,45 @@ interface AbTestCard {
       <div *ngIf="showCreateModal" class="modal-backdrop">
         <div class="modal-content glass-card">
           <div class="modal-header">
-            <h3>⚡ Yeni A/B Test Deneyi Oluştur</h3>
+            <h3>{{ t('analytics.abTest.modal.title') }}</h3>
             <button class="modal-close" (click)="showCreateModal = false">✕</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>Deney Adı:</label>
-              <input type="text" [(ngModel)]="newExp.experimentName" class="form-input" placeholder="Örn: 3D Ejderha Noel Başlık Testi" />
+              <label>{{ t('analytics.abTest.modal.experimentNameLabel') }}</label>
+              <input type="text" [(ngModel)]="newExp.experimentName" class="form-input" [placeholder]="t('analytics.abTest.modal.experimentNamePlaceholder')" />
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Listing ID:</label>
+                <label>{{ t('analytics.abTest.modal.listingIdLabel') }}</label>
                 <input type="text" [(ngModel)]="newExp.listingId" class="form-input" placeholder="189204859" />
               </div>
               <div class="form-group">
-                <label>İlan Başlığı:</label>
-                <input type="text" [(ngModel)]="newExp.listingTitle" class="form-input" placeholder="Orijinal İlan Başlığı" />
+                <label>{{ t('analytics.abTest.modal.listingTitleLabel') }}</label>
+                <input type="text" [(ngModel)]="newExp.listingTitle" class="form-input" [placeholder]="t('analytics.abTest.modal.listingTitlePlaceholder')" />
               </div>
             </div>
             <div class="form-group">
-              <label>A Varyantı Başlığı (Mevcut):</label>
+              <label>{{ t('analytics.abTest.modal.variantATitleLabel') }}</label>
               <input type="text" [(ngModel)]="newExp.variantA_Title" class="form-input" />
             </div>
             <div class="form-group">
-              <label>B Varyantı Başlığı (AI SEO):</label>
+              <label>{{ t('analytics.abTest.modal.variantBTitleLabel') }}</label>
               <input type="text" [(ngModel)]="newExp.variantB_Title" class="form-input" />
             </div>
             <div class="form-group">
-              <label>B Varyantı Etiketleri (virgülle ayırın):</label>
-              <input type="text" [(ngModel)]="newExpTagsRaw" class="form-input" placeholder="gift for gamer, 3d printed desk, dragon toy" />
+              <label>{{ t('analytics.abTest.modal.variantBTagsLabel') }}</label>
+              <input type="text" [(ngModel)]="newExpTagsRaw" class="form-input" [placeholder]="t('analytics.abTest.modal.variantBTagsPlaceholder')" />
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" (click)="showCreateModal = false">Vazgeç</button>
-            <button class="btn-save" (click)="submitCreate()">Deneyi Başlat</button>
+            <button class="btn-cancel" (click)="showCreateModal = false">{{ t('analytics.abTest.modal.cancelBtn') }}</button>
+            <button class="btn-save" (click)="submitCreate()">{{ t('analytics.abTest.modal.submitBtn') }}</button>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .ab-container {
@@ -539,6 +542,7 @@ interface AbTestCard {
 })
 export class AbTestDashboardComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   filterStatus: 'ALL' | 'Active' | 'Completed' = 'ALL';
@@ -606,7 +610,7 @@ export class AbTestDashboardComponent implements OnInit {
     this.newExp = {
       listingId: '189204859',
       listingTitle: 'Articulated Dragon 3D Print',
-      experimentName: 'SEO Başlık Dönüşüm Testi',
+      experimentName: this.transloco.translate('analytics.abTest.modal.defaultExperimentName'),
       variantA_Title: 'Articulated Dragon 3D Print Toy',
       variantB_Title: 'Fidget Sensory Dragon Gift for Gamers Desk Toy'
     };
@@ -630,7 +634,7 @@ export class AbTestDashboardComponent implements OnInit {
 
     this.etsyApi.createAbTest(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (created) => {
-        this.toastMessage = `✓ "${this.newExp.experimentName}" A/B testi başarıyla başlatıldı ve VDS SQLite'a kaydedildi!`;
+        this.toastMessage = this.transloco.translate('analytics.abTest.toast.createdVds', { name: this.newExp.experimentName });
         this.showCreateModal = false;
         this.loadFromVds();
         setTimeout(() => this.toastMessage = '', 4000);
@@ -653,7 +657,7 @@ export class AbTestDashboardComponent implements OnInit {
           afterViews: 145,
           afterSales: 6
         });
-        this.toastMessage = `✓ "${this.newExp.experimentName}" A/B testi yerel olarak başlatıldı!`;
+        this.toastMessage = this.transloco.translate('analytics.abTest.toast.createdLocal', { name: this.newExp.experimentName });
         this.showCreateModal = false;
         setTimeout(() => this.toastMessage = '', 4000);
       }
@@ -671,21 +675,21 @@ export class AbTestDashboardComponent implements OnInit {
             tags: exp.variantB_Tags
           }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: () => {
-              this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve 13 etiket mağazaya canlı olarak uygulandı.`;
+              this.toastMessage = this.transloco.translate('analytics.abTest.toast.winnerLive');
               setTimeout(() => this.toastMessage = '', 4500);
             },
             error: () => {
-              this.toastMessage = `✓ B Varyantı kazanan ilan edildi! (SQLite güncellendi)`;
+              this.toastMessage = this.transloco.translate('analytics.abTest.toast.winnerSqlite');
               setTimeout(() => this.toastMessage = '', 4000);
             }
           });
         } else {
-          this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve etiketler kaydedildi.`;
+          this.toastMessage = this.transloco.translate('analytics.abTest.toast.winnerSaved');
           setTimeout(() => this.toastMessage = '', 4000);
         }
       },
       error: () => {
-        this.toastMessage = `✓ B Varyantı kazanan ilan edildi! (Yerel uygulandı)`;
+        this.toastMessage = this.transloco.translate('analytics.abTest.toast.winnerLocal');
         setTimeout(() => this.toastMessage = '', 4000);
       }
     });
@@ -695,7 +699,7 @@ export class AbTestDashboardComponent implements OnInit {
     this.experiments = this.experiments.filter(e => e.id !== id);
     this.etsyApi.deleteAbTest(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = '✓ A/B test deneyi VDS veri tabanından silindi.';
+        this.toastMessage = this.transloco.translate('analytics.abTest.toast.deleted');
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });

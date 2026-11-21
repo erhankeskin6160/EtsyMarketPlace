@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -18,21 +19,23 @@ interface ScheduledJob {
 @Component({
   selector: 'app-automation-scheduler',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="auto-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">⚙️</div>
           <div>
-            <h1 class="page-title">Otomasyon & Arka Plan Görev Zamanlayıcı (Cron)</h1>
-            <p class="page-subtitle">VDS üzerinde 7/24 çalışan arka plan senkronizasyonu, CRO teklif merdiveni, C_max marj kalkanı ve kargo takip botları</p>
+            <h1 class="page-title">{{ t('tools.automation.title') }}</h1>
+            <p class="page-subtitle">{{ t('tools.automation.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-save-all" (click)="saveAll()">
-            💾 Zamanlayıcıyı VDS'e Kaydet
+            {{ t('tools.automation.saveBtn') }}
           </button>
         </div>
       </div>
@@ -40,24 +43,24 @@ interface ScheduledJob {
       <!-- STATUS CARDS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">AKTİF ZAMANLAYICILAR</span>
-          <span class="kpi-val text-green">{{ getActiveCount() }} Görev</span>
-          <span class="kpi-sub">VDS Systemd Servisi</span>
+          <span class="kpi-label">{{ t('tools.automation.kpi.activeSchedulers') }}</span>
+          <span class="kpi-val text-green">{{ t('tools.automation.kpi.tasksCount', { count: getActiveCount() }) }}</span>
+          <span class="kpi-sub">{{ t('tools.automation.kpi.systemdService') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">SON 24 SAAT ÇALIŞMA</span>
-          <span class="kpi-val text-blue">144 Tetiklenme</span>
-          <span class="kpi-sub">Hata Oranı: %0.0</span>
+          <span class="kpi-label">{{ t('tools.automation.kpi.last24h') }}</span>
+          <span class="kpi-val text-blue">{{ t('tools.automation.kpi.triggersValue') }}</span>
+          <span class="kpi-sub">{{ t('tools.automation.kpi.errorRate') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">CANLI KALP ATIŞI (HEARTBEAT)</span>
-          <span class="kpi-val text-purple">12 sn</span>
-          <span class="kpi-sub">VDS SQLite Senkronize</span>
+          <span class="kpi-label">{{ t('tools.automation.kpi.heartbeat') }}</span>
+          <span class="kpi-val text-purple">{{ t('tools.automation.kpi.heartbeatValue') }}</span>
+          <span class="kpi-sub">{{ t('tools.automation.kpi.sqliteSynced') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">CRO & C_MAX KALKANI</span>
-          <span class="kpi-val text-orange">Aktif Koruma</span>
-          <span class="kpi-sub">Kupon + Offsite Ads Denetimi</span>
+          <span class="kpi-label">{{ t('tools.automation.kpi.shieldTitle') }}</span>
+          <span class="kpi-val text-orange">{{ t('tools.automation.kpi.shieldValue') }}</span>
+          <span class="kpi-sub">{{ t('tools.automation.kpi.shieldSub') }}</span>
         </div>
       </div>
 
@@ -68,7 +71,7 @@ interface ScheduledJob {
 
       <!-- JOBS LIST SECTION -->
       <div class="jobs-section glass-card">
-        <h2 class="section-title">Otomasyon Görev Listesi</h2>
+        <h2 class="section-title">{{ t('tools.automation.sectionTitle') }}</h2>
 
         <div class="jobs-list">
           <div *ngFor="let job of jobs" class="job-card" [class.disabled]="!job.isEnabled">
@@ -76,20 +79,20 @@ interface ScheduledJob {
               <div class="job-status-dot" [class.green]="job.isEnabled" [class.gray]="!job.isEnabled"></div>
               <div class="job-info">
                 <div class="job-title-row">
-                  <span class="job-name">{{ job.name }}</span>
-                  <span class="cron-badge"><code>{{ job.schedule }}</code></span>
+                  <span class="job-name">{{ t('tools.automation.jobs.' + job.id + '.name') }}</span>
+                  <span class="cron-badge"><code>{{ t('tools.automation.jobs.' + job.id + '.schedule') }}</code></span>
                 </div>
-                <p class="job-desc">{{ job.desc }}</p>
+                <p class="job-desc">{{ t('tools.automation.jobs.' + job.id + '.desc') }}</p>
                 <div class="job-meta">
-                  <span>Son Çalışma: <b>{{ job.lastRun }}</b></span>
-                  <span>Sonraki Çalışma: <b>{{ job.nextRun }}</b></span>
+                  <span>{{ t('tools.automation.lastRun') }} <b>{{ (job.lastRun === 'NOW' || job.lastRun === 'Şimdi') ? t('tools.automation.justNow') : t('tools.automation.jobs.' + job.id + '.lastRun') }}</b></span>
+                  <span>{{ t('tools.automation.nextRun') }} <b>{{ t('tools.automation.jobs.' + job.id + '.nextRun') }}</b></span>
                 </div>
               </div>
             </div>
 
             <div class="job-right">
               <button class="btn-run-now" (click)="runNow(job)">
-                ⚡ Şimdi Çalıştır
+                {{ t('tools.automation.runNow') }}
               </button>
               <label class="switch">
                 <input type="checkbox" [(ngModel)]="job.isEnabled" />
@@ -100,6 +103,7 @@ interface ScheduledJob {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .auto-container {
@@ -292,6 +296,7 @@ interface ScheduledJob {
 })
 export class TaskSchedulerAutomationComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   toastMessage = '';
@@ -382,25 +387,30 @@ export class TaskSchedulerAutomationComponent implements OnInit {
   }
 
   runNow(job: ScheduledJob): void {
-    job.lastRun = 'Şimdi';
+    job.lastRun = 'NOW';
     this.saveAll(false);
+    const jobName = this.transloco.translate('tools.automation.jobs.' + job.id + '.name') || job.name;
 
     if (job.id === 'job-1') {
-      this.toastMessage = `⚡ "${job.name}" görevi VDS sunucusunda başlatıldı. Siparişler taranıyor...`;
+      this.toastMessage = this.transloco.translate('tools.automation.toasts.syncStarted', { name: jobName });
       this.etsyApi.syncFromEtsy().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (res) => {
-          this.toastMessage = `✓ "${job.name}" başarıyla tamamlandı: ${res.orderCount} sipariş, ${res.transactionCount} hareket senkronize edildi.`;
+          this.toastMessage = this.transloco.translate('tools.automation.toasts.syncCompleted', {
+            name: jobName,
+            orderCount: res.orderCount,
+            transactionCount: res.transactionCount
+          });
           setTimeout(() => this.toastMessage = '', 4500);
         },
         error: () => {
-          this.toastMessage = `✓ "${job.name}" görevi tetiklendi (VDS API bağlandı).`;
+          this.toastMessage = this.transloco.translate('tools.automation.toasts.syncTriggered', { name: jobName });
           setTimeout(() => this.toastMessage = '', 4000);
         }
       });
       return;
     }
 
-    this.toastMessage = `⚡ "${job.name}" görevi VDS sunucusunda anında çalıştırıldı!`;
+    this.toastMessage = this.transloco.translate('tools.automation.toasts.runImmediate', { name: jobName });
     setTimeout(() => this.toastMessage = '', 4000);
   }
 
@@ -408,7 +418,7 @@ export class TaskSchedulerAutomationComponent implements OnInit {
     try {
       localStorage.setItem('etsy_automation_jobs_v1', JSON.stringify(this.jobs));
       if (showToast) {
-        this.toastMessage = '✓ Tüm otomasyon zamanlama kuralları VDS cron servisine kaydedildi!';
+        this.toastMessage = this.transloco.translate('tools.automation.toasts.savedAll');
         setTimeout(() => this.toastMessage = '', 4000);
       }
     } catch {}

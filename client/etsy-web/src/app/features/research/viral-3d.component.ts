@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 
 interface ViralModel {
@@ -24,8 +25,10 @@ interface ViralModel {
 @Component({
   selector: 'app-viral-3d',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('research')],
   template: `
+    <ng-container *transloco="let t">
     <div class="viral-view">
       <!-- HEADER -->
       <div class="viral-header">
@@ -38,14 +41,14 @@ interface ViralModel {
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Viral 3D Model Avcısı & Arbitraj Radarı</h1>
-            <p class="page-subtitle">MakerWorld & Printables popüler modelleri, filament üretim maliyeti ve %200 - %500 Etsy arbitrajı</p>
+            <h1 class="page-title">{{ t('research.viral3d.header.title') }}</h1>
+            <p class="page-subtitle">{{ t('research.viral3d.header.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-actions">
           <div class="arbitrage-badge">
-            <span>🔥 Radar: {{ hotOpportunitiesCount }} Yüksek Fırsat Tespit Edildi</span>
+            <span>{{ t('research.viral3d.header.hotBadge', { count: hotOpportunitiesCount }) }}</span>
           </div>
         </div>
       </div>
@@ -53,22 +56,21 @@ interface ViralModel {
       <!-- PLATFORM & SEARCH FILTERS -->
       <div class="filter-strip">
         <div class="platform-tabs">
-          <button class="p-tab" [class.active]="activePlatform === 'all'" (click)="activePlatform = 'all'">Tüm Platformlar ({{ models.length }})</button>
+          <button class="p-tab" [class.active]="activePlatform === 'all'" (click)="activePlatform = 'all'">{{ t('research.viral3d.filters.allPlatforms', { count: models.length }) }}</button>
           <button class="p-tab" [class.active]="activePlatform === 'MakerWorld'" (click)="activePlatform = 'MakerWorld'">MakerWorld</button>
           <button class="p-tab" [class.active]="activePlatform === 'Printables'" (click)="activePlatform = 'Printables'">Printables</button>
           <button class="p-tab" [class.active]="activePlatform === 'CrealityCloud'" (click)="activePlatform = 'CrealityCloud'">CrealityCloud</button>
         </div>
 
         <div class="search-wrap">
-          <input type="text" [(ngModel)]="searchQuery" placeholder="Model, kategori veya tasarımcı ara..." class="search-input" />
+          <input type="text" [(ngModel)]="searchQuery" [placeholder]="t('research.viral3d.filters.searchPlaceholder')" class="search-input" />
         </div>
       </div>
 
       <!-- MAIN GRID OF 3D MODELS -->
       <div class="models-grid">
         <div *ngIf="filteredModels.length === 0" class="empty-hint">
-          Canlı model radarı veri kaynağı bağlanana kadar bu liste boştur (demo veri gösterilmez).
-          MakerWorld / Printables tarama servisi entegre edildiğinde popüler modeller burada otomatik listelenir.
+          {{ t('research.viral3d.card.emptyHint') }}
         </div>
         <div 
           *ngFor="let m of filteredModels" 
@@ -76,32 +78,32 @@ interface ViralModel {
           [class.hot-card]="m.isHotOpportunity">
           
           <div class="model-thumb-wrap">
-            <img [src]="m.imageUrl" class="model-img" alt="3D Model" />
+            <img [src]="m.imageUrl" class="model-img" [alt]="t('research.viral3d.card.imageAlt')" />
             <span class="platform-tag" [ngClass]="m.platform.toLowerCase()">{{ m.platform }}</span>
-            <span *ngIf="m.isHotOpportunity" class="hot-badge">★ %{{ m.arbitrageMargin }} KÂR</span>
+            <span *ngIf="m.isHotOpportunity" class="hot-badge">{{ t('research.viral3d.card.hotMarginBadge', { margin: m.arbitrageMargin }) }}</span>
           </div>
 
           <div class="model-info">
             <h3 class="model-title">{{ m.title }}</h3>
-            <span class="model-creator">Tasarımcı: {{ m.creator }}</span>
+            <span class="model-creator">{{ t('research.viral3d.card.creator', { creator: m.creator }) }}</span>
 
             <div class="model-stats">
-              <span>📥 {{ m.downloads7d | number }} İndirme (7g)</span>
-              <span>❤️ {{ m.likes | number }} Beğeni</span>
+              <span>{{ t('research.viral3d.card.downloads7d', { count: (m.downloads7d | number) }) }}</span>
+              <span>{{ t('research.viral3d.card.likes', { count: (m.likes | number) }) }}</span>
             </div>
 
             <!-- ARBITRAGE FINANCIAL MATRIX -->
             <div class="arbitrage-matrix">
               <div class="matrix-item">
-                <span class="m-label">Filament (Gram)</span>
-                <span class="m-val">{{ m.weightGrams }}g ({{ m.printHours }}s)</span>
+                <span class="m-label">{{ t('research.viral3d.card.filamentLabel') }}</span>
+                <span class="m-val">{{ t('research.viral3d.card.filamentVal', { grams: m.weightGrams, hours: m.printHours }) }}</span>
               </div>
               <div class="matrix-item">
-                <span class="m-label">Üretim Maliyeti</span>
+                <span class="m-label">{{ t('research.viral3d.card.costLabel') }}</span>
                 <span class="m-val cost">&#36;{{ m.estCostUsd.toFixed(2) }}</span>
               </div>
               <div class="matrix-item">
-                <span class="m-label">Etsy Piyasa Fiyatı</span>
+                <span class="m-label">{{ t('research.viral3d.card.etsyPriceLabel') }}</span>
                 <span class="m-val price">&#36;{{ m.etsyAvgPriceUsd.toFixed(2) }}</span>
               </div>
             </div>
@@ -109,7 +111,7 @@ interface ViralModel {
             <!-- NET PROFIT BADGE -->
             <div class="net-arbitrage-banner">
               <div>
-                <span class="arb-label">Tahmini Net Kâr:</span>
+                <span class="arb-label">{{ t('research.viral3d.card.estNetProfit') }}</span>
                 <span class="arb-val">&#36;{{ (m.etsyAvgPriceUsd - m.estCostUsd - (m.etsyAvgPriceUsd * 0.1)).toFixed(2) }}</span>
                 <span class="arb-try">(₺{{ ((m.etsyAvgPriceUsd - m.estCostUsd - (m.etsyAvgPriceUsd * 0.1)) * usdTryRate).toFixed(2) }})</span>
               </div>
@@ -117,12 +119,13 @@ interface ViralModel {
             </div>
 
             <button class="btn-create-listing" (click)="createListingFromModel(m)">
-              ✨ Bu Modeli Doğrudan Etsy İlanına Dönüştür
+              {{ t('research.viral3d.card.createListingBtn') }}
             </button>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .viral-view {

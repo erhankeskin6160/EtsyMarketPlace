@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 
 interface ArbitrageItem {
@@ -20,21 +21,23 @@ interface ArbitrageItem {
 @Component({
   selector: 'app-external-arbitrage',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('research')],
   template: `
+    <ng-container *transloco="let t">
     <div class="arb-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">🌐</div>
           <div>
-            <h1 class="page-title">Dış Pazar Yeri Bulucu & Çapraz Arbitraj Radarı</h1>
-            <p class="page-subtitle">Amazon Handmade, AliExpress ve eBay üzerindeki fiyat farklarını tespit edip Etsy'de yüksek kâr marjıyla listeleyin</p>
+            <h1 class="page-title">{{ t('research.externalArbitrage.header.title') }}</h1>
+            <p class="page-subtitle">{{ t('research.externalArbitrage.header.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-scan" (click)="scanMarkets()">
-            ⚡ Çapraz Pazarları Tara
+            {{ t('research.externalArbitrage.header.scanBtn') }}
           </button>
         </div>
       </div>
@@ -42,24 +45,24 @@ interface ArbitrageItem {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">LİSTELENEN ÜRÜN</span>
-          <span class="kpi-val text-blue">{{ items.length }} Ürün</span>
-          <span class="kpi-sub">Amazon, AliExpress, eBay</span>
+          <span class="kpi-label">{{ t('research.externalArbitrage.kpi.listedProducts') }}</span>
+          <span class="kpi-val text-blue">{{ t('research.externalArbitrage.kpi.productsCount', { count: items.length }) }}</span>
+          <span class="kpi-sub">{{ t('research.externalArbitrage.kpi.sourcesSub') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">YÜKSEK KÂR FIRSATI</span>
-          <span class="kpi-val text-green">{{ highMarginCount }} Ürün</span>
-          <span class="kpi-sub">%150+ Net Marj</span>
+          <span class="kpi-label">{{ t('research.externalArbitrage.kpi.highMargin') }}</span>
+          <span class="kpi-val text-green">{{ t('research.externalArbitrage.kpi.productsCount', { count: highMarginCount }) }}</span>
+          <span class="kpi-sub">{{ t('research.externalArbitrage.kpi.highMarginSub') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORTALAMA ARBİTRAJ KÂRI</span>
+          <span class="kpi-label">{{ t('research.externalArbitrage.kpi.avgProfit') }}</span>
           <span class="kpi-val text-purple">{{ items.length ? ('+$' + (avgNetProfit | number:'1.2-2')) : '—' }}</span>
-          <span class="kpi-sub">Ürün Başına Net</span>
+          <span class="kpi-sub">{{ t('research.externalArbitrage.kpi.perProductSub') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORT. TESLİMAT SÜRESİ</span>
+          <span class="kpi-label">{{ t('research.externalArbitrage.kpi.avgShipping') }}</span>
           <span class="kpi-val text-orange">—</span>
-          <span class="kpi-sub">Kargo verisi bağlandığında devreye girer</span>
+          <span class="kpi-sub">{{ t('research.externalArbitrage.kpi.shippingSub') }}</span>
         </div>
       </div>
 
@@ -71,9 +74,9 @@ interface ArbitrageItem {
       <!-- ITEMS GRID -->
       <div class="items-section">
         <div class="section-top">
-          <h2 class="section-title">Keşfedilen Arbitraj Fırsatları ({{ items.length }})</h2>
+          <h2 class="section-title">{{ t('research.externalArbitrage.section.title', { count: items.length }) }}</h2>
           <div class="filter-pills">
-            <button [class.active]="marketFilter === 'ALL'" (click)="marketFilter = 'ALL'">Tümü</button>
+            <button [class.active]="marketFilter === 'ALL'" (click)="marketFilter = 'ALL'">{{ t('research.externalArbitrage.section.filterAll') }}</button>
             <button [class.active]="marketFilter === 'AliExpress'" (click)="marketFilter = 'AliExpress'">AliExpress</button>
             <button [class.active]="marketFilter === 'Amazon'" (click)="marketFilter = 'Amazon'">Amazon</button>
           </div>
@@ -82,12 +85,12 @@ interface ArbitrageItem {
         <div class="items-grid">
           <div *ngIf="filteredItems.length === 0" class="empty-hint">
             {{ items.length === 0
-              ? 'Canlı arbitraj listesi şu an boş — dış pazar fiyat uçları (Amazon/AliExpress) bağlandığında fırsatlar burada listelenecek. Bu sayfa demo veri göstermez.'
-              : 'Bu filtreye uyan ürün bulunamadı.' }}
+              ? t('research.externalArbitrage.section.emptyNoData')
+              : t('research.externalArbitrage.section.emptyFiltered') }}
           </div>
           <div *ngFor="let item of filteredItems" class="item-card glass-card">
             <div class="item-img-wrap">
-              <img [src]="item.imageUrl" alt="Product" class="item-img" />
+              <img [src]="item.imageUrl" [alt]="t('research.externalArbitrage.section.productAlt')" class="item-img" />
               <span class="source-badge" [ngClass]="item.sourceMarket.toLowerCase()">{{ item.sourceMarket }}</span>
             </div>
 
@@ -98,23 +101,23 @@ interface ArbitrageItem {
               <!-- PRICE MATRIX -->
               <div class="price-matrix">
                 <div class="price-col">
-                  <span class="price-label">Tedarik Alış:</span>
+                  <span class="price-label">{{ t('research.externalArbitrage.section.sourcePrice') }}</span>
                   <span class="price-val">\${{ item.sourcePrice | number:'1.2-2' }}</span>
-                  <span class="price-sub">Kargo: {{ item.sourceShippingDays }}</span>
+                  <span class="price-sub">{{ t('research.externalArbitrage.section.shipping', { days: item.sourceShippingDays }) }}</span>
                 </div>
                 <div class="arrow-col">➔</div>
                 <div class="price-col">
-                  <span class="price-label">Etsy Satış:</span>
+                  <span class="price-label">{{ t('research.externalArbitrage.section.etsyPrice') }}</span>
                   <span class="price-val text-green">\${{ item.etsyAvgPrice | number:'1.2-2' }}</span>
-                  <span class="price-sub">Net Kâr: <b>+\${{ item.netProfitUsd }}</b></span>
+                  <span class="price-sub">{{ t('research.externalArbitrage.section.netProfit') }} <b>+\${{ item.netProfitUsd }}</b></span>
                 </div>
               </div>
 
               <!-- MARGIN BAR -->
               <div class="margin-row">
-                <span>Kâr Marjı: <b class="text-green">+%{{ item.estimatedMargin }}</b></span>
+                <span>{{ t('research.externalArbitrage.section.marginLabel') }} <b class="text-green">+%{{ item.estimatedMargin }}</b></span>
                 <button class="btn-import-listing" (click)="importToCreator(item)">
-                  🚀 Etsy Taslağı Oluştur
+                  {{ t('research.externalArbitrage.section.createDraftBtn') }}
                 </button>
               </div>
             </div>
@@ -122,6 +125,7 @@ interface ArbitrageItem {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .arb-container {
@@ -333,6 +337,7 @@ interface ArbitrageItem {
 export class ExternalArbitrageRadarComponent implements OnInit {
   etsyApi = inject(EtsyApiService);
   router = inject(Router);
+  private transloco = inject(TranslocoService);
 
   marketFilter: 'ALL' | 'AliExpress' | 'Amazon' = 'ALL';
   toastMessage = '';
@@ -356,7 +361,7 @@ export class ExternalArbitrageRadarComponent implements OnInit {
   }
 
   scanMarkets(): void {
-    this.toastMessage = '⚠️ Canlı çapraz pazar tarama servisi bu panel için henüz bağlı değil — veri kaynağı entegre edildiğinde sonuçlar otomatik listelenecek.';
+    this.toastMessage = this.transloco.translate('research.externalArbitrage.messages.scanUnavailable');
     setTimeout(() => this.toastMessage = '', 5000);
   }
 

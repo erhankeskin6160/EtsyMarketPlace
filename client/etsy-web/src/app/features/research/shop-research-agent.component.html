@@ -1,17 +1,18 @@
+<ng-container *transloco="let t">
 <div class="agent-page">
   <header class="agent-header">
     <div>
-      <h1>🤖 Mağaza Araştırma Ajanı V3 • Komuta Merkezi</h1>
+      <h1>{{ t('research.shopAgent.header.title') }}</h1>
       <p class="subtitle">
-        Etsy pazarı, rakip mağaza boşlukları, sezon sinyalleri ve 3D model gölünü TR→ABD navlun gerçekçiliğiyle birleştiren otonom ajan kokpiti.
+        {{ t('research.shopAgent.header.subtitle') }}
       </p>
     </div>
     <div class="header-actions">
       <button class="btn-secondary" (click)="toggleDnaSettings()">
-        {{ dnaSettingsExpanded() ? '▲ DNA Ayarlarını Gizle' : '⚙️ DNA & Maliyet Ayarları' }}
+        {{ dnaSettingsExpanded() ? t('research.shopAgent.header.hideDnaBtn') : t('research.shopAgent.header.showDnaBtn') }}
       </button>
       <button class="btn-secondary" (click)="loadDna(true)" [disabled]="loadingDna()">
-        {{ loadingDna() ? 'Analiz Ediliyor...' : '🧬 DNA Yenile' }}
+        {{ loadingDna() ? t('research.shopAgent.header.refreshingDnaBtn') : t('research.shopAgent.header.refreshDnaBtn') }}
       </button>
     </div>
   </header>
@@ -27,19 +28,19 @@
   <section class="dna-compact-bar">
     @if (dna(); as profile) {
       <div class="dna-pills-row">
-        <span class="dna-chip primary">🏪 Shop #{{ profile.shopId }} (v{{ profile.dnaVersion }})</span>
+        <span class="dna-chip primary">{{ t('research.shopAgent.dnaBar.shopChip', { shopId: profile.shopId, version: profile.dnaVersion }) }}</span>
         <span class="dna-chip">{{ profile.primaryNiche }}</span>
         <span class="dna-chip">💲 ${{ profile.targetPriceMinUsd }}–${{ profile.targetPriceMaxUsd }}</span>
-        <span class="dna-chip">📈 Min. Marj %{{ profile.minAcceptableNetMarginPct }}</span>
-        <span class="dna-chip">🚚 Navlun: {{ (profile.defaultShippingCostUsd ?? 0) > 0 ? '$' + profile.defaultShippingCostUsd : 'Otomatik Tahmin' }}</span>
-        <span class="dna-chip">{{ profile.supports3DPrint ? '🖨️ 3D Gölü Aktif' : '🎨 El Yapımı / Tasarım' }}</span>
+        <span class="dna-chip">{{ t('research.shopAgent.dnaBar.minMargin', { pct: profile.minAcceptableNetMarginPct }) }}</span>
+        <span class="dna-chip">{{ t('research.shopAgent.dnaBar.shipping', { value: (profile.defaultShippingCostUsd ?? 0) > 0 ? '$' + profile.defaultShippingCostUsd : t('research.shopAgent.dnaBar.shippingAuto') }) }}</span>
+        <span class="dna-chip">{{ profile.supports3DPrint ? t('research.shopAgent.dnaBar.mode3d') : t('research.shopAgent.dnaBar.modeHandmade') }}</span>
       </div>
     } @else if (loadingDna()) {
-      <div class="dna-loading-inline">Mağaza DNA profili yükleniyor...</div>
+      <div class="dna-loading-inline">{{ t('research.shopAgent.dnaBar.loading') }}</div>
     } @else {
       <div class="dna-loading-inline">
-        <span>Mağaza DNA profili henüz yüklenemedi.</span>
-        <button class="btn-mini" (click)="loadDna(false)">🔄 Tekrar Yükle</button>
+        <span>{{ t('research.shopAgent.dnaBar.notLoaded') }}</span>
+        <button class="btn-mini" (click)="loadDna(false)">{{ t('research.shopAgent.dnaBar.retryBtn') }}</button>
       </div>
     }
   </section>
@@ -54,48 +55,48 @@
       </div>
       <div class="form-grid-v3">
         <div class="field">
-          <span>Çalışma Modu</span>
-          <div class="manual-mode-pill">🔒 Yalnızca Manuel (Ben Başlattığımda)</div>
+          <span>{{ t('research.shopAgent.dnaForm.runModeLabel') }}</span>
+          <div class="manual-mode-pill">{{ t('research.shopAgent.dnaForm.manualOnlyPill') }}</div>
         </div>
         <label class="field">
-          <span>Min. Net Marj (%)</span>
+          <span>{{ t('research.shopAgent.dnaForm.minMarginLabel') }}</span>
           <input type="number" [(ngModel)]="minMarginPct" min="5" max="85" />
         </label>
         <label class="field">
-          <span>Hedef Min. ($)</span>
+          <span>{{ t('research.shopAgent.dnaForm.targetMinLabel') }}</span>
           <input type="number" [(ngModel)]="priceMinUsd" min="1" />
         </label>
         <label class="field">
-          <span>Hedef Maks. ($)</span>
+          <span>{{ t('research.shopAgent.dnaForm.targetMaxLabel') }}</span>
           <input type="number" [(ngModel)]="priceMaxUsd" min="5" />
         </label>
         <label class="field">
-          <span>Varsayılan Navlun ($) (0=Otomatik)</span>
+          <span>{{ t('research.shopAgent.dnaForm.defaultShippingLabel') }}</span>
           <input type="number" [(ngModel)]="defaultShippingCostUsd" min="0" max="100" step="0.5" />
         </label>
         <label class="field">
-          <span>Ambalaj Maliyeti ($)</span>
+          <span>{{ t('research.shopAgent.dnaForm.packagingLabel') }}</span>
           <input type="number" [(ngModel)]="defaultPackagingCostUsd" min="0" max="25" step="0.25" />
         </label>
         <label class="field">
-          <span>İade / Fire Tamponu (%)</span>
+          <span>{{ t('research.shopAgent.dnaForm.returnReserveLabel') }}</span>
           <input type="number" [(ngModel)]="returnReserveRatePct" min="0" max="20" step="0.5" />
         </label>
         <label class="field">
-          <span>Tercih Edilen Materyaller</span>
-          <input type="text" [(ngModel)]="materialsInput" placeholder="PLA, Ahşap, Seramik..." />
+          <span>{{ t('research.shopAgent.dnaForm.materialsLabel') }}</span>
+          <input type="text" [(ngModel)]="materialsInput" [placeholder]="t('research.shopAgent.dnaForm.materialsPlaceholder')" />
         </label>
         <label class="field span-2">
-          <span>Yasaklı Kelimeler (Telif / İstenmeyen)</span>
-          <input type="text" [(ngModel)]="forbiddenKeywordsInput" placeholder="disney, marvel, nike..." />
+          <span>{{ t('research.shopAgent.dnaForm.forbiddenLabel') }}</span>
+          <input type="text" [(ngModel)]="forbiddenKeywordsInput" [placeholder]="t('research.shopAgent.dnaForm.forbiddenPlaceholder')" />
         </label>
         <label class="checkbox-field span-2">
           <input type="checkbox" [(ngModel)]="supports3DPrint" />
-          <span>3D Baskı / STL model gölünü (MakerWorld, Printables vb.) da tara</span>
+          <span>{{ t('research.shopAgent.dnaForm.supports3dLabel') }}</span>
         </label>
       </div>
       <button class="btn-primary" (click)="saveDnaSettings()" [disabled]="savingDna()">
-        {{ savingDna() ? 'Kaydediliyor...' : '💾 DNA Kısıtlarını & Landed Maliyet Ayarlarını Kaydet' }}
+        {{ savingDna() ? t('research.shopAgent.dnaForm.savingBtn') : t('research.shopAgent.dnaForm.saveBtn') }}
       </button>
     </section>
   }
@@ -107,38 +108,38 @@
         type="text"
         class="focus-input"
         [(ngModel)]="focusHint"
-        placeholder="İsteğe bağlı odak ipucu (boş bırakırsanız Thompson Bandit + sezon sinyalleriyle hipotez üretir)..."
+        [placeholder]="t('research.shopAgent.runner.focusPlaceholder')"
       />
-      <select class="ai-mode-select" [(ngModel)]="aiMode" title="Token harcamasını kontrol etmek için AI kullanım modunu seçin">
-        <option [ngValue]="0">⚡ Ekonomik (0 Token)</option>
-        <option [ngValue]="1">⚖️ Dengeli (Top 5 AI Blueprint)</option>
-        <option [ngValue]="2">🧠 Tam AI (Sorgu + Top 5 Blueprint)</option>
+      <select class="ai-mode-select" [(ngModel)]="aiMode" [title]="t('research.shopAgent.runner.aiModeTitle')">
+        <option [ngValue]="0">{{ t('research.shopAgent.runner.aiModeEco') }}</option>
+        <option [ngValue]="1">{{ t('research.shopAgent.runner.aiModeBalanced') }}</option>
+        <option [ngValue]="2">{{ t('research.shopAgent.runner.aiModeFull') }}</option>
       </select>
       <button class="btn-run" (click)="runAgentNow()" [disabled]="runningAgent()">
-        {{ runningAgent() ? '⏳ Ajan Araştırıyor...' : '🚀 Mağazam İçin Araştır' }}
+        {{ runningAgent() ? t('research.shopAgent.runner.runningBtn') : t('research.shopAgent.runner.runBtn') }}
       </button>
     </div>
 
     <!-- 6-Stage SSE Data Refinery Funnel -->
     @if (liveProgress(); as prog) {
       <div class="sse-funnel">
-        <div class="funnel-step" [class.active]="prog.stageIndex === 1" [class.done]="prog.stageIndex > 1">1. DNA &amp; Sezon</div>
-        <div class="funnel-step" [class.active]="prog.stageIndex === 2" [class.done]="prog.stageIndex > 2">2. Bandit Hipotez</div>
-        <div class="funnel-step" [class.active]="prog.stageIndex === 3" [class.done]="prog.stageIndex > 3">3. Çoklu Keşif</div>
-        <div class="funnel-step" [class.active]="prog.stageIndex === 4" [class.done]="prog.stageIndex > 4">4. Eleme ({{ prog.scannedCount }})</div>
-        <div class="funnel-step" [class.active]="prog.stageIndex === 5" [class.done]="prog.stageIndex > 5">5. Critic Denetim</div>
-        <div class="funnel-step" [class.active]="prog.stageIndex === 6">6. Blueprint ({{ prog.remainingCount }})</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 1" [class.done]="prog.stageIndex > 1">{{ t('research.shopAgent.funnel.step1') }}</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 2" [class.done]="prog.stageIndex > 2">{{ t('research.shopAgent.funnel.step2') }}</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 3" [class.done]="prog.stageIndex > 3">{{ t('research.shopAgent.funnel.step3') }}</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 4" [class.done]="prog.stageIndex > 4">{{ t('research.shopAgent.funnel.step4', { count: prog.scannedCount }) }}</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 5" [class.done]="prog.stageIndex > 5">{{ t('research.shopAgent.funnel.step5') }}</div>
+        <div class="funnel-step" [class.active]="prog.stageIndex === 6">{{ t('research.shopAgent.funnel.step6', { count: prog.remainingCount }) }}</div>
       </div>
       <div class="sse-detail">{{ prog.detail }}</div>
     } @else {
       @if (activeTelemetry(); as tel) {
         <div class="sse-funnel completed">
-          <div class="funnel-stat"><span>1. Taranan</span><strong>{{ tel.scannedCount }}</strong></div>
-          <div class="funnel-stat warn"><span>2. Telif/Hafıza</span><strong>-{{ tel.blockedByIpCount + tel.rejectedByMemoryCount }}</strong></div>
-          <div class="funnel-stat warn"><span>3. Fiyat/Ölü Niş</span><strong>-{{ tel.rejectedByPriceCount + tel.rejectedByDeadNicheCount }}</strong></div>
-          <div class="funnel-stat warn"><span>4. Marj/Navlun</span><strong>-{{ tel.rejectedByMarginCount }}</strong></div>
-          <div class="funnel-stat warn"><span>5. Yamyamlaşma</span><strong>-{{ tel.rejectedByCannibalizationCount }}</strong></div>
-          <div class="funnel-stat win"><span>6. Kazanan ({{ tel.criticIterations }} tur)</span><strong>{{ tel.winningCount }}</strong></div>
+          <div class="funnel-stat"><span>{{ t('research.shopAgent.funnel.statScanned') }}</span><strong>{{ tel.scannedCount }}</strong></div>
+          <div class="funnel-stat warn"><span>{{ t('research.shopAgent.funnel.statIpMemory') }}</span><strong>-{{ tel.blockedByIpCount + tel.rejectedByMemoryCount }}</strong></div>
+          <div class="funnel-stat warn"><span>{{ t('research.shopAgent.funnel.statPriceDead') }}</span><strong>-{{ tel.rejectedByPriceCount + tel.rejectedByDeadNicheCount }}</strong></div>
+          <div class="funnel-stat warn"><span>{{ t('research.shopAgent.funnel.statMarginShip') }}</span><strong>-{{ tel.rejectedByMarginCount }}</strong></div>
+          <div class="funnel-stat warn"><span>{{ t('research.shopAgent.funnel.statCannibal') }}</span><strong>-{{ tel.rejectedByCannibalizationCount }}</strong></div>
+          <div class="funnel-stat win"><span>{{ t('research.shopAgent.funnel.statWinners', { turns: tel.criticIterations }) }}</span><strong>{{ tel.winningCount }}</strong></div>
         </div>
       }
     }
@@ -162,10 +163,10 @@
   <!-- Main V3 Split Workspace: Candidate Grid + Slide-Over Evidence/Simulator Drawer -->
   @if (activeRun(); as run) {
     <div class="run-summary-box">
-      <div><strong>Oturum Özeti:</strong> {{ run.summary }}</div>
+      <div><strong>{{ t('research.shopAgent.run.summaryLabel') }}</strong> {{ run.summary }}</div>
       @if (run.searchQueriesUsed.length > 0) {
         <div class="queries-used">
-          <span>Kullanılan Sorgular:</span>
+          <span>{{ t('research.shopAgent.run.queriesUsed') }}</span>
           @for (q of run.searchQueriesUsed; track q) {
             <span class="query-pill">{{ q }}</span>
           }
@@ -175,18 +176,18 @@
 
     <div class="filter-toolbar">
       <div class="filter-chips">
-        <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="filterMode.set('all')">Tümü ({{ run.candidates.length }})</button>
-        <button class="filter-btn" [class.active]="filterMode() === 'safe'" (click)="filterMode.set('safe')">🛡️ Telif Güvenli</button>
-        <button class="filter-btn" [class.active]="filterMode() === 'explore'" (click)="filterMode.set('explore')">🧭 Keşif (%20)</button>
-        <button class="filter-btn" [class.active]="filterMode() === 'low_monopoly'" (click)="filterMode.set('low_monopoly')">⚖️ Düşük Tekel (&lt;%30)</button>
-        <button class="filter-btn" [class.active]="filterMode() === 'high_demand'" (click)="filterMode.set('high_demand')">🔥 Yüksek Talep</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="filterMode.set('all')">{{ t('research.shopAgent.run.filterAll', { count: run.candidates.length }) }}</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'safe'" (click)="filterMode.set('safe')">{{ t('research.shopAgent.run.filterSafe') }}</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'explore'" (click)="filterMode.set('explore')">{{ t('research.shopAgent.run.filterExplore') }}</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'low_monopoly'" (click)="filterMode.set('low_monopoly')">{{ t('research.shopAgent.run.filterLowMonopoly') }}</button>
+        <button class="filter-btn" [class.active]="filterMode() === 'high_demand'" (click)="filterMode.set('high_demand')">{{ t('research.shopAgent.run.filterHighDemand') }}</button>
       </div>
       <div class="sort-box">
-        <span>Sırala:</span>
+        <span>{{ t('research.shopAgent.run.sortLabel') }}</span>
         <select [ngModel]="sortMode()" (ngModelChange)="sortMode.set($event)">
-          <option value="opportunity">Fırsat Puanı</option>
-          <option value="profit">Net Kâr</option>
-          <option value="momentum">Talep İvmesi</option>
+          <option value="opportunity">{{ t('research.shopAgent.run.sortOpportunity') }}</option>
+          <option value="profit">{{ t('research.shopAgent.run.sortProfit') }}</option>
+          <option value="momentum">{{ t('research.shopAgent.run.sortMomentum') }}</option>
         </select>
       </div>
     </div>
@@ -217,24 +218,24 @@
                     <span class="source-badge">{{ c.sourcePlatform }}</span>
                     <span class="status-badge">{{ decisionLabel(c.decisionStatus) }}</span>
                     @if (c.isExplorationCandidate) {
-                      <span class="explore-badge">🧭 Keşif</span>
+                      <span class="explore-badge">{{ t('research.shopAgent.card.exploreBadge') }}</span>
                     }
                     @if ((c.seasonalBoostPct ?? 0) > 0) {
-                      <span class="season-badge">📅 +{{ c.seasonalBoostPct }}% Sezon</span>
+                      <span class="season-badge">{{ t('research.shopAgent.card.seasonBadge', { pct: c.seasonalBoostPct }) }}</span>
                     }
                   </div>
                   <div class="scores">
-                    <span class="score-pill opp">Fırsat: {{ c.opportunityScore }}/100</span>
-                    <span class="score-pill demand" [class.high]="c.demandConfidence === 2">Talep: {{ c.demandScore }}</span>
+                    <span class="score-pill opp">{{ t('research.shopAgent.card.oppScore', { score: c.opportunityScore }) }}</span>
+                    <span class="score-pill demand" [class.high]="c.demandConfidence === 2">{{ t('research.shopAgent.card.demandScore', { score: c.demandScore }) }}</span>
                     <span class="score-pill risk" [class.high]="c.riskDecision === 1">{{ riskDecisionLabel(c.riskDecision) }}</span>
                   </div>
                 </div>
 
                 <h3>{{ c.title }}</h3>
                 @if (c.mobileTitle55) {
-                  <p class="mobile-title"><strong>📱 Mobil Başlık ({{ c.mobileTitle55.length }}/55):</strong> {{ c.mobileTitle55 }}</p>
+                  <p class="mobile-title"><strong>{{ t('research.shopAgent.card.mobileTitle', { len: c.mobileTitle55.length }) }}</strong> {{ c.mobileTitle55 }}</p>
                 }
-                <p class="suggested-title"><strong>SEO Başlık ({{ c.suggestedTitle.length }}/140):</strong> {{ c.suggestedTitle }}</p>
+                <p class="suggested-title"><strong>{{ t('research.shopAgent.card.seoTitle', { len: c.suggestedTitle.length }) }}</strong> {{ c.suggestedTitle }}</p>
 
                 @if (c.warningFlags && c.warningFlags.length > 0) {
                   <div class="warning-pills">
@@ -250,37 +251,37 @@
 
                 <div class="metrics-row">
                   <div class="metric">
-                    <span class="label">Satış</span>
+                    <span class="label">{{ t('research.shopAgent.card.metricSale') }}</span>
                     <span class="value">${{ c.estimatedSellPriceUsd | number:'1.2-2' }}</span>
                   </div>
                   <div class="metric profit">
-                    <span class="label">Net Kâr</span>
+                    <span class="label">{{ t('research.shopAgent.card.metricNetProfit') }}</span>
                     <span class="value">${{ c.estimatedNetProfitUsd | number:'1.2-2' }} (%{{ c.estimatedNetMarginPct | number:'1.1-1' }})</span>
                   </div>
                   <div class="metric">
-                    <span class="label">TR→ABD Navlun</span>
+                    <span class="label">{{ t('research.shopAgent.card.metricShipping') }}</span>
                     <span class="value">~${{ (c.estimatedShippingUsd ?? 9.5) | number:'1.2-2' }}</span>
                   </div>
                   <div class="metric">
-                    <span class="label">Tekel / Ücr.Kargo</span>
+                    <span class="label">{{ t('research.shopAgent.card.metricMonopolyShip') }}</span>
                     <span class="value">%{{ c.topShopConcentrationPct ?? 0 }} / %{{ c.freeShippingRatioPct ?? 0 }}</span>
                   </div>
                 </div>
 
                 <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button class="btn-draft" (click)="sendToFastCreator(c)">⚡ Taslağa Aktar</button>
-                  <button class="btn-accept" (click)="acceptCandidate(c)" [disabled]="c.decisionStatus === 1">✅ Onayla</button>
-                  <button class="btn-reject" (click)="rejectCandidate(c, 3)" [disabled]="c.decisionStatus === 2">❌ Tarz Dışı</button>
-                  <button class="btn-reject" (click)="rejectCandidate(c, 2)" [disabled]="c.decisionStatus === 2">💸 Kâr Düşük</button>
+                  <button class="btn-draft" (click)="sendToFastCreator(c)">{{ t('research.shopAgent.card.btnDraft') }}</button>
+                  <button class="btn-accept" (click)="acceptCandidate(c)" [disabled]="c.decisionStatus === 1">{{ t('research.shopAgent.card.btnAccept') }}</button>
+                  <button class="btn-reject" (click)="rejectCandidate(c, 3)" [disabled]="c.decisionStatus === 2">{{ t('research.shopAgent.card.btnRejectStyle') }}</button>
+                  <button class="btn-reject" (click)="rejectCandidate(c, 2)" [disabled]="c.decisionStatus === 2">{{ t('research.shopAgent.card.btnRejectMargin') }}</button>
                   <button
                     class="btn-compare"
                     [class.pinned]="isPinnedForCompare(c.candidateId)"
                     (click)="toggleCompare(c.candidateId, $event)"
                   >
-                    {{ isPinnedForCompare(c.candidateId) ? '✓ Kıyasla' : '+ Kıyasla' }}
+                    {{ isPinnedForCompare(c.candidateId) ? t('research.shopAgent.card.btnComparePinned') : t('research.shopAgent.card.btnCompareAdd') }}
                   </button>
                   @if (c.sourceUrl) {
-                    <a class="btn-link" [href]="c.sourceUrl" target="_blank" rel="noopener">🔗 Kaynak</a>
+                    <a class="btn-link" [href]="c.sourceUrl" target="_blank" rel="noopener">{{ t('research.shopAgent.card.btnSource') }}</a>
                   }
                 </div>
               </div>
@@ -288,7 +289,7 @@
           </article>
         } @empty {
           <div class="empty-state">
-            Bu filtrede veya oturumda kriterlere uyan aday ürün bulunamadı. Filtreleri sıfırlayın veya fiyat/marj aralığını esnetip tekrar deneyin.
+            {{ t('research.shopAgent.run.emptyFiltered') }}
           </div>
         }
       </div>
@@ -297,8 +298,8 @@
       @if (selectedCandidate(); as sel) {
         <aside class="panel evidence-drawer">
           <div class="drawer-tabs">
-            <button [class.active]="drawerTab() === 'evidence'" (click)="drawerTab.set('evidence')">🔬 Kanıt &amp; Simülatör</button>
-            <button [class.active]="drawerTab() === 'compare'" (click)="drawerTab.set('compare')">📊 Kıyasla ({{ comparedCandidates().length }})</button>
+            <button [class.active]="drawerTab() === 'evidence'" (click)="drawerTab.set('evidence')">{{ t('research.shopAgent.drawer.tabEvidence') }}</button>
+            <button [class.active]="drawerTab() === 'compare'" (click)="drawerTab.set('compare')">{{ t('research.shopAgent.drawer.tabCompare', { count: comparedCandidates().length }) }}</button>
           </div>
 
           @if (drawerTab() === 'evidence') {
@@ -309,45 +310,45 @@
                 }
                 <div>
                   <div class="drawer-title">{{ sel.title }}</div>
-                  <div class="drawer-sub">Fırsat {{ sel.opportunityScore }}/100 • İvme {{ sel.momentumScore ?? 50 }}/100 • Tekel %{{ sel.topShopConcentrationPct ?? 0 }}</div>
+                  <div class="drawer-sub">{{ t('research.shopAgent.drawer.heroSub', { opp: sel.opportunityScore, momentum: sel.momentumScore ?? 50, monopoly: sel.topShopConcentrationPct ?? 0 }) }}</div>
                 </div>
               </div>
 
               <!-- Interactive TR->ABD Simulator -->
               <div class="simulator-box">
                 <div class="sim-header">
-                  <span>🧮 TR → ABD Canlı Kâr &amp; Navlun Simülatörü</span>
+                  <span>{{ t('research.shopAgent.drawer.simTitle') }}</span>
                   <div class="ads-toggle">
-                    <button [class.active]="simAdsPct() === 0" (click)="simAdsPct.set(0)">%0 Ads</button>
-                    <button [class.active]="simAdsPct() === 12" (click)="simAdsPct.set(12)">%12 Ads</button>
-                    <button [class.active]="simAdsPct() === 15" (click)="simAdsPct.set(15)">%15 Ads</button>
+                    <button [class.active]="simAdsPct() === 0" (click)="simAdsPct.set(0)">{{ t('research.shopAgent.drawer.ads0') }}</button>
+                    <button [class.active]="simAdsPct() === 12" (click)="simAdsPct.set(12)">{{ t('research.shopAgent.drawer.ads12') }}</button>
+                    <button [class.active]="simAdsPct() === 15" (click)="simAdsPct.set(15)">{{ t('research.shopAgent.drawer.ads15') }}</button>
                   </div>
                 </div>
 
                 <label class="sim-slider">
-                  <div><span>Satış Fiyatı</span><strong>${{ simPriceUsd() | number:'1.2-2' }}</strong></div>
+                  <div><span>{{ t('research.shopAgent.drawer.simPrice') }}</span><strong>${{ simPriceUsd() | number:'1.2-2' }}</strong></div>
                   <input type="range" min="10" max="150" step="0.5" [ngModel]="simPriceUsd()" (ngModelChange)="simPriceUsd.set(+$event)" />
                 </label>
 
                 <label class="sim-slider">
-                  <div><span>TR → ABD Navlun</span><strong>${{ simShippingUsd() | number:'1.2-2' }}</strong></div>
+                  <div><span>{{ t('research.shopAgent.drawer.simShipping') }}</span><strong>${{ simShippingUsd() | number:'1.2-2' }}</strong></div>
                   <input type="range" min="0" max="35" step="0.5" [ngModel]="simShippingUsd()" (ngModelChange)="simShippingUsd.set(+$event)" />
                 </label>
 
                 <label class="sim-slider">
-                  <div><span>Üretim / Filament (COGS)</span><strong>${{ simCogsUsd() | number:'1.2-2' }}</strong></div>
+                  <div><span>{{ t('research.shopAgent.drawer.simCogs') }}</span><strong>${{ simCogsUsd() | number:'1.2-2' }}</strong></div>
                   <input type="range" min="1" max="60" step="0.5" [ngModel]="simCogsUsd()" (ngModelChange)="simCogsUsd.set(+$event)" />
                 </label>
 
                 @if (simCalculation(); as calc) {
                   <div class="sim-result" [class]="calc.status">
                     <div>
-                      <span class="sim-label">Gerçek Landed Net Kâr</span>
+                      <span class="sim-label">{{ t('research.shopAgent.drawer.simNetLabel') }}</span>
                       <div class="sim-big">${{ calc.netUsd | number:'1.2-2' }} <small>(₺{{ calc.netTry }})</small></div>
                     </div>
                     <div class="sim-right">
                       <span class="sim-margin">%{{ calc.marginPct | number:'1.1-1' }}</span>
-                      <span class="sim-meta">Kesinti ${{ calc.feesUsd }} • İade Payı ${{ calc.returnReserveUsd }}</span>
+                      <span class="sim-meta">{{ t('research.shopAgent.drawer.simMeta', { fees: calc.feesUsd, reserve: calc.returnReserveUsd }) }}</span>
                     </div>
                   </div>
                 }
@@ -356,10 +357,10 @@
               <!-- Product Blueprint -->
               @if (selectedBlueprint(); as bp) {
                 <div class="blueprint-box">
-                  <h4>📐 Ürün Farklılaştırma Blueprint'i</h4>
-                  <p><strong>Farklılaşma Açısı:</strong> {{ bp.differentiationAngle }}</p>
-                  <p><strong>Rakip Boşluğu:</strong> {{ bp.competitorGap }}</p>
-                  <p><strong>AI Mockup Brifi:</strong> {{ bp.aiMockupBrief }}</p>
+                  <h4>{{ t('research.shopAgent.drawer.blueprintTitle') }}</h4>
+                  <p><strong>{{ t('research.shopAgent.drawer.blueprintAngle') }}</strong> {{ bp.differentiationAngle }}</p>
+                  <p><strong>{{ t('research.shopAgent.drawer.blueprintGap') }}</strong> {{ bp.competitorGap }}</p>
+                  <p><strong>{{ t('research.shopAgent.drawer.blueprintMockup') }}</strong> {{ bp.aiMockupBrief }}</p>
 
                   @if (bp.variationLadder.length > 0) {
                     <div class="ladder-grid">
@@ -376,13 +377,13 @@
               }
 
               <div class="tags-row">
-                @for (t of sel.suggestedTags; track t) {
-                  <span class="etsy-tag">#{{ t }}</span>
+                @for (tag of sel.suggestedTags; track tag) {
+                  <span class="etsy-tag">#{{ tag }}</span>
                 }
               </div>
 
               <button class="btn-primary full-width" (click)="sendToFastCreator(sel)">
-                ⚡ Tek Tıkla Fast Creator + Varyasyon + Mockup Brifi Aktar
+                {{ t('research.shopAgent.drawer.sendFullCreatorBtn') }}
               </button>
             </div>
           } @else {
@@ -390,11 +391,11 @@
               <table class="compare-table">
                 <thead>
                   <tr>
-                    <th>Aday</th>
-                    <th>Fırsat</th>
-                    <th>Tekel</th>
-                    <th>Navlun</th>
-                    <th>Net Kâr</th>
+                    <th>{{ t('research.shopAgent.drawer.colCandidate') }}</th>
+                    <th>{{ t('research.shopAgent.drawer.colOpportunity') }}</th>
+                    <th>{{ t('research.shopAgent.drawer.colMonopoly') }}</th>
+                    <th>{{ t('research.shopAgent.drawer.colShipping') }}</th>
+                    <th>{{ t('research.shopAgent.drawer.colNetProfit') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -416,7 +417,8 @@
     </div>
   } @else {
     <div class="panel empty-state">
-      Henüz araştırma oturumu yok. Yukarıdan <strong>"🚀 Mağazam İçin Araştır"</strong> butonuna basarak ilk V3 mağazaya özel taramayı başlatabilirsiniz.
+      {{ t('research.shopAgent.run.emptyNoRunsBefore') }} <strong>{{ t('research.shopAgent.run.emptyNoRunsHighlight') }}</strong> {{ t('research.shopAgent.run.emptyNoRunsAfter') }}
     </div>
   }
 </div>
+</ng-container>

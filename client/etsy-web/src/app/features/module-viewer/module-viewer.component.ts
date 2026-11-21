@@ -1,59 +1,59 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface ModuleDetail {
   id: string;
-  title: string;
-  category: string;
+  categoryKey: string;
   icon: string;
-  badge?: string;
-  summary: string;
-  features: string[];
-  kpiTitle?: string;
-  kpiValue?: string;
+  badgeKey?: string;
+  featureKeys: string[];
+  hasKpi?: boolean;
 }
 
 @Component({
   selector: 'app-module-viewer',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="module-root" *ngIf="module">
       <div class="module-banner glass-card">
         <div class="banner-left">
           <div class="module-badge-row">
-            <span class="category-pill">{{ module.category }}</span>
-            <span class="badge badge-new" *ngIf="module.badge">{{ module.badge }}</span>
+            <span class="category-pill">{{ t('tools.moduleViewer.categories.' + module.categoryKey) }}</span>
+            <span class="badge badge-new" *ngIf="module.badgeKey">{{ t('tools.moduleViewer.badges.' + module.badgeKey) }}</span>
           </div>
           <div class="module-title-row">
             <span class="module-icon">{{ module.icon }}</span>
             <div>
-              <h2 class="module-title">{{ module.title }}</h2>
-              <p class="module-summary">{{ module.summary }}</p>
+              <h2 class="module-title">{{ t('tools.moduleViewer.modules.' + module.id + '.title') }}</h2>
+              <p class="module-summary">{{ t('tools.moduleViewer.modules.' + module.id + '.summary') }}</p>
             </div>
           </div>
         </div>
 
-        <div class="banner-right" *ngIf="module.kpiTitle">
+        <div class="banner-right" *ngIf="module.hasKpi">
           <div class="module-kpi-card">
-            <span class="kpi-label">{{ module.kpiTitle }}</span>
-            <span class="kpi-num text-orange">{{ module.kpiValue }}</span>
-            <span class="kpi-sub">Canlı Senkronize</span>
+            <span class="kpi-label">{{ t('tools.moduleViewer.modules.' + module.id + '.kpiTitle') }}</span>
+            <span class="kpi-num text-orange">{{ t('tools.moduleViewer.modules.' + module.id + '.kpiValue') }}</span>
+            <span class="kpi-sub">{{ t('tools.moduleViewer.liveSynced') }}</span>
           </div>
         </div>
       </div>
 
       <!-- FEATURES & ACTION CARDS -->
       <section class="features-grid">
-        <div class="glass-card feature-card" *ngFor="let feat of module.features; let i = index">
+        <div class="glass-card feature-card" *ngFor="let featKey of module.featureKeys; let i = index">
           <div class="feat-num">0{{ i + 1 }}</div>
-          <h4 class="feat-title">{{ feat }}</h4>
-          <p class="feat-desc">Masaüstü motoru ile tam uyumlu çalışan optimize edilmiş bulut algoritması.</p>
-          <button class="btn btn-secondary btn-sm" (click)="triggerAction(feat)">
-            ⚡ Şimdi Çalıştır
+          <h4 class="feat-title">{{ t('tools.moduleViewer.modules.' + module.id + '.features.' + featKey) }}</h4>
+          <p class="feat-desc">{{ t('tools.moduleViewer.featureDesc') }}</p>
+          <button class="btn btn-secondary btn-sm" (click)="triggerAction(featKey)">
+            {{ t('tools.moduleViewer.runNow') }}
           </button>
         </div>
       </section>
@@ -64,14 +64,15 @@ interface ModuleDetail {
           <div class="status-left">
             <span class="status-dot-pulse"></span>
             <div>
-              <h4 class="status-title">VDS API & Gemini Spark Motoru Bağlı</h4>
-              <p class="status-sub">Mağaza ID: <b>{{ apiService.activeShopId() }}</b> | Uç Nokta: <code>http://5.180.81.148:5263/api/*</code></p>
+              <h4 class="status-title">{{ t('tools.moduleViewer.apiStatusTitle') }}</h4>
+              <p class="status-sub">{{ t('tools.moduleViewer.shopIdLabel') }} <b>{{ apiService.activeShopId() }}</b> | {{ t('tools.moduleViewer.endpointLabel') }} <code>http://5.180.81.148:5263/api/*</code></p>
             </div>
           </div>
-          <a routerLink="/dashboard" class="btn btn-orange">← Kontrol Paneline Dön</a>
+          <a routerLink="/dashboard" class="btn btn-orange">{{ t('tools.moduleViewer.backToDashboard') }}</a>
         </div>
       </section>
     </div>
+    </ng-container>
   `,
   styles: [`
     .module-root {
@@ -202,267 +203,138 @@ interface ModuleDetail {
 })
 export class ModuleViewerComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   route = inject(ActivatedRoute);
   apiService = inject(EtsyApiService);
 
   module?: ModuleDetail;
 
+  private readonly defaultFeatureKeys = ['f1', 'f2', 'f3', 'f4'];
+
   private readonly catalog: Record<string, ModuleDetail> = {
     'orders': {
       id: 'orders',
-      title: 'Sipariş & Kargo Karşılama Studio',
-      category: 'Genel',
+      categoryKey: 'general',
       icon: '🚚',
-      badge: 'YENİ',
-      summary: 'Etsy siparişlerinin takibi, eksik maliyet tespiti, otomatik kargo konşimentosu oluşturma ve kâr marjı hesaplama.',
-      features: [
-        'Eksik Maliyetli Siparişler için Kırmızı Alarm & Bildirim',
-        'Aras Global, ShipEntegra, Navlungo & Shiptomore Canlı Fiyatlandırma',
-        'Tek Tıkla Siparişe Maliyet & Takip Kodu Atama',
-        'Gerçekleşen Kâr Marjı (Gross vs Net Profit) Analizi'
-      ],
-      kpiTitle: 'BEKLEYEN SİPARİŞ',
-      kpiValue: '18 Adet'
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'fast-creator': {
       id: 'fast-creator',
-      title: 'Hızlı Ürün Ekle (AI Fast Creator)',
-      category: 'Genel',
+      categoryKey: 'general',
       icon: '⚡',
-      badge: 'YENİ',
-      summary: 'Tek tıklamayla AI destekli SEO başlık, açıklama ve 13 algoritma etiketini saniyeler içinde mağazanıza aktarma.',
-      features: [
-        'Gemini Spark AI ile Kusursuz Başlık ve Açıklama Üretimi',
-        '13 Yüksek Hacimli Etsy Arama Etiketi (Tags) Optimizasyonu',
-        'Önceden Tanımlı Şablonlar (3D Model, Hediyelik, Takı)',
-        'Doğrudan Mağazaya Taslak (Draft) Olarak Yükleme'
-      ],
-      kpiTitle: 'ŞABLON SAYISI',
-      kpiValue: '12 Şablon'
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'creator': {
       id: 'creator',
-      title: 'Ürün Bul & Taslak Listeleme',
-      category: 'Genel',
+      categoryKey: 'general',
       icon: '🛍️',
-      summary: 'Trend ürün radarı, pazar hacmi tahminleme ve tek tıkla taslak listeleme stüdyosu.',
-      features: [
-        'Global Trendlerdeki Ürünlerin Keşfi',
-        'Hedef Kitle ve Kategori Uygunluk Skoru',
-        'Dinamik Fiyat Öneri Simülatörü',
-        'Taslak Envanter Yönetimi'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'ai-studio': {
       id: 'ai-studio',
-      title: 'AI Görsel Stüdyosu & Arka Plan Temizleyici',
-      category: 'Genel',
+      categoryKey: 'general',
       icon: '🎨',
-      badge: 'PRO',
-      summary: 'Yapay zeka ile stüdyo kalitesinde mockup üretimi, fon değiştirme ve anti-ban EXIF temizleme.',
-      features: [
-        'AI ile Ürün Sahnesi ve Stüdyo Arka Planı Üretimi',
-        'Arka Plan Kaldırma (Background Removal)',
-        'Anti-Ban EXIF Metadata ve Görsel Parmak İzi Temizleme',
-        'Etsy Ölçülerine (2000x2000px) Uygun Otomatik Ölçekleme'
-      ],
-      kpiTitle: 'İŞLENEN GÖRSEL',
-      kpiValue: '142 Görsel'
+      badgeKey: 'pro',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'analytics-shop': {
       id: 'analytics-shop',
-      title: 'Mağazam Performansı & Ziyaretçi Analitiği',
-      category: 'Genel',
+      categoryKey: 'general',
       icon: '🏬',
-      summary: 'Görüntülenme, favori sayıları, dönüşüm oranları (Conversion Rate %) ve ürün bazlı trafik grafikleri.',
-      features: [
-        'Günlük ve Aylık Ziyaretçi & Favori Sayısı Trendi',
-        'Dönüşüm Oranı En Yüksek İlk 10 İlan',
-        'Hareketsiz / Trafik Almayan İlanlar için Uyarı Sistemi',
-        'Aylık İlan Trafik Veri Tabanı (listing_traffic_daily)'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'market-search': {
       id: 'market-search',
-      title: 'Pazar Araştırması & Anahtar Kelime Radarı',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '🔍',
-      summary: 'Anahtar kelime arama hacmi, rekabet skoru ve en çok satan listelemelerin detaylı pazar dökümü.',
-      features: [
-        'Arama Hacmi ve Tıklama Başı Maliyet (CPC) Matrisi',
-        'Düşük Rekabet / Yüksek Talep Niche Keşif Motoru',
-        'Rakiplerin Kullandığı Ortak Etiket Dağılımı',
-        'Arama Trendi Mevsimsellik Değerlendirmesi'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'viral-3d': {
       id: 'viral-3d',
-      title: 'Viral 3D Model Avcısı & Arbitraj Radarı',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '🔥',
-      badge: 'YENİ',
-      summary: 'MakerWorld, Printables, CrealityCloud ve Thingiverse üzerinde viral olan modellerin Etsy kâr arbitrajı.',
-      features: [
-        'MakerWorld & Printables Popüler İndirme Taraması',
-        'Model Gramajı ve Filament Maliyeti Hesaplama',
-        'Etsy Benzer Ürün Fiyat Karşılaştırması',
-        'Potansiyel Net Kâr Marjı Radarı (%300+ Fırsatlar)'
-      ],
-      kpiTitle: 'VİRAL MODEL',
-      kpiValue: '28 Model'
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'competitor': {
       id: 'competitor',
-      title: 'Rakip & Trend Casusu',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '🕵️',
-      badge: 'YENİ',
-      summary: 'Rakip mağazaların günlük satış hızları, fiyat değişiklikleri ve en çok satan listing tespiti.',
-      features: [
-        'Rakip Mağazanın 30 Günlük Satış Hızı Projeksiyonu',
-        'Fiyat Artışı / İndirimi Canlı Alarmı',
-        'En Son Eklenen Başarılı İlanların Bildirimi',
-        'Pazar Payı ve Satıcı Sıralaması Değerlendirmesi'
-      ]
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys
     },
     'external': {
       id: 'external',
-      title: 'Dış Pazar Yeri Bulucu (Arbitraj)',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '🌐',
-      summary: 'Amazon, eBay, AliExpress ve Walmart üzerinden çapraz arbitraj ve fırsat tespiti.',
-      features: [
-        'Amazon Handmade vs Etsy Fiyat Karşılaştırması',
-        'AliExpress Tedarik Fiyatı ve Kargo Süresi Analizi',
-        'Görsel Arama ile Çapraz Pazar Eşleme',
-        'İthalat ve Gümrük Masrafı Simülasyonu'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'ai-audit': {
       id: 'ai-audit',
-      title: 'Mağaza AI Analizi & Denetim',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '🤖',
-      badge: 'YENİ',
-      summary: 'Yapay zeka ile mağazadaki tüm listinglerin taranması, eksik etiket ve zayıf açıklamaların raporlanması.',
-      features: [
-        'Fotoğraf Kontrol Listesi (Işık, Mockup, Açı Değerlendirmesi)',
-        'Eksik Etiket ve Zayıf Başlık Tespiti',
-        'Müşteri Gözünden Listing İnceleme Raporu',
-        'Tek Tıkla Toplu Optimizasyon Önerisi'
-      ]
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys
     },
     'ab-test': {
       id: 'ab-test',
-      title: 'A/B Test Paneli',
-      category: 'Araştırma & Analiz',
+      categoryKey: 'research',
       icon: '📈',
-      summary: 'Başlık, ana görsel ve fiyat A/B testlerinin takibi, istatistiksel üstünlük ölçümü.',
-      features: [
-        'İki Farklı Başlık Varyasyonunun Tıklama Oranı Karşılaştırması',
-        'Görsel Testinde Dönüşüm Oranı Artışı',
-        'İstatistiksel Anlamlılık (Statistical Significance %) Göstergesi',
-        'Kazanan Varyasyonun Otomatik Olarak Canlıya Alınması'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'accounting': {
       id: 'accounting',
-      title: 'Finansal Muhasebe & Banka Ödemeleri',
-      category: 'Otomasyon & Finans',
+      categoryKey: 'automationFinance',
       icon: '💳',
-      badge: 'YENİ',
-      summary: 'Çift para birimi (₺ TRY / $ USD) ile tam kapsamlı Etsy ödeme defteri, komisyonlar ve banka transferleri.',
-      features: [
-        'Canlı Güncel Dolar Kuru ile Çift Para Birimi Hesaplaması',
-        'Etsy Komisyonları, İşlem Ücreti ve Reklam Giderleri Dökümü',
-        'Hesaba Yatan Banka Transferleri (Payouts) Listesi',
-        'Excel / CSV Formatında Dışa Aktarma (Export)'
-      ],
-      kpiTitle: 'NET KÂR ORANI',
-      kpiValue: '%43.8'
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'financial-ai': {
       id: 'financial-ai',
-      title: 'Finansal AI Analiz & Gelecek Projeksiyonu',
-      category: 'Otomasyon & Finans',
+      categoryKey: 'automationFinance',
       icon: '🧠',
-      badge: 'YENİ',
-      summary: 'Kural tabanlı finansal yapay zeka öneri motoru, marj uyarıları ve 30 günlük nakit akışı tahmini.',
-      features: [
-        'Gider Kalemlerinde Anormal Artış Tespiti',
-        'Kârlılığı Düşen Ürünler için Fiyat Artışı Önerisi',
-        'Gelecek Ay Tahmini Banka Girişi Projeksiyonu',
-        'Vergi ve Muhasebe Ön Hazırlık Raporu'
-      ]
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys
     },
     'profit': {
       id: 'profit',
-      title: 'Kâr Simülatörü & Fiyat Hesaplayıcı',
-      category: 'Otomasyon & Finans',
+      categoryKey: 'automationFinance',
       icon: '💰',
-      summary: 'Hammadde, kargo, Etsy komisyonu ve reklam payını girerek ideal satış fiyatını hesaplayın.',
-      features: [
-        'Etsy %6.5 İşlem Ücreti + Sabit Ücret Hesaplaması',
-        'Kargo Firması (Aras, ShipEntegra, Navlungo) Entegre Fiyatı',
-        'Hedeflenen Net Kâr Marjına Göre Fiyat Tavsiyesi',
-        'Dolar Kuru Değişimine Duyarlı Dinamik Tablo'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'vault': {
       id: 'vault',
-      title: 'Mağaza Yedekleme & Anti-Ban Transfer (.etsyvault)',
-      category: 'Otomasyon & Finans',
+      categoryKey: 'automationFinance',
       icon: '🛡️',
-      badge: 'YENİ',
-      summary: 'Tüm mağazayı tek tıkla `.etsyvault` olarak yedekleme, anti-ban resim işleme ve kurtarma.',
-      features: [
-        'Tüm Başlık, Açıklama, Etiket ve Resimlerin Şifreli Yedeklenmesi',
-        'Resimlerin EXIF ve pHash Bilgilerini Sıfırlama (Anti-Ban)',
-        'Başka Bir Etsy Mağazasına Tek Tıkla Geri Yükleme (Restore)',
-        'SQLite Tabanlı Yerel Arşivleme Güvencesi'
-      ],
-      kpiTitle: 'YEDEK DURUMU',
-      kpiValue: '84 İlan Hazır'
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys,
+      hasKpi: true
     },
     'ai-usage': {
       id: 'ai-usage',
-      title: 'AI Token, Model & Bakiye Takip',
-      category: 'Otomasyon & Finans',
+      categoryKey: 'automationFinance',
       icon: '📊',
-      badge: 'YENİ',
-      summary: 'Gemini, OpenAI ve Claude API tüketimlerinin canlı takibi, maliyet dökümü ve kullanıcı kotaları.',
-      features: [
-        'Model Bazlı Token Tüketim Grafiği (gemini-2.5-flash)',
-        'Kullanıcı Başına Kalan Aylık Sorgu Kotası',
-        'Sorgu Başına Ortalama Yanıt Süresi (Latency ms)',
-        'Maliyet Tasarrufu ve Prompt Optimizasyon İpuçları'
-      ]
+      badgeKey: 'new',
+      featureKeys: this.defaultFeatureKeys
     },
     'shipping': {
       id: 'shipping',
-      title: 'Çoklu Taşıyıcı Kargo Entegrasyonları Hub',
-      category: 'Kargo',
+      categoryKey: 'shipping',
       icon: '🚚',
-      summary: 'Aras Global, ShipEntegra, Navlungo ve Shiptomore hesaplarınızı tek merkezden yönetin.',
-      features: [
-        'Tüm Kargo Taşıyıcılarının Anlık Fiyat Karşılaştırması',
-        'Otomatik Koli Hacmi (Desi) ve Ağırlık Hesaplama',
-        'Siparişe Doğrudan Kargo Etiketi Oluşturma',
-        'Takip Numarasının Etsy Üzerine Otomatik İşlenmesi'
-      ]
+      featureKeys: this.defaultFeatureKeys
     },
     'system': {
       id: 'system',
-      title: 'Sistem, API Ayarları & Günlükler',
-      category: 'Sistem',
+      categoryKey: 'system',
       icon: '⚙️',
-      summary: 'Etsy OAuth bağlantıları, Telegram bildirim botu, VDS otomatik güncelleme ve sistem logları.',
-      features: [
-        'Canlı Etsy API Token Yenileme (Refresh Token)',
-        'Telegram Kanalına Anlık Sipariş & Ciro Bildirimleri',
-        'GitHub Actions VDS Derleme ve Sürüm Takibi',
-        'Uygulama Hata Günlüğü (Application Logs)'
-      ]
+      featureKeys: this.defaultFeatureKeys
     }
   };
 
@@ -495,7 +367,10 @@ export class ModuleViewerComponent implements OnInit {
     return 'orders';
   }
 
-  triggerAction(feat: string): void {
-    alert(`⚡ "${feat}" işlemi başarıyla VDS API kuyruğuna iletildi!`);
+  triggerAction(featKey: string): void {
+    const featLabel = this.module
+      ? this.transloco.translate('tools.moduleViewer.modules.' + this.module.id + '.features.' + featKey)
+      : featKey;
+    alert(this.transloco.translate('tools.moduleViewer.actionAlert', { feature: featLabel }));
   }
 }

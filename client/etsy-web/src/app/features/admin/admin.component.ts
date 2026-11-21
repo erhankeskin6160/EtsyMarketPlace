@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
 import { PaymentGatewaySettings, SubscriptionPlan } from '../../core/models/subscription.models';
@@ -10,16 +11,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('admin')],
   template: `
+    <ng-container *transloco="let t">
     <div class="admin-root">
       <div class="page-header-flex">
         <div>
-          <div class="badge-admin-title">👑 SUPER ADMIN KOMUTA MERKEZİ</div>
-          <h2 class="title">Kurumsal Kullanıcı, Rol & Güvenlik Yönetimi</h2>
-          <p class="subtitle">Platformdaki tüm kullanıcıları, mağaza eşlemelerini, AI kotalarını ve audit kayıtlarını yönetin</p>
+          <div class="badge-admin-title">{{ t('admin.header.badge') }}</div>
+          <h2 class="title">{{ t('admin.header.title') }}</h2>
+          <p class="subtitle">{{ t('admin.header.subtitle') }}</p>
         </div>
-        <button class="btn btn-secondary" (click)="loadData()">🔄 Verileri Yenile</button>
+        <button class="btn btn-secondary" (click)="loadData()">{{ t('admin.header.refreshBtn') }}</button>
       </div>
 
       <!-- TOAST NOTIFICATION -->
@@ -31,24 +34,24 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <!-- SYSTEM STATS STRIP -->
       <section class="stats-strip">
         <div class="glass-card stat-box">
-          <span class="stat-label">Toplam Kayıtlı Kullanıcı</span>
+          <span class="stat-label">{{ t('admin.stats.totalUsersLabel') }}</span>
           <span class="stat-number text-cyan">{{ stats.totalUsers }}</span>
-          <span class="stat-sub">SaaS Platform Hesabı</span>
+          <span class="stat-sub">{{ t('admin.stats.totalUsersSub') }}</span>
         </div>
         <div class="glass-card stat-box">
-          <span class="stat-label">Aktif Kullanıcılar</span>
+          <span class="stat-label">{{ t('admin.stats.activeUsersLabel') }}</span>
           <span class="stat-number text-emerald">{{ stats.activeUsers }}</span>
-          <span class="stat-sub">Yetkili Giriş Açık</span>
+          <span class="stat-sub">{{ t('admin.stats.activeUsersSub') }}</span>
         </div>
         <div class="glass-card stat-box">
-          <span class="stat-label">Lisanslı Etsy Mağazaları</span>
+          <span class="stat-label">{{ t('admin.stats.totalShopsLabel') }}</span>
           <span class="stat-number text-orange">{{ stats.totalShops }}</span>
-          <span class="stat-sub">Aktif Entegre Mağaza</span>
+          <span class="stat-sub">{{ t('admin.stats.totalShopsSub') }}</span>
         </div>
         <div class="glass-card stat-box">
-          <span class="stat-label">Toplam Tüketilen AI Token</span>
+          <span class="stat-label">{{ t('admin.stats.totalTokensLabel') }}</span>
           <span class="stat-number text-purple">{{ stats.totalUsedAiTokens | number }}</span>
-          <span class="stat-sub">Gemini Spark Motoru</span>
+          <span class="stat-sub">{{ t('admin.stats.totalTokensSub') }}</span>
         </div>
       </section>
 
@@ -56,24 +59,24 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <section class="glass-card users-section">
         <div class="table-header">
           <div>
-            <h3 class="section-title">👥 Kullanıcı ve Rol Yetkilendirme</h3>
-            <span class="section-sub">Kullanıcı rollerini, mağaza eşlemelerini ve aylık AI sorgu kotalarını düzenleyin</span>
+            <h3 class="section-title">{{ t('admin.users.title') }}</h3>
+            <span class="section-sub">{{ t('admin.users.subtitle') }}</span>
           </div>
-          <span class="badge badge-admin">{{ users.length }} Kullanıcı</span>
+          <span class="badge badge-admin">{{ t('admin.users.countBadge', { count: users.length }) }}</span>
         </div>
 
         <div class="table-responsive">
           <table class="admin-table">
             <thead>
               <tr>
-                <th>KULLANICI</th>
-                <th>E-POSTA</th>
-                <th>ROL</th>
-                <th>ABONELİK PAKETİ</th>
-                <th>ATANMIŞ MAĞAZALAR</th>
-                <th>AYLIK AI KOTASI</th>
-                <th>DURUM</th>
-                <th>İŞLEMLER</th>
+                <th>{{ t('admin.users.colUser') }}</th>
+                <th>{{ t('admin.users.colEmail') }}</th>
+                <th>{{ t('admin.users.colRole') }}</th>
+                <th>{{ t('admin.users.colPlan') }}</th>
+                <th>{{ t('admin.users.colShops') }}</th>
+                <th>{{ t('admin.users.colQuota') }}</th>
+                <th>{{ t('admin.users.colStatus') }}</th>
+                <th>{{ t('admin.users.colActions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -83,26 +86,26 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                     <span class="user-avatar-sm">{{ u.username.charAt(0).toUpperCase() }}</span>
                     <div>
                       <div class="user-cell-name">{{ u.username }}</div>
-                      <span class="user-cell-date">Kayıt: {{ u.createdAt | date:'shortDate' }}</span>
+                      <span class="user-cell-date">{{ t('admin.users.registeredAt', { date: (u.createdAt | date:'shortDate') }) }}</span>
                     </div>
                   </div>
                 </td>
                 <td>{{ u.email }}</td>
                 <td>
                   <select [(ngModel)]="u.role" (change)="saveUser(u)" class="form-select role-select">
-                    <option value="Admin">👑 Super Admin</option>
-                    <option value="StoreOwner">🏪 Mağaza Sahibi</option>
-                    <option value="Demo">👁️ Demo / Salt Okunur</option>
+                    <option value="Admin">{{ t('admin.users.roleAdmin') }}</option>
+                    <option value="StoreOwner">{{ t('admin.users.roleStoreOwner') }}</option>
+                    <option value="Demo">{{ t('admin.users.roleDemo') }}</option>
                   </select>
                 </td>
                 <td>
                   <select [ngModel]="u.subscriptionPlanId || 'pro'"
                           (ngModelChange)="assignUserPlan(u, $event)"
                           class="form-select role-select">
-                    <option value="starter">🌱 Starter ($19)</option>
-                    <option value="growth">🚀 Growth ($49)</option>
-                    <option value="pro">💎 Pro ($99)</option>
-                    <option value="enterprise">👑 Enterprise ($249)</option>
+                    <option value="starter">{{ t('admin.users.planStarter') }}</option>
+                    <option value="growth">{{ t('admin.users.planGrowth') }}</option>
+                    <option value="pro">{{ t('admin.users.planPro') }}</option>
+                    <option value="enterprise">{{ t('admin.users.planEnterprise') }}</option>
                   </select>
                 </td>
                 <td>
@@ -111,16 +114,16 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                   </div>
                 </td>
                 <td>
-                  <span class="quota-text">{{ u.monthlyAiTokenQuota | number }} Token</span>
+                  <span class="quota-text">{{ t('admin.users.tokensUnit', { count: (u.monthlyAiTokenQuota | number) }) }}</span>
                 </td>
                 <td>
                   <span class="badge" [class.badge-success]="u.isActive" [class.badge-danger]="!u.isActive">
-                    {{ u.isActive ? 'AKTİF' : 'ASKIDA' }}
+                    {{ u.isActive ? t('admin.users.statusActive') : t('admin.users.statusSuspended') }}
                   </span>
                 </td>
                 <td>
                   <button class="btn btn-secondary btn-sm" (click)="toggleStatus(u)">
-                    {{ u.isActive ? '🛑 Askıya Al' : '✅ Aktifleştir' }}
+                    {{ u.isActive ? t('admin.users.suspendBtn') : t('admin.users.activateBtn') }}
                   </button>
                 </td>
               </tr>
@@ -133,22 +136,22 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <section class="glass-card users-section">
         <div class="table-header">
           <div>
-            <h3 class="section-title">💎 SaaS Abonelik Paketleri, Fiyat & Kota Yönetimi</h3>
-            <span class="section-sub">Paketlerin USD/TRY fiyatlarını, mağaza limitlerini ve aylık AI token kotalarını canlı güncelleyin</span>
+            <h3 class="section-title">{{ t('admin.plans.title') }}</h3>
+            <span class="section-sub">{{ t('admin.plans.subtitle') }}</span>
           </div>
-          <span class="badge badge-pro">{{ plans.length }} Paket</span>
+          <span class="badge badge-pro">{{ t('admin.plans.countBadge', { count: plans.length }) }}</span>
         </div>
 
         <div class="table-responsive">
           <table class="admin-table">
             <thead>
               <tr>
-                <th>PAKET</th>
-                <th>AYLIK USD</th>
-                <th>AYLIK TRY</th>
-                <th>MAKS. MAĞAZA</th>
-                <th>AI TOKEN KOTASI</th>
-                <th>İŞLEM</th>
+                <th>{{ t('admin.plans.colPlan') }}</th>
+                <th>{{ t('admin.plans.colMonthlyUsd') }}</th>
+                <th>{{ t('admin.plans.colMonthlyTry') }}</th>
+                <th>{{ t('admin.plans.colMaxShops') }}</th>
+                <th>{{ t('admin.plans.colAiQuota') }}</th>
+                <th>{{ t('admin.plans.colAction') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -159,7 +162,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                 <td><input type="number" [(ngModel)]="p.maxShops" class="role-select" style="width:80px" /></td>
                 <td><input type="number" [(ngModel)]="p.monthlyAiTokenQuota" class="role-select" style="width:130px" /></td>
                 <td>
-                  <button class="btn btn-secondary btn-sm" (click)="savePlanConfig(p)">💾 Kaydet</button>
+                  <button class="btn btn-secondary btn-sm" (click)="savePlanConfig(p)">{{ t('admin.plans.saveBtn') }}</button>
                 </td>
               </tr>
             </tbody>
@@ -173,14 +176,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           <div>
             <h3 class="section-title" id="payment-gateway-heading">
               <i class="fa-solid fa-credit-card pg-heading-icon" aria-hidden="true"></i>
-              Ödeme Altyapısı (İyzico & PayTR Sanal POS) Ayarları
+              {{ t('admin.payment.title') }}
             </h3>
             <span class="section-sub">
-              Hangi sanal POS sağlayıcısının API anahtarlarını girip aktif ederseniz abonelik sayfasında doğrudan o sağlayıcının 3D Secure iFrame ekranı açılır.
+              {{ t('admin.payment.subtitle') }}
             </span>
           </div>
           <span class="pg-source-pill">
-            Kaynak: {{ paymentSettings?.configSource || 'Henüz Yapılandırılmadı' }}
+            {{ t('admin.payment.sourceLabel', { source: paymentSettings?.configSource || t('admin.payment.unconfiguredShort') }) }}
           </span>
         </div>
 
@@ -190,37 +193,37 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
               (ngSubmit)="savePaymentGatewaySettings()">
           <div class="pg-top-grid">
             <div class="pg-field">
-              <label for="pg-provider">Aktif Ödeme Sağlayıcısı</label>
+              <label for="pg-provider">{{ t('admin.payment.activeProviderLabel') }}</label>
               <select id="pg-provider"
                       name="activeProvider"
                       [(ngModel)]="paymentForm.activeProvider"
                       class="pg-input">
-                <option value="Unconfigured">Henüz Yapılandırılmadı (Sadece Yönetici Test Onayı)</option>
-                <option value="PayTR">PayTR (Ortak Ödeme / 3D Secure iFrame)</option>
-                <option value="Iyzico">iyzico (Checkout Form / 3D Secure iFrame)</option>
-                <option value="Stripe">Stripe Checkout (Uluslararası USD/TRY)</option>
+                <option value="Unconfigured">{{ t('admin.payment.providerUnconfigured') }}</option>
+                <option value="PayTR">{{ t('admin.payment.providerPaytr') }}</option>
+                <option value="Iyzico">{{ t('admin.payment.providerIyzico') }}</option>
+                <option value="Stripe">{{ t('admin.payment.providerStripe') }}</option>
               </select>
             </div>
 
             <div class="pg-field">
-              <label for="pg-env">Çalışma Ortamı</label>
+              <label for="pg-env">{{ t('admin.payment.envLabel') }}</label>
               <select id="pg-env"
                       name="isSandbox"
                       [ngModel]="paymentForm.isSandbox"
                       (ngModelChange)="onSandboxChanged($event)"
                       class="pg-input">
-                <option [ngValue]="true">Test / Sandbox Ortamı</option>
-                <option [ngValue]="false">Canlı Üretim Ortamı (Gerçek Tahsilat)</option>
+                <option [ngValue]="true">{{ t('admin.payment.envSandbox') }}</option>
+                <option [ngValue]="false">{{ t('admin.payment.envLive') }}</option>
               </select>
             </div>
           </div>
 
           <!-- PAYTR SETTINGS -->
           <fieldset *ngIf="paymentForm.activeProvider === 'PayTR'" class="pg-fieldset">
-            <legend>PayTR Mağaza API Bilgileri</legend>
+            <legend>{{ t('admin.payment.paytrLegend') }}</legend>
             <div class="pg-fields-grid">
               <div class="pg-field">
-                <label for="paytr-id">Merchant ID (Mağaza No)</label>
+                <label for="paytr-id">{{ t('admin.payment.paytrMerchantIdLabel') }}</label>
                 <input id="paytr-id"
                        name="paytrMerchantId"
                        type="text"
@@ -229,14 +232,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                        autocapitalize="none"
                        spellcheck="false"
                        [(ngModel)]="paymentForm.paytrMerchantId"
-                       placeholder="Örn: 123456" />
+                       [placeholder]="t('admin.payment.paytrMerchantIdPlaceholder')" />
               </div>
 
               <div class="pg-field">
                 <div class="pg-label-row">
-                  <label for="paytr-key">Merchant Key (Mağaza Parolası)</label>
+                  <label for="paytr-key">{{ t('admin.payment.paytrMerchantKeyLabel') }}</label>
                   <span *ngIf="paymentSettings?.hasPaytrMerchantKey" class="pg-saved-badge">
-                    Kayıtlı ({{ paymentSettings?.paytrMerchantKeyMask }})
+                    {{ t('admin.payment.savedBadge', { mask: paymentSettings?.paytrMerchantKeyMask }) }}
                   </span>
                 </div>
                 <input id="paytr-key"
@@ -248,14 +251,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                        autocapitalize="none"
                        spellcheck="false"
                        [(ngModel)]="paymentForm.paytrMerchantKey"
-                       placeholder="Değiştirmek için yeni Merchant Key girin" />
+                       [placeholder]="t('admin.payment.paytrMerchantKeyPlaceholder')" />
               </div>
 
               <div class="pg-field">
                 <div class="pg-label-row">
-                  <label for="paytr-salt">Merchant Salt (Mağaza Gizli Anahtar)</label>
+                  <label for="paytr-salt">{{ t('admin.payment.paytrMerchantSaltLabel') }}</label>
                   <span *ngIf="paymentSettings?.hasPaytrMerchantSalt" class="pg-saved-badge">
-                    Kayıtlı ({{ paymentSettings?.paytrMerchantSaltMask }})
+                    {{ t('admin.payment.savedBadge', { mask: paymentSettings?.paytrMerchantSaltMask }) }}
                   </span>
                 </div>
                 <input id="paytr-salt"
@@ -267,14 +270,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                        autocapitalize="none"
                        spellcheck="false"
                        [(ngModel)]="paymentForm.paytrMerchantSalt"
-                       placeholder="Değiştirmek için yeni Merchant Salt girin" />
+                       [placeholder]="t('admin.payment.paytrMerchantSaltPlaceholder')" />
               </div>
             </div>
 
             <div class="pg-callback-notice">
               <i class="fa-solid fa-link" aria-hidden="true"></i>
               <div>
-                <strong>PayTR Mağaza Paneline Tanımlanacak Bildirim URL'si (Callback):</strong>
+                <strong>{{ t('admin.payment.paytrCallbackLabel') }}</strong>
                 <code>{{ paytrCallbackUrl }}</code>
               </div>
             </div>
@@ -282,10 +285,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
           <!-- IYZICO SETTINGS -->
           <fieldset *ngIf="paymentForm.activeProvider === 'Iyzico'" class="pg-fieldset">
-            <legend>iyzico Üye İşyeri API Bilgileri</legend>
+            <legend>{{ t('admin.payment.iyzicoLegend') }}</legend>
             <div class="pg-fields-grid">
               <div class="pg-field">
-                <label for="iyzi-key">API Key</label>
+                <label for="iyzi-key">{{ t('admin.payment.iyzicoApiKeyLabel') }}</label>
                 <input id="iyzi-key"
                        name="iyzicoApiKey"
                        type="text"
@@ -294,14 +297,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                        autocapitalize="none"
                        spellcheck="false"
                        [(ngModel)]="paymentForm.iyzicoApiKey"
-                       placeholder="sandbox-... veya canlı API Key" />
+                       [placeholder]="t('admin.payment.iyzicoApiKeyPlaceholder')" />
               </div>
 
               <div class="pg-field">
                 <div class="pg-label-row">
-                  <label for="iyzi-secret">Secret Key</label>
+                  <label for="iyzi-secret">{{ t('admin.payment.iyzicoSecretKeyLabel') }}</label>
                   <span *ngIf="paymentSettings?.hasIyzicoSecretKey" class="pg-saved-badge">
-                    Kayıtlı ({{ paymentSettings?.iyzicoSecretKeyMask }})
+                    {{ t('admin.payment.savedBadge', { mask: paymentSettings?.iyzicoSecretKeyMask }) }}
                   </span>
                 </div>
                 <input id="iyzi-secret"
@@ -313,11 +316,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                        autocapitalize="none"
                        spellcheck="false"
                        [(ngModel)]="paymentForm.iyzicoSecretKey"
-                       placeholder="Değiştirmek için yeni Secret Key girin" />
+                       [placeholder]="t('admin.payment.iyzicoSecretKeyPlaceholder')" />
               </div>
 
               <div class="pg-field">
-                <label for="iyzi-url">API Base URL</label>
+                <label for="iyzi-url">{{ t('admin.payment.iyzicoBaseUrlLabel') }}</label>
                 <input id="iyzi-url"
                        name="iyzicoBaseUrl"
                        type="url"
@@ -333,12 +336,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
           <!-- STRIPE SETTINGS -->
           <fieldset *ngIf="paymentForm.activeProvider === 'Stripe'" class="pg-fieldset">
-            <legend>Stripe Checkout API Bilgisi</legend>
+            <legend>{{ t('admin.payment.stripeLegend') }}</legend>
             <div class="pg-field">
               <div class="pg-label-row">
-                <label for="stripe-secret">Stripe Secret Key</label>
+                <label for="stripe-secret">{{ t('admin.payment.stripeSecretKeyLabel') }}</label>
                 <span *ngIf="paymentSettings?.hasStripeSecretKey" class="pg-saved-badge">
-                  Kayıtlı ({{ paymentSettings?.stripeSecretKeyMask }})
+                  {{ t('admin.payment.savedBadge', { mask: paymentSettings?.stripeSecretKeyMask }) }}
                 </span>
               </div>
               <input id="stripe-secret"
@@ -350,22 +353,22 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                      autocapitalize="none"
                      spellcheck="false"
                      [(ngModel)]="paymentForm.stripeSecretKey"
-                     placeholder="sk_test_... veya sk_live_..." />
+                     [placeholder]="t('admin.payment.stripeSecretKeyPlaceholder')" />
             </div>
           </fieldset>
 
           <div class="pg-footer-actions">
             <span class="pg-hint-note">
-              Gizli anahtar alanlarını boş bırakırsanız veritabanındaki kayıtlı mevcut anahtarlar korunur.
+              {{ t('admin.payment.secretHint') }}
             </span>
             <button type="submit"
                     class="btn pg-btn-save"
                     [disabled]="savingPaymentSettings">
               <ng-container *ngIf="!savingPaymentSettings">
-                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Ödeme Ayarlarını Kaydet
+                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> {{ t('admin.payment.saveBtn') }}
               </ng-container>
               <ng-container *ngIf="savingPaymentSettings">
-                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Kaydediliyor...
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> {{ t('admin.payment.savingBtn') }}
               </ng-container>
             </button>
           </div>
@@ -376,21 +379,21 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <section class="glass-card audit-section">
         <div class="table-header">
           <div>
-            <h3 class="section-title">🛡️ Sistem ve Audit Güvenlik Günlüğü</h3>
-            <span class="section-sub">Gerçekleşen tüm girişler, rol değişiklikleri ve güvenlik olayları</span>
+            <h3 class="section-title">{{ t('admin.audit.title') }}</h3>
+            <span class="section-sub">{{ t('admin.audit.subtitle') }}</span>
           </div>
-          <span class="badge badge-cyan">{{ logs.length }} Kayıt</span>
+          <span class="badge badge-cyan">{{ t('admin.audit.countBadge', { count: logs.length }) }}</span>
         </div>
 
         <div class="table-responsive">
           <table class="admin-table">
             <thead>
               <tr>
-                <th>ZAMAN</th>
-                <th>KULLANICI</th>
-                <th>AKSİYON</th>
-                <th>DETAYLAR</th>
-                <th>IP ADRESİ</th>
+                <th>{{ t('admin.audit.colTime') }}</th>
+                <th>{{ t('admin.audit.colUser') }}</th>
+                <th>{{ t('admin.audit.colAction') }}</th>
+                <th>{{ t('admin.audit.colDetails') }}</th>
+                <th>{{ t('admin.audit.colIp') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -410,6 +413,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         </div>
       </section>
     </div>
+    </ng-container>
   `,
   styles: [`
     .admin-root {
@@ -700,6 +704,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class AdminComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   apiService = inject(EtsyApiService);
   subscriptionService = inject(SubscriptionService);
 
@@ -815,12 +820,12 @@ export class AdminComponent implements OnInit {
       next: saved => {
         this.savingPaymentSettings = false;
         this.hydratePaymentForm(saved);
-        this.showToast(`✓ Ödeme altyapısı ayarları kaydedildi (${saved.activeProvider}).`, 'success');
+        this.showToast(this.transloco.translate('admin.toast.paymentSaved', { provider: saved.activeProvider }), 'success');
       },
       error: err => {
         this.savingPaymentSettings = false;
-        const msg = err?.error?.message || err?.error?.error || err?.message || 'Ödeme ayarları kaydedilemedi';
-        this.showToast(`Ödeme ayarları hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || this.transloco.translate('admin.toast.paymentSaveDefaultError');
+        this.showToast(this.transloco.translate('admin.toast.paymentSaveError', { message: msg }), 'error');
       }
     });
   }
@@ -845,11 +850,16 @@ export class AdminComponent implements OnInit {
       next: summary => {
         user.subscriptionPlanId = summary.planId;
         user.monthlyAiTokenQuota = summary.monthlyAiTokenQuota;
-        this.showToast(`✓ "${user.username}" kullanıcısı ${summary.planName} paketine atandı (${summary.monthlyAiTokenQuota.toLocaleString('tr-TR')} Token).`, 'success');
+        const locale = this.transloco.getActiveLang() === 'tr' ? 'tr-TR' : 'en-US';
+        this.showToast(this.transloco.translate('admin.toast.planAssigned', {
+          username: user.username,
+          planName: summary.planName,
+          tokens: summary.monthlyAiTokenQuota.toLocaleString(locale)
+        }), 'success');
       },
       error: (err) => {
-        const msg = err?.error?.message || err?.message || 'Paket atanamadı';
-        this.showToast(`⚠️ Paket atama hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.message || this.transloco.translate('admin.toast.planAssignDefaultError');
+        this.showToast(this.transloco.translate('admin.toast.planAssignError', { message: msg }), 'error');
       }
     });
   }
@@ -872,12 +882,16 @@ export class AdminComponent implements OnInit {
       isActive: plan.isActive
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: updated => {
-        this.showToast(`✓ "${updated.name}" paketi güncellendi ($${updated.monthlyPriceUsd}/ay, ${updated.maxShops} mağaza).`, 'success');
+        this.showToast(this.transloco.translate('admin.toast.planUpdated', {
+          name: updated.name,
+          priceUsd: updated.monthlyPriceUsd,
+          maxShops: updated.maxShops
+        }), 'success');
         this.loadData();
       },
       error: (err) => {
-        const msg = err?.error?.message || err?.message || 'Paket güncellenemedi';
-        this.showToast(`⚠️ Paket güncelleme hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.message || this.transloco.translate('admin.toast.planUpdateDefaultError');
+        this.showToast(this.transloco.translate('admin.toast.planUpdateError', { message: msg }), 'error');
       }
     });
   }
@@ -893,12 +907,15 @@ export class AdminComponent implements OnInit {
 
     this.apiService.updateAdminUser(user.id, req).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.showToast(`✓ "${user.username}" kullanıcısının rolü "${user.role}" ve ayarları başarıyla kaydedildi.`, 'success');
+        this.showToast(this.transloco.translate('admin.toast.userSaved', {
+          username: user.username,
+          role: user.role
+        }), 'success');
         this.loadData();
       },
       error: (err) => {
-        const msg = err?.error?.error || err?.message || 'Güncelleme yapılamadı';
-        this.showToast(`⚠️ Kullanıcı güncelleme hatası: ${msg}`, 'error');
+        const msg = err?.error?.error || err?.message || this.transloco.translate('admin.toast.userSaveDefaultError');
+        this.showToast(this.transloco.translate('admin.toast.userSaveError', { message: msg }), 'error');
       }
     });
   }
@@ -907,12 +924,16 @@ export class AdminComponent implements OnInit {
     this.apiService.toggleUserStatus(user.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         user.isActive = res.isActive;
-        this.showToast(`✓ "${user.username}" hesabı ${res.isActive ? 'aktif edildi' : 'askıya alındı'}.`, 'success');
+        const statusWord = this.transloco.translate(res.isActive ? 'admin.toast.statusActiveWord' : 'admin.toast.statusSuspendedWord');
+        this.showToast(this.transloco.translate('admin.toast.userStatusToggled', {
+          username: user.username,
+          status: statusWord
+        }), 'success');
         this.loadData();
       },
       error: (err) => {
-        const msg = err?.error?.error || err?.message || 'Durum değiştirilemedi';
-        this.showToast(`⚠️ Hesap durumu değiştirilemedi: ${msg}`, 'error');
+        const msg = err?.error?.error || err?.message || this.transloco.translate('admin.toast.userStatusDefaultError');
+        this.showToast(this.transloco.translate('admin.toast.userStatusError', { message: msg }), 'error');
       }
     });
   }

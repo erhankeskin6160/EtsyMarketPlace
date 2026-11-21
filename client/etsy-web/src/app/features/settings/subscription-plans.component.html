@@ -1,31 +1,32 @@
+<ng-container *transloco="let t">
 <div class="sub-page">
   <!-- PAGE HEADER -->
   <header class="sub-header corp-card">
     <div class="sub-header-left">
-      <span class="eyebrow-label">Abonelik ve Faturalandırma</span>
-      <h1 class="sub-title">Abonelik Paketleri ve Ödeme Merkezi</h1>
+      <span class="eyebrow-label">{{ t('settings.subscription.eyebrow') }}</span>
+      <h1 class="sub-title">{{ t('settings.subscription.title') }}</h1>
       <p class="sub-subtitle">
-        Mağaza kapasitenizi, aylık AI kullanım kotanızı ve yetkili modüllerinizi yönetin.
+        {{ t('settings.subscription.subtitle') }}
       </p>
     </div>
 
     <div class="sub-header-controls">
-      <div class="segmented-control" role="group" aria-label="Faturalama dönemi seçimi">
+      <div class="segmented-control" role="group" [attr.aria-label]="t('settings.subscription.billingCycleAria')">
         <button type="button"
                 class="seg-btn"
                 [class.active]="billingCycle === 'Monthly'"
                 (click)="billingCycle = 'Monthly'">
-          Aylık
+          {{ t('settings.subscription.monthly') }}
         </button>
         <button type="button"
                 class="seg-btn"
                 [class.active]="billingCycle === 'Yearly'"
                 (click)="billingCycle = 'Yearly'">
-          Yıllık <span class="discount-note">%20</span>
+          {{ t('settings.subscription.yearly') }} <span class="discount-note">{{ t('settings.subscription.yearlyDiscount') }}</span>
         </button>
       </div>
 
-      <div class="segmented-control" role="group" aria-label="Para birimi seçimi">
+      <div class="segmented-control" role="group" [attr.aria-label]="t('settings.subscription.currencyAria')">
         <button type="button"
                 class="seg-btn"
                 [class.active]="currency === 'USD'"
@@ -47,13 +48,13 @@
     <div class="upgrade-alert-content">
       <i class="fa-solid fa-lock lock-icon" aria-hidden="true"></i>
       <div>
-        <strong>{{ upgradeFeatureTitle }} modülü mevcut paketinizde aktif değil.</strong>
+        <strong>{{ t('settings.subscription.upgrade.lockedTitle', { feature: upgradeFeatureTitle }) }}</strong>
         <p>
-          Bu modülü kullanabilmek için en az <strong>{{ requiredPlanForUpgrade.toUpperCase() }}</strong> paketine geçmeniz gerekmektedir.
+          {{ t('settings.subscription.upgrade.requiredPlanPrefix') }} <strong>{{ requiredPlanForUpgrade.toUpperCase() }}</strong> {{ t('settings.subscription.upgrade.requiredPlanSuffix') }}
         </p>
       </div>
     </div>
-    <button type="button" class="btn-corp btn-corp-ghost btn-sm" (click)="clearUpgradeNotice()">Kapat</button>
+    <button type="button" class="btn-corp btn-corp-ghost btn-sm" (click)="clearUpgradeNotice()">{{ t('settings.subscription.upgrade.closeBtn') }}</button>
   </section>
 
   <!-- FEEDBACK / PAYMENT STATUS BANNER -->
@@ -67,7 +68,7 @@
       <i [class]="statusType === 'success' ? 'fa-solid fa-circle-check mr-2' : 'fa-solid fa-circle-exclamation mr-2'"></i>
       {{ statusMessage }}
     </span>
-    <button type="button" class="btn-close-banner" (click)="statusMessage = null" aria-label="Bildirimi kapat">
+    <button type="button" class="btn-close-banner" (click)="statusMessage = null" [attr.aria-label]="t('settings.subscription.closeNotificationAria')">
       <i class="fa-solid fa-xmark"></i>
     </button>
   </section>
@@ -77,56 +78,56 @@
     <div class="current-sub-top">
       <div>
         <div class="current-plan-row">
-          <h2>Mevcut Plan: {{ sub.planName }}</h2>
+          <h2>{{ t('settings.subscription.current.title', { planName: sub.planName }) }}</h2>
           <span class="status-chip" [class.active]="sub.status === 'Active' || sub.isAdminExempt">
-            {{ sub.isAdminExempt ? 'Yönetici (Sınırsız)' : (sub.status === 'Active' ? 'Aktif' : sub.status) }}
+            {{ sub.isAdminExempt ? t('settings.subscription.current.adminExempt') : (sub.status === 'Active' ? t('settings.subscription.current.active') : sub.status) }}
           </span>
         </div>
         <p class="period-meta">
-          {{ sub.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }} faturalandırma ·
-          Yenileme: <strong>{{ sub.currentPeriodEndUtc | date:'dd.MM.yyyy' }}</strong>
-          ({{ sub.daysRemaining }} gün)
+          {{ t('settings.subscription.current.billingLabel', { cycle: sub.billingCycle === 'Yearly' ? t('settings.subscription.yearly') : t('settings.subscription.monthly') }) }} ·
+          {{ t('settings.subscription.current.renewalLabel') }} <strong>{{ sub.currentPeriodEndUtc | date:'dd.MM.yyyy' }}</strong>
+          {{ t('settings.subscription.current.daysRemaining', { days: sub.daysRemaining }) }}
         </p>
       </div>
 
       <button type="button" class="btn-corp btn-corp-ghost btn-sm" (click)="refreshAll()">
-        <i class="fa-solid fa-arrows-rotate"></i> Yenile
+        <i class="fa-solid fa-arrows-rotate"></i> {{ t('settings.subscription.current.refreshBtn') }}
       </button>
     </div>
 
     <div class="quota-grid">
       <div class="quota-box">
         <div class="quota-header">
-          <span><i class="fa-solid fa-store mr-1"></i> Mağaza Kapasitesi</span>
+          <span><i class="fa-solid fa-store mr-1"></i> {{ t('settings.subscription.current.shopCapacity') }}</span>
           <strong>{{ sub.assignedShopsCount }} / {{ sub.maxShops }}</strong>
         </div>
         <div class="progress-track">
           <div class="progress-fill" [style.width.%]="getShopUsagePct(sub)"></div>
         </div>
-        <span class="quota-hint">Kullanılabilir ek mağaza: {{ sub.remainingShopSlots }}</span>
+        <span class="quota-hint">{{ t('settings.subscription.current.remainingShops', { count: sub.remainingShopSlots }) }}</span>
       </div>
 
       <div class="quota-box">
         <div class="quota-header">
-          <span><i class="fa-solid fa-microchip mr-1"></i> Aylık AI Token Kotası</span>
+          <span><i class="fa-solid fa-microchip mr-1"></i> {{ t('settings.subscription.current.aiQuota') }}</span>
           <strong>{{ sub.usedAiTokens | number }} / {{ sub.monthlyAiTokenQuota | number }}</strong>
         </div>
         <div class="progress-track">
           <div class="progress-fill" [style.width.%]="sub.aiUsagePercentage"></div>
         </div>
-        <span class="quota-hint">Kalan kota: {{ sub.remainingAiTokens | number }} token (%{{ sub.aiUsagePercentage }})</span>
+        <span class="quota-hint">{{ t('settings.subscription.current.remainingQuota', { tokens: (sub.remainingAiTokens | number), pct: sub.aiUsagePercentage }) }}</span>
       </div>
 
       <div class="quota-box">
         <div class="quota-header">
-          <span><i class="fa-solid fa-sliders mr-1"></i> Operasyon Limitleri</span>
+          <span><i class="fa-solid fa-sliders mr-1"></i> {{ t('settings.subscription.current.operationLimits') }}</span>
           <strong>
-            {{ sub.maxMonthlyAiListings < 0 ? 'Sınırsız İlan' : sub.maxMonthlyAiListings + ' İlan / Ay' }}
+            {{ sub.maxMonthlyAiListings < 0 ? t('settings.subscription.current.unlimitedListings') : t('settings.subscription.current.listingsPerMonth', { count: sub.maxMonthlyAiListings }) }}
           </strong>
         </div>
         <div class="quota-mini-pills">
-          <span class="mini-pill">Toplu Kuyruk: {{ sub.maxBatchQueueSize > 0 ? sub.maxBatchQueueSize + ' Ürün' : 'Kapalı' }}</span>
-          <span class="mini-pill">Yetkili Modül: {{ sub.allowedFeatures.length }}</span>
+          <span class="mini-pill">{{ t('settings.subscription.current.batchQueue', { value: sub.maxBatchQueueSize > 0 ? t('settings.subscription.current.batchItems', { count: sub.maxBatchQueueSize }) : t('settings.subscription.current.disabled') }) }}</span>
+          <span class="mini-pill">{{ t('settings.subscription.current.authorizedModules', { count: sub.allowedFeatures.length }) }}</span>
         </div>
       </div>
     </div>
@@ -136,42 +137,42 @@
   <section *ngIf="activeCheckoutSession as session" class="corp-card vpos-checkout-card" id="stripe-vpos-panel">
     <div class="vpos-header">
       <div>
-        <span class="eyebrow-label">Güvenli Ödeme Adımı</span>
-        <h3>{{ session.planName }} Paketi — Güvenli Ödeme</h3>
+        <span class="eyebrow-label">{{ t('settings.subscription.checkout.eyebrow') }}</span>
+        <h3>{{ t('settings.subscription.checkout.title', { planName: session.planName }) }}</h3>
       </div>
       <button type="button" class="btn-corp btn-corp-ghost btn-sm" (click)="cancelCheckout()">
-        <i class="fa-solid fa-xmark"></i> Vazgeç
+        <i class="fa-solid fa-xmark"></i> {{ t('settings.subscription.checkout.cancelBtn') }}
       </button>
     </div>
 
     <div class="vpos-grid">
       <!-- ORDER SUMMARY -->
       <div class="vpos-summary">
-        <h4>Sipariş Özeti</h4>
+        <h4>{{ t('settings.subscription.checkout.orderSummary') }}</h4>
         <div class="summary-row">
-          <span>Plan</span>
-          <strong>{{ session.planName }} ({{ session.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }})</strong>
+          <span>{{ t('settings.subscription.checkout.planLabel') }}</span>
+          <strong>{{ session.planName }} ({{ session.billingCycle === 'Yearly' ? t('settings.subscription.yearly') : t('settings.subscription.monthly') }})</strong>
         </div>
         <div class="summary-row">
-          <span>Ödeme Altyapısı</span>
+          <span>{{ t('settings.subscription.checkout.providerLabel') }}</span>
           <strong>{{ getProviderDisplayLabel(session.provider) }}</strong>
         </div>
         <div class="summary-row">
-          <span>Fatura Numarası</span>
+          <span>{{ t('settings.subscription.checkout.invoiceLabel') }}</span>
           <strong>{{ session.invoiceNumber }}</strong>
         </div>
         <div class="summary-divider"></div>
         <div class="summary-row total">
-          <span>Ödenecek Tutar</span>
+          <span>{{ t('settings.subscription.checkout.totalLabel') }}</span>
           <strong class="total-amount">{{ formatSessionAmount(session) }}</strong>
         </div>
         <div class="summary-alt">
-          Karşılık: {{ session.currency === 'TRY' ? ('$' + (session.amountUsd | number:'1.2-2') + ' USD') : ('₺' + (session.amountTry | number:'1.2-2') + ' TRY') }}
+          {{ t('settings.subscription.checkout.equivalentLabel', { amount: session.currency === 'TRY' ? ('$' + (session.amountUsd | number:'1.2-2') + ' USD') : ('₺' + (session.amountTry | number:'1.2-2') + ' TRY') }) }}
         </div>
 
         <div class="ssl-note">
           <i class="fa-solid fa-shield-halved"></i>
-          <span>Ödemeniz 256-Bit TLS/SSL, PCI-DSS Level 1 ve banka 3D Secure doğrulamasıyla korunur. Kart bilgileriniz sunucularımızda saklanmaz.</span>
+          <span>{{ t('settings.subscription.checkout.sslNote') }}</span>
         </div>
       </div>
 
@@ -190,7 +191,7 @@
         <div *ngIf="session.mode === 'Iframe' && trustedCheckoutIframeUrl" class="vpos-iframe-wrapper">
           <iframe class="vpos-iframe"
                   [src]="trustedCheckoutIframeUrl"
-                  title="3D Secure Güvenli Ödeme Ekranı"
+                  [title]="t('settings.subscription.checkout.iframeTitle')"
                   referrerpolicy="strict-origin-when-cross-origin"
                   allow="payment">
           </iframe>
@@ -201,40 +202,40 @@
           <div class="unconfigured-head">
             <i class="fa-solid fa-key" aria-hidden="true"></i>
             <div>
-              <h4>Canlı Sanal POS (İyzico / PayTR) Henüz Yapılandırılmadı</h4>
+              <h4>{{ t('settings.subscription.checkout.unconfiguredTitle') }}</h4>
               <p>
-                Gerçek kredi ve banka kartlarından tahsilat yapılabilmesi için Admin Panelinden İyzico veya PayTR mağaza API anahtarlarının girilmesi gerekmektedir.
+                {{ t('settings.subscription.checkout.unconfiguredDesc') }}
               </p>
             </div>
           </div>
 
           <ul class="unconfigured-checklist">
-            <li><i class="fa-solid fa-check" aria-hidden="true"></i> İyzico veya PayTR üye işyeri başvurunuzdan aldığınız API/Merchant anahtarlarını tanımlayın.</li>
-            <li><i class="fa-solid fa-check" aria-hidden="true"></i> Anahtarlar kaydedildiğinde bu alanda doğrudan resmi 3D Secure ortak ödeme formu (iFrame) açılır.</li>
+            <li><i class="fa-solid fa-check" aria-hidden="true"></i> {{ t('settings.subscription.checkout.unconfiguredCheck1') }}</li>
+            <li><i class="fa-solid fa-check" aria-hidden="true"></i> {{ t('settings.subscription.checkout.unconfiguredCheck2') }}</li>
           </ul>
 
           <div *ngIf="authService.isAdmin(); else nonAdminSetupHint" class="unconfigured-actions">
             <button type="button"
                     class="btn-corp btn-corp-secondary"
                     (click)="goToAdminPaymentSettings()">
-              <i class="fa-solid fa-sliders"></i> Admin Panelinden Ödeme Anahtarlarını Gir
+              <i class="fa-solid fa-sliders"></i> {{ t('settings.subscription.checkout.goToAdminBtn') }}
             </button>
             <button type="button"
                     class="btn-corp btn-corp-primary"
                     [disabled]="isPaying"
                     (click)="confirmAdminTestActivation()">
               <ng-container *ngIf="!isPaying">
-                <i class="fa-solid fa-circle-check"></i> Yönetici Test Onayı ile Paketi Aktifleştir
+                <i class="fa-solid fa-circle-check"></i> {{ t('settings.subscription.checkout.adminTestActivateBtn') }}
               </ng-container>
               <ng-container *ngIf="isPaying">
-                <i class="fa-solid fa-spinner fa-spin"></i> Paket Aktifleştiriliyor...
+                <i class="fa-solid fa-spinner fa-spin"></i> {{ t('settings.subscription.checkout.activatingBtn') }}
               </ng-container>
             </button>
           </div>
 
           <ng-template #nonAdminSetupHint>
             <p class="non-admin-hint">
-              Canlı ödeme altyapısını aktifleştirmek için sistem yöneticinizle iletişime geçiniz.
+              {{ t('settings.subscription.checkout.nonAdminHint') }}
             </p>
           </ng-template>
         </div>
@@ -243,7 +244,7 @@
   </section>
 
   <!-- 4-TIER PRICING CARDS -->
-  <section class="plans-grid" aria-label="Abonelik paket seçenekleri">
+  <section class="plans-grid" [attr.aria-label]="t('settings.subscription.plans.gridAria')">
     <article *ngFor="let plan of subscriptionService.plans()"
              class="corp-card plan-card"
              [class.popular]="plan.isPopular"
@@ -252,8 +253,8 @@
       <header class="plan-card-header">
         <div class="plan-badge-row">
           <span class="plan-badge" [class.accent]="plan.isPopular">{{ plan.badgeText || plan.id.toUpperCase() }}</span>
-          <span *ngIf="isCurrentPlan(plan.id)" class="current-chip">Aktif Plan</span>
-          <span *ngIf="isRecommendedUpgrade(plan.id)" class="upgrade-chip">Önerilen</span>
+          <span *ngIf="isCurrentPlan(plan.id)" class="current-chip">{{ t('settings.subscription.plans.activeBadge') }}</span>
+          <span *ngIf="isRecommendedUpgrade(plan.id)" class="upgrade-chip">{{ t('settings.subscription.plans.recommendedBadge') }}</span>
         </div>
         <h3 class="plan-name">{{ plan.name }}</h3>
         <p class="plan-tagline">{{ plan.tagline }}</p>
@@ -262,26 +263,26 @@
       <div class="plan-price-block">
         <div class="price-main">{{ formatPlanPrice(plan) }}</div>
         <div class="price-period">
-          {{ billingCycle === 'Yearly' ? '/ yıl (' + formatMonthlyEquivalent(plan) + ')' : '/ ay' }}
+          {{ billingCycle === 'Yearly' ? t('settings.subscription.plans.perYear', { monthlyEq: formatMonthlyEquivalent(plan) }) : t('settings.subscription.plans.perMonth') }}
         </div>
       </div>
 
       <div class="plan-limits-box">
         <div class="limit-item">
-          <span>Mağaza Sayısı</span>
-          <strong>{{ plan.maxShops }} Mağaza</strong>
+          <span>{{ t('settings.subscription.plans.shopCountLabel') }}</span>
+          <strong>{{ t('settings.subscription.plans.shopCountVal', { count: plan.maxShops }) }}</strong>
         </div>
         <div class="limit-item">
-          <span>Aylık AI Token</span>
+          <span>{{ t('settings.subscription.plans.aiTokenLabel') }}</span>
           <strong>{{ plan.monthlyAiTokenQuota | number }}</strong>
         </div>
         <div class="limit-item">
-          <span>Aylık AI İlan</span>
-          <strong>{{ plan.maxMonthlyAiListings < 0 ? 'Sınırsız' : plan.maxMonthlyAiListings + ' İlan' }}</strong>
+          <span>{{ t('settings.subscription.plans.aiListingsLabel') }}</span>
+          <strong>{{ plan.maxMonthlyAiListings < 0 ? t('settings.subscription.plans.unlimited') : t('settings.subscription.plans.listingsVal', { count: plan.maxMonthlyAiListings }) }}</strong>
         </div>
         <div class="limit-item">
-          <span>Toplu Kuyruk</span>
-          <strong>{{ plan.maxBatchQueueSize > 0 ? plan.maxBatchQueueSize + ' Ürün' : 'Kapalı' }}</strong>
+          <span>{{ t('settings.subscription.plans.batchQueueLabel') }}</span>
+          <strong>{{ plan.maxBatchQueueSize > 0 ? t('settings.subscription.current.batchItems', { count: plan.maxBatchQueueSize }) : t('settings.subscription.current.disabled') }}</strong>
         </div>
       </div>
 
@@ -293,7 +294,7 @@
              [class.fa-check]="planIncludesFeature(plan, feat.key)"
              [class.fa-minus]="!planIncludesFeature(plan, feat.key)"
              aria-hidden="true"></i>
-          <span>{{ feat.label }}</span>
+          <span>{{ t(feat.labelKey) }}</span>
         </li>
       </ul>
 
@@ -306,13 +307,13 @@
                 [disabled]="isCurrentPlan(plan.id) || startingCheckoutPlanId === plan.id"
                 (click)="startCheckout(plan)">
           <ng-container *ngIf="isCurrentPlan(plan.id)">
-            <i class="fa-solid fa-check"></i> Mevcut Planınız
+            <i class="fa-solid fa-check"></i> {{ t('settings.subscription.plans.currentPlanBtn') }}
           </ng-container>
           <ng-container *ngIf="!isCurrentPlan(plan.id) && startingCheckoutPlanId === plan.id">
-            <i class="fa-solid fa-spinner fa-spin"></i> Hazırlanıyor...
+            <i class="fa-solid fa-spinner fa-spin"></i> {{ t('settings.subscription.plans.preparingBtn') }}
           </ng-container>
           <ng-container *ngIf="!isCurrentPlan(plan.id) && startingCheckoutPlanId !== plan.id">
-            Planı Seç
+            {{ t('settings.subscription.plans.selectPlanBtn') }}
           </ng-container>
         </button>
       </footer>
@@ -323,23 +324,23 @@
   <section class="corp-card transactions-section">
     <div class="section-header-row">
       <div>
-        <h3>Ödeme ve Fatura Geçmişi</h3>
-        <p class="section-sub">Abonelik dönemi ödemeleri ve düzenlenen faturalar</p>
+        <h3>{{ t('settings.subscription.transactions.title') }}</h3>
+        <p class="section-sub">{{ t('settings.subscription.transactions.subtitle') }}</p>
       </div>
-      <span class="count-pill">{{ subscriptionService.transactions().length }} Kayıt</span>
+      <span class="count-pill">{{ t('settings.subscription.transactions.countPill', { count: subscriptionService.transactions().length }) }}</span>
     </div>
 
     <div class="table-responsive">
       <table class="sub-table">
         <thead>
           <tr>
-            <th>FATURA NO</th>
-            <th>TARİH</th>
-            <th>PLAN VE DÖNEM</th>
-            <th>TUTAR</th>
-            <th>ÖDEME YÖNTEMİ</th>
-            <th>DURUM</th>
-            <th>İŞLEM</th>
+            <th>{{ t('settings.subscription.transactions.colInvoice') }}</th>
+            <th>{{ t('settings.subscription.transactions.colDate') }}</th>
+            <th>{{ t('settings.subscription.transactions.colPlan') }}</th>
+            <th>{{ t('settings.subscription.transactions.colAmount') }}</th>
+            <th>{{ t('settings.subscription.transactions.colMethod') }}</th>
+            <th>{{ t('settings.subscription.transactions.colStatus') }}</th>
+            <th>{{ t('settings.subscription.transactions.colAction') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -348,13 +349,13 @@
             <td>{{ tx.createdAtUtc | date:'dd.MM.yyyy HH:mm' }}</td>
             <td>
               <strong>{{ tx.planName }}</strong>
-              <span class="cycle-tag">{{ tx.billingCycle === 'Yearly' ? 'Yıllık' : 'Aylık' }}</span>
+              <span class="cycle-tag">{{ tx.billingCycle === 'Yearly' ? t('settings.subscription.yearly') : t('settings.subscription.monthly') }}</span>
             </td>
             <td class="amount-cell">
               {{ tx.currency === 'TRY' ? ('₺' + (tx.amountTry | number:'1.2-2')) : ('$' + (tx.amountUsd | number:'1.2-2')) }}
             </td>
             <td>
-              <span>Kredi / Banka Kartı</span>
+              <span>{{ t('settings.subscription.transactions.cardMethod') }}</span>
               <span *ngIf="tx.cardMaskedNumber" class="card-mask">{{ tx.cardMaskedNumber }}</span>
             </td>
             <td>
@@ -362,7 +363,7 @@
                     [class.paid]="tx.status === 'Paid'"
                     [class.pending]="tx.status === 'Pending'"
                     [class.failed]="tx.status === 'Failed'">
-                {{ tx.status === 'Paid' ? 'Ödendi' : tx.status === 'Pending' ? 'Bekliyor' : 'Reddedildi' }}
+                {{ tx.status === 'Paid' ? t('settings.subscription.transactions.statusPaid') : tx.status === 'Pending' ? t('settings.subscription.transactions.statusPending') : t('settings.subscription.transactions.statusFailed') }}
               </span>
             </td>
             <td>
@@ -370,13 +371,13 @@
                       type="button"
                       class="btn-corp btn-corp-secondary btn-xs"
                       (click)="resumePendingTransaction(tx)">
-                Tamamla
+                {{ t('settings.subscription.transactions.completeBtn') }}
               </button>
               <span *ngIf="tx.status !== 'Pending'" class="text-muted text-xs">—</span>
             </td>
           </tr>
           <tr *ngIf="subscriptionService.transactions().length === 0">
-            <td colspan="7" class="empty-row">Henüz ödeme işlemi bulunmuyor.</td>
+            <td colspan="7" class="empty-row">{{ t('settings.subscription.transactions.empty') }}</td>
           </tr>
         </tbody>
       </table>
@@ -384,12 +385,11 @@
   </section>
 
   <!-- COMPLIANCE FOOTER: CARD ACCEPTANCE MARKS & SECURITY BADGES -->
-  <footer class="corp-card payment-compliance-footer" aria-label="Ödeme altyapısı ve kabul edilen kart markaları">
+  <footer class="corp-card payment-compliance-footer" [attr.aria-label]="t('settings.subscription.compliance.aria')">
     <div class="compliance-left">
       <ng-container *ngTemplateOutlet="cardBrandMarks; context: { activeBrand: 'all' }"></ng-container>
       <p class="compliance-note">
-        Tüm abonelik ödemeleri 3D Secure, PCI-DSS Level 1 ve 256-Bit TLS/SSL güvenlik standartları altında işlenir.
-        İptal ve iade talepleri fatura numarası ile destek ekibimiz üzerinden işleme alınır.
+        {{ t('settings.subscription.compliance.note') }}
       </p>
     </div>
     <div class="security-seals">
@@ -400,6 +400,7 @@
     </div>
   </footer>
 </div>
+</ng-container>
 
 <!-- REUSABLE OFFICIAL CARD SCHEME SVG LOGOS -->
 <ng-template #cardBrandMarks let-activeBrand="activeBrand">

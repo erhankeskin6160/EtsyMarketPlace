@@ -3,14 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-etsy-api-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   template: `
+    <ng-container *transloco="let t">
     <div class="settings-view">
       <!-- HEADER -->
       <div class="settings-header">
@@ -22,13 +25,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Etsy API & Canlı Mağaza Bağlantı Ayarları</h1>
-            <p class="page-subtitle">Etsy OAuth v3 token sağlığı, doğrudan Etsy bağlantısı ve canlı döviz kuru motoru</p>
+            <h1 class="page-title">{{ t('settings.etsyApi.title') }}</h1>
+            <p class="page-subtitle">{{ t('settings.etsyApi.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-badge">
-          <span>● VDS API: 5.180.81.148:5263 (Online)</span>
+          <span>{{ t('settings.etsyApi.vdsBadge') }}</span>
         </div>
       </div>
 
@@ -38,39 +41,39 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         <!-- CARD 1: STORE CONNECTION & TOKEN HEALTH -->
         <div class="glass-card">
           <div class="card-head">
-            <span class="card-label">1. Etsy Mağaza Bağlantısı & OAuth Token Sağlığı</span>
+            <span class="card-label">{{ t('settings.etsyApi.connectionCard.title') }}</span>
             <span class="status-pill" [ngClass]="etsyApi.tokenStatus()">
-              {{ etsyApi.tokenStatus() === 'connected' ? 'BAĞLI & AKTİF' : (etsyApi.tokenStatus() === 'expired' ? 'SÜRESİ DOLDU' : 'BAĞLI DEĞİL') }}
+              {{ etsyApi.tokenStatus() === 'connected' ? t('settings.etsyApi.connectionCard.statusConnected') : (etsyApi.tokenStatus() === 'expired' ? t('settings.etsyApi.connectionCard.statusExpired') : t('settings.etsyApi.connectionCard.statusDisconnected')) }}
             </span>
           </div>
 
           <div class="form-group">
-            <label>Aktif Etsy Mağaza ID</label>
+            <label>{{ t('settings.etsyApi.connectionCard.shopIdLabel') }}</label>
             <div class="input-with-btn">
               <input type="text" [(ngModel)]="currentShopId" class="form-input font-bold" />
-              <button class="btn-primary" (click)="saveShopId()">Kaydet</button>
+              <button class="btn-primary" (click)="saveShopId()">{{ t('settings.etsyApi.connectionCard.saveBtn') }}</button>
             </div>
           </div>
 
           <div class="token-health-box">
             <div class="health-row">
-              <span class="h-label">OAuth v3 Token Durumu:</span>
+              <span class="h-label">{{ t('settings.etsyApi.connectionCard.tokenStatusLabel') }}</span>
               <span class="h-val" [ngClass]="etsyApi.tokenStatus() === 'connected' ? 'green' : 'amber'">
                 {{ etsyApi.tokenDetails() }}
               </span>
             </div>
             <div class="health-row">
-              <span class="h-label">Son Kullanma Zamanı:</span>
+              <span class="h-label">{{ t('settings.etsyApi.connectionCard.expiresAtLabel') }}</span>
               <span class="h-val text-muted">
-                {{ etsyApi.tokenExpiresAt() ? (etsyApi.tokenExpiresAt() | date:'medium') : 'Belirtilmedi' }}
+                {{ etsyApi.tokenExpiresAt() ? (etsyApi.tokenExpiresAt() | date:'medium') : t('settings.etsyApi.connectionCard.notSpecified') }}
               </span>
             </div>
             <div class="health-row">
-              <span class="h-label">Otomatik Yenileme (Auto-Refresh):</span>
-              <span class="h-val green">EtsyAccessTokenHandler Devrede (90 Gün)</span>
+              <span class="h-label">{{ t('settings.etsyApi.connectionCard.autoRefreshLabel') }}</span>
+              <span class="h-val green">{{ t('settings.etsyApi.connectionCard.autoRefreshValue') }}</span>
             </div>
             <div class="health-row">
-              <span class="h-label">Erişim İzinleri (Scopes):</span>
+              <span class="h-label">{{ t('settings.etsyApi.connectionCard.scopesLabel') }}</span>
               <span class="h-val text-muted">listings_r, listings_w, transactions_r, shops_r, billing_r</span>
             </div>
           </div>
@@ -78,39 +81,39 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           <!-- DIRECT OAUTH CONNECT BUTTON -->
           <div class="direct-connect-banner">
             <div class="connect-info">
-              <div class="connect-title">🔑 1-Tıkla Doğrudan Etsy ile Yetkilendir (PKCE)</div>
-              <div class="connect-sub">Etsy resmi onay ekranını açar, izin verildiğinde yeni Access & Refresh token çiftini otomatik sisteme kaydeder.</div>
+              <div class="connect-title">{{ t('settings.etsyApi.connectionCard.directConnectTitle') }}</div>
+              <div class="connect-sub">{{ t('settings.etsyApi.connectionCard.directConnectSub') }}</div>
             </div>
             <button class="btn-direct-connect" [disabled]="isConnecting" (click)="connectWithEtsy()">
-              {{ isConnecting ? 'Bağlanıyor...' : 'Etsy ile Hesabımı Doğrudan Bağla' }}
+              {{ isConnecting ? t('settings.etsyApi.connectionCard.connectingBtn') : t('settings.etsyApi.connectionCard.connectBtn') }}
             </button>
           </div>
 
           <div class="btn-actions-row">
             <button class="btn-sync-token" [disabled]="isTestingToken" (click)="testEtsyToken()">
-              🔍 Durumu Sorgula
+              {{ t('settings.etsyApi.connectionCard.checkStatusBtn') }}
             </button>
             <button class="btn-refresh-token" [disabled]="isRefreshingToken" (click)="tryRefreshToken()">
-              ⚡ Token'ı Şimdi Yenile
+              {{ t('settings.etsyApi.connectionCard.refreshTokenBtn') }}
             </button>
             <button class="btn-toggle-manual" (click)="showManualCodeModal = !showManualCodeModal">
-              📋 Yetki Kodu Yapıştır
+              {{ t('settings.etsyApi.connectionCard.pasteCodeBtn') }}
             </button>
             <a class="btn-connect-etsy" href="https://developers.etsy.com/documentation/essentials/authentication" target="_blank">
-              📖 Etsy Kılavuzu
+              {{ t('settings.etsyApi.connectionCard.etsyGuideBtn') }}
             </a>
           </div>
 
           <!-- MANUAL CODE EXCHANGE BOX -->
           <div *ngIf="showManualCodeModal" class="manual-code-box">
             <div class="manual-code-head">
-              <span>Etsy'den Dönen URL'yi veya Yetki Kodunu (code=...) Girin:</span>
+              <span>{{ t('settings.etsyApi.connectionCard.manualCodeHead') }}</span>
               <button class="btn-close-sm" (click)="showManualCodeModal = false">✕</button>
             </div>
             <div class="input-with-btn">
-              <input type="text" [(ngModel)]="manualAuthCode" placeholder="https://.../?code=abcd1234... veya doğrudan kod" class="form-input font-mono" />
+              <input type="text" [(ngModel)]="manualAuthCode" [placeholder]="t('settings.etsyApi.connectionCard.manualCodePlaceholder')" class="form-input font-mono" />
               <button class="btn-primary" [disabled]="!manualAuthCode.trim() || isExchangingCode" (click)="submitManualCode()">
-                {{ isExchangingCode ? 'Doğrulanıyor...' : 'Token Al ve Kaydet' }}
+                {{ isExchangingCode ? t('settings.etsyApi.connectionCard.verifyingBtn') : t('settings.etsyApi.connectionCard.exchangeBtn') }}
               </button>
             </div>
           </div>
@@ -119,53 +122,53 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         <!-- CARD 2: LIVE USD/TRY EXCHANGE RATE API -->
         <div class="glass-card">
           <div class="card-head">
-            <span class="card-label">2. Canlı USD/TRY Kur Sağlayıcısı</span>
-            <span class="status-pill live">CANLI API</span>
+            <span class="card-label">{{ t('settings.etsyApi.rateCard.title') }}</span>
+            <span class="status-pill live">{{ t('settings.etsyApi.rateCard.liveBadge') }}</span>
           </div>
 
           <p class="card-desc">
-            Sistemdeki tüm finansal hesaplamalar, sipariş kârları ve muhasebe defteri bu canlı kur üzerinden gerçek zamanlı hesaplanır.
+            {{ t('settings.etsyApi.rateCard.desc') }}
           </p>
 
           <div class="rate-display-box">
             <span class="rate-large">1 USD = {{ etsyApi.exchangeRate() }} ₺ TRY</span>
-            <span class="rate-source">Kaynak: open.er-api.com (Yedek: api.frankfurter.app)</span>
+            <span class="rate-source">{{ t('settings.etsyApi.rateCard.source') }}</span>
           </div>
 
           <div class="form-group">
-            <label>Manuel Kur Güncelle (İsteğe Bağlı)</label>
+            <label>{{ t('settings.etsyApi.rateCard.manualLabel') }}</label>
             <div class="input-with-btn">
               <input type="number" step="0.01" [(ngModel)]="manualRate" class="form-input" />
-              <button class="btn-primary" (click)="applyManualRate()">Uygula</button>
+              <button class="btn-primary" (click)="applyManualRate()">{{ t('settings.etsyApi.rateCard.applyBtn') }}</button>
             </div>
           </div>
 
           <button class="btn-fetch-live" (click)="fetchFreshRate()">
-            💱 Canlı Kuru Merkezden Yeniden Çek
+            {{ t('settings.etsyApi.rateCard.fetchLiveBtn') }}
           </button>
         </div>
 
         <!-- CARD 3: ETSY DEVELOPER API CREDENTIALS -->
         <div class="glass-card full-width">
           <div class="card-head">
-            <span class="card-label">3. Etsy Developer Uygulama Anahtarları (Keystring & Secret)</span>
-            <span class="status-pill active-pill">VDS SQLite Şifreli Kasa</span>
+            <span class="card-label">{{ t('settings.etsyApi.credentialsCard.title') }}</span>
+            <span class="status-pill active-pill">{{ t('settings.etsyApi.credentialsCard.vaultBadge') }}</span>
           </div>
 
           <p class="card-desc">
-            Etsy OpenAPI v3 ile doğrudan bağlantı kurmak ve token yenilemek için Etsy Developer Portal'ınızdan aldığınız uygulama anahtarlarıdır. Bu veriler VDS veritabanında AES-256 (DataProtection) ile korunur.
+            {{ t('settings.etsyApi.credentialsCard.desc') }}
           </p>
 
           <div class="credentials-grid">
             <div class="form-group">
-              <label>Etsy App Keystring (Client ID)</label>
-              <input type="text" [(ngModel)]="keystring" class="form-input font-mono" placeholder="Etsy Developer KeyString (Client ID) giriniz" />
+              <label>{{ t('settings.etsyApi.credentialsCard.keystringLabel') }}</label>
+              <input type="text" [(ngModel)]="keystring" class="form-input font-mono" [placeholder]="t('settings.etsyApi.credentialsCard.keystringPlaceholder')" />
             </div>
 
             <div class="form-group">
-              <label>Etsy Shared Secret</label>
+              <label>{{ t('settings.etsyApi.credentialsCard.secretLabel') }}</label>
               <div class="secret-wrapper">
-                <input [type]="showSecret ? 'text' : 'password'" [(ngModel)]="sharedSecret" class="form-input font-mono" placeholder="Etsy Shared Secret giriniz" />
+                <input [type]="showSecret ? 'text' : 'password'" [(ngModel)]="sharedSecret" class="form-input font-mono" [placeholder]="t('settings.etsyApi.credentialsCard.secretPlaceholder')" />
                 <button type="button" class="btn-eye" (click)="showSecret = !showSecret">
                   {{ showSecret ? '👁️' : '🔒' }}
                 </button>
@@ -173,18 +176,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             </div>
 
             <div class="form-group">
-              <label>Callback / Redirect URI</label>
+              <label>{{ t('settings.etsyApi.credentialsCard.redirectUriLabel') }}</label>
               <input type="text" [(ngModel)]="redirectUri" class="form-input font-mono" placeholder="http://localhost:4200/settings/etsy-api" />
-              <small class="hint-text">Etsy Developer portalınızdaki uygulamanızın 'Redirect URIs' listesi ile birebir uyuşmalıdır.</small>
+              <small class="hint-text">{{ t('settings.etsyApi.credentialsCard.redirectUriHint') }}</small>
             </div>
           </div>
 
           <div class="credentials-actions">
             <button class="btn-primary-lg" [disabled]="isSavingCredentials" (click)="saveCredentials()">
-              {{ isSavingCredentials ? 'Kaydediliyor...' : '💾 API Anahtarlarını Güvenli Kaydet' }}
+              {{ isSavingCredentials ? t('settings.etsyApi.credentialsCard.savingBtn') : t('settings.etsyApi.credentialsCard.saveBtn') }}
             </button>
             <a href="https://developers.etsy.com/your-apps" target="_blank" class="btn-secondary-link">
-              ↗ Etsy Developer Portalına Git (Uygulamalarım)
+              {{ t('settings.etsyApi.credentialsCard.portalLink') }}
             </a>
           </div>
         </div>
@@ -196,6 +199,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         {{ toastMessage }}
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .settings-view {
@@ -658,6 +662,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class EtsyApiSettingsComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   currentShopId = '53236321';
   manualRate = 49.12;
 
@@ -706,7 +711,7 @@ export class EtsyApiSettingsComponent implements OnInit {
       const code = params['code'];
       const state = params['state'];
       if (code) {
-        this.showToast('Etsy yetkilendirme kodu algılandı! Token takası yapılıyor...', 'warning');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.codeDetected'), 'warning');
         // Clean URL to prevent re-triggering
         this.router.navigate([], { queryParams: {}, replaceUrl: true });
         this.performExchange(code, state);
@@ -737,7 +742,7 @@ export class EtsyApiSettingsComponent implements OnInit {
 
   saveCredentials(): void {
     if (!this.keystring.trim()) {
-      this.showToast('Lütfen geçerli bir Keystring (Client ID) girin.', 'error');
+      this.showToast(this.transloco.translate('settings.etsyApi.toasts.invalidKeystring'), 'error');
       return;
     }
 
@@ -750,18 +755,18 @@ export class EtsyApiSettingsComponent implements OnInit {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isSavingCredentials = false;
-        this.showToast('✅ Etsy Developer API anahtarları VDS kasasına güvenle kaydedildi!', 'success');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.credentialsSaved'), 'success');
       },
       error: (err) => {
         this.isSavingCredentials = false;
-        this.showToast('⚠️ Anahtarlar kaydedilemedi: ' + (err.error?.error || err.message), 'error');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.credentialsSaveFailed', { error: err.error?.error || err.message }), 'error');
       }
     });
   }
 
   connectWithEtsy(): void {
     if (!this.keystring.trim()) {
-      this.showToast('Önce Etsy Keystring bilgisini kaydedin.', 'error');
+      this.showToast(this.transloco.translate('settings.etsyApi.toasts.saveKeystringFirst'), 'error');
       return;
     }
 
@@ -769,14 +774,14 @@ export class EtsyApiSettingsComponent implements OnInit {
     this.etsyApi.getEtsyConnectUrl(this.currentShopId, this.redirectUri).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isConnecting = false;
-        this.showToast('Etsy resmi yetkilendirme sayfasına yönlendiriliyorsunuz...', 'success');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.redirectingToEtsy'), 'success');
         // Open authorization in new tab/window so user stays logged in
         window.open(res.url, '_blank');
         this.showManualCodeModal = true;
       },
       error: (err) => {
         this.isConnecting = false;
-        this.showToast('OAuth bağlantı URL\'i üretilemedi: ' + (err.error?.error || err.message), 'error');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.connectUrlFailed', { error: err.error?.error || err.message }), 'error');
       }
     });
   }
@@ -815,11 +820,11 @@ export class EtsyApiSettingsComponent implements OnInit {
         this.showManualCodeModal = false;
         this.manualAuthCode = '';
         this.etsyApi.verifyApiConnection();
-        this.showToast('🎉 ' + (res.message || 'Etsy OAuth v3 bağlantısı başarıyla tamamlandı!'), 'success');
+        this.showToast('🎉 ' + (res.message || this.transloco.translate('settings.etsyApi.toasts.oauthCompleted')), 'success');
       },
       error: (err) => {
         this.isExchangingCode = false;
-        const msg = err.error?.message || 'Yetki kodu takası başarısız oldu.';
+        const msg = err.error?.message || this.transloco.translate('settings.etsyApi.toasts.codeExchangeFailed');
         this.showToast('⚠️ ' + msg, 'error');
       }
     });
@@ -830,20 +835,20 @@ export class EtsyApiSettingsComponent implements OnInit {
       this.etsyApi.activeShopId.set(this.currentShopId.trim());
       this.etsyApi.verifyApiConnection();
       this.loadSavedCredentials();
-      this.showToast(`Aktif mağaza #${this.currentShopId} olarak ayarlandı.`, 'success');
+      this.showToast(this.transloco.translate('settings.etsyApi.toasts.shopIdSaved', { shopId: this.currentShopId }), 'success');
     }
   }
 
   applyManualRate(): void {
     if (this.manualRate > 0) {
       this.etsyApi.setExchangeRate(this.manualRate);
-      this.showToast(`Döviz kuru 1 USD = ${this.manualRate} ₺ olarak güncellendi!`, 'success');
+      this.showToast(this.transloco.translate('settings.etsyApi.toasts.rateUpdated', { rate: this.manualRate }), 'success');
     }
   }
 
   fetchFreshRate(): void {
     this.etsyApi.fetchLiveExchangeRate();
-    this.showToast('Canlı kur merkezden başarıyla yenilendi!', 'success');
+    this.showToast(this.transloco.translate('settings.etsyApi.toasts.liveRateRefreshed'), 'success');
     setTimeout(() => {
       this.manualRate = this.etsyApi.exchangeRate();
     }, 2500);
@@ -856,16 +861,16 @@ export class EtsyApiSettingsComponent implements OnInit {
         this.isTestingToken = false;
         this.etsyApi.verifyApiConnection();
         if (res.exists && !res.isExpired) {
-          this.showToast(`✅ Etsy OAuth v3 bağlantısı aktif ve geçerli! Mağaza: ${res.shopId}`, 'success');
+          this.showToast(this.transloco.translate('settings.etsyApi.toasts.tokenValid', { shopId: res.shopId }), 'success');
         } else if (res.exists && res.isExpired) {
-          this.showToast(`⚠️ Etsy OAuth v3 token süresi dolmuş. Lütfen "Token'ı Şimdi Yenile" veya "Etsy ile Hesabımı Doğrudan Bağla" butonunu kullanın.`, 'warning');
+          this.showToast(this.transloco.translate('settings.etsyApi.toasts.tokenExpired'), 'warning');
         } else {
-          this.showToast(`❌ Mağaza #${this.currentShopId} için kayıtlı bir Etsy token bulunamadı.`, 'error');
+          this.showToast(this.transloco.translate('settings.etsyApi.toasts.tokenMissing', { shopId: this.currentShopId }), 'error');
         }
       },
       error: () => {
         this.isTestingToken = false;
-        this.showToast('⚠️ VDS API sunucusuna erişilemedi veya bağlantı kurulamadı.', 'error');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.vdsUnreachable'), 'error');
       }
     });
   }
@@ -876,13 +881,13 @@ export class EtsyApiSettingsComponent implements OnInit {
       next: (res) => {
         this.isRefreshingToken = false;
         this.etsyApi.verifyApiConnection();
-        this.showToast(`✅ ${res.message || 'Etsy OAuth v3 token başarıyla yenilendi!'}`, 'success');
+        this.showToast(`✅ ${res.message || this.transloco.translate('settings.etsyApi.toasts.tokenRefreshed')}`, 'success');
       },
       error: (err) => {
         this.isRefreshingToken = false;
         this.etsyApi.verifyApiConnection();
-        const msg = err.error?.message || 'Etsy API yetkilendirme yenilemesi başarısız oldu.';
-        this.showToast(`⚠️ ${msg} Lütfen "Etsy ile Hesabımı Doğrudan Bağla" butonuna tıklayarak taze yetki verin.`, 'warning');
+        const msg = err.error?.message || this.transloco.translate('settings.etsyApi.toasts.tokenRefreshFailed');
+        this.showToast(this.transloco.translate('settings.etsyApi.toasts.tokenRefreshHint', { message: msg }), 'warning');
       }
     });
   }

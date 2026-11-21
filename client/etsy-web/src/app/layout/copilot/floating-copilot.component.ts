@@ -1,6 +1,8 @@
 import { Component, OnInit, ElementRef, ViewChild, HostListener, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { StoreAiAssistantService, AssistantChatMessage, ChatAttachment } from '../../core/services/store-ai-assistant.service';
 import { CopilotSessionStorageService, CopilotChatSession } from '../../core/services/copilot-session-storage.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
@@ -12,13 +14,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 @Component({
   selector: 'app-floating-copilot',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent],
+  imports: [CommonModule, FormsModule, AiLogoComponent, TranslocoDirective],
+  providers: [provideTranslocoScope('copilot')],
   template: `
+    <ng-container *transloco="let t">
     <!-- FLOATING BUTTON -->
     <div class="floating-btn-wrap" *ngIf="!isOpen" (click)="toggleOpen()">
-      <button class="copilot-fab" [title]="activeProvider + ' Mağaza Danışmanı'">
+      <button class="copilot-fab" [title]="t('copilot.fab.title', { provider: activeProvider })">
         <app-ai-logo [provider]="activeProvider" [size]="20"></app-ai-logo>
-        <span class="fab-label">{{ activeProvider }} Danışmanı</span>
+        <span class="fab-label">{{ t('copilot.fab.label', { provider: activeProvider }) }}</span>
       </button>
     </div>
 
@@ -34,8 +38,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <div class="drag-drop-overlay" *ngIf="isDraggingOver">
         <div class="drop-card">
           <span class="drop-icon">📂</span>
-          <h4>Dosyayı Buraya Bırakın</h4>
-          <p>Resim, Excel, PDF, CSV veya Belge</p>
+          <h4>{{ t('copilot.dragDrop.title') }}</h4>
+          <p>{{ t('copilot.dragDrop.subtitle') }}</p>
         </div>
       </div>
 
@@ -43,8 +47,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         <div class="header-info">
           <app-ai-logo [provider]="activeProvider" [size]="22"></app-ai-logo>
           <div class="header-titles">
-            <h4 class="copilot-title" [title]="activeSession?.title || (activeProvider + ' AI Asistanı')">
-              {{ activeSession?.title || (activeProvider + ' AI Asistanı') }}
+            <h4 class="copilot-title" [title]="activeSession?.title || t('copilot.header.defaultTitle', { provider: activeProvider })">
+              {{ activeSession?.title || t('copilot.header.defaultTitle', { provider: activeProvider }) }}
             </h4>
             <span class="copilot-sub">
               {{ activeModel }} • 1$ = {{ (etsyApi.exchangeRate() || 49.73).toFixed(2) }} ₺
@@ -52,28 +56,28 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           </div>
         </div>
         <div class="header-actions">
-          <button class="btn-new-chat" (click)="startNewChat()" title="Yeni Sohbet Başlat">
+          <button class="btn-new-chat" (click)="startNewChat()" [title]="t('copilot.header.newChatTitle')">
             <span class="btn-plus">＋</span>
-            <span class="btn-text">Yeni</span>
+            <span class="btn-text">{{ t('copilot.header.newChatBtn') }}</span>
           </button>
-          <button class="btn-icon" [class.active]="isHistoryOpen" (click)="toggleHistoryDrawer()" title="Geçmiş Sohbetler">
+          <button class="btn-icon" [class.active]="isHistoryOpen" (click)="toggleHistoryDrawer()" [title]="t('copilot.header.historyTitle')">
             📜<span *ngIf="savedSessions.length > 0" class="history-count-badge">{{ savedSessions.length }}</span>
           </button>
-          <button class="btn-icon" (click)="openAiSettingsModal()" title="Yapay Zeka & Model Ayarları (DeepSeek, OpenAI, Claude, Grok, Gemini)">⚙️</button>
-          <button class="btn-icon" (click)="clearChat()" title="Sohbeti Temizle (/clear)">🗑️</button>
-          <button class="btn-close" (click)="toggleOpen()" title="Kapat">×</button>
+          <button class="btn-icon" (click)="openAiSettingsModal()" [title]="t('copilot.header.settingsTitle')">⚙️</button>
+          <button class="btn-icon" (click)="clearChat()" [title]="t('copilot.header.clearTitle')">🗑️</button>
+          <button class="btn-close" (click)="toggleOpen()" [title]="t('copilot.header.closeTitle')">×</button>
         </div>
       </div>
 
       <!-- SOHBET GEÇMİŞİ ÇEKMECESİ (HISTORY DRAWER) -->
       <div class="history-drawer" *ngIf="isHistoryOpen">
         <div class="history-drawer-header">
-          <span class="history-drawer-title">📜 Geçmiş Sohbetler ({{ savedSessions.length }})</span>
-          <button class="btn-close-drawer" (click)="toggleHistoryDrawer()" title="Kapat">✕</button>
+          <span class="history-drawer-title">{{ t('copilot.history.title', { count: savedSessions.length }) }}</span>
+          <button class="btn-close-drawer" (click)="toggleHistoryDrawer()" [title]="t('copilot.header.closeTitle')">✕</button>
         </div>
         <div class="history-list">
           <div *ngIf="savedSessions.length === 0" class="history-empty">
-            Henüz kayıtlı geçmiş sohbetiniz yok.
+            {{ t('copilot.history.empty') }}
           </div>
           <div 
             *ngFor="let s of savedSessions" 
@@ -86,15 +90,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
                 ❓ {{ getLastUserQuery(s) }}
               </div>
               <div class="history-card-sub">
-                <span>💬 {{ s.messages.length }} mesaj</span>
+                <span>{{ t('copilot.history.messageCount', { count: s.messages.length }) }}</span>
                 <span>•</span>
                 <span>{{ formatSessionDate(s.updatedAt) }}</span>
                 <span *ngIf="isGeneratingSession(s.id)" class="session-running-badge">
-                  <span class="pulsing-dot"></span> Yanıt üretiliyor...
+                  <span class="pulsing-dot"></span> {{ t('copilot.history.generating') }}
                 </span>
               </div>
             </div>
-            <button class="btn-del-session" (click)="deleteSession($event, s.id)" title="Bu sohbeti sil">🗑️</button>
+            <button class="btn-del-session" (click)="deleteSession($event, s.id)" [title]="t('copilot.history.deleteTitle')">🗑️</button>
           </div>
         </div>
       </div>
@@ -102,18 +106,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <!-- MESSAGES STREAM -->
       <div class="messages-container" #scrollArea>
         <div *ngFor="let msg of messages" class="msg-bubble" [ngClass]="msg.sender">
-          <div class="msg-author">{{ msg.sender === 'user' ? 'Siz' : (activeProvider + ' Asistanı') }}</div>
+          <div class="msg-author">{{ msg.sender === 'user' ? t('copilot.messages.authorUser') : t('copilot.messages.authorAssistant', { provider: activeProvider }) }}</div>
 
           <!-- ATTACHMENTS IN USER MESSAGE -->
           <div *ngIf="msg.attachments && msg.attachments.length > 0" class="msg-attachments-wrap">
             <div *ngFor="let att of msg.attachments" class="att-card" [ngClass]="att.type">
-              <div *ngIf="att.type === 'image' && att.dataUrl" class="att-img-card" (click)="openImageModal(att.dataUrl)" title="Tam boyutta büyütmek için tıklayın">
+              <div *ngIf="att.type === 'image' && att.dataUrl" class="att-img-card" (click)="openImageModal(att.dataUrl)" [title]="t('copilot.messages.zoomTitle')">
                 <div class="att-img-viewport">
-                  <img [src]="att.dataUrl" class="att-thumb-contain" alt="Ekli Görsel" />
-                  <span class="att-zoom-badge">🔍 Büyüt</span>
+                  <img [src]="att.dataUrl" class="att-thumb-contain" [alt]="t('copilot.messages.attachedImageAlt')" />
+                  <span class="att-zoom-badge">{{ t('copilot.messages.zoomBadge') }}</span>
                 </div>
                 <div class="att-card-footer">
-                  <span class="att-name-label" [title]="att.name">{{ att.name || 'Görsel.png' }}</span>
+                  <span class="att-name-label" [title]="att.name">{{ att.name || t('copilot.messages.defaultImageName') }}</span>
                   <span class="att-size-label">{{ (att.size / 1024).toFixed(0) }} KB</span>
                 </div>
               </div>
@@ -134,18 +138,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           <div class="typing-dots">
             <span></span><span></span><span></span>
           </div>
-          <span class="thinking-text">{{ assistantAi.liveToolStatus() || (activeProvider + ' düşünüyor ve mağazanızı analiz ediyor...') }}</span>
+          <span class="thinking-text">{{ assistantAi.liveToolStatus() || t('copilot.messages.thinkingFallback', { provider: activeProvider }) }}</span>
         </div>
       </div>
 
       <!-- QUICK ACTION CHIPS -->
       <div class="quick-prompts">
-        <button class="q-chip" (click)="askLiveMarketAnalysis()">⚡ Canlı Pazar & Kargo Modülü</button>
-        <button class="q-chip" (click)="askNetProfit()">💰 Net Kâr & Durum</button>
-        <button class="q-chip" (click)="askMissingCosts()">⚠️ Eksik Maliyet</button>
-        <button class="q-chip" (click)="askProductViability()">🔍 Bu Ürün Satılır mı?</button>
-        <button class="q-chip" (click)="askPricingAdvice()">🏷️ Fiyat & Kâr Tavsiyesi</button>
-        <button class="q-chip" (click)="askTrendingModels()">🔥 Trend 3D Modeller</button>
+        <button class="q-chip" (click)="askLiveMarketAnalysis()">{{ t('copilot.quickChips.liveMarket') }}</button>
+        <button class="q-chip" (click)="askNetProfit()">{{ t('copilot.quickChips.netProfit') }}</button>
+        <button class="q-chip" (click)="askMissingCosts()">{{ t('copilot.quickChips.missingCosts') }}</button>
+        <button class="q-chip" (click)="askProductViability()">{{ t('copilot.quickChips.productViability') }}</button>
+        <button class="q-chip" (click)="askPricingAdvice()">{{ t('copilot.quickChips.pricingAdvice') }}</button>
+        <button class="q-chip" (click)="askTrendingModels()">{{ t('copilot.quickChips.trendingModels') }}</button>
       </div>
 
       <!-- ATTACHMENT STAGING BAR (ABOVE INPUT) -->
@@ -160,10 +164,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
               <span class="staging-name" [title]="att.name">{{ att.name }}</span>
               <span class="staging-size">{{ (att.size / 1024).toFixed(0) }} KB</span>
             </span>
-            <button type="button" class="btn-remove-att" (click)="removeAttachment(i)" title="Kaldır">✕</button>
+            <button type="button" class="btn-remove-att" (click)="removeAttachment(i)" [title]="t('copilot.attachments.removeTitle')">✕</button>
           </div>
         </div>
-        <button type="button" class="btn-clear-all-att" (click)="clearAttachments()" title="Tüm ekleri temizle">✕ Tümünü Temizle</button>
+        <button type="button" class="btn-clear-all-att" (click)="clearAttachments()" [title]="t('copilot.attachments.clearAllTitle')">{{ t('copilot.attachments.clearAllBtn') }}</button>
       </div>
 
       <!-- INPUT BAR -->
@@ -181,7 +185,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           type="button" 
           class="btn-attach" 
           (click)="triggerFileInput()" 
-          title="Resim, Excel, PDF veya Belge Ekle (Ctrl+V ile de yapıştırabilirsiniz)">
+          [title]="t('copilot.input.attachTitle')">
           📎
         </button>
 
@@ -189,7 +193,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
           type="text" 
           [(ngModel)]="userInput" 
           (keyup.enter)="sendMessage()"
-          placeholder="Sorunuzu yazın veya resim/belge yapıştırın (Ctrl+V)..." 
+          [placeholder]="t('copilot.input.placeholder')" 
           class="chat-input" />
 
         <button 
@@ -208,6 +212,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         <button class="btn-close-modal" (click)="previewImageUrl = null">✕</button>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .floating-btn-wrap {
@@ -1013,6 +1018,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class FloatingCopilotComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   @ViewChild('scrollArea') scrollArea!: ElementRef;
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
 
@@ -1057,8 +1063,13 @@ export class FloatingCopilotComponent implements OnInit {
         this.router.navigateByUrl(route);
       };
     }
+    await firstValueFrom(this.transloco.selectTranslate('fab.label', { provider: '' }, 'copilot')).catch(() => {});
     await this.loadActiveSession();
     await this.refreshSavedSessionsList();
+  }
+
+  private getDateLocale(): string {
+    return this.transloco.getActiveLang() === 'tr' ? 'tr-TR' : 'en-US';
   }
 
   /**
@@ -1095,7 +1106,7 @@ export class FloatingCopilotComponent implements OnInit {
       if (tableMarkdown) {
         this.pendingAttachments.push({
           id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-          name: 'Panodan_Tablo.tsv',
+          name: this.transloco.translate('copilot.attachments.clipboardTableName'),
           type: 'excel',
           mimeType: 'text/tab-separated-values',
           size: new Blob([textData]).size,
@@ -1160,7 +1171,7 @@ export class FloatingCopilotComponent implements OnInit {
       reader.onload = (e: any) => {
         this.pendingAttachments.push({
           id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-          name: file.name || 'Görsel.png',
+          name: file.name || this.transloco.translate('copilot.messages.defaultImageName'),
           type: 'image',
           mimeType: file.type || 'image/png',
           size: file.size,
@@ -1324,7 +1335,7 @@ export class FloatingCopilotComponent implements OnInit {
 
     this.assistantAi.resetConversation();
     this.clearAttachments();
-    this.activeSession = this.sessionStorage.createNewSession('Yeni Sohbet');
+    this.activeSession = this.sessionStorage.createNewSession(this.transloco.translate('copilot.session.newChatTitle'));
     this.initWelcomeMessage();
     this.syncCurrentSession();
     this.refreshSavedSessionsList();
@@ -1355,10 +1366,11 @@ export class FloatingCopilotComponent implements OnInit {
   formatSessionDate(ts: number): string {
     const d = new Date(ts);
     const now = new Date();
+    const locale = this.getDateLocale();
     if (d.toDateString() === now.toDateString()) {
-      return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     }
-    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   }
 
   private syncCurrentSession(): void {
@@ -1371,16 +1383,14 @@ export class FloatingCopilotComponent implements OnInit {
 
   private initWelcomeMessage(): void {
     const rate = this.etsyApi.exchangeRate() || 49.73;
-    const now = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date().toLocaleTimeString(this.getDateLocale(), { hour: '2-digit', minute: '2-digit' });
     this.messages = [
       {
         sender: 'assistant',
-        text: `Selamlar! Ben mağazanızın canlı <strong>${this.activeProvider} AI</strong> danışmanıyım. 🚀<br><br>
-VDS sunucu finans motorundaki tüm siparişleriniz, kârlılık dökümleriniz ve anlık dolar kuru (<strong>1$ = ${rate.toFixed(2)} ₺</strong>) arka planda hafızama yüklenmiş durumda.<br><br>
-Size nasıl yardımcı olabilirim?<br>
-• <strong>📸 Görsel İncelemesi:</strong> Ürün fotoğrafı yapıştırarak (Ctrl+V) veya yükleyerek Etsy'de satılıp satılmayacağını ve kaça satılacağını danışabilirsiniz.<br>
-• <strong>📊 Excel & PDF Denetimi:</strong> Kargo faturası, maliyet tablosu veya sipariş raporu yükleyip analizi başlatabilirsiniz.<br>
-• <strong>💰 Finans & Net Kâr:</strong> Mağazanızın kârlılık dökümünü ve eksik maliyetlerini inceleyebiliriz.`,
+        text: this.transloco.translate('copilot.welcome.html', {
+          provider: this.activeProvider,
+          rate: rate.toFixed(2)
+        }),
         time: now,
         provider: this.activeProvider,
         model: this.activeModel
@@ -1415,27 +1425,27 @@ Size nasıl yardımcı olabilirim?<br>
   }
 
   askLiveMarketAnalysis(): void {
-    this.sendPrompt("Bu ürün Etsy'de kaça satılır ve canlı kargo teklifleri nedir? Pazar araştırması ve kargo motorunu çalıştırır mısın?");
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.liveMarket'));
   }
 
   askNetProfit(): void {
-    this.sendPrompt('Bugünkü net kârım, cirom ve mağaza durumum nedir?');
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.netProfit'));
   }
 
   askMissingCosts(): void {
-    this.sendPrompt('Maliyeti veya kargo faturası eksik olan siparişler var mı?');
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.missingCosts'));
   }
 
   askProductViability(): void {
-    this.sendPrompt("Bu ürün Etsy'de satılır mı? Pazar talebi ve rekabet analizi yapar mısın?");
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.productViability'));
   }
 
   askPricingAdvice(): void {
-    this.sendPrompt('Yeni ekleyeceğimiz bir ürün için perakende satış fiyatı, kargo ve net kâr tavsiyesi verir misin?');
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.pricingAdvice'));
   }
 
   askTrendingModels(): void {
-    this.sendPrompt("Etsy ve MakerWorld'de en çok kazandıran viral 3D modeller ve kârlılıkları neler?");
+    this.sendPrompt(this.transloco.translate('copilot.quickPrompts.trendingModels'));
   }
 
   sendMessage(): void {
@@ -1456,8 +1466,9 @@ Size nasıl yardımcı olabilirim?<br>
     const targetSessionId = targetSession.id;
 
     // Auto-derive session title if it's the first message
-    if (!targetSession.title || targetSession.title === 'Yeni Sohbet') {
-      let derivedTitle = text || (attachmentsToSend.length > 0 ? attachmentsToSend[0].name : 'Ürün İncelemesi');
+    const defaultNewTitle = this.transloco.translate('copilot.session.newChatTitle');
+    if (!targetSession.title || targetSession.title === 'Yeni Sohbet' || targetSession.title === 'New Chat' || targetSession.title === defaultNewTitle) {
+      let derivedTitle = text || (attachmentsToSend.length > 0 ? attachmentsToSend[0].name : this.transloco.translate('copilot.session.defaultReviewTitle'));
       derivedTitle = derivedTitle.replace(/\.(png|jpg|jpeg|webp|gif|pdf|xlsx|csv)$/i, '').trim();
       if (derivedTitle.length > 32) {
         derivedTitle = derivedTitle.substring(0, 30) + '...';
@@ -1466,10 +1477,10 @@ Size nasıl yardımcı olabilirim?<br>
     }
 
     const displayText = text || (attachmentsToSend.length === 1 
-      ? `📎 ${attachmentsToSend[0].name} dosyasını inceler misin?` 
-      : `📎 ${attachmentsToSend.length} adet ekli belge/resim inceler misin?`);
+      ? this.transloco.translate('copilot.attachments.singlePrompt', { name: attachmentsToSend[0].name })
+      : this.transloco.translate('copilot.attachments.multiPrompt', { count: attachmentsToSend.length }));
 
-    const now = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date().toLocaleTimeString(this.getDateLocale(), { hour: '2-digit', minute: '2-digit' });
     const userMsg: AssistantChatMessage = {
       sender: 'user',
       text: displayText,
@@ -1495,7 +1506,7 @@ Size nasıl yardımcı olabilirim?<br>
         const assistantMsg: AssistantChatMessage = {
           sender: 'assistant',
           text: res.replyHtml,
-          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+          time: new Date().toLocaleTimeString(this.getDateLocale(), { hour: '2-digit', minute: '2-digit' }),
           provider: this.activeProvider,
           model: this.activeModel
         };
@@ -1519,8 +1530,8 @@ Size nasıl yardımcı olabilirim?<br>
         this.generatingSessionIds.delete(targetSessionId);
         const errorMsg: AssistantChatMessage = {
           sender: 'assistant',
-          text: 'Üzgünüm, yanıt oluşturulurken bir bağlantı gecikmesi oluştu. Lütfen tekrar deneyiniz.',
-          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+          text: this.transloco.translate('copilot.errors.connectionDelay'),
+          time: new Date().toLocaleTimeString(this.getDateLocale(), { hour: '2-digit', minute: '2-digit' }),
           provider: this.activeProvider,
           model: this.activeModel
         };
@@ -1570,7 +1581,7 @@ Size nasıl yardımcı olabilirim?<br>
       md += '| ' + parsedRows[i].join(' | ') + ' |\n';
     }
     if (parsedRows.length > 50) {
-      md += `\n*(Tablodan ilk 50 satır gösteriliyor, toplam ${parsedRows.length} satır)*\n`;
+      md += `\n${this.transloco.translate('copilot.extract.csvTruncated', { total: parsedRows.length })}\n`;
     }
     return md;
   }
@@ -1610,10 +1621,10 @@ Size nasıl yardımcı olabilirim?<br>
       }
 
       if (textMatches.length > 0) {
-        return `[PDF İçeriği: ${fileName}]\n` + textMatches.join(' ').replace(/\s+/g, ' ').substring(0, 4000);
+        return `${this.transloco.translate('copilot.extract.pdfContent', { fileName })}\n` + textMatches.join(' ').replace(/\s+/g, ' ').substring(0, 4000);
       }
     } catch {}
-    return `[PDF Belgesi Eklendi: ${fileName}]`;
+    return this.transloco.translate('copilot.extract.pdfAttached', { fileName });
   }
 
   private async extractTextFromBinary(buffer: ArrayBuffer, fileName: string): Promise<string> {
@@ -1665,7 +1676,7 @@ Size nasıl yardımcı olabilirim?<br>
         }
         if (rows.length > 0) {
           const header = rows[0];
-          let md = `[Excel Tablosu: ${fileName} — Toplam ${rows.length - 1} Satır]\n`;
+          let md = `${this.transloco.translate('copilot.extract.excelTable', { fileName, rows: rows.length - 1 })}\n`;
           md += '| ' + header.join(' | ') + ' |\n';
           md += '| ' + header.map(() => '---').join(' | ') + ' |\n';
           for (let i = 1; i < Math.min(rows.length, 60); i++) {
@@ -1689,10 +1700,10 @@ Size nasıl yardımcı olabilirim?<br>
       }
 
       if (cellMatches.length > 0) {
-        return `[Excel Hücre Verileri: ${fileName}]\n` + cellMatches.join(' | ').substring(0, 4000);
+        return `${this.transloco.translate('copilot.extract.excelCells', { fileName })}\n` + cellMatches.join(' | ').substring(0, 4000);
       }
     } catch {}
-    return `[Excel Belgesi Eklendi: ${fileName}]`;
+    return this.transloco.translate('copilot.extract.excelAttached', { fileName });
   }
 
   private async readZipEntries(buffer: ArrayBuffer): Promise<Map<string, string>> {

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -22,24 +23,26 @@ interface BatchItem {
 @Component({
   selector: 'app-batch-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="batch-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">⚡</div>
           <div>
-            <h1 class="page-title">Toplu İlan Optimizasyonu & Batch Kuyruğu</h1>
-            <p class="page-subtitle">Tüm mağaza listinglerini topluca yapay zeka ile denetleyin, SEO başlıklarını zenginleştirin ve Etsy'ye aktarın</p>
+            <h1 class="page-title">{{ t('tools.batchQueue.title') }}</h1>
+            <p class="page-subtitle">{{ t('tools.batchQueue.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-clear" (click)="clearCompleted()">
-            Tamamlananları Temizle
+            {{ t('tools.batchQueue.clearCompletedBtn') }}
           </button>
           <button class="btn-run-all" [disabled]="isProcessingBatch" (click)="runBatchOptimization()">
-            {{ isProcessingBatch ? 'İşleniyor (' + processProgress + '%)...' : '⚡ Bekleyen Tümünü Optimize Et' }}
+            {{ isProcessingBatch ? t('tools.batchQueue.processingBtn', { progress: processProgress }) : t('tools.batchQueue.optimizeAllBtn') }}
           </button>
         </div>
       </div>
@@ -47,24 +50,24 @@ interface BatchItem {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">KUYRUKTAKİ İLANLAR</span>
-          <span class="kpi-val text-blue">{{ items.length }} İlan</span>
-          <span class="kpi-sub">Bekleyen: {{ getPendingCount() }}</span>
+          <span class="kpi-label">{{ t('tools.batchQueue.kpi.queuedListings') }}</span>
+          <span class="kpi-val text-blue">{{ t('tools.batchQueue.kpi.listingsCount', { count: items.length }) }}</span>
+          <span class="kpi-sub">{{ t('tools.batchQueue.kpi.pendingCount', { count: getPendingCount() }) }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ORTALAMA SEO SKORU</span>
-          <span class="kpi-val text-green">%{{ getAverageScore() }}</span>
-          <span class="kpi-sub">Optimizasyon Öncesi: %62</span>
+          <span class="kpi-label">{{ t('tools.batchQueue.kpi.avgSeoScore') }}</span>
+          <span class="kpi-val text-green">{{ getAverageScore() }}%</span>
+          <span class="kpi-sub">{{ t('tools.batchQueue.kpi.preOptScore') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">ETSY'YE SENKRONİZE</span>
-          <span class="kpi-val text-purple">{{ getSyncedCount() }} İlan</span>
-          <span class="kpi-sub">Canlı Mağazada Aktif</span>
+          <span class="kpi-label">{{ t('tools.batchQueue.kpi.syncedToEtsy') }}</span>
+          <span class="kpi-val text-purple">{{ t('tools.batchQueue.kpi.listingsCount', { count: getSyncedCount() }) }}</span>
+          <span class="kpi-sub">{{ t('tools.batchQueue.kpi.activeInLiveShop') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">RİSK & POLİTİKA KONTROLÜ</span>
-          <span class="kpi-val text-emerald">0 Uyarı</span>
-          <span class="kpi-sub">Anti-Ban Onaylı</span>
+          <span class="kpi-label">{{ t('tools.batchQueue.kpi.riskPolicyCheck') }}</span>
+          <span class="kpi-val text-emerald">{{ t('tools.batchQueue.kpi.zeroWarnings') }}</span>
+          <span class="kpi-sub">{{ t('tools.batchQueue.kpi.antiBanVerified') }}</span>
         </div>
       </div>
 
@@ -76,11 +79,11 @@ interface BatchItem {
       <!-- QUEUE LIST SECTION -->
       <div class="queue-section glass-card">
         <div class="table-header">
-          <h2 class="table-title">İşlem Listesi & Kuyruk Sıralaması</h2>
+          <h2 class="table-title">{{ t('tools.batchQueue.tableTitle') }}</h2>
           <div class="filter-pills">
-            <button [class.active]="statusFilter === 'ALL'" (click)="statusFilter = 'ALL'">Tümü ({{ items.length }})</button>
-            <button [class.active]="statusFilter === 'Pending'" (click)="statusFilter = 'Pending'">Bekleyenler ({{ getPendingCount() }})</button>
-            <button [class.active]="statusFilter === 'Completed'" (click)="statusFilter = 'Completed'">Optimize Edilenler</button>
+            <button [class.active]="statusFilter === 'ALL'" (click)="statusFilter = 'ALL'">{{ t('tools.batchQueue.filters.all', { count: items.length }) }}</button>
+            <button [class.active]="statusFilter === 'Pending'" (click)="statusFilter = 'Pending'">{{ t('tools.batchQueue.filters.pending', { count: getPendingCount() }) }}</button>
+            <button [class.active]="statusFilter === 'Completed'" (click)="statusFilter = 'Completed'">{{ t('tools.batchQueue.filters.completed') }}</button>
           </div>
         </div>
 
@@ -88,13 +91,13 @@ interface BatchItem {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Listing ID</th>
-                <th>Mevcut Başlık</th>
-                <th>Hedef Niche / Anahtar Kelime</th>
-                <th>SEO Skoru</th>
-                <th>Durum</th>
-                <th>Optimize Edilmiş Başlık</th>
-                <th>İşlem</th>
+                <th>{{ t('tools.batchQueue.columns.listingId') }}</th>
+                <th>{{ t('tools.batchQueue.columns.currentTitle') }}</th>
+                <th>{{ t('tools.batchQueue.columns.targetKeyword') }}</th>
+                <th>{{ t('tools.batchQueue.columns.seoScore') }}</th>
+                <th>{{ t('tools.batchQueue.columns.status') }}</th>
+                <th>{{ t('tools.batchQueue.columns.optimizedTitle') }}</th>
+                <th>{{ t('tools.batchQueue.columns.action') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -108,25 +111,25 @@ interface BatchItem {
                 </td>
                 <td>
                   <div class="score-badge" [ngClass]="item.overallScore >= 80 ? 'high' : 'mid'">
-                    %{{ item.overallScore }}
+                    {{ item.overallScore }}%
                   </div>
                 </td>
                 <td>
-                  <span class="status-pill" [ngClass]="item.status.toLowerCase()">{{ item.status }}</span>
+                  <span class="status-pill" [ngClass]="item.status.toLowerCase()">{{ t('tools.batchQueue.status.' + item.status) }}</span>
                 </td>
                 <td class="cell-opt-title">
                   <span *ngIf="item.optimizedTitle" class="opt-text">{{ item.optimizedTitle }}</span>
-                  <span *ngIf="!item.optimizedTitle" class="pending-text">— Henüz optimize edilmedi —</span>
+                  <span *ngIf="!item.optimizedTitle" class="pending-text">{{ t('tools.batchQueue.notOptimizedYet') }}</span>
                 </td>
                 <td>
                   <div class="action-btn-row">
                     <button *ngIf="item.status === 'Pending'" class="btn-single-opt" (click)="optimizeSingle(item)">
-                      Optimize Et
+                      {{ t('tools.batchQueue.optimizeBtn') }}
                     </button>
                     <button *ngIf="item.status === 'Completed'" class="btn-sync-etsy" (click)="syncItemToEtsy(item)">
-                      Etsy'ye Yükle
+                      {{ t('tools.batchQueue.pushToEtsyBtn') }}
                     </button>
-                    <span *ngIf="item.status === 'SyncedToEtsy'" class="synced-check">✓ Canlıda</span>
+                    <span *ngIf="item.status === 'SyncedToEtsy'" class="synced-check">{{ t('tools.batchQueue.liveBadge') }}</span>
                   </div>
                 </td>
               </tr>
@@ -134,10 +137,10 @@ interface BatchItem {
                 <td colspan="7" class="empty-table-cell">
                   <div class="empty-state-box">
                     <span class="empty-icon">📦</span>
-                    <span class="empty-title">Kuyrukta İşlem Bulunmuyor</span>
+                    <span class="empty-title">{{ t('tools.batchQueue.emptyTitle') }}</span>
                     <p class="empty-desc">
-                      Şu anda toplu optimizasyon veya yükleme kuyruğunda bekleyen ilan yok. <strong>Asla sahte veri uydurulmaz</strong>.
-                      İlan ekleme veya pazar araştırma modüllerinden ilanları toplu işleme aktarabilirsiniz.
+                      {{ t('tools.batchQueue.emptyDescPrefix') }} <strong>{{ t('tools.batchQueue.emptyDescStrong') }}</strong>.
+                      {{ t('tools.batchQueue.emptyDescSuffix') }}
                     </p>
                   </div>
                 </td>
@@ -147,6 +150,7 @@ interface BatchItem {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .batch-container {
@@ -361,6 +365,7 @@ interface BatchItem {
 })
 export class BatchQueueComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   statusFilter: 'ALL' | 'Pending' | 'Completed' = 'ALL';
@@ -452,11 +457,16 @@ export class BatchQueueComponent implements OnInit {
       status: 2
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = `✓ #${item.listingId} ilanı (${item.targetKeyword}) yapay zeka ile optimize edildi!`;
+        this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.optimizedAi', {
+          listingId: item.listingId,
+          keyword: item.targetKeyword
+        });
         setTimeout(() => this.toastMessage = '', 3000);
       },
       error: () => {
-        this.toastMessage = `✓ #${item.listingId} ilanı yerel olarak optimize edildi!`;
+        this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.optimizedLocal', {
+          listingId: item.listingId
+        });
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });
@@ -465,7 +475,7 @@ export class BatchQueueComponent implements OnInit {
   runBatchOptimization(): void {
     const pendings = this.items.filter(i => i.status === 'Pending');
     if (pendings.length === 0) {
-      this.toastMessage = 'Kuyrukta bekleyen optimize edilecek ilan bulunmuyor.';
+      this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.noPending');
       setTimeout(() => this.toastMessage = '', 3000);
       return;
     }
@@ -491,7 +501,7 @@ export class BatchQueueComponent implements OnInit {
             status: 2
           }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => {} });
         });
-        this.toastMessage = `✓ ${pendings.length} adet ilan başarıyla optimize edildi ve VDS SQLite kuyruğu güncellendi!`;
+        this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.batchDone', { count: pendings.length });
         setTimeout(() => this.toastMessage = '', 4000);
       }
     }, 600);
@@ -507,7 +517,7 @@ export class BatchQueueComponent implements OnInit {
       status: 5
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = `✓ #${item.listingId} ilanı Etsy API'ye taslak olarak yüklendi!`;
+        this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.syncedEtsy', { listingId: item.listingId });
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });
@@ -516,8 +526,8 @@ export class BatchQueueComponent implements OnInit {
   clearCompleted(): void {
     this.items = this.items.filter(i => i.status === 'Pending');
     this.etsyApi.clearCompletedBatch().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (res) => {
-        this.toastMessage = `✓ Tamamlanan ilanlar kuyruktan temizlendi.`;
+      next: () => {
+        this.toastMessage = this.transloco.translate('tools.batchQueue.toasts.cleared');
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });

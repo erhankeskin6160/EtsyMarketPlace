@@ -2,6 +2,7 @@ import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import {
   EtsyApiService,
   CompetitorShopAnalysisDto,
@@ -46,8 +47,10 @@ export interface LqsAuditCheck {
 @Component({
   selector: 'app-competitor-spy',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('research')],
   template: `
+    <ng-container *transloco="let t">
     <div class="spy-view">
       <!-- HEADER & MAIN TAB SWITCHER -->
       <div class="spy-header">
@@ -59,8 +62,8 @@ export interface LqsAuditCheck {
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Rakip & Trend Casusu (EverBee + eRank Intelligence)</h1>
-            <p class="page-subtitle">Canlı Etsy v3 rakip mağaza röntgeni, ürün fotoğraf galerisi, açıklama inceleyici ve tek tıkla fotoğraflı klonlama</p>
+            <h1 class="page-title">{{ t('research.competitorSpy.header.title') }}</h1>
+            <p class="page-subtitle">{{ t('research.competitorSpy.header.subtitle') }}</p>
           </div>
         </div>
 
@@ -70,14 +73,14 @@ export interface LqsAuditCheck {
             class="main-tab-btn"
             [class.active]="activeMainTab === 'competitor'"
             (click)="activeMainTab = 'competitor'">
-            🕵️ Rakip Mağaza Casusu
+            {{ t('research.competitorSpy.header.tabCompetitor') }}
           </button>
           <button
             type="button"
             class="main-tab-btn"
             [class.active]="activeMainTab === 'seasonal'"
             (click)="switchToSeasonalTab()">
-            📅 Dönemsel Trend & Q4 Radarı
+            {{ t('research.competitorSpy.header.tabSeasonal') }}
           </button>
         </div>
       </div>
@@ -100,16 +103,16 @@ export interface LqsAuditCheck {
               class="shop-input"
               [(ngModel)]="shopQueryInput"
               (keyup.enter)="analyzeShop()"
-              placeholder="Rakip Etsy mağaza adı, mağaza linki veya ürün linki girin (Örn: CaitlynMinimalist veya https://www.etsy.com/listing/...)" />
+              [placeholder]="t('research.competitorSpy.search.placeholder')" />
           </div>
 
           <div class="search-controls">
             <label class="limit-label">
-              Örneklem:
+              {{ t('research.competitorSpy.search.sampleLabel') }}
               <select [(ngModel)]="sampleLimit" class="limit-select">
-                <option [ngValue]="25">25 Ürün</option>
-                <option [ngValue]="50">50 Ürün</option>
-                <option [ngValue]="100">100 Ürün</option>
+                <option [ngValue]="25">{{ t('research.competitorSpy.search.sampleOption', { count: 25 }) }}</option>
+                <option [ngValue]="50">{{ t('research.competitorSpy.search.sampleOption', { count: 50 }) }}</option>
+                <option [ngValue]="100">{{ t('research.competitorSpy.search.sampleOption', { count: 100 }) }}</option>
               </select>
             </label>
 
@@ -118,8 +121,8 @@ export interface LqsAuditCheck {
               class="btn-primary-analyze"
               [disabled]="isAnalyzing"
               (click)="analyzeShop()">
-              <span *ngIf="!isAnalyzing">🚀 Mağazayı Canlı Analiz Et</span>
-              <span *ngIf="isAnalyzing">⏳ Etsy v3 & Görseller Taranıyor...</span>
+              <span *ngIf="!isAnalyzing">{{ t('research.competitorSpy.search.analyzeBtn') }}</span>
+              <span *ngIf="isAnalyzing">{{ t('research.competitorSpy.search.analyzingBtn') }}</span>
             </button>
 
             <button
@@ -127,7 +130,7 @@ export interface LqsAuditCheck {
               class="btn-secondary-action"
               *ngIf="analysisResult?.found"
               (click)="saveCurrentShopToWatchlist()">
-              📌 Takip Listesine Kaydet
+              {{ t('research.competitorSpy.search.saveWatchlistBtn') }}
             </button>
 
             <button
@@ -135,7 +138,7 @@ export interface LqsAuditCheck {
               class="btn-secondary-action"
               *ngIf="analysisResult?.found && listings.length > 0"
               (click)="exportCsv()">
-              📥 CSV İndir
+              {{ t('research.competitorSpy.search.exportCsvBtn') }}
             </button>
 
             <button
@@ -143,7 +146,7 @@ export interface LqsAuditCheck {
               class="btn-secondary-action"
               *ngIf="analysisResult?.found && analysisResult?.shop?.shopUrl"
               (click)="openExternalUrl(analysisResult!.shop.shopUrl)">
-              🏪 Mağazayı Etsy'de Aç ↗
+              {{ t('research.competitorSpy.search.openOnEtsyBtn') }}
             </button>
           </div>
         </div>
@@ -151,8 +154,8 @@ export interface LqsAuditCheck {
         <!-- WATCHLIST HORIZONTAL STRIP -->
         <div class="watchlist-strip" *ngIf="watchedShops.length > 0">
           <div class="watchlist-header">
-            <span class="watchlist-title">📌 Takip Edilen Rakip Mağazalar ({{ watchedShops.length }})</span>
-            <span class="watchlist-hint">Mağaza kartına tıklayarak canlı Etsy v3 röntgenini ve önceki analize göre değişim (Δ) farkını görüntüleyin</span>
+            <span class="watchlist-title">{{ t('research.competitorSpy.watchlist.title', { count: watchedShops.length }) }}</span>
+            <span class="watchlist-hint">{{ t('research.competitorSpy.watchlist.hint') }}</span>
           </div>
           <div class="watchlist-cards">
             <div
@@ -167,13 +170,13 @@ export interface LqsAuditCheck {
                   <button
                     type="button"
                     class="btn-remove-watch"
-                    title="Takipten Çıkar"
+                    [title]="t('research.competitorSpy.watchlist.removeTitle')"
                     (click)="removeWatchedShop(w.shopName, $event)">✕</button>
                 </div>
               </div>
               <div class="watch-metrics">
                 <div class="w-metric">
-                  <span class="w-label">Aylık Ciro (Tah.):</span>
+                  <span class="w-label">{{ t('research.competitorSpy.watchlist.estMonthlyRevenue') }}</span>
                   <span class="w-val revenue">&#36;{{ (w.estimatedMonthlyRevenueUsd || 0) | number:'1.0-0' }}</span>
                   <span
                     *ngIf="getDeltaDiff(w.estimatedMonthlyRevenueUsd, w.prevEstimatedMonthlyRevenueUsd) !== 0"
@@ -184,7 +187,7 @@ export interface LqsAuditCheck {
                   </span>
                 </div>
                 <div class="w-metric">
-                  <span class="w-label">Toplam Satış:</span>
+                  <span class="w-label">{{ t('research.competitorSpy.watchlist.totalSales') }}</span>
                   <span class="w-val">{{ (w.totalSalesCount || 0) | number }}</span>
                   <span
                     *ngIf="getDeltaDiff(w.totalSalesCount, w.prevTotalSalesCount) !== 0"
@@ -195,7 +198,7 @@ export interface LqsAuditCheck {
                   </span>
                 </div>
                 <div class="w-metric">
-                  <span class="w-label">Aktif İlan:</span>
+                  <span class="w-label">{{ t('research.competitorSpy.watchlist.activeListings') }}</span>
                   <span class="w-val">{{ w.activeListingsCount || 0 }}</span>
                 </div>
               </div>
@@ -211,11 +214,11 @@ export interface LqsAuditCheck {
         <!-- EMPTY STATE WHEN NO SHOP ANALYZED YET -->
         <div *ngIf="!analysisResult && !isAnalyzing && !errorMessage" class="empty-hero-card">
           <div class="empty-hero-icon">🕵️‍♂️</div>
-          <h3>Rakip Mağazanın Röntgenini Çekin</h3>
+          <h3>{{ t('research.competitorSpy.empty.title') }}</h3>
           <p>
-            Herhangi bir Etsy mağazasının adını veya linkini yukarıdaki arama çubuğuna yazıp
-            <strong>"Mağazayı Canlı Analiz Et"</strong> butonuna tıklayın. Ürünlerin tüm fotoğrafları, açıklamaları,
-            EverBee aylık satış/ciro tahminleri, eRank LQS kalite notları (A+..D) ve tek tıkla fotoğraflı klonlama saniyeler içinde hazırlanır.
+            {{ t('research.competitorSpy.empty.bodyBefore') }}
+            <strong>{{ t('research.competitorSpy.empty.bodyHighlight') }}</strong>
+            {{ t('research.competitorSpy.empty.bodyAfter') }}
           </p>
         </div>
 
@@ -224,47 +227,47 @@ export interface LqsAuditCheck {
           <!-- 7 KPI CARDS -->
           <div class="kpi-grid-7">
             <div class="kpi-card">
-              <span class="kpi-title">TOPLAM SATIŞ</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.totalSales') }}</span>
               <div class="kpi-value">{{ shop.totalSalesCount | number }}</div>
-              <span class="kpi-sub">Mağaza Yaşı: {{ shop.shopAgeDays }} gün</span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.shopAgeDays', { days: shop.shopAgeDays }) }}</span>
             </div>
 
             <div class="kpi-card">
-              <span class="kpi-title">MAĞAZA PUANI</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.shopRating') }}</span>
               <div class="kpi-value star-val">★ {{ shop.reviewAverage | number:'1.1-2' }}</div>
-              <span class="kpi-sub">{{ shop.reviewCount | number }} müşteri yorumu</span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.reviewsCount', { count: (shop.reviewCount | number) }) }}</span>
             </div>
 
             <div class="kpi-card">
-              <span class="kpi-title">AKTİF ÜRÜN</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.activeListings') }}</span>
               <div class="kpi-value">{{ shop.activeListingsCount | number }}</div>
-              <span class="kpi-sub">🔥 {{ shop.bestsellerCount }} Best Seller aday</span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.bestsellerCandidates', { count: shop.bestsellerCount }) }}</span>
             </div>
 
             <div class="kpi-card">
-              <span class="kpi-title">ORTALAMA FİYAT</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.averagePrice') }}</span>
               <div class="kpi-value">&#36;{{ shop.averagePriceUsd | number:'1.2-2' }}</div>
-              <span class="kpi-sub">Medyan: &#36;{{ shop.medianPriceUsd | number:'1.2-2' }} (₺{{ (shop.averagePriceUsd * usdTryRate) | number:'1.0-0' }})</span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.medianPrice', { median: (shop.medianPriceUsd | number:'1.2-2'), tryPrice: ((shop.averagePriceUsd * usdTryRate) | number:'1.0-0') }) }}</span>
             </div>
 
             <div class="kpi-card">
-              <span class="kpi-title">GÜNLÜK SATIŞ HIZI</span>
-              <div class="kpi-value velocity-val">{{ shop.dailySalesVelocity | number:'1.1-2' }} <small>/gün</small></div>
-              <span class="kpi-sub">Aylık Tah.: ~{{ shop.estimatedMonthlySales | number }} satış</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.dailyVelocity') }}</span>
+              <div class="kpi-value velocity-val">{{ shop.dailySalesVelocity | number:'1.1-2' }} <small>{{ t('research.competitorSpy.kpi.perDay') }}</small></div>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.estMonthlySales', { count: (shop.estimatedMonthlySales | number) }) }}</span>
             </div>
 
             <div class="kpi-card highlight-revenue">
-              <span class="kpi-title">TAHMİNİ AYLIK CİRO</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.estMonthlyRevenue') }}</span>
               <div class="kpi-value revenue-val">&#36;{{ shop.estimatedMonthlyRevenueUsd | number:'1.0-0' }}</div>
-              <span class="kpi-sub">≈ ₺{{ (shop.estimatedMonthlyRevenueUsd * usdTryRate) | number:'1.0-0' }} / ay</span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.perMonthTry', { tryAmount: ((shop.estimatedMonthlyRevenueUsd * usdTryRate) | number:'1.0-0') }) }}</span>
             </div>
 
             <div class="kpi-card">
-              <span class="kpi-title">RAKİP GÜÇ SKORU</span>
+              <span class="kpi-title">{{ t('research.competitorSpy.kpi.strengthScore') }}</span>
               <div class="kpi-value" [ngClass]="getStrengthClass(shop.competitorStrengthScore)">
                 {{ shop.competitorStrengthScore }}/100
               </div>
-              <span class="kpi-sub">Ort. SEO/LQS Notu: <strong>{{ shop.averageLqsGrade }}</strong></span>
+              <span class="kpi-sub">{{ t('research.competitorSpy.kpi.avgLqsGrade') }} <strong>{{ shop.averageLqsGrade }}</strong></span>
             </div>
           </div>
 
@@ -274,7 +277,7 @@ export interface LqsAuditCheck {
             <div class="listings-panel glass-card">
               <div class="panel-toolbar">
                 <div class="toolbar-left">
-                  <span class="panel-title">📦 Rakibin Ürün Portföyü ({{ filteredListings.length }})</span>
+                  <span class="panel-title">{{ t('research.competitorSpy.table.title', { count: filteredListings.length }) }}</span>
                 </div>
                 <div class="toolbar-filters">
                   <input
@@ -282,23 +285,23 @@ export interface LqsAuditCheck {
                     class="filter-input"
                     [(ngModel)]="listingSearchText"
                     (ngModelChange)="applyListingFilters()"
-                    placeholder="Ürün başlığı veya etikette ara..." />
+                    [placeholder]="t('research.competitorSpy.table.filterPlaceholder')" />
 
                   <select [(ngModel)]="priceBandFilter" (ngModelChange)="applyListingFilters()" class="filter-select">
-                    <option value="all">Tüm Fiyatlar</option>
-                    <option value="under30">$0 – $30</option>
-                    <option value="30to75">$30 – $75</option>
-                    <option value="over75">$75+</option>
+                    <option value="all">{{ t('research.competitorSpy.table.priceAll') }}</option>
+                    <option value="under30">{{ t('research.competitorSpy.table.priceUnder30') }}</option>
+                    <option value="30to75">{{ t('research.competitorSpy.table.price30to75') }}</option>
+                    <option value="over75">{{ t('research.competitorSpy.table.priceOver75') }}</option>
                   </select>
 
                   <select [(ngModel)]="listingSortBy" (ngModelChange)="applyListingFilters()" class="filter-select">
-                    <option value="revenue">Sırala: Tahmini Aylık Ciro</option>
-                    <option value="sales">Sırala: Tahmini Aylık Satış</option>
-                    <option value="favorites">Sırala: Favori Sayısı</option>
-                    <option value="views">Sırala: Görüntülenme</option>
-                    <option value="lqs">Sırala: LQS Kalite Puanı</option>
-                    <option value="price_desc">Sırala: Fiyat (Azalan)</option>
-                    <option value="price_asc">Sırala: Fiyat (Artan)</option>
+                    <option value="revenue">{{ t('research.competitorSpy.table.sortRevenue') }}</option>
+                    <option value="sales">{{ t('research.competitorSpy.table.sortSales') }}</option>
+                    <option value="favorites">{{ t('research.competitorSpy.table.sortFavorites') }}</option>
+                    <option value="views">{{ t('research.competitorSpy.table.sortViews') }}</option>
+                    <option value="lqs">{{ t('research.competitorSpy.table.sortLqs') }}</option>
+                    <option value="price_desc">{{ t('research.competitorSpy.table.sortPriceDesc') }}</option>
+                    <option value="price_asc">{{ t('research.competitorSpy.table.sortPriceAsc') }}</option>
                   </select>
                 </div>
               </div>
@@ -308,14 +311,14 @@ export interface LqsAuditCheck {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Görsel & Ürün</th>
-                      <th>Fiyat</th>
-                      <th>Tah. Satış/Ay</th>
-                      <th>Tah. Ciro/Ay</th>
-                      <th>Favori / Gör.</th>
-                      <th>Hız Rozeti</th>
-                      <th>LQS</th>
-                      <th>İşlemler</th>
+                      <th>{{ t('research.competitorSpy.table.colImageProduct') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colPrice') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colEstSales') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colEstRevenue') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colFavViews') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colVelocity') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colLqs') }}</th>
+                      <th>{{ t('research.competitorSpy.table.colActions') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -325,7 +328,7 @@ export interface LqsAuditCheck {
                       (click)="selectListing(item)">
                       <td class="rank-cell">{{ item.rank }}</td>
                       <td class="product-cell">
-                        <div class="thumb-box" (click)="openLightbox(item, 0, $event)" title="Büyütmek için tıklayın">
+                        <div class="thumb-box" (click)="openLightbox(item, 0, $event)" [title]="t('research.competitorSpy.table.zoomTitle')">
                           <img
                             *ngIf="getPrimaryImage(item)"
                             [src]="getPrimaryImage(item)"
@@ -341,14 +344,14 @@ export interface LqsAuditCheck {
                             {{ item.title }}
                           </div>
                           <div class="prod-meta" translate="no">
-                            <span>🏷️ {{ item.tagCount }}/13 etiket</span>
-                            <span>📷 {{ getItemImages(item).length }} görsel</span>
-                            <span>📝 {{ (item.description || '').length }} krk.</span>
+                            <span>{{ t('research.competitorSpy.table.metaTags', { count: item.tagCount }) }}</span>
+                            <span>{{ t('research.competitorSpy.table.metaImages', { count: getItemImages(item).length }) }}</span>
+                            <span>{{ t('research.competitorSpy.table.metaChars', { count: (item.description || '').length }) }}</span>
                           </div>
                         </div>
                       </td>
                       <td class="price-cell" translate="no">&#36;{{ item.priceUsd | number:'1.2-2' }}</td>
-                      <td class="num-cell" translate="no">{{ item.estimatedMonthlySales | number }} ad.</td>
+                      <td class="num-cell" translate="no">{{ t('research.competitorSpy.table.unitsShort', { count: (item.estimatedMonthlySales | number) }) }}</td>
                       <td class="rev-cell" translate="no">&#36;{{ item.estimatedMonthlyRevenueUsd | number:'1.0-0' }}</td>
                       <td class="num-cell" translate="no">
                         <span class="fav-num">❤️ {{ item.favorites | number }}</span>
@@ -369,17 +372,17 @@ export interface LqsAuditCheck {
                           <button
                             type="button"
                             class="btn-etsy-mini"
-                            title="Ürünü Etsy'de Yeni Sekmede Aç"
+                            [title]="t('research.competitorSpy.table.openEtsyTitle')"
                             (click)="openListingOnEtsy(item)">
-                            🌐 Etsy ↗
+                            {{ t('research.competitorSpy.table.openEtsyBtn') }}
                           </button>
                           <button
                             type="button"
                             class="btn-clone-mini"
                             [disabled]="cloningListingId === item.listingId"
-                            title="Bu ürünü tüm fotoğrafları, açıklaması, 13 etiketi ve varyasyonlarıyla Hızlı İlan Oluşturucuya Klonla"
+                            [title]="t('research.competitorSpy.table.cloneTitle')"
                             (click)="cloneListingToFastCreator(item)">
-                            {{ cloningListingId === item.listingId ? '⏳ Çekiliyor...' : '🚀 Klonla' }}
+                            {{ cloningListingId === item.listingId ? t('research.competitorSpy.table.cloningBtn') : t('research.competitorSpy.table.cloneBtn') }}
                           </button>
                         </div>
                       </td>
@@ -401,10 +404,10 @@ export interface LqsAuditCheck {
                       <img
                         *ngIf="getActiveImageUrl(sel)"
                         [src]="getActiveImageUrl(sel)"
-                        alt="Ürün Görseli"
+                        [alt]="t('research.competitorSpy.showcase.imageAlt')"
                         class="main-stage-img" />
                       <div *ngIf="!getActiveImageUrl(sel)" class="main-stage-empty">
-                        <span>📷 Görsel Bulunamadı</span>
+                        <span>{{ t('research.competitorSpy.showcase.noImage') }}</span>
                       </div>
 
                       <button
@@ -419,7 +422,7 @@ export interface LqsAuditCheck {
                         (click)="nextImage(sel, $event)">›</button>
 
                       <span class="stage-counter" translate="no" *ngIf="getItemImages(sel).length > 0">
-                        🔍 {{ activeImageIndex + 1 }} / {{ getItemImages(sel).length }} (Büyüt)
+                        {{ t('research.competitorSpy.showcase.zoomCounter', { current: activeImageIndex + 1, total: getItemImages(sel).length }) }}
                       </span>
                     </div>
 
@@ -448,22 +451,22 @@ export interface LqsAuditCheck {
                       <span class="id-pill" translate="no">ID: #{{ sel.listingId }}</span>
                     </div>
 
-                    <h3 class="sel-title" (click)="openListingOnEtsy(sel)" title="Etsy'de açmak için tıklayın">
+                    <h3 class="sel-title" (click)="openListingOnEtsy(sel)" [title]="t('research.competitorSpy.showcase.openEtsyTitle')">
                       {{ sel.title }} <span class="ext-arrow">↗</span>
                     </h3>
 
                     <div class="sel-price-row" translate="no">
                       <span class="sel-price">&#36;{{ sel.priceUsd | number:'1.2-2' }}</span>
                       <span class="sel-try">(≈ ₺{{ (sel.priceUsd * usdTryRate) | number:'1.0-0' }})</span>
-                      <span class="sel-est-rev">• Tah. Satış: <strong>{{ sel.estimatedMonthlySales }} ad/ay</strong></span>
-                      <span class="sel-est-rev">• Tah. Ciro: <strong>&#36;{{ sel.estimatedMonthlyRevenueUsd | number:'1.0-0' }}/ay</strong></span>
+                      <span class="sel-est-rev">{{ t('research.competitorSpy.showcase.estSales') }} <strong>{{ t('research.competitorSpy.showcase.unitsPerMonth', { count: sel.estimatedMonthlySales }) }}</strong></span>
+                      <span class="sel-est-rev">{{ t('research.competitorSpy.showcase.estRevenue') }} <strong>&#36;{{ sel.estimatedMonthlyRevenueUsd | number:'1.0-0' }}{{ t('research.competitorSpy.showcase.perMonth') }}</strong></span>
                     </div>
 
                     <div class="sel-quick-stats">
-                      <span>❤️ <strong>{{ sel.favorites | number }}</strong> Favori</span>
-                      <span>👁️ <strong>{{ sel.views | number }}</strong> Görüntülenme</span>
-                      <span>📦 <strong>{{ sel.quantity }}</strong> Stok</span>
-                      <span>📷 <strong>{{ getItemImages(sel).length }}</strong> Fotoğraf</span>
+                      <span>❤️ <strong>{{ sel.favorites | number }}</strong> {{ t('research.competitorSpy.showcase.statFavorites') }}</span>
+                      <span>👁️ <strong>{{ sel.views | number }}</strong> {{ t('research.competitorSpy.showcase.statViews') }}</span>
+                      <span>📦 <strong>{{ sel.quantity }}</strong> {{ t('research.competitorSpy.showcase.statStock') }}</span>
+                      <span>📷 <strong>{{ getItemImages(sel).length }}</strong> {{ t('research.competitorSpy.showcase.statPhotos') }}</span>
                     </div>
 
                     <div class="sel-actions-bar">
@@ -471,7 +474,7 @@ export interface LqsAuditCheck {
                         type="button"
                         class="btn-clone-primary"
                         (click)="cloneListingToFastCreator(sel)">
-                        🚀 {{ getItemImages(sel).length }} Fotoğrafla İlan Oluşturucuya Klonla
+                        {{ t('research.competitorSpy.showcase.cloneWithPhotosBtn', { count: getItemImages(sel).length }) }}
                       </button>
 
                       <button
@@ -479,15 +482,15 @@ export interface LqsAuditCheck {
                         class="btn-ai-lqs-glow"
                         [disabled]="isImprovingLqs"
                         (click)="improveSelectedListingLqs(sel)">
-                        <span *ngIf="!isImprovingLqs">✨ AI ile 100/100 LQS Yap</span>
-                        <span *ngIf="isImprovingLqs">⏳ LQS İyileştiriliyor...</span>
+                        <span *ngIf="!isImprovingLqs">{{ t('research.competitorSpy.showcase.aiLqsBtn') }}</span>
+                        <span *ngIf="isImprovingLqs">{{ t('research.competitorSpy.showcase.aiLqsLoadingBtn') }}</span>
                       </button>
 
                       <button
                         type="button"
                         class="btn-open-etsy-prominent"
                         (click)="openListingOnEtsy(sel)">
-                        🌐 Etsy'de Ürüne Git ↗
+                        {{ t('research.competitorSpy.showcase.goToEtsyBtn') }}
                       </button>
 
                       <button
@@ -495,7 +498,7 @@ export interface LqsAuditCheck {
                         class="btn-copy-tags"
                         [disabled]="!sel.tags || sel.tags.length === 0"
                         (click)="copyTags(sel.tags)">
-                        📋 {{ sel.tags.length }} Etiketi Kopyala
+                        {{ t('research.competitorSpy.showcase.copyTagsBtn', { count: sel.tags.length }) }}
                       </button>
                     </div>
                   </div>
@@ -509,21 +512,21 @@ export interface LqsAuditCheck {
                       class="insp-tab-btn"
                       [class.active]="activeProductDetailTab === 'description'"
                       (click)="activeProductDetailTab = 'description'">
-                      📝 Ürün Açıklaması ({{ (sel.description || '').length }} karakter)
+                      {{ t('research.competitorSpy.inspector.tabDescription', { count: (sel.description || '').length }) }}
                     </button>
                     <button
                       type="button"
                       class="insp-tab-btn"
                       [class.active]="activeProductDetailTab === 'tags'"
                       (click)="activeProductDetailTab = 'tags'">
-                      🏷️ Aktif 13 Arama Etiketi ({{ sel.tags.length }}/13) & Materyaller
+                      {{ t('research.competitorSpy.inspector.tabTags', { count: sel.tags.length }) }}
                     </button>
                     <button
                       type="button"
                       class="insp-tab-btn tab-ai-doctor"
                       [class.active]="activeProductDetailTab === 'ai-doctor'"
                       (click)="activeProductDetailTab = 'ai-doctor'">
-                      ✨ 100/100 LQS Reçetesi & Varyasyonlar
+                      {{ t('research.competitorSpy.inspector.tabAiDoctor') }}
                     </button>
 
                     <button
@@ -531,7 +534,7 @@ export interface LqsAuditCheck {
                       class="btn-mini-copy ml-auto"
                       *ngIf="activeProductDetailTab === 'description' && sel.description"
                       (click)="copyDescription(sel.description)">
-                      📋 Açıklamayı Kopyala
+                      {{ t('research.competitorSpy.inspector.copyDescriptionBtn') }}
                     </button>
                   </div>
 
@@ -541,11 +544,11 @@ export interface LqsAuditCheck {
                       {{ sel.description }}
                     </div>
                     <ng-template #noDescTpl>
-                      <div class="muted-text">Bu ürün için açıklama metni bulunamadı.</div>
+                      <div class="muted-text">{{ t('research.competitorSpy.inspector.noDescription') }}</div>
                     </ng-template>
 
                     <div class="materials-row" *ngIf="sel.materials && sel.materials.length > 0">
-                      <span class="mat-label">🧵 Materyaller:</span>
+                      <span class="mat-label">{{ t('research.competitorSpy.inspector.materialsLabel') }}</span>
                       <span *ngFor="let m of sel.materials" class="mat-chip">{{ m }}</span>
                     </div>
                   </div>
@@ -554,17 +557,17 @@ export interface LqsAuditCheck {
                   <div class="inspector-tab-content" *ngIf="activeProductDetailTab === 'tags'">
                     <div class="tags-cloud">
                       <span
-                        *ngFor="let t of sel.tags"
+                        *ngFor="let tag of sel.tags"
                         class="tag-chip"
-                        title="Tıkla: Bu etiketi Pazar Araştırmasında analiz et"
-                        (click)="navigateToMarketResearch(t)">
-                        #{{ t }}
+                        [title]="t('research.competitorSpy.inspector.tagClickTitle')"
+                        (click)="navigateToMarketResearch(tag)">
+                        #{{ tag }}
                       </span>
-                      <span *ngIf="sel.tags.length === 0" class="muted-text">Bu üründe etiket bulunamadı.</span>
+                      <span *ngIf="sel.tags.length === 0" class="muted-text">{{ t('research.competitorSpy.inspector.noTags') }}</span>
                     </div>
 
                     <div class="materials-row" *ngIf="sel.materials && sel.materials.length > 0">
-                      <span class="mat-label">🧵 Materyaller:</span>
+                      <span class="mat-label">{{ t('research.competitorSpy.inspector.materialsLabel') }}</span>
                       <span *ngFor="let m of sel.materials" class="mat-chip">{{ m }}</span>
                     </div>
                   </div>
@@ -573,15 +576,15 @@ export interface LqsAuditCheck {
                   <div class="inspector-tab-content ai-doctor-content" *ngIf="activeProductDetailTab === 'ai-doctor'">
                     <div *ngIf="isImprovingLqs" class="ai-loading-box">
                       <div class="spinner-ai"></div>
-                      <p>✨ <strong>{{ activeAiModelBadge }}</strong> ürünün SEO zafiyetlerini inceliyor, 13 altın arama etiketini, 140 karakterlik viral başlığı ve varyasyon baremlerini 100/100 seviyesine optimize ediyor...</p>
+                      <p>{{ t('research.competitorSpy.inspector.aiLoading', { model: activeAiModelBadge }) }}</p>
                     </div>
 
                     <div *ngIf="!isImprovingLqs && !lqsImprovementResult" class="ai-empty-prompt">
                       <div class="empty-prompt-card">
-                        <h4>🎯 Mevcut eRank LQS Kalite Skoru: <span class="badge-lqs" [class.badge-a]="sel.lqsScore >= 80" [class.badge-b]="sel.lqsScore >= 68 && sel.lqsScore < 80" [class.badge-c]="sel.lqsScore < 68">{{ sel.lqsScore }}/100 ({{ sel.lqsGrade }})</span></h4>
-                        <p class="muted-text">Bu üründen ilham alarak organik sıralamada öne geçmek için yapay zeka ile 13 altın etiket, 140 karakterlik viral başlık ve akıllı varyasyon baremleri oluşturun.</p>
+                        <h4>{{ t('research.competitorSpy.inspector.currentLqsTitle') }} <span class="badge-lqs" [class.badge-a]="sel.lqsScore >= 80" [class.badge-b]="sel.lqsScore >= 68 && sel.lqsScore < 80" [class.badge-c]="sel.lqsScore < 68">{{ sel.lqsScore }}/100 ({{ sel.lqsGrade }})</span></h4>
+                        <p class="muted-text">{{ t('research.competitorSpy.inspector.emptyPromptDesc') }}</p>
                         <button type="button" class="btn-ai-lqs-glow large-cta" (click)="improveSelectedListingLqs(sel)">
-                          ✨ {{ activeAiModelBadge }} ile 100/100 LQS Reçetesini Başlat
+                          {{ t('research.competitorSpy.inspector.startAiDoctorBtn', { model: activeAiModelBadge }) }}
                         </button>
                       </div>
                     </div>
@@ -589,16 +592,16 @@ export interface LqsAuditCheck {
                     <div *ngIf="!isImprovingLqs && lqsImprovementResult as opt" class="ai-result-view">
                       <div class="ai-result-header">
                         <div class="ai-header-left">
-                          <span class="badge-target-lqs">🏆 Hedef LQS: 100/100 (A+)</span>
+                          <span class="badge-target-lqs">{{ t('research.competitorSpy.inspector.targetLqsBadge') }}</span>
                           <span class="badge-provider">🤖 {{ opt.provider }}</span>
                         </div>
                         <button type="button" class="btn-clone-optimized-hero" (click)="cloneListingWithOptimization(sel, opt)">
-                          ✨ 100/100 AI Optimize Haliyle Klonla
+                          {{ t('research.competitorSpy.inspector.cloneOptimizedBtn') }}
                         </button>
                       </div>
 
                       <div class="doctor-summary-box">
-                        <strong>🩺 LQS Doktoru Denetim Notu:</strong>
+                        <strong>{{ t('research.competitorSpy.inspector.doctorAuditLabel') }}</strong>
                         <p>{{ opt.lqsDoctorAuditSummary }}</p>
                         <ul class="highlights-list" *ngIf="opt.improvementHighlights && opt.improvementHighlights.length > 0">
                           <li *ngFor="let h of opt.improvementHighlights">✅ {{ h }}</li>
@@ -607,25 +610,25 @@ export interface LqsAuditCheck {
 
                       <div class="opt-field-block">
                         <div class="opt-field-label">
-                          <span>📝 100/100 Optimize Başlık ({{ opt.optimizedTitle.length }} Karakter):</span>
-                          <button type="button" class="btn-mini-copy" (click)="copyText(opt.optimizedTitle, 'Başlık')">📋 Kopyala</button>
+                          <span>{{ t('research.competitorSpy.inspector.optimizedTitleLabel', { count: opt.optimizedTitle.length }) }}</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyText(opt.optimizedTitle, t('research.competitorSpy.inspector.titleCopyLabel'))">{{ t('research.competitorSpy.inspector.copyBtn') }}</button>
                         </div>
                         <div class="opt-field-box">{{ opt.optimizedTitle }}</div>
                       </div>
 
                       <div class="opt-field-block">
                         <div class="opt-field-label">
-                          <span>🏷️ 13 Altın Long-Tail Arama Etiketi ({{ opt.optimizedTags.length }}/13):</span>
-                          <button type="button" class="btn-mini-copy" (click)="copyTags(opt.optimizedTags)">📋 Tümünü Kopyala</button>
+                          <span>{{ t('research.competitorSpy.inspector.optimizedTagsLabel', { count: opt.optimizedTags.length }) }}</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyTags(opt.optimizedTags)">{{ t('research.competitorSpy.inspector.copyAllBtn') }}</button>
                         </div>
                         <div class="tags-cloud">
-                          <span *ngFor="let t of opt.optimizedTags" class="tag-chip opt-chip">#{{ t }}</span>
+                          <span *ngFor="let optTag of opt.optimizedTags" class="tag-chip opt-chip">#{{ optTag }}</span>
                         </div>
                       </div>
 
                       <div class="opt-field-block" *ngIf="opt.suggestedVariations && opt.suggestedVariations.length > 0">
                         <div class="opt-field-label">
-                          <span>📦 Önerilen Akıllı Varyasyonlar (Sütun 3'e Otomatik Aktarılacak):</span>
+                          <span>{{ t('research.competitorSpy.inspector.suggestedVarsLabel') }}</span>
                         </div>
                         <div class="vars-preview-row">
                           <div *ngFor="let v of opt.suggestedVariations" class="var-group-card">
@@ -637,18 +640,18 @@ export interface LqsAuditCheck {
 
                       <div class="opt-field-block">
                         <div class="opt-field-label">
-                          <span>📄 Google SEO & Dönüşüm Uyumlu Ürün Açıklaması:</span>
-                          <button type="button" class="btn-mini-copy" (click)="copyDescription(opt.optimizedDescription)">📋 Açıklamayı Kopyala</button>
+                          <span>{{ t('research.competitorSpy.inspector.optimizedDescLabel') }}</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyDescription(opt.optimizedDescription)">{{ t('research.competitorSpy.inspector.copyDescriptionBtn') }}</button>
                         </div>
                         <div class="description-reader opt-desc-reader">{{ opt.optimizedDescription }}</div>
                       </div>
 
                       <div class="ai-bottom-actions">
                         <button type="button" class="btn-clone-optimized-hero" (click)="cloneListingWithOptimization(sel, opt)">
-                          ✨ 100/100 AI Optimize Haliyle Klonla (Tüm Bilgilerle İlan Oluşturucuya Git)
+                          {{ t('research.competitorSpy.inspector.cloneOptimizedFullBtn') }}
                         </button>
                         <button type="button" class="btn-clone-secondary" (click)="cloneListingToFastCreator(sel)">
-                          🚀 Orijinal (Ham) Rakip Haliyle Klonla
+                          {{ t('research.competitorSpy.inspector.cloneRawBtn') }}
                         </button>
                       </div>
                     </div>
@@ -665,21 +668,21 @@ export interface LqsAuditCheck {
                     class="subtab-btn"
                     [class.active]="activeIntelTab === 'tags'"
                     (click)="activeIntelTab = 'tags'">
-                    🏷️ Mağaza Etiket & Kelime Röntgeni
+                    {{ t('research.competitorSpy.intel.tabTags') }}
                   </button>
                   <button
                     type="button"
                     class="subtab-btn"
                     [class.active]="activeIntelTab === 'gap'"
                     (click)="activeIntelTab = 'gap'">
-                    🎯 AI Rakip Açığı & Strateji
+                    {{ t('research.competitorSpy.intel.tabGap') }}
                   </button>
                   <button
                     type="button"
                     class="subtab-btn"
                     [class.active]="activeIntelTab === 'lqs'"
                     (click)="activeIntelTab = 'lqs'">
-                    📊 eRank LQS Ürün Denetimi
+                    {{ t('research.competitorSpy.intel.tabLqs') }}
                   </button>
                 </div>
 
@@ -688,12 +691,12 @@ export interface LqsAuditCheck {
                   <div class="freq-columns">
                     <div class="freq-col">
                       <div class="freq-col-header">
-                        <h4>En Çok Kullanılan Etiketler (Top 25)</h4>
+                        <h4>{{ t('research.competitorSpy.intel.topTagsTitle') }}</h4>
                         <button
                           type="button"
                           class="btn-mini-copy"
                           (click)="copyTopShopTags()">
-                          İlk 13'ü Kopyala
+                          {{ t('research.competitorSpy.intel.copyTop13Btn') }}
                         </button>
                       </div>
                       <div class="freq-list">
@@ -705,14 +708,14 @@ export interface LqsAuditCheck {
                           <div class="freq-bar-wrap">
                             <div class="freq-bar" [style.width.%]="tf.usagePercentage"></div>
                           </div>
-                          <span class="freq-count">{{ tf.count }} ilan (%{{ tf.usagePercentage }})</span>
+                          <span class="freq-count">{{ t('research.competitorSpy.intel.listingCountPct', { count: tf.count, pct: tf.usagePercentage }) }}</span>
                         </div>
                       </div>
                     </div>
 
                     <div class="freq-col">
                       <div class="freq-col-header">
-                        <h4>Başlıklarda En Çok Geçen Kelimeler</h4>
+                        <h4>{{ t('research.competitorSpy.intel.topTitleWordsTitle') }}</h4>
                       </div>
                       <div class="freq-list">
                         <div
@@ -723,7 +726,7 @@ export interface LqsAuditCheck {
                           <div class="freq-bar-wrap">
                             <div class="freq-bar word-bar" [style.width.%]="wf.usagePercentage"></div>
                           </div>
-                          <span class="freq-count">{{ wf.count }} kez (%{{ wf.usagePercentage }})</span>
+                          <span class="freq-count">{{ t('research.competitorSpy.intel.wordCountPct', { count: wf.count, pct: wf.usagePercentage }) }}</span>
                         </div>
                       </div>
                     </div>
@@ -734,22 +737,22 @@ export interface LqsAuditCheck {
                 <div class="subtab-body" *ngIf="activeIntelTab === 'gap'">
                   <div class="ai-insight-box">
                     <div class="ai-badge-row">
-                      <span class="ai-pill">✨ EverBee & eRank Rekabet İstihbaratı</span>
+                      <span class="ai-pill">{{ t('research.competitorSpy.intel.aiGapPill') }}</span>
                     </div>
                     <p class="ai-insight-text">{{ analysisResult!.aiCompetitiveGapInsight }}</p>
 
                     <div class="gap-metrics-grid">
                       <div class="gap-metric-item">
-                        <span class="gm-label">Fiyat Konumlandırma Fırsatı</span>
+                        <span class="gm-label">{{ t('research.competitorSpy.intel.priceOpportunityLabel') }}</span>
                         <span class="gm-val">
                           &#36;{{ (shop.averagePriceUsd * 0.90) | number:'1.2-2' }} – &#36;{{ (shop.averagePriceUsd * 0.95) | number:'1.2-2' }}
                         </span>
-                        <span class="gm-hint">Rakibin ortalama fiyatının %5-%10 altında giriş yaparak dönüşüm avantajı yakalayın.</span>
+                        <span class="gm-hint">{{ t('research.competitorSpy.intel.priceOpportunityHint') }}</span>
                       </div>
                       <div class="gap-metric-item">
-                        <span class="gm-label">Zayıf LQS İlan Oranı (C/D Notu)</span>
-                        <span class="gm-val">{{ getWeakLqsCount() }} / {{ listings.length }} ilan</span>
-                        <span class="gm-hint">Rakibin eksik etiket/görsel bıraktığı ürünlerde 13 tam etiket ve 10 görselle üst sıraya çıkın.</span>
+                        <span class="gm-label">{{ t('research.competitorSpy.intel.weakLqsLabel') }}</span>
+                        <span class="gm-val">{{ t('research.competitorSpy.intel.weakLqsVal', { weak: getWeakLqsCount(), total: listings.length }) }}</span>
+                        <span class="gm-hint">{{ t('research.competitorSpy.intel.weakLqsHint') }}</span>
                       </div>
                     </div>
                   </div>
@@ -759,7 +762,7 @@ export interface LqsAuditCheck {
                 <div class="subtab-body" *ngIf="activeIntelTab === 'lqs'">
                   @for (sel of (selectedListing ? [selectedListing] : []); track sel.listingId) {
                     <div class="lqs-audit-header">
-                      <span>Seçili Ürün LQS Kalite Denetimi: <strong>{{ sel.lqsGrade }} ({{ sel.lqsScore }}/100)</strong></span>
+                      <span>{{ t('research.competitorSpy.intel.lqsAuditHeader') }} <strong>{{ sel.lqsGrade }} ({{ sel.lqsScore }}/100)</strong></span>
                     </div>
                     <div class="lqs-checks-list">
                       <div *ngFor="let chk of getListingLqsAudit(sel)" class="lqs-check-item" [class.failed]="!chk.passed">
@@ -784,10 +787,10 @@ export interface LqsAuditCheck {
       <ng-container *ngIf="activeMainTab === 'seasonal'">
         <div class="seasonal-intro glass-card">
           <div>
-            <h2 class="seasonal-heading">📅 Yıllık Etsy Dönemsel Trend & Q4 Hazırlık Takvimi</h2>
+            <h2 class="seasonal-heading">{{ t('research.competitorSpy.seasonal.heading') }}</h2>
             <p class="seasonal-sub">
-              Etsy arama algoritmasında mevsimsel nişlerin organik indeksleme süresi ortalama <strong>45-60 gündür</strong>.
-              Zirve sezonlarından önce hangi anahtar kelimelere ve 13 etikete odaklanmanız gerektiğini aşağıdan takip edin ve tek tıkla aksiyon alın.
+              {{ t('research.competitorSpy.seasonal.subBefore') }} <strong>{{ t('research.competitorSpy.seasonal.subHighlight') }}</strong>
+              {{ t('research.competitorSpy.seasonal.subAfter') }}
             </p>
           </div>
         </div>
@@ -799,7 +802,7 @@ export interface LqsAuditCheck {
                 <span class="sc-icon">{{ tr.icon }}</span>
                 <div>
                   <h3 class="sc-name">{{ tr.eventName }}</h3>
-                  <span class="sc-peak">Zirve Dönemi: {{ tr.peakMonth }} • Hazırlık: {{ tr.prepStartDate }}</span>
+                  <span class="sc-peak">{{ t('research.competitorSpy.seasonal.peakPrep', { peak: tr.peakMonth, prep: tr.prepStartDate }) }}</span>
                 </div>
               </div>
               <span
@@ -812,15 +815,15 @@ export interface LqsAuditCheck {
             </div>
 
             <div class="sc-metrics-row">
-              <div class="sc-pill">⏳ Zirveye <strong>{{ tr.daysLeftToPeak }} gün</strong></div>
-              <div class="sc-pill">📈 Trafik Çarpanı: <strong>{{ tr.estimatedTrafficMultiplier }}x</strong></div>
-              <div class="sc-pill">🎯 Odak: {{ tr.categoryFocus }}</div>
+              <div class="sc-pill">{{ t('research.competitorSpy.seasonal.daysLeft') }} <strong>{{ t('research.competitorSpy.seasonal.daysUnit', { days: tr.daysLeftToPeak }) }}</strong></div>
+              <div class="sc-pill">{{ t('research.competitorSpy.seasonal.trafficMultiplier') }} <strong>{{ tr.estimatedTrafficMultiplier }}x</strong></div>
+              <div class="sc-pill">{{ t('research.competitorSpy.seasonal.focus', { focus: tr.categoryFocus }) }}</div>
             </div>
 
             <p class="sc-advice">{{ tr.actionAdvice }}</p>
 
             <div class="sc-section">
-              <span class="sc-sec-label">🔥 Yüksek Talep Gören Arama Kelimeleri (Tıkla & Pazar Analizi Yap):</span>
+              <span class="sc-sec-label">{{ t('research.competitorSpy.seasonal.highDemandKeywords') }}</span>
               <div class="tags-cloud">
                 <span
                   *ngFor="let kw of tr.highDemandKeywords"
@@ -833,13 +836,13 @@ export interface LqsAuditCheck {
 
             <div class="sc-section">
               <div class="sc-sec-head">
-                <span class="sc-sec-label">🏷️ Önerilen Altın Etiketler:</span>
+                <span class="sc-sec-label">{{ t('research.competitorSpy.seasonal.recommendedTags') }}</span>
                 <div class="sc-sec-actions">
                   <button type="button" class="btn-mini-copy" (click)="copyTags(tr.winningTags)">
-                    📋 Etiketleri Kopyala
+                    {{ t('research.competitorSpy.seasonal.copyTagsBtn') }}
                   </button>
                   <button type="button" class="btn-mini-clone" (click)="sendSeasonalTrendToFastCreator(tr)">
-                    🚀 Bu Trendle İlan Oluştur
+                    {{ t('research.competitorSpy.seasonal.createFromTrendBtn') }}
                   </button>
                 </div>
               </div>
@@ -859,14 +862,14 @@ export interface LqsAuditCheck {
           <div class="lb-header">
             <div class="lb-title-wrap">
               <span class="lb-title">{{ lb.title }}</span>
-              <span class="lb-sub">Görsel {{ lightboxIndex + 1 }} / {{ getItemImages(lb).length }} • &#36;{{ lb.priceUsd | number:'1.2-2' }}</span>
+              <span class="lb-sub">{{ t('research.competitorSpy.lightbox.sub', { current: lightboxIndex + 1, total: getItemImages(lb).length, price: (lb.priceUsd | number:'1.2-2') }) }}</span>
             </div>
             <div class="lb-top-actions">
               <button type="button" class="btn-open-etsy-prominent" (click)="openListingOnEtsy(lb)">
-                🌐 Etsy'de Ürüne Git ↗
+                {{ t('research.competitorSpy.showcase.goToEtsyBtn') }}
               </button>
               <button type="button" class="btn-clone-primary" (click)="cloneListingToFastCreator(lb)">
-                🚀 {{ getItemImages(lb).length }} Fotoğrafla Klonla
+                {{ t('research.competitorSpy.lightbox.cloneWithPhotosBtn', { count: getItemImages(lb).length }) }}
               </button>
               <button type="button" class="btn-close-lb" (click)="closeLightbox()">✕</button>
             </div>
@@ -905,6 +908,7 @@ export interface LqsAuditCheck {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .spy-view {
@@ -2265,6 +2269,7 @@ export interface LqsAuditCheck {
 export class CompetitorSpyComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private extensionBridge = inject(ExtensionBridgeService);
+  private transloco = inject(TranslocoService);
   activeMainTab: 'competitor' | 'seasonal' = 'competitor';
   activeIntelTab: 'tags' | 'gap' | 'lqs' = 'tags';
   activeProductDetailTab: 'description' | 'tags' | 'ai-doctor' = 'description';
@@ -2328,7 +2333,7 @@ export class CompetitorSpyComponent implements OnInit {
   analyzeShop(overrideQuery?: string): void {
     const query = (overrideQuery ?? this.shopQueryInput ?? '').trim();
     if (!query) {
-      this.showToast('⚠️ Lütfen analiz edilecek Etsy mağaza adını, mağaza linkini veya ürün linkini girin.');
+      this.showToast(this.transloco.translate('research.competitorSpy.messages.enterShopQuery'));
       return;
     }
 
@@ -2342,7 +2347,7 @@ export class CompetitorSpyComponent implements OnInit {
         this.analysisResult = res;
 
         if (!res.found) {
-          this.errorMessage = res.errorMessage || `"${query}" mağazası bulunamadı.`;
+          this.errorMessage = res.errorMessage || this.transloco.translate('research.competitorSpy.messages.shopNotFound', { query });
           this.listings = [];
           this.filteredListings = [];
           this.selectedListing = null;
@@ -2352,7 +2357,10 @@ export class CompetitorSpyComponent implements OnInit {
         const isListingUrl = /etsy\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?listing\/(\d+)/i.test(query);
         if (isListingUrl && res.shop && res.shop.shopName) {
           this.shopQueryInput = res.shop.shopName;
-          this.showToast(`🎯 Ürün linkinden mağaza tespit edildi: "${res.shop.shopName}" (${(res.shop.totalSalesCount || 0).toLocaleString()} satış)`);
+          this.showToast(this.transloco.translate('research.competitorSpy.messages.shopDetectedFromUrl', {
+            shopName: res.shop.shopName,
+            sales: (res.shop.totalSalesCount || 0).toLocaleString()
+          }));
         }
 
         this.listings = res.listings || [];
@@ -2369,7 +2377,7 @@ export class CompetitorSpyComponent implements OnInit {
       },
       error: (err) => {
         this.isAnalyzing = false;
-        this.errorMessage = err?.error?.error || err?.message || 'Etsy v3 rakip analizi sırasında bağlantı hatası oluştu.';
+        this.errorMessage = err?.error?.error || err?.message || this.transloco.translate('research.competitorSpy.messages.analyzeError');
       }
     });
   }
@@ -2494,7 +2502,7 @@ export class CompetitorSpyComponent implements OnInit {
   copyDescription(desc: string): void {
     if (!desc) return;
     navigator.clipboard.writeText(desc);
-    this.showToast('📋 Ürün açıklaması panoya kopyalandı!');
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.descriptionCopied'));
   }
 
   saveCurrentShopToWatchlist(): void {
@@ -2550,7 +2558,7 @@ export class CompetitorSpyComponent implements OnInit {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => {} });
 
     if (notify) {
-      this.showToast(`📌 "${shop.shopName}" takip listesine kaydedildi ve canlı snapshot güncellendi!`);
+      this.showToast(this.transloco.translate('research.competitorSpy.messages.watchlistSaved', { shopName: shop.shopName }));
     }
   }
 
@@ -2563,7 +2571,7 @@ export class CompetitorSpyComponent implements OnInit {
     event.stopPropagation();
     this.watchedShops = this.watchedShops.filter(s => s.shopName.toLowerCase() !== shopName.toLowerCase());
     this.saveWatchedShops();
-    this.showToast(`🗑 "${shopName}" takip listesinden çıkarıldı.`);
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.watchlistRemoved', { shopName }));
   }
 
   private loadWatchedShops(): void {
@@ -2670,15 +2678,15 @@ export class CompetitorSpyComponent implements OnInit {
     }
 
     const bridgeHint = this.extensionBridge.isBridgeDetected()
-      ? 'Eklenti köprüsü bağlı ancak Etsy sayfasından varyasyon seçicisi okunamadı.'
-      : 'Eklenti köprüsü algılanamadı (Etsy Copilot 2.7.0 eklentisini yükleyip/yenileyip bu sayfayı F5 ile yenileyin).';
+      ? this.transloco.translate('research.competitorSpy.messages.bridgeDetectedNoVariations')
+      : this.transloco.translate('research.competitorSpy.messages.bridgeNotDetected');
 
     if (isApiError) {
-      cloned.variationWarning = `Varyasyon servisine ulaşılamadı. ${bridgeHint}`;
-      return 'Varyasyon servisine ulaşılamadı, ilan varyasyonsuz aktarıldı.';
+      cloned.variationWarning = this.transloco.translate('research.competitorSpy.messages.variationServiceUnreachable', { hint: bridgeHint });
+      return this.transloco.translate('research.competitorSpy.messages.variationServiceFallback');
     }
 
-    cloned.variationWarning = `${inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor.'} — ${bridgeHint}`;
+    cloned.variationWarning = `${inv?.warningMessage || this.transloco.translate('research.competitorSpy.messages.etsyApiNoVariations')} — ${bridgeHint}`;
     return inv?.warningMessage;
   }
 
@@ -2704,9 +2712,17 @@ export class CompetitorSpyComponent implements OnInit {
   private finishCloning(cloned: ClonedMarketListing, item: CompetitorListingDto, imgCount: number, warningMessage?: string): void {
     this.aiSettings.setClonedListing(cloned);
     this.closeLightbox();
-    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` + ${cloned.variationRows.length} varyasyon` : '';
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0)
+      ? this.transloco.translate('research.competitorSpy.messages.variationSuffix', { count: cloned.variationRows.length })
+      : '';
     const warnSuffix = warningMessage && !varText ? ` (${warningMessage})` : '';
-    this.showToast(`🚀 "${item.title.slice(0, 32)}..." (${imgCount} fotoğraf + ${cloned.tags.length} etiket${varText}) İlan Oluşturucuya aktarıldı!${warnSuffix}`);
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.clonedToCreator', {
+      title: item.title.slice(0, 32),
+      images: imgCount,
+      tags: cloned.tags.length,
+      varText,
+      warnSuffix
+    }));
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 250);
@@ -2770,8 +2786,14 @@ export class CompetitorSpyComponent implements OnInit {
   private finalizeOptimizedClone(cloned: ClonedMarketListing, imgCount: number): void {
     this.aiSettings.setClonedListing(cloned);
     this.closeLightbox();
-    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` + ${cloned.variationRows.length} varyasyon` : '';
-    this.showToast(`✨ 100/100 Optimize "${cloned.title.slice(0, 30)}..." (${imgCount} fotoğraf + 13 altın etiket${varText}) İlan Oluşturucuya aktarıldı!`);
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0)
+      ? this.transloco.translate('research.competitorSpy.messages.variationSuffix', { count: cloned.variationRows.length })
+      : '';
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.optimizedClonedToCreator', {
+      title: cloned.title.slice(0, 30),
+      images: imgCount,
+      varText
+    }));
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 250);
@@ -2800,25 +2822,26 @@ export class CompetitorSpyComponent implements OnInit {
       next: (res) => {
         this.isImprovingLqs = false;
         this.lqsImprovementResult = res;
-        this.showToast(`✨ 100/100 LQS Reçetesi hazırlandı (${res.provider})!`);
+        this.showToast(this.transloco.translate('research.competitorSpy.messages.lqsReady', { provider: res.provider }));
       },
       error: () => {
         this.isImprovingLqs = false;
-        this.showToast('❌ LQS iyileştirmesi oluşturulamadı.');
+        this.showToast(this.transloco.translate('research.competitorSpy.messages.lqsError'));
       }
     });
   }
 
-  copyText(text: string, label: string = 'Metin'): void {
+  copyText(text: string, label?: string): void {
     if (!text) return;
     navigator.clipboard.writeText(text);
-    this.showToast(`📋 ${label} panoya kopyalandı!`);
+    const resolvedLabel = label || this.transloco.translate('research.competitorSpy.inspector.defaultCopyLabel');
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.copiedLabel', { label: resolvedLabel }));
   }
 
   copyTags(tags: string[]): void {
     if (!tags || tags.length === 0) return;
     navigator.clipboard.writeText(tags.join(', '));
-    this.showToast(`📋 ${tags.length} etiket panoya kopyalandı!`);
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.tagsCopied', { count: tags.length }));
   }
 
   copyTopShopTags(): void {
@@ -2864,7 +2887,7 @@ export class CompetitorSpyComponent implements OnInit {
     link.href = URL.createObjectURL(blob);
     link.download = `rakip_analizi_${shopName}_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
-    this.showToast(`📥 "${shopName}" ürün portföyü CSV olarak indirildi.`);
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.csvDownloaded', { shopName }));
   }
 
   getWeakLqsCount(): number {
@@ -2879,37 +2902,37 @@ export class CompetitorSpyComponent implements OnInit {
 
     checks.push({
       icon: titleLen >= 70 && titleLen <= 140 ? '✅' : (titleLen >= 40 ? '⚠️' : '❌'),
-      label: `Başlık Uzunluğu (${titleLen}/140 karakter)`,
+      label: this.transloco.translate('research.competitorSpy.audit.titleLengthLabel', { len: titleLen }),
       detail: titleLen >= 70
-        ? 'Güçlü uzun kuyruklu (long-tail) anahtar kelime kapsaması.'
-        : 'Başlık kısa bırakılmış; siz 90-130 karakter arası 3 anahtar kelime öbeği kullanarak bu ürünü geçebilirsiniz.',
+        ? this.transloco.translate('research.competitorSpy.audit.titleLengthPass')
+        : this.transloco.translate('research.competitorSpy.audit.titleLengthFail'),
       passed: titleLen >= 70
     });
 
     checks.push({
       icon: item.tagCount >= 13 ? '✅' : (item.tagCount >= 10 ? '⚠️' : '❌'),
-      label: `Arama Etiketi Kullanımı (${item.tagCount}/13 etiket)`,
+      label: this.transloco.translate('research.competitorSpy.audit.tagUsageLabel', { count: item.tagCount }),
       detail: item.tagCount >= 13
-        ? 'Rakip 13 etiket hakkının tamamını kullanıyor.'
-        : `Rakip ${13 - item.tagCount} etiket hakkını boş bırakmış! 13 etiketi eksiksiz doldurarak organik görünürlük farkı yaratın.`,
+        ? this.transloco.translate('research.competitorSpy.audit.tagUsagePass')
+        : this.transloco.translate('research.competitorSpy.audit.tagUsageFail', { missing: 13 - item.tagCount }),
       passed: item.tagCount >= 13
     });
 
     checks.push({
       icon: imgCount >= 8 ? '✅' : (imgCount >= 5 ? '⚠️' : '❌'),
-      label: `Görsel Galerisi (${imgCount}/10 fotoğraf)`,
+      label: this.transloco.translate('research.competitorSpy.audit.galleryLabel', { count: imgCount }),
       detail: imgCount >= 8
-        ? 'Görsel çeşitliliği yüksek.'
-        : 'Görsel sayısı yetersiz; ölçü tablosu, yaşam alanı (lifestyle) ve yakın çekim fotoğraflarla dönüşüm oranını artırın.',
+        ? this.transloco.translate('research.competitorSpy.audit.galleryPass')
+        : this.transloco.translate('research.competitorSpy.audit.galleryFail'),
       passed: imgCount >= 8
     });
 
     checks.push({
       icon: descLen >= 300 ? '✅' : (descLen >= 150 ? '⚠️' : '❌'),
-      label: `Ürün Açıklaması (${descLen} karakter)`,
+      label: this.transloco.translate('research.competitorSpy.audit.descriptionLabel', { len: descLen }),
       detail: descLen >= 300
-        ? 'Açıklama metni Google ve Etsy SEO indekslemesi için yeterli uzunlukta.'
-        : 'Açıklama çok kısa; malzeme, boyut, kargo ve hediye paketi detaylarını içeren zengin bir açıklama yazın.',
+        ? this.transloco.translate('research.competitorSpy.audit.descriptionPass')
+        : this.transloco.translate('research.competitorSpy.audit.descriptionFail'),
       passed: descLen >= 300
     });
 
@@ -2946,7 +2969,7 @@ export class CompetitorSpyComponent implements OnInit {
       marketScore: 95
     };
     this.aiSettings.setClonedListing(cloned);
-    this.showToast(`🚀 "${tr.eventName}" sezon etiketleri Hızlı İlan Oluşturucuya aktarıldı!`);
+    this.showToast(this.transloco.translate('research.competitorSpy.messages.seasonalSentToCreator', { eventName: tr.eventName }));
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
     }, 350);

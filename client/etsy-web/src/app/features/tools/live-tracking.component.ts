@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -23,21 +24,23 @@ interface TrackedEntity {
 @Component({
   selector: 'app-live-tracking',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="tracking-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">📡</div>
           <div>
-            <h1 class="page-title">Canlı Kargo, Rakip & İlan Takip Radarı</h1>
-            <p class="page-subtitle">Rakip ilanların fiyat değişikliklerini, favori artış hızlarını ve anahtar kelime sıralamalarını SQLite ile kaydedin</p>
+            <h1 class="page-title">{{ t('tools.liveTracking.title') }}</h1>
+            <p class="page-subtitle">{{ t('tools.liveTracking.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-add-track" (click)="openAddModal()">
-            + Yeni Takip Ekle
+            {{ t('tools.liveTracking.addBtn') }}
           </button>
         </div>
       </div>
@@ -45,24 +48,24 @@ interface TrackedEntity {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">TAKİP EDİLEN İLANLAR</span>
-          <span class="kpi-val text-indigo">{{ items.length }} İlan</span>
-          <span class="kpi-sub">Fiyat & Hacim Radarı</span>
+          <span class="kpi-label">{{ t('tools.liveTracking.kpi.trackedListings') }}</span>
+          <span class="kpi-val text-indigo">{{ t('tools.liveTracking.kpi.listingsCount', { count: items.length }) }}</span>
+          <span class="kpi-sub">{{ t('tools.liveTracking.kpi.priceVolumeRadar') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">SON 24 SAAT FİYAT DEĞİŞİMİ</span>
-          <span class="kpi-val text-orange">3 İlan</span>
-          <span class="kpi-sub">2 İndirim, 1 Artış</span>
+          <span class="kpi-label">{{ t('tools.liveTracking.kpi.priceChanges24h') }}</span>
+          <span class="kpi-val text-orange">{{ t('tools.liveTracking.kpi.priceChangesVal') }}</span>
+          <span class="kpi-sub">{{ t('tools.liveTracking.kpi.priceChangesSub') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">FAVORİ PATLAMASI</span>
-          <span class="kpi-val text-green">+340 Favori</span>
-          <span class="kpi-sub">Viral Trend Alarmı</span>
+          <span class="kpi-label">{{ t('tools.liveTracking.kpi.favoriteSurge') }}</span>
+          <span class="kpi-val text-green">{{ t('tools.liveTracking.kpi.favoriteSurgeVal') }}</span>
+          <span class="kpi-sub">{{ t('tools.liveTracking.kpi.viralTrendAlert') }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">RADAR DURUMU</span>
-          <span class="kpi-val text-emerald">Aktif</span>
-          <span class="kpi-sub">Her 4 Saatte Bir Snapshot</span>
+          <span class="kpi-label">{{ t('tools.liveTracking.kpi.radarStatus') }}</span>
+          <span class="kpi-val text-emerald">{{ t('tools.liveTracking.kpi.active') }}</span>
+          <span class="kpi-sub">{{ t('tools.liveTracking.kpi.snapshotInterval') }}</span>
         </div>
       </div>
 
@@ -74,9 +77,9 @@ interface TrackedEntity {
       <!-- TRACKED ITEMS TABLE -->
       <div class="tracking-table-card glass-card">
         <div class="table-header">
-          <h2 class="table-title">İzlenen Ürün & Rakip Listesi ({{ items.length }})</h2>
+          <h2 class="table-title">{{ t('tools.liveTracking.tableTitle', { count: items.length }) }}</h2>
           <div class="filter-row">
-            <input type="text" [(ngModel)]="searchQuery" class="search-input" placeholder="İlan ara..." />
+            <input type="text" [(ngModel)]="searchQuery" class="search-input" [placeholder]="t('tools.liveTracking.searchPlaceholder')" />
           </div>
         </div>
 
@@ -84,20 +87,20 @@ interface TrackedEntity {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Tür</th>
-                <th>İlan Adı / Mağaza</th>
-                <th>Listing ID / URL</th>
-                <th>Güncel Fiyat</th>
-                <th>Favori</th>
-                <th>SEO Skoru</th>
-                <th>Fiyat Eğilimi</th>
-                <th>İşlemler</th>
+                <th>{{ t('tools.liveTracking.columns.type') }}</th>
+                <th>{{ t('tools.liveTracking.columns.name') }}</th>
+                <th>{{ t('tools.liveTracking.columns.key') }}</th>
+                <th>{{ t('tools.liveTracking.columns.price') }}</th>
+                <th>{{ t('tools.liveTracking.columns.favorites') }}</th>
+                <th>{{ t('tools.liveTracking.columns.seoScore') }}</th>
+                <th>{{ t('tools.liveTracking.columns.trend') }}</th>
+                <th>{{ t('tools.liveTracking.columns.actions') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let item of filteredItems">
                 <td>
-                  <span class="type-pill" [ngClass]="item.entityType.toLowerCase()">{{ item.entityType }}</span>
+                  <span class="type-pill" [ngClass]="item.entityType.toLowerCase()">{{ t('tools.liveTracking.entityTypes.' + item.entityType) }}</span>
                 </td>
                 <td class="cell-name">
                   <span class="name-text">{{ item.displayName }}</span>
@@ -113,14 +116,14 @@ interface TrackedEntity {
                   <span class="score-tag">{{ item.seoScore }} / 100</span>
                 </td>
                 <td>
-                  <span *ngIf="item.priceTrend === 'down'" class="trend-tag down">📉 %12 İndirim</span>
-                  <span *ngIf="item.priceTrend === 'up'" class="trend-tag up">📈 %5 Artış</span>
-                  <span *ngIf="item.priceTrend === 'stable'" class="trend-tag stable">⏸️ Sabit</span>
+                  <span *ngIf="item.priceTrend === 'down'" class="trend-tag down">{{ t('tools.liveTracking.trends.down') }}</span>
+                  <span *ngIf="item.priceTrend === 'up'" class="trend-tag up">{{ t('tools.liveTracking.trends.up') }}</span>
+                  <span *ngIf="item.priceTrend === 'stable'" class="trend-tag stable">{{ t('tools.liveTracking.trends.stable') }}</span>
                 </td>
                 <td>
                   <div class="action-btn-row">
-                    <button class="btn-snapshot" (click)="takeSnapshot(item)">Anlık Tara</button>
-                    <button class="btn-delete" (click)="deleteTracked(item.id)">Sil</button>
+                    <button class="btn-snapshot" (click)="takeSnapshot(item)">{{ t('tools.liveTracking.scanNowBtn') }}</button>
+                    <button class="btn-delete" (click)="deleteTracked(item.id)">{{ t('tools.liveTracking.deleteBtn') }}</button>
                   </div>
                 </td>
               </tr>
@@ -128,10 +131,10 @@ interface TrackedEntity {
                 <td colspan="8" class="empty-table-cell">
                   <div class="empty-state-box">
                     <span class="empty-icon">🎯</span>
-                    <span class="empty-title">Takip Edilen Öğe Bulunmuyor</span>
+                    <span class="empty-title">{{ t('tools.liveTracking.emptyTitle') }}</span>
                     <p class="empty-desc">
-                      Henüz radara veya takip listesine bir ürün, kargo ya da rakip eklemediniz. <strong>Asla sahte veri uydurulmaz</strong>.
-                      Yukarıdaki "+ Yeni Takip Öğesi Ekle" butonuna basarak dilediğiniz ilanı canlı izlemeye alabilirsiniz.
+                      {{ t('tools.liveTracking.emptyDescPrefix') }} <strong>{{ t('tools.liveTracking.emptyDescStrong') }}</strong>.
+                      {{ t('tools.liveTracking.emptyDescSuffix') }}
                     </p>
                   </div>
                 </td>
@@ -145,36 +148,37 @@ interface TrackedEntity {
       <div *ngIf="showAddModal" class="modal-backdrop">
         <div class="modal-content glass-card">
           <div class="modal-header">
-            <h3>📡 Yeni Takip Öğesi Ekle</h3>
+            <h3>{{ t('tools.liveTracking.modal.title') }}</h3>
             <button class="modal-close" (click)="showAddModal = false">✕</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>İlan / Ürün Başlığı:</label>
-              <input type="text" [(ngModel)]="newItem.displayName" class="form-input" placeholder="Rakip 3D Ejderha Figürü" />
+              <label>{{ t('tools.liveTracking.modal.nameLabel') }}</label>
+              <input type="text" [(ngModel)]="newItem.displayName" class="form-input" [placeholder]="t('tools.liveTracking.modal.namePlaceholder')" />
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Listing ID / Kod:</label>
+                <label>{{ t('tools.liveTracking.modal.keyLabel') }}</label>
                 <input type="text" [(ngModel)]="newItem.externalKey" class="form-input" placeholder="189204859" />
               </div>
               <div class="form-group">
-                <label>Fiyat ($):</label>
+                <label>{{ t('tools.liveTracking.modal.priceLabel') }}</label>
                 <input type="number" [(ngModel)]="newItem.latestPrice" class="form-input" placeholder="24.99" />
               </div>
             </div>
             <div class="form-group">
-              <label>Etsy Ürün URL'si:</label>
+              <label>{{ t('tools.liveTracking.modal.urlLabel') }}</label>
               <input type="text" [(ngModel)]="newItem.url" class="form-input" placeholder="https://www.etsy.com/listing/..." />
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" (click)="showAddModal = false">Vazgeç</button>
-            <button class="btn-save" (click)="saveNewItem()">Takibe Başla</button>
+            <button class="btn-cancel" (click)="showAddModal = false">{{ t('tools.liveTracking.modal.cancelBtn') }}</button>
+            <button class="btn-save" (click)="saveNewItem()">{{ t('tools.liveTracking.modal.saveBtn') }}</button>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .tracking-container {
@@ -418,6 +422,7 @@ interface TrackedEntity {
 })
 export class LiveTrackingRadarComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   searchQuery = '';
@@ -500,7 +505,7 @@ export class LiveTrackingRadarComponent implements OnInit {
 
     this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = `✓ "${this.newItem.displayName}" VDS SQLite veri tabanına kaydedildi ve radara alındı!`;
+        this.toastMessage = this.transloco.translate('tools.liveTracking.toasts.savedDb', { name: this.newItem.displayName });
         this.showAddModal = false;
         this.loadTracked();
         setTimeout(() => this.toastMessage = '', 3500);
@@ -521,7 +526,7 @@ export class LiveTrackingRadarComponent implements OnInit {
           seoScore: 80,
           priceTrend: 'stable'
         });
-        this.toastMessage = `✓ "${this.newItem.displayName}" takip radarına eklendi!`;
+        this.toastMessage = this.transloco.translate('tools.liveTracking.toasts.addedLocal', { name: this.newItem.displayName });
         this.showAddModal = false;
         setTimeout(() => this.toastMessage = '', 3500);
       }
@@ -546,11 +551,17 @@ export class LiveTrackingRadarComponent implements OnInit {
 
     this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = `⚡ "${item.displayName}" için anlık tarama VDS SQLite'a kaydedildi! (Fiyat: \$${item.latestPrice})`;
+        this.toastMessage = this.transloco.translate('tools.liveTracking.toasts.snapshotDb', {
+          name: item.displayName,
+          price: item.latestPrice
+        });
         setTimeout(() => this.toastMessage = '', 4000);
       },
       error: () => {
-        this.toastMessage = `⚡ "${item.displayName}" için anlık fiyat & rank taraması tamamlandı! (Güncel Fiyat: \$${item.latestPrice})`;
+        this.toastMessage = this.transloco.translate('tools.liveTracking.toasts.snapshotLocal', {
+          name: item.displayName,
+          price: item.latestPrice
+        });
         setTimeout(() => this.toastMessage = '', 4000);
       }
     });
@@ -560,7 +571,7 @@ export class LiveTrackingRadarComponent implements OnInit {
     this.items = this.items.filter(i => i.id !== id);
     this.etsyApi.deleteTrackingItem(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.toastMessage = '✓ Takip öğesi silindi.';
+        this.toastMessage = this.transloco.translate('tools.liveTracking.toasts.deleted');
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });

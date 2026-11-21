@@ -1,0 +1,552 @@
+{
+  "aiUsage": {
+    "title": "AI Token, Model & Balance Tracking Center",
+    "subtitle": "Official DeepSeek, Gemini, OpenAI, Claude and Grok logos, zero-mock live balances and analytics charts",
+    "refreshingBalances": "⏳ Fetching Balances...",
+    "refreshBalances": "⚡ Refresh Live Balances",
+    "selectedBrandLabel": "🎯 SELECTED PROVIDER:",
+    "allProviders": "🌐 All Providers (5 Providers)",
+    "activeOnlyProviders": "⚡ Configured Providers Only (DeepSeek, Gemini)",
+    "activePrimarySuffix": "⭐ (Active Primary Engine)",
+    "unconfiguredSuffix": "⚪ (Not Configured)",
+    "periodLabel": "📅 PERIOD:",
+    "periods": {
+      "30dOption": "🗓️ Last 30 Days",
+      "thisMonthOption": "📅 This Month (Current Period)",
+      "lastMonthOption": "⏮️ Last Month (Previous Period)",
+      "90dOption": "📊 Last 90 Days (Last 3 Months)",
+      "allOption": "🌐 All Time (Archive)",
+      "30d": "Last 30 Days",
+      "thisMonth": "This Month",
+      "lastMonth": "Last Month",
+      "90d": "Last 90 Days",
+      "all": "All Time"
+    },
+    "activePrimaryEngine": "Active Primary Engine:",
+    "kpi": {
+      "tokensUsed": "TOKENS USED ({{ period }})",
+      "inputOutput": "Input: {{ prompt }} / Output: {{ completion }}",
+      "costSpent": "TOTAL COST ({{ period }})",
+      "remainingBalance": "REMAINING BALANCE (USD & TRY)",
+      "totalCalls": "TOTAL AI REQUESTS / CALLS",
+      "callsCount": "{{ count }} Calls",
+      "selectedProvidersTotal": "Total across selected providers",
+      "brandTotalCalls": "Total calls for {{ brand }}"
+    },
+    "charts": {
+      "donutTitle": "🤖 AI Provider Token Distribution",
+      "donutSubtitle": "Token consumption share for the selected period ({{ period }})",
+      "donutEmpty": "No token usage recorded for this period (0 Tokens / ₺0.00 TRY)",
+      "donutNoDataLabel": "No Data",
+      "barTitle": "📈 Module-Based AI Usage Analysis",
+      "barSubtitleAll": "Token consumption across all modules",
+      "barSubtitleBrand": "Module consumption for {{ brand }}",
+      "barTag": "Module Analytics",
+      "barEmpty": "No module-based usage recorded in this period (0 Calls)",
+      "barNoDataLabel": "No Module Data",
+      "barDatasetLabel": "Tokens Used",
+      "tokenUnit": "Tokens",
+      "defaultModule": "General"
+    },
+    "focus": {
+      "activePrimaryTag": "⭐ SYSTEM ACTIVE PRIMARY ENGINE",
+      "onlineReady": "● Online & Ready",
+      "notConfigured": "⚪ Not Configured / Unused",
+      "activeModel": "Active Model:",
+      "unitTariff": "Unit Tariff:",
+      "topUpBtn": "💳 Top Up {{ provider }} Balance ↗",
+      "setupKeyBtn": "⚙️ Configure {{ provider }} API Key ↗",
+      "remainingUsd": "REMAINING BALANCE ($ USD)",
+      "spentAmount": "AMOUNT SPENT ({{ period }})",
+      "periodicSqliteSpend": "Periodic SQLite spend",
+      "tokensUsed": "TOKENS USED ({{ period }})",
+      "inputLabel": "Input:",
+      "outputLabel": "Output:",
+      "actualSqliteUsage": "Actual SQLite usage",
+      "totalApiCalls": "TOTAL API CALLS",
+      "requestsCount": "{{ count }} Requests",
+      "apiKeyLabel": "API Key:",
+      "storedInSqlite": "Stored securely in VDS SQLite"
+    },
+    "card": {
+      "activeEngine": "⭐ Active Engine",
+      "notConfigured": "⚪ Not Configured",
+      "remainingBalance": "Remaining Balance:",
+      "modelLabel": "Model:",
+      "unconfiguredHint": "API key not configured. Not in use.",
+      "tokensUsed": "Tokens Used:",
+      "totalRequests": "Total Requests:",
+      "callsCount": "{{ count }} Calls",
+      "cost": "Cost:",
+      "topUp": "Top Up Balance ↗",
+      "addKey": "⚙️ Add Key",
+      "inspectDetails": "Inspect Details →"
+    },
+    "history": {
+      "titleAll": "Recent AI Call Log (All Providers - {{ period }})",
+      "titleBrand": "AI Call Log for {{ brand }} ({{ period }})",
+      "subtitle": "Every AI token usage, model, and response status stored in VDS SQLite",
+      "filterAll": "All Providers",
+      "filterActiveOnly": "Configured Providers Only",
+      "colTime": "Time",
+      "colModule": "Module",
+      "colProvider": "Provider",
+      "colModel": "Model",
+      "colPromptCompletion": "Input / Output Tokens",
+      "colTotalTokens": "Total Tokens",
+      "colCostUsd": "Cost ($)",
+      "colCostTry": "Cost (₺)",
+      "colStatus": "Status",
+      "emptyAll": "No AI call logs recorded for the selected period ({{ period }}) (0 Calls / 0 Tokens).",
+      "emptyBrand": "No call logs recorded for {{ brand }} in this period.",
+      "defaultStatus": "Success"
+    }
+  },
+  "automation": {
+    "title": "Automation & Background Task Scheduler (Cron)",
+    "subtitle": "24/7 VDS background sync, CRO offer ladder, C_max margin shield, and shipping tracking bots",
+    "saveBtn": "💾 Save Scheduler to VDS",
+    "kpi": {
+      "activeSchedulers": "ACTIVE SCHEDULERS",
+      "tasksCount": "{{ count }} Tasks",
+      "systemdService": "VDS Systemd Service",
+      "last24h": "LAST 24H EXECUTIONS",
+      "triggersValue": "144 Triggers",
+      "errorRate": "Error Rate: 0.0%",
+      "heartbeat": "LIVE HEARTBEAT",
+      "heartbeatValue": "12s",
+      "sqliteSynced": "VDS SQLite Synced",
+      "shieldTitle": "CRO & C_MAX SHIELD",
+      "shieldValue": "Active Protection",
+      "shieldSub": "Coupon + Offsite Ads Audit"
+    },
+    "sectionTitle": "Automation Task List",
+    "lastRun": "Last Run:",
+    "nextRun": "Next Run:",
+    "runNow": "⚡ Run Now",
+    "justNow": "Just now",
+    "jobs": {
+      "job-1": {
+        "name": "Automatic Etsy Order & Payment Sync",
+        "schedule": "0 */1 * * * (Every 1 Hour)",
+        "lastRun": "15 minutes ago",
+        "nextRun": "in 45 minutes",
+        "desc": "Fetches new orders via Etsy Open API v3 and writes them to the VDS SQLite database."
+      },
+      "job-2": {
+        "name": "Multi-Carrier Shipping Rate & Tracking Check",
+        "schedule": "*/15 * * * * (Every 15 Minutes)",
+        "lastRun": "4 minutes ago",
+        "nextRun": "in 11 minutes",
+        "desc": "Updates Aras Global, ShipEntegra, and Navlungo tracking statuses and prepares delivery notifications."
+      },
+      "job-3": {
+        "name": "Midnight Financial Close & Telegram Briefing",
+        "schedule": "59 23 * * * (Every Night at 23:59)",
+        "lastRun": "Yesterday 23:59",
+        "nextRun": "Today 23:59",
+        "desc": "Calculates daily gross revenue, shipping costs, and estimated net profit and reports to the Telegram channel."
+      },
+      "job-4": {
+        "name": "Weekly A/B Test Winner Selector",
+        "schedule": "0 0 * * 0 (Sunday 00:00)",
+        "lastRun": "6 days ago",
+        "nextRun": "in 1 day",
+        "desc": "Automatically concludes 7-day A/B tests based on statistical significance and applies the winner to the shop."
+      },
+      "job-5": {
+        "name": "🪜 CRO Abandoned Cart & Favorite 3-Tier Offer Ladder",
+        "schedule": "0 */2 * * * (Every 2 Hours)",
+        "lastRun": "32 minutes ago",
+        "nextRun": "in 1h 28m",
+        "desc": "Triggers an 8% gentle nudge after 2h for favorites, a 15% recovery coupon after 24h for abandoned carts, and a Free Shipping VIP offer at 72h."
+      },
+      "job-6": {
+        "name": "🛡️ Coupon + Offsite Ads (15%) C_max Margin Protection Shield",
+        "schedule": "*/30 * * * * (Every 30 Minutes)",
+        "lastRun": "8 minutes ago",
+        "nextRun": "in 22 minutes",
+        "desc": "Audits active shop coupons (e.g. 30% DSFJY25) overlapping with the 15% Offsite Ads fee to warn when unit net profit drops below the target threshold."
+      }
+    },
+    "toasts": {
+      "syncStarted": "⚡ Task \"{{ name }}\" started on the VDS server. Scanning orders...",
+      "syncCompleted": "✓ \"{{ name }}\" completed successfully: {{ orderCount }} orders, {{ transactionCount }} transactions synced.",
+      "syncTriggered": "✓ Task \"{{ name }}\" triggered (VDS API connected).",
+      "runImmediate": "⚡ Task \"{{ name }}\" executed immediately on the VDS server!",
+      "savedAll": "✓ All automation schedule rules saved to the VDS cron service!"
+    }
+  },
+  "batchQueue": {
+    "title": "Bulk Listing Optimization & Batch Queue",
+    "subtitle": "Audit all shop listings in bulk with AI, enrich SEO titles, and push them to Etsy",
+    "clearCompletedBtn": "Clear Completed",
+    "processingBtn": "Processing ({{ progress }}%)...",
+    "optimizeAllBtn": "⚡ Optimize All Pending",
+    "kpi": {
+      "queuedListings": "QUEUED LISTINGS",
+      "listingsCount": "{{ count }} Listings",
+      "pendingCount": "Pending: {{ count }}",
+      "avgSeoScore": "AVERAGE SEO SCORE",
+      "preOptScore": "Pre-Optimization: 62%",
+      "syncedToEtsy": "SYNCED TO ETSY",
+      "activeInLiveShop": "Active in Live Shop",
+      "riskPolicyCheck": "RISK & POLICY CHECK",
+      "zeroWarnings": "0 Warnings",
+      "antiBanVerified": "Anti-Ban Verified"
+    },
+    "tableTitle": "Processing List & Queue Order",
+    "filters": {
+      "all": "All ({{ count }})",
+      "pending": "Pending ({{ count }})",
+      "completed": "Optimized"
+    },
+    "columns": {
+      "listingId": "Listing ID",
+      "currentTitle": "Current Title",
+      "targetKeyword": "Target Niche / Keyword",
+      "seoScore": "SEO Score",
+      "status": "Status",
+      "optimizedTitle": "Optimized Title",
+      "action": "Action"
+    },
+    "status": {
+      "Pending": "Pending",
+      "Processing": "Processing",
+      "Completed": "Completed",
+      "RiskWarning": "Risk Warning",
+      "SyncedToEtsy": "Synced to Etsy"
+    },
+    "notOptimizedYet": "— Not optimized yet —",
+    "optimizeBtn": "Optimize",
+    "pushToEtsyBtn": "Push to Etsy",
+    "liveBadge": "✓ Live",
+    "emptyTitle": "No Items in Queue",
+    "emptyDescPrefix": "There are currently no listings waiting in the bulk optimization or upload queue.",
+    "emptyDescStrong": "Mock data is never fabricated",
+    "emptyDescSuffix": "You can send listings to batch processing from the listing creator or market research modules.",
+    "toasts": {
+      "optimizedAi": "✓ Listing #{{ listingId }} ({{ keyword }}) optimized with AI!",
+      "optimizedLocal": "✓ Listing #{{ listingId }} optimized locally!",
+      "noPending": "No pending listings in the queue to optimize.",
+      "batchDone": "✓ {{ count }} listings successfully optimized and VDS SQLite queue updated!",
+      "syncedEtsy": "✓ Listing #{{ listingId }} uploaded to Etsy API as a draft!",
+      "cleared": "✓ Completed listings cleared from the queue."
+    }
+  },
+  "liveTracking": {
+    "title": "Live Shipping, Competitor & Listing Tracking Radar",
+    "subtitle": "Track competitor listing price changes, favorite velocity, and keyword rankings in SQLite",
+    "addBtn": "+ Add New Tracker",
+    "kpi": {
+      "trackedListings": "TRACKED LISTINGS",
+      "listingsCount": "{{ count }} Listings",
+      "priceVolumeRadar": "Price & Volume Radar",
+      "priceChanges24h": "24H PRICE CHANGES",
+      "priceChangesVal": "3 Listings",
+      "priceChangesSub": "2 Drops, 1 Increase",
+      "favoriteSurge": "FAVORITE SURGE",
+      "favoriteSurgeVal": "+340 Favorites",
+      "viralTrendAlert": "Viral Trend Alert",
+      "radarStatus": "RADAR STATUS",
+      "active": "Active",
+      "snapshotInterval": "Snapshot Every 4 Hours"
+    },
+    "tableTitle": "Monitored Products & Competitors ({{ count }})",
+    "searchPlaceholder": "Search listings...",
+    "columns": {
+      "type": "Type",
+      "name": "Listing Name / Shop",
+      "key": "Listing ID / URL",
+      "price": "Current Price",
+      "favorites": "Favorites",
+      "seoScore": "SEO Score",
+      "trend": "Price Trend",
+      "actions": "Actions"
+    },
+    "entityTypes": {
+      "Shop": "Shop",
+      "Listing": "Listing"
+    },
+    "trends": {
+      "down": "📉 12% Drop",
+      "up": "📈 5% Increase",
+      "stable": "⏸️ Stable"
+    },
+    "scanNowBtn": "Scan Now",
+    "deleteBtn": "Delete",
+    "emptyTitle": "No Tracked Items",
+    "emptyDescPrefix": "You haven't added any products, shipments, or competitors to the tracking radar yet.",
+    "emptyDescStrong": "Mock data is never fabricated",
+    "emptyDescSuffix": "Click the \"+ Add New Tracker\" button above to start live monitoring for any listing.",
+    "modal": {
+      "title": "📡 Add New Tracked Item",
+      "nameLabel": "Listing / Product Title:",
+      "namePlaceholder": "Competitor 3D Dragon Figure",
+      "keyLabel": "Listing ID / Code:",
+      "priceLabel": "Price ($):",
+      "urlLabel": "Etsy Listing URL:",
+      "cancelBtn": "Cancel",
+      "saveBtn": "Start Tracking"
+    },
+    "toasts": {
+      "savedDb": "✓ \"{{ name }}\" saved to VDS SQLite database and added to radar!",
+      "addedLocal": "✓ \"{{ name }}\" added to tracking radar!",
+      "snapshotDb": "⚡ Live scan for \"{{ name }}\" saved to VDS SQLite! (Price: ${{ price }})",
+      "snapshotLocal": "⚡ Live price & rank scan completed for \"{{ name }}\"! (Current Price: ${{ price }})",
+      "deleted": "✓ Tracked item deleted."
+    }
+  },
+  "shopVault": {
+    "title": "Shop Vault & Anti-Ban Backup (.etsyvault)",
+    "subtitle": "Encrypt and back up your entire shop in one click, and migrate safely to a new shop with anti-ban protection",
+    "vaultStatusBadge": "🛡️ Vault Status: Secure",
+    "backupCard": {
+      "label": "1. Create Full Shop Backup (.etsyvault)",
+      "shopPill": "Shop: {{ shopId }}",
+      "descPrefix": "All ",
+      "descStrong": "listings, titles, 13 tags, prices, variations, stock quantities, and HD photo links",
+      "descSuffix": " from your active shop are packaged into a single encrypted file.",
+      "includeImages": "Include High-Resolution Photo Manifest",
+      "includeInactive": "Also Back Up Draft and Inactive Listings",
+      "statListings": "Listings to Back Up",
+      "statTags": "Total Tags",
+      "statEncryption": "Encryption (AES-256)",
+      "btnPackaging": "Packaging...",
+      "btnCreate": "💾 Create & Download .etsyvault File"
+    },
+    "restoreCard": {
+      "label": "2. Restore from Backup & Anti-Ban Migration",
+      "shieldPill": "Anti-Ban Enabled",
+      "descPrefix": "If your previous shop was closed or you opened a new one, upload your ",
+      "descSuffix": " file to transfer all products in one step.",
+      "dropTitle": "Drag & Drop or Select an .etsyvault File",
+      "dropSub": "Automatic pHash and EXIF scrubber is applied",
+      "autoRewriteSeo": "Rephrase Titles & Descriptions with AI (Anti-Duplicate)",
+      "asDraft": "Publish Products as Drafts (Safe Mode)",
+      "btnRestore": "🚀 Start Migration to New Shop"
+    },
+    "toasts": {
+      "backupSuccess": "Shop backup ({{ listings }} listings, {{ tags }} tags) successfully encrypted and downloaded as .etsyvault!",
+      "backupError": "An error occurred while preparing the backup file.",
+      "fileVerified": "✓ \"{{ fileName }}\" verified: {{ listings }} listings and {{ tags }} tags found.",
+      "restoreCountInfo": "({{ listings }} listings and {{ tags }} tags)",
+      "restoreSuccess": "🎉 Backup \"{{ fileName }}\" {{ countInfo }} successfully migrated to the new shop and drafts were created!"
+    }
+  },
+  "moduleViewer": {
+    "liveSynced": "Live Synced",
+    "featureDesc": "Optimized cloud algorithm fully compatible with the desktop engine.",
+    "runNow": "⚡ Run Now",
+    "apiStatusTitle": "VDS API & Gemini Spark Engine Connected",
+    "shopIdLabel": "Shop ID:",
+    "endpointLabel": "Endpoint:",
+    "backToDashboard": "← Back to Dashboard",
+    "actionAlert": "⚡ Action \"{{ feature }}\" successfully queued in VDS API!",
+    "badges": {
+      "new": "NEW",
+      "pro": "PRO"
+    },
+    "categories": {
+      "general": "General",
+      "research": "Research & Analysis",
+      "automationFinance": "Automation & Finance",
+      "shipping": "Shipping",
+      "system": "System"
+    },
+    "modules": {
+      "orders": {
+        "title": "Order & Shipping Fulfillment Studio",
+        "summary": "Track Etsy orders, detect missing costs, generate shipping labels automatically, and calculate profit margins.",
+        "kpiTitle": "PENDING ORDERS",
+        "kpiValue": "18 Orders",
+        "features": {
+          "f1": "Red Alert & Notification for Orders with Missing Costs",
+          "f2": "Live Pricing from Aras Global, ShipEntegra, Navlungo & Shiptomore",
+          "f3": "One-Click Cost & Tracking Code Assignment to Orders",
+          "f4": "Realized Profit Margin (Gross vs Net Profit) Analysis"
+        }
+      },
+      "fast-creator": {
+        "title": "Fast Listing Creator (AI Fast Creator)",
+        "summary": "Generate AI-powered SEO titles, descriptions, and 13 algorithm-ready tags and push them to your shop in seconds.",
+        "kpiTitle": "TEMPLATE COUNT",
+        "kpiValue": "12 Templates",
+        "features": {
+          "f1": "Flawless Title and Description Generation with Gemini Spark AI",
+          "f2": "13 High-Volume Etsy Search Tag Optimization",
+          "f3": "Predefined Templates (3D Models, Gifts, Jewelry)",
+          "f4": "Direct Upload to Shop as a Draft"
+        }
+      },
+      "creator": {
+        "title": "Product Discovery & Draft Listing",
+        "summary": "Trend product radar, market volume estimation, and one-click draft listing studio.",
+        "features": {
+          "f1": "Discover Trending Products Worldwide",
+          "f2": "Target Audience and Category Fit Score",
+          "f3": "Dynamic Price Recommendation Simulator",
+          "f4": "Draft Inventory Management"
+        }
+      },
+      "ai-studio": {
+        "title": "AI Image Studio & Background Remover",
+        "summary": "Generate studio-quality mockups with AI, swap backgrounds, and strip EXIF metadata for anti-ban safety.",
+        "kpiTitle": "PROCESSED IMAGES",
+        "kpiValue": "142 Images",
+        "features": {
+          "f1": "AI Product Scene and Studio Background Generation",
+          "f2": "Background Removal",
+          "f3": "Anti-Ban EXIF Metadata & Image Fingerprint Scrubbing",
+          "f4": "Automatic Scaling to Etsy Dimensions (2000x2000px)"
+        }
+      },
+      "analytics-shop": {
+        "title": "Shop Performance & Visitor Analytics",
+        "summary": "Views, favorite counts, conversion rates (%), and per-product traffic charts.",
+        "features": {
+          "f1": "Daily and Monthly Visitor & Favorite Trends",
+          "f2": "Top 10 Listings by Conversion Rate",
+          "f3": "Alert System for Stagnant / Zero-Traffic Listings",
+          "f4": "Monthly Listing Traffic Database (listing_traffic_daily)"
+        }
+      },
+      "market-search": {
+        "title": "Market Research & Keyword Radar",
+        "summary": "Keyword search volume, competition score, and detailed market breakdown of top-selling listings.",
+        "features": {
+          "f1": "Search Volume and Cost-Per-Click (CPC) Matrix",
+          "f2": "Low Competition / High Demand Niche Discovery Engine",
+          "f3": "Shared Tag Distribution Used by Competitors",
+          "f4": "Search Trend Seasonality Assessment"
+        }
+      },
+      "viral-3d": {
+        "title": "Viral 3D Model Hunter & Arbitrage Radar",
+        "summary": "Etsy profit arbitrage on viral 3D models from MakerWorld, Printables, CrealityCloud, and Thingiverse.",
+        "kpiTitle": "VIRAL MODELS",
+        "kpiValue": "28 Models",
+        "features": {
+          "f1": "MakerWorld & Printables Popular Download Scan",
+          "f2": "Model Weight and Filament Cost Calculation",
+          "f3": "Etsy Similar Product Price Comparison",
+          "f4": "Potential Net Profit Margin Radar (300%+ Opportunities)"
+        }
+      },
+      "competitor": {
+        "title": "Competitor & Trend Spy",
+        "summary": "Daily sales velocity of competitor shops, price changes, and best-selling listing detection.",
+        "features": {
+          "f1": "30-Day Sales Velocity Projection for Competitor Shops",
+          "f2": "Live Price Increase / Discount Alerts",
+          "f3": "Notifications for Newly Added Successful Listings",
+          "f4": "Market Share and Seller Ranking Assessment"
+        }
+      },
+      "external": {
+        "title": "External Marketplace Finder (Arbitrage)",
+        "summary": "Cross-marketplace arbitrage and opportunity discovery across Amazon, eBay, AliExpress, and Walmart.",
+        "features": {
+          "f1": "Amazon Handmade vs Etsy Price Comparison",
+          "f2": "AliExpress Sourcing Cost & Shipping Time Analysis",
+          "f3": "Cross-Marketplace Matching via Visual Search",
+          "f4": "Import and Customs Cost Simulation"
+        }
+      },
+      "ai-audit": {
+        "title": "Shop AI Analysis & Audit",
+        "summary": "AI scan of all shop listings reporting missing tags, weak descriptions, and improvement opportunities.",
+        "features": {
+          "f1": "Photo Checklist (Lighting, Mockup, Angle Evaluation)",
+          "f2": "Missing Tag and Weak Title Detection",
+          "f3": "Buyer-Perspective Listing Review Report",
+          "f4": "One-Click Bulk Optimization Suggestions"
+        }
+      },
+      "ab-test": {
+        "title": "A/B Testing Dashboard",
+        "summary": "Track title, main image, and price A/B tests with statistical significance measurement.",
+        "features": {
+          "f1": "Click-Through Rate Comparison of Two Title Variations",
+          "f2": "Conversion Rate Lift in Image Tests",
+          "f3": "Statistical Significance (%) Indicator",
+          "f4": "Automatic Promotion of Winning Variation to Live"
+        }
+      },
+      "accounting": {
+        "title": "Financial Accounting & Bank Payouts",
+        "summary": "Full Etsy payment ledger with dual currency (₺ TRY / $ USD), fees, and bank transfers.",
+        "kpiTitle": "NET PROFIT MARGIN",
+        "kpiValue": "43.8%",
+        "features": {
+          "f1": "Dual-Currency Calculation with Live USD Exchange Rate",
+          "f2": "Breakdown of Etsy Commissions, Transaction Fees, and Ad Spend",
+          "f3": "Bank Deposit Transfers (Payouts) List",
+          "f4": "Export to Excel / CSV Format"
+        }
+      },
+      "financial-ai": {
+        "title": "Financial AI Analysis & Future Projection",
+        "summary": "Rule-based financial AI recommendation engine, margin alerts, and 30-day cash flow forecast.",
+        "features": {
+          "f1": "Abnormal Expense Spike Detection",
+          "f2": "Price Increase Recommendations for Low-Margin Products",
+          "f3": "Next Month Estimated Bank Deposit Projection",
+          "f4": "Tax and Accounting Pre-Preparation Report"
+        }
+      },
+      "profit": {
+        "title": "Profit Simulator & Price Calculator",
+        "summary": "Enter material, shipping, Etsy commission, and ad share to calculate your ideal selling price.",
+        "features": {
+          "f1": "Etsy 6.5% Transaction Fee + Fixed Fee Calculation",
+          "f2": "Integrated Carrier Pricing (Aras, ShipEntegra, Navlungo)",
+          "f3": "Price Recommendation Based on Target Net Profit Margin",
+          "f4": "Dynamic Table Sensitive to USD Exchange Rate Changes"
+        }
+      },
+      "vault": {
+        "title": "Shop Backup & Anti-Ban Transfer (.etsyvault)",
+        "summary": "One-click `.etsyvault` full shop backup, anti-ban image scrubbing, and recovery.",
+        "kpiTitle": "BACKUP STATUS",
+        "kpiValue": "84 Listings Ready",
+        "features": {
+          "f1": "Encrypted Backup of All Titles, Descriptions, Tags, and Images",
+          "f2": "EXIF & pHash Image Scrubbing (Anti-Ban)",
+          "f3": "One-Click Restore to Another Etsy Shop",
+          "f4": "SQLite-Backed Local Archiving Security"
+        }
+      },
+      "ai-usage": {
+        "title": "AI Token, Model & Balance Tracking",
+        "summary": "Live tracking of Gemini, OpenAI, and Claude API consumption, cost breakdowns, and user quotas.",
+        "features": {
+          "f1": "Model-Based Token Consumption Chart (gemini-2.5-flash)",
+          "f2": "Remaining Monthly Query Quota per User",
+          "f3": "Average Response Latency per Query (ms)",
+          "f4": "Cost-Saving & Prompt Optimization Tips"
+        }
+      },
+      "shipping": {
+        "title": "Multi-Carrier Shipping Integrations Hub",
+        "summary": "Manage your Aras Global, ShipEntegra, Navlungo, and Shiptomore accounts from one hub.",
+        "features": {
+          "f1": "Instant Rate Comparison Across All Carriers",
+          "f2": "Automatic Parcel Volumetric (Desi) & Weight Calculation",
+          "f3": "Direct Shipping Label Generation for Orders",
+          "f4": "Automatic Tracking Number Upload to Etsy"
+        }
+      },
+      "system": {
+        "title": "System, API Settings & Logs",
+        "summary": "Etsy OAuth connections, Telegram notification bot, VDS auto-updates, and system logs.",
+        "features": {
+          "f1": "Live Etsy API Token Refresh (Refresh Token)",
+          "f2": "Instant Order & Revenue Notifications to Telegram Channel",
+          "f3": "GitHub Actions VDS Build and Release Tracking",
+          "f4": "Application Error Logs"
+        }
+      }
+    }
+  }
+}

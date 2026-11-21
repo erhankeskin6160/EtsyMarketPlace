@@ -1,0 +1,67 @@
+{
+  "title": "Shipping Integrations Hub & Freight Comparison",
+  "subtitle": "Instant freight and Fast Customs Payment (DDP) simulation across 4 carriers (Aras Global, ShipEntegra, Shiptomore, Navlungo)",
+  "calculatingBtn": "⏳ Calculating...",
+  "recalculateBtn": "⚡ Recalculate Rates",
+  "labelToast": {
+    "title": "{{carrier}} International Shipping Label Created!",
+    "trackingLabel": "Tracking Number:",
+    "destination": "(Destination: {{country}})"
+  },
+  "calculator": {
+    "destinationCountry": "Destination Country:",
+    "countries": {
+      "US": "🇺🇸 United States (USA)",
+      "GB": "🇬🇧 United Kingdom (UK)",
+      "DE": "🇩🇪 Germany",
+      "CA": "🇨🇦 Canada",
+      "FR": "🇫🇷 France",
+      "AU": "🇦🇺 Australia"
+    },
+    "weightGrams": "Parcel Weight (Grams):",
+    "dimensionsLabel": "Dimensions (cm): W x L x H",
+    "dimWidthPlaceholder": "W",
+    "dimLengthPlaceholder": "L",
+    "dimHeightPlaceholder": "H",
+    "hsCodeLabel": "HS / Tariff Code:",
+    "declaredValueLabel": "Customs Value ($):",
+    "billableLabel": "Billable ({{desi}} Desi):",
+    "kgUnit": "{{kg}} kg"
+  },
+  "card": {
+    "bestValueBadge": "🌟 BEST VALUE CARRIER",
+    "calculating": "Calculating...",
+    "freightOnly": "Freight Only",
+    "liveApiQuote": "Live API Quote",
+    "contractTariff": "Contract Tariff",
+    "baseFreight": "Base Freight",
+    "fuelAndExtra": "Fuel + Extra Fee",
+    "fastCustomsDdp": "🛡️ Fast Customs (DDP)",
+    "allInclusiveTotal": "All-Inclusive Total",
+    "customsIncluded": "(Customs Included)",
+    "openWithFreightBtn": "🚀 Open with Freight",
+    "applyDdpBtn": "🛡️ Apply DDP"
+  },
+  "carriers": {
+    "aras": {
+      "name": "Aras Global Cargo",
+      "eta": "2-5 Business Days",
+      "trackingType": "Widect / UPS Express"
+    },
+    "shipentegra": {
+      "name": "ShipEntegra Cargo",
+      "eta": "3-6 Business Days",
+      "trackingType": "US Eco Plus / Express"
+    },
+    "navlungo": {
+      "name": "Navlungo Cargo",
+      "eta": "3-7 Business Days",
+      "trackingType": "Widect Eco / UPS Saver"
+    },
+    "shiptomore": {
+      "name": "Shiptomore Cargo",
+      "eta": "2-4 Business Days",
+      "trackingType": "FedEx / UPS DDP Express"
+    }
+  }
+}

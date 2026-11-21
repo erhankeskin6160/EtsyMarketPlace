@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import {
   ShopResearchAgentService,
   ShopDnaProfileDto,
@@ -25,7 +26,8 @@ export type CandidateSortMode = 'opportunity' | 'profit' | 'momentum';
 @Component({
   selector: 'app-shop-research-agent',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('research')],
   templateUrl: './shop-research-agent.component.html',
   styleUrl: './shop-research-agent.component.css'
 })
@@ -35,6 +37,7 @@ export class ShopResearchAgentComponent {
   readonly etsyApi = inject(EtsyApiService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly transloco = inject(TranslocoService);
 
   readonly dna = signal<ShopDnaProfileDto | null>(null);
   readonly runs = signal<ResearchRunDto[]>([]);
@@ -223,7 +226,7 @@ export class ShopResearchAgentComponent {
     this.loadingDna.set(true);
     this.errorMessage.set(null);
     if (refreshFromShop) {
-      this.statusMessage.set('Mağaza DNA profiliniz canlı Etsy ilanlarınızdan yenileniyor...');
+      this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.dnaRefreshing'));
     }
 
     this.agentService.getDna(refreshFromShop)
@@ -236,14 +239,14 @@ export class ShopResearchAgentComponent {
           this.loadingDna.set(false);
           this.errorMessage.set(null);
           if (refreshFromShop) {
-            this.statusMessage.set('Mağaza DNA profiliniz canlı Etsy ilanlarınızdan güncellendi.');
+            this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.dnaUpdated'));
           }
         },
         error: (err) => {
           if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.loadingDna.set(false);
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Mağaza DNA profili yüklenemedi.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.dnaLoadError')));
         }
       });
   }
@@ -281,13 +284,13 @@ export class ShopResearchAgentComponent {
           this.syncFormFromDna(updated);
           this.savingDna.set(false);
           this.errorMessage.set(null);
-          this.statusMessage.set('Mağaza DNA kısıtları ve landed maliyet ayarları kaydedildi (Yalnızca Manuel Mod).');
+          this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.dnaSaved'));
         },
         error: (err) => {
           if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.savingDna.set(false);
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Ayarlar kaydedilemedi.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.dnaSaveError')));
         }
       });
   }
@@ -299,15 +302,15 @@ export class ShopResearchAgentComponent {
     this.liveProgress.set({
       runId: '',
       stageKey: 'dna',
-      stageLabel: '1. Mağaza DNA & Sezon',
+      stageLabel: this.transloco.translate('research.shopAgent.messages.sseStage1Label'),
       stageIndex: 1,
       totalStages: 6,
       scannedCount: 0,
       remainingCount: 0,
-      detail: 'SSE veri rafinerisi başlatılıyor...',
+      detail: this.transloco.translate('research.shopAgent.messages.sseStarting'),
       timestampUtc: new Date().toISOString()
     });
-    this.statusMessage.set('V3 Ajanı 6 aşamalı çoklu kaynak taramasını başlattı...');
+    this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.agentStarted'));
     this.startSseStream();
 
     this.agentService.runResearch(this.focusHint, 10, this.aiMode)
@@ -335,7 +338,7 @@ export class ShopResearchAgentComponent {
           this.runningAgent.set(false);
           this.liveProgress.set(null);
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma ajanı çalıştırılamadı.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.agentRunError')));
         }
       });
   }
@@ -357,7 +360,7 @@ export class ShopResearchAgentComponent {
           if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.statusMessage.set(null);
           if (!this.errorMessage()) {
-            this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma oturumları yüklenemedi.'));
+            this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.runsLoadError')));
           }
         }
       });
@@ -377,7 +380,7 @@ export class ShopResearchAgentComponent {
         error: (err) => {
           if (this.etsyApi.activeShopId() !== requestedShopId) return;
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Araştırma oturumu detayları yüklenemedi.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.runDetailLoadError')));
         }
       });
   }
@@ -389,11 +392,11 @@ export class ShopResearchAgentComponent {
         next: () => {
           this.applyCandidateDecision(c.candidateId, 1, 0);
           this.errorMessage.set(null);
-          this.statusMessage.set(`"${c.title}" onaylandı ve Thompson Bandit hafızasına güçlendirilmiş ödül eklendi.`);
+          this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.candidateApproved', { title: c.title }));
         },
         error: (err) => {
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Aday onay kararı kaydedilemedi.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.candidateApproveError')));
         }
       });
   }
@@ -405,11 +408,11 @@ export class ShopResearchAgentComponent {
         next: () => {
           this.applyCandidateDecision(c.candidateId, 2, reason);
           this.errorMessage.set(null);
-          this.statusMessage.set(`"${c.title}" reddedildi; ajan sonraki aramalarda bu desenden kaçınacak.`);
+          this.statusMessage.set(this.transloco.translate('research.shopAgent.messages.candidateRejected', { title: c.title }));
         },
         error: (err) => {
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Aday red kararı kaydedilemedi.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.candidateRejectError')));
         }
       });
   }
@@ -426,8 +429,11 @@ export class ShopResearchAgentComponent {
         next: () => {
           this.applyCandidateDecision(c.candidateId, 3, 0);
           this.errorMessage.set(null);
+          const gapLabel = this.transloco.translate('research.shopAgent.creator.competitorGapLabel');
+          const mockupLabel = this.transloco.translate('research.shopAgent.creator.mockupBriefLabel');
+          const netLabel = this.transloco.translate('research.shopAgent.creator.estLandedNetLabel');
           const briefNotes = bp
-            ? `${bp.differentiationAngle}\n\nRakip Boşluğu: ${bp.competitorGap}\n\nAI Stüdyo Mockup Brifi: ${bp.aiMockupBrief}\n\nTahmini Landed Net: $${sim.netUsd.toFixed(2)} (%${sim.marginPct.toFixed(1)})`
+            ? `${bp.differentiationAngle}\n\n${gapLabel}: ${bp.competitorGap}\n\n${mockupLabel}: ${bp.aiMockupBrief}\n\n${netLabel}: $${sim.netUsd.toFixed(2)} (%${sim.marginPct.toFixed(1)})`
             : c.rationale;
 
           this.aiSettings.setClonedListing({
@@ -441,7 +447,7 @@ export class ShopResearchAgentComponent {
             imageUrls: c.imageUrl ? [c.imageUrl] : [],
             sourceListingUrl: c.sourceUrl || undefined,
             hasVariations: ladder.length > 0,
-            varType1: ladder.length > 0 ? 'Seçenek / Paket' : undefined,
+            varType1: ladder.length > 0 ? this.transloco.translate('research.shopAgent.creator.variationOption') : undefined,
             varValues1: ladder.length > 0 ? ladder.map(t => t.label).join(', ') : undefined,
             variationRows: ladder.length > 0
               ? ladder.map(t => ({ key: t.label, price: t.priceUsd, quantity: 10, active: true }))
@@ -451,7 +457,7 @@ export class ShopResearchAgentComponent {
         },
         error: (err) => {
           this.statusMessage.set(null);
-          this.errorMessage.set(this.extractErrorMessage(err, 'Aday taslağa aktarılamadı.'));
+          this.errorMessage.set(this.extractErrorMessage(err, this.transloco.translate('research.shopAgent.messages.candidateDraftError')));
         }
       });
   }
@@ -467,47 +473,47 @@ export class ShopResearchAgentComponent {
 
   warningFlagLabel(flag: string): string {
     switch (flag) {
-      case 'HighMonopoly': return '⚠️ Yüksek Tekel';
-      case 'FreeShippingPressure': return '🚚 Ücr. Kargo Baskısı';
-      case 'FreeShippingMarginRisk': return '💸 Navlun Marj Riski';
-      case 'RedOcean': return '🌊 Doygun Pazar';
-      case 'SeasonalPeak': return '📅 Sezon Zirvesi';
-      case 'LossLeader': return '🔻 Aşırı Düşük Fiyat';
+      case 'HighMonopoly': return this.transloco.translate('research.shopAgent.labels.flagHighMonopoly');
+      case 'FreeShippingPressure': return this.transloco.translate('research.shopAgent.labels.flagFreeShippingPressure');
+      case 'FreeShippingMarginRisk': return this.transloco.translate('research.shopAgent.labels.flagFreeShippingMarginRisk');
+      case 'RedOcean': return this.transloco.translate('research.shopAgent.labels.flagRedOcean');
+      case 'SeasonalPeak': return this.transloco.translate('research.shopAgent.labels.flagSeasonalPeak');
+      case 'LossLeader': return this.transloco.translate('research.shopAgent.labels.flagLossLeader');
       default: return flag;
     }
   }
 
   triggerLabel(triggerType: number): string {
     switch (triggerType) {
-      case 1: return 'Günlük';
-      case 2: return 'Haftalık';
-      case 3: return 'Aylık';
-      default: return 'Manuel';
+      case 1: return this.transloco.translate('research.shopAgent.labels.triggerDaily');
+      case 2: return this.transloco.translate('research.shopAgent.labels.triggerWeekly');
+      case 3: return this.transloco.translate('research.shopAgent.labels.triggerMonthly');
+      default: return this.transloco.translate('research.shopAgent.labels.triggerManual');
     }
   }
 
   decisionLabel(status: number): string {
     switch (status) {
-      case 1: return 'Onaylandı';
-      case 2: return 'Reddedildi';
-      case 3: return 'Taslağa Alındı';
-      default: return 'Beklemede';
+      case 1: return this.transloco.translate('research.shopAgent.labels.decisionApproved');
+      case 2: return this.transloco.translate('research.shopAgent.labels.decisionRejected');
+      case 3: return this.transloco.translate('research.shopAgent.labels.decisionDrafted');
+      default: return this.transloco.translate('research.shopAgent.labels.decisionPending');
     }
   }
 
   demandConfidenceLabel(conf: number): string {
     switch (conf) {
-      case 2: return 'Yüksek Talep';
-      case 1: return 'Orta Talep';
-      default: return 'Düşük Talep';
+      case 2: return this.transloco.translate('research.shopAgent.labels.demandHigh');
+      case 1: return this.transloco.translate('research.shopAgent.labels.demandMedium');
+      default: return this.transloco.translate('research.shopAgent.labels.demandLow');
     }
   }
 
   riskDecisionLabel(dec: number): string {
     switch (dec) {
-      case 1: return 'İncele';
-      case 2: return 'Bloklu';
-      default: return 'Telif Güvenli';
+      case 1: return this.transloco.translate('research.shopAgent.labels.riskReview');
+      case 2: return this.transloco.translate('research.shopAgent.labels.riskBlocked');
+      default: return this.transloco.translate('research.shopAgent.labels.riskSafe');
     }
   }
 

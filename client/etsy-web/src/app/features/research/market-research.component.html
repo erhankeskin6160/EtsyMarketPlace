@@ -1,3 +1,4 @@
+    <ng-container *transloco="let t">
     <div class="market-view">
       <ng-template #kpiEmpty>—</ng-template>
       <!-- 1. HEADER (Title + AI Active Badge + Status) -->
@@ -10,8 +11,8 @@
             </svg>
           </div>
           <div>
-            <h1 class="page-title">🔍 Etsy Pazar Araştırması & Rakip İstihbaratı</h1>
-            <p class="page-subtitle">Arama hacmi, ortalama fiyatlar, rekabet skoru, SEO ve pazar fırsat puanlaması</p>
+            <h1 class="page-title">{{ t('research.marketResearch.header.title') }}</h1>
+            <p class="page-subtitle">{{ t('research.marketResearch.header.subtitle') }}</p>
           </div>
         </div>
 
@@ -22,7 +23,7 @@
             class="ai-badge-btn" 
             [ngClass]="aiService.activeBadgeClass()" 
             (click)="aiService.openAiSettingsModal()" 
-            title="Yapay Zeka Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
+            [title]="t('research.marketResearch.header.aiBadgeTitle')">
             <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
             <span>{{ aiService.activeBadgeTextClean() }}</span>
             <span class="hub-gear">⚙️</span>
@@ -41,61 +42,61 @@
               type="text" 
               [(ngModel)]="searchKeyword" 
               (keyup.enter)="onSearch()"
-              placeholder="Etsy pazarında kelime (örn: flexi starfish, resin lamp) veya ürün linki (https://www.etsy.com/listing/...)" 
+              [placeholder]="t('research.marketResearch.search.placeholder')" 
               class="search-input" />
           </div>
           <div class="filter-wrap">
-            <label class="filter-label">Limit:</label>
+            <label class="filter-label">{{ t('research.marketResearch.search.limitLabel') }}</label>
             <select [(ngModel)]="limit" class="filter-select">
-              <option [value]="10">10 İlan</option>
-              <option [value]="25">25 İlan</option>
-              <option [value]="50">50 İlan</option>
-              <option [value]="100">100 İlan</option>
+              <option [value]="10">{{ t('research.marketResearch.search.limitOption', { count: 10 }) }}</option>
+              <option [value]="25">{{ t('research.marketResearch.search.limitOption', { count: 25 }) }}</option>
+              <option [value]="50">{{ t('research.marketResearch.search.limitOption', { count: 50 }) }}</option>
+              <option [value]="100">{{ t('research.marketResearch.search.limitOption', { count: 100 }) }}</option>
             </select>
           </div>
           <div class="filter-wrap">
-            <label class="filter-label">Sıralama:</label>
+            <label class="filter-label">{{ t('research.marketResearch.search.sortLabel') }}</label>
             <select [(ngModel)]="sortBy" class="filter-select" (change)="applySort()">
-              <option value="market_score">Pazar Puanı (Önce En Yüksek)</option>
-              <option value="estimated_revenue">💰 Tahmini Ciro (En Çok Kazandıran)</option>
-              <option value="estimated_sales">🔥 Tahmini Satış (En Çok Satan)</option>
-              <option value="seo_score">SEO Puanı (Önce En Yüksek)</option>
-              <option value="favorites">En Çok Beğenilen (Favori)</option>
-              <option value="views">Görüntülenme Sayısı</option>
-              <option value="shop_sales">Mağaza Satışı</option>
-              <option value="price_asc">Fiyat (Önce En Düşük)</option>
-              <option value="price_desc">Fiyat (Önce En Yüksek)</option>
+              <option value="market_score">{{ t('research.marketResearch.search.sortMarketScore') }}</option>
+              <option value="estimated_revenue">{{ t('research.marketResearch.search.sortEstRevenue') }}</option>
+              <option value="estimated_sales">{{ t('research.marketResearch.search.sortEstSales') }}</option>
+              <option value="seo_score">{{ t('research.marketResearch.search.sortSeoScore') }}</option>
+              <option value="favorites">{{ t('research.marketResearch.search.sortFavorites') }}</option>
+              <option value="views">{{ t('research.marketResearch.search.sortViews') }}</option>
+              <option value="shop_sales">{{ t('research.marketResearch.search.sortShopSales') }}</option>
+              <option value="price_asc">{{ t('research.marketResearch.search.sortPriceAsc') }}</option>
+              <option value="price_desc">{{ t('research.marketResearch.search.sortPriceDesc') }}</option>
             </select>
           </div>
           <button class="btn-primary-search" (click)="onSearch()" [disabled]="isLoading">
-            {{ isLoading ? '⏳ Taranıyor...' : '🔍 Etsy\'de Ara' }}
+            {{ isLoading ? t('research.marketResearch.search.searchingBtn') : t('research.marketResearch.search.searchBtn') }}
           </button>
         </div>
 
         <div class="search-history-row" *ngIf="searchHistory.length > 0">
-          <span class="history-label">🕘 Son aramalar:</span>
+          <span class="history-label">{{ t('research.marketResearch.search.recentSearches') }}</span>
           <button type="button" class="history-chip" *ngFor="let kw of searchHistory" (click)="searchFromHistory(kw)">{{ kw }}</button>
-          <button type="button" class="clear-history-btn" (click)="clearHistory()" title="Geçmişi temizle">✕</button>
+          <button type="button" class="clear-history-btn" (click)="clearHistory()" [title]="t('research.marketResearch.search.clearHistoryTitle')">✕</button>
         </div>
 
         <div class="search-actions-row">
           <button class="btn-sub-action" (click)="generateAiMarketReport()" [disabled]="isGeneratingReport">
-            <span>{{ isGeneratingReport ? 'Yapay Zeka Analiz Ediyor...' : '✨ AI Pazar Özeti' }}</span>
+            <span>{{ isGeneratingReport ? t('research.marketResearch.search.aiReportLoading') : t('research.marketResearch.search.aiReportBtn') }}</span>
           </button>
           <button class="btn-sub-action" (click)="copyAllTopTags()">
-            <span>📋 13 Altın Tag'i Kopyala</span>
+            <span>{{ t('research.marketResearch.search.copyTopTagsBtn') }}</span>
           </button>
           <button class="btn-sub-action" (click)="filterOnlyTopOpportunity()">
-            <span>⚡ Fırsat Ürünlerini Filtrele</span>
+            <span>{{ t('research.marketResearch.search.filterOpportunityBtn') }}</span>
           </button>
           <button class="btn-sub-action" (click)="openCompareModal()">
-            <span>📊 Kelimeleri Karşılaştır</span>
+            <span>{{ t('research.marketResearch.search.compareBtn') }}</span>
           </button>
           <button class="btn-sub-action" (click)="trackCurrentKeyword()" [disabled]="isTrackingKeyword">
-            <span>{{ isTrackingKeyword ? '⏳ Kaydediliyor...' : '📌 Kelimeyi Takibe Al' }}</span>
+            <span>{{ isTrackingKeyword ? t('research.marketResearch.search.trackingSavingBtn') : t('research.marketResearch.search.trackKeywordBtn') }}</span>
           </button>
           <button class="btn-sub-action" (click)="openTrackingModal()">
-            <span>📈 Takip Listesi</span>
+            <span>{{ t('research.marketResearch.search.trackingListBtn') }}</span>
           </button>
         </div>
       </div>
@@ -103,67 +104,67 @@
       <!-- 3. KPI SUMMARY STRIP (6 KPI Cards: EverBee / Toolsy / eRank) -->
       <div class="kpi-grid">
         <div class="glass-card kpi-card">
-          <span class="kpi-label">ORTALAMA FİYAT (AOV)</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.avgPrice') }}</span>
           <div class="kpi-val text-emerald">
             <ng-container *ngIf="hasResults; else kpiEmpty">&#36;{{ avgPriceUsd | number:'1.2-2' }}
               <span class="sub-try">(₺{{ (avgPriceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
             </ng-container>
           </div>
-          <span class="kpi-desc" *ngIf="hasResults">Min: &#36;{{ minPriceUsd | number:'1.2-2' }} • Medyan: &#36;{{ medianPriceUsd | number:'1.2-2' }} • Max: &#36;{{ maxPriceUsd | number:'1.2-2' }}</span>
-          <span class="kpi-desc" *ngIf="!hasResults">Kategorideki rekabetçi satış ortalaması</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ t('research.marketResearch.kpi.priceRange', { min: (minPriceUsd | number:'1.2-2'), median: (medianPriceUsd | number:'1.2-2'), max: (maxPriceUsd | number:'1.2-2') }) }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">{{ t('research.marketResearch.kpi.avgPriceEmpty') }}</span>
         </div>
 
         <div class="glass-card kpi-card highlight-emerald">
-          <span class="kpi-label">TAHMİNİ AYLIK PAZAR CİROSU</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.estMarketRevenue') }}</span>
           <div class="kpi-val text-emerald">
-            <ng-container *ngIf="hasResults; else kpiEmpty">&#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} / ay
+            <ng-container *ngIf="hasResults; else kpiEmpty">&#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} {{ t('research.marketResearch.kpi.perMonth') }}
               <span class="sub-try">(₺{{ (totalEstimatedMarketRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
             </ng-container>
           </div>
-          <span class="kpi-desc">Toolsy & EverBee algoritmasıyla toplam pazar hacmi</span>
+          <span class="kpi-desc">{{ t('research.marketResearch.kpi.estMarketRevenueDesc') }}</span>
         </div>
 
         <div class="glass-card kpi-card">
-          <span class="kpi-label">ORTALAMA AYLIK SATIŞ</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.avgMonthlySales') }}</span>
           <div class="kpi-val text-cyan">
-            <ng-container *ngIf="hasResults; else kpiEmpty">{{ averageEstimatedMonthlySales | number:'1.0-1' }} Adet / ay</ng-container>
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ t('research.marketResearch.kpi.unitsPerMonth', { count: (averageEstimatedMonthlySales | number:'1.0-1') }) }}</ng-container>
           </div>
-          <span class="kpi-desc" *ngIf="hasResults">Lider ürün cirosu: &#36;{{ topSellerMonthlyRevenue | number:'1.0-0' }}/ay</span>
-          <span class="kpi-desc" *ngIf="!hasResults">İlan başına tahmini aylık sipariş hızı</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ t('research.marketResearch.kpi.topSellerRevenue', { revenue: (topSellerMonthlyRevenue | number:'1.0-0') }) }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">{{ t('research.marketResearch.kpi.avgMonthlySalesEmpty') }}</span>
         </div>
 
         <div class="glass-card kpi-card">
-          <span class="kpi-label">ORTALAMA FAVORİ / İLAN</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.avgFavorites') }}</span>
           <div class="kpi-val text-purple">
-            <ng-container *ngIf="hasResults; else kpiEmpty">{{ avgFavorites | number:'1.0-0' }} Fav</ng-container>
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ t('research.marketResearch.kpi.favUnit', { count: (avgFavorites | number:'1.0-0') }) }}</ng-container>
           </div>
-          <span class="kpi-desc" *ngIf="hasResults">Ort. {{ avgViews | number:'1.0-0' }} görüntülenme • {{ totalEtsyCount | number }} toplam sonuç</span>
-          <span class="kpi-desc" *ngIf="!hasResults">Müşteri kaydetme ve satın alma ilgisi</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ t('research.marketResearch.kpi.avgViewsTotal', { views: (avgViews | number:'1.0-0'), total: (totalEtsyCount | number) }) }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">{{ t('research.marketResearch.kpi.avgFavoritesEmpty') }}</span>
         </div>
 
         <div class="glass-card kpi-card">
-          <span class="kpi-label">LİDER SATICI MAĞAZA</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.topShop') }}</span>
           <div class="kpi-val text-purple">
             <ng-container *ngIf="hasResults; else kpiEmpty">{{ topShopName }}</ng-container>
           </div>
-          <span class="kpi-desc" *ngIf="hasResults">{{ topShopSales | number }} mağaza satışı • {{ uniqueShopCount }} farklı mağaza</span>
-          <span class="kpi-desc" *ngIf="!hasResults">Kategori hacminin lider oyuncusu</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ t('research.marketResearch.kpi.topShopDesc', { sales: (topShopSales | number), shops: uniqueShopCount }) }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">{{ t('research.marketResearch.kpi.topShopEmpty') }}</span>
         </div>
 
         <div class="glass-card kpi-card highlight-orange">
-          <span class="kpi-label">PAZAR FIRSAT SKORU</span>
+          <span class="kpi-label">{{ t('research.marketResearch.kpi.opportunityScore') }}</span>
           <div class="kpi-val text-orange">
             <ng-container *ngIf="hasResults; else kpiEmpty">%{{ opportunityScore }} / 100</ng-container>
           </div>
-          <span class="kpi-desc" *ngIf="hasResults">🎯 {{ highOpportunityCount }} SEO fırsatı • 🚚 %{{ freeShippingRatioPct | number:'1.0-0' }} ücretsiz kargo</span>
-          <span class="kpi-desc" *ngIf="!hasResults">Yüksek talep, optimize edilebilir rekabet</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ t('research.marketResearch.kpi.opportunityDesc', { seoOpps: highOpportunityCount, freeShipPct: (freeShippingRatioPct | number:'1.0-0') }) }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">{{ t('research.marketResearch.kpi.opportunityEmpty') }}</span>
         </div>
       </div>
 
       <!-- AI REPORT CALLOUT -->
       <div *ngIf="aiReport" class="glass-card ai-report-card">
         <div class="ai-report-head">
-          <span class="ai-badge">🤖 {{ aiService.activeBadgeText() }} - PAZAR STRATEJİ RAPORU</span>
+          <span class="ai-badge">🤖 {{ aiService.activeBadgeText() }} - {{ t('research.marketResearch.aiReport.titleSuffix') }}</span>
           <button class="close-report" (click)="aiReport = ''">×</button>
         </div>
         <div class="ai-report-content" [innerHTML]="aiReport"></div>
@@ -176,16 +177,16 @@
           class="tab-btn" 
           [class.active]="activeTab === 'listings'" 
           (click)="activeTab = 'listings'">
-          <span>📋 Pazar İlanları & Rakip Listesi</span>
-          <span class="tab-count-badge">{{ items.length }} İlan</span>
+          <span>{{ t('research.marketResearch.tabs.listings') }}</span>
+          <span class="tab-count-badge">{{ t('research.marketResearch.tabs.listingsCount', { count: items.length }) }}</span>
         </button>
         <button 
           type="button" 
           class="tab-btn" 
           [class.active]="activeTab === 'tag_matrix'" 
           (click)="activeTab = 'tag_matrix'">
-          <span>🏷️ eRank & Marmalead Etiket Rekabet Matrisi</span>
-          <span class="tab-count-badge tag-matrix-badge">{{ topTags.length }} Etiket</span>
+          <span>{{ t('research.marketResearch.tabs.tagMatrix') }}</span>
+          <span class="tab-count-badge tag-matrix-badge">{{ t('research.marketResearch.tabs.tagsCount', { count: topTags.length }) }}</span>
         </button>
       </div>
 
@@ -194,66 +195,66 @@
       <div class="glass-card table-card">
         <div class="table-head-row">
           <div class="table-title-group">
-            <span class="table-title">Pazar İlanları</span>
-            <span class="table-count-badge">{{ displayItems.length === items.length ? items.length : displayItems.length + ' / ' + items.length }} Ürün Sıralandı</span>
+            <span class="table-title">{{ t('research.marketResearch.listings.title') }}</span>
+            <span class="table-count-badge">{{ t('research.marketResearch.listings.rankedCount', { count: displayItems.length === items.length ? items.length : displayItems.length + ' / ' + items.length }) }}</span>
           </div>
-          <span class="table-hint">💡 Bir satıra tıklayarak alttaki 12 eylem aracını kullanabilir veya "🚀 Taslağa Klonla" ile hızlıca satışa açabilirsiniz.</span>
+          <span class="table-hint">{{ t('research.marketResearch.listings.hint') }}</span>
         </div>
 
         <div class="result-filter-bar">
-          <span class="filter-bar-title">🎛️ Hızlı Niş Filtreleri</span>
+          <span class="filter-bar-title">{{ t('research.marketResearch.listings.quickFilters') }}</span>
           <label class="filter-field">
-            <span>Min $</span>
+            <span>{{ t('research.marketResearch.listings.minPrice') }}</span>
             <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinPrice" />
           </label>
           <label class="filter-field">
-            <span>Max $</span>
+            <span>{{ t('research.marketResearch.listings.maxPrice') }}</span>
             <input type="number" min="0" placeholder="∞" class="filter-input" [(ngModel)]="filterMaxPrice" />
           </label>
           <label class="filter-field">
-            <span>Min Fav</span>
+            <span>{{ t('research.marketResearch.listings.minFav') }}</span>
             <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinFavorites" />
           </label>
-          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyWeakSeoOpportunity" (click)="toggleWeakSeoOpportunityFilter()" title="Yüksek talep/satış alan ancak rakibin SEO puanı zayıf (<80) bıraktığı en değerli fırsat ürünleri">
-            🎯 SEO Zafiyeti Fırsatı ({{ highOpportunityCount }})
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyWeakSeoOpportunity" (click)="toggleWeakSeoOpportunityFilter()" [title]="t('research.marketResearch.listings.weakSeoTitle')">
+            {{ t('research.marketResearch.listings.weakSeoBtn', { count: highOpportunityCount }) }}
           </button>
-          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyBestseller" (click)="toggleBestsellerFilter()" title="Aylık 35+ satış veya yüksek ciro yapan çok satan ürünler">
-            🔥 Çok Satanlar ({{ bestsellerCount }})
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyBestseller" (click)="toggleBestsellerFilter()" [title]="t('research.marketResearch.listings.bestsellerTitle')">
+            {{ t('research.marketResearch.listings.bestsellerBtn', { count: bestsellerCount }) }}
           </button>
-          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyFreeShipping" (click)="toggleFreeShippingFilter()" title="Ücretsiz kargo avantajı sunan ilanlar">
-            🚚 Ücretsiz Kargo
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyFreeShipping" (click)="toggleFreeShippingFilter()" [title]="t('research.marketResearch.listings.freeShippingTitle')">
+            {{ t('research.marketResearch.listings.freeShippingBtn') }}
           </button>
           <label class="filter-toggle">
             <input type="checkbox" [(ngModel)]="filterOnlyOpportunity" />
-            <span>⚡ %85+ Pazar Puanı</span>
+            <span>{{ t('research.marketResearch.listings.highMarketScore') }}</span>
           </label>
-          <span class="filter-count" [class.active-filter]="isFilterActive">{{ displayItems.length }} / {{ items.length }} ilan</span>
-          <button type="button" class="filter-reset-btn" *ngIf="isFilterActive" (click)="resetFilters()">Filtreleri Sıfırla</button>
+          <span class="filter-count" [class.active-filter]="isFilterActive">{{ t('research.marketResearch.listings.filterCount', { shown: displayItems.length, total: items.length }) }}</span>
+          <button type="button" class="filter-reset-btn" *ngIf="isFilterActive" (click)="resetFilters()">{{ t('research.marketResearch.listings.resetFilters') }}</button>
         </div>
 
         <div class="table-wrap">
           <table class="market-table">
             <thead>
               <tr>
-                <th style="width: 50px;">Resim</th>
-                <th style="width: 45px;">Sıra</th>
-                <th>Ürün Başlığı</th>
-                <th style="width: 105px;">Fiyat ($ / ₺)</th>
-                <th style="width: 110px;">Tahmini Satış</th>
-                <th style="width: 110px;">Tahmini Ciro</th>
-                <th style="width: 130px;">Mağaza</th>
+                <th style="width: 50px;">{{ t('research.marketResearch.listings.colImage') }}</th>
+                <th style="width: 45px;">{{ t('research.marketResearch.listings.colRank') }}</th>
+                <th>{{ t('research.marketResearch.listings.colTitle') }}</th>
+                <th style="width: 105px;">{{ t('research.marketResearch.listings.colPrice') }}</th>
+                <th style="width: 110px;">{{ t('research.marketResearch.listings.colEstSales') }}</th>
+                <th style="width: 110px;">{{ t('research.marketResearch.listings.colEstRevenue') }}</th>
+                <th style="width: 130px;">{{ t('research.marketResearch.listings.colShop') }}</th>
                 <th style="width: 75px;" class="sortable-fav" (click)="toggleFavSort()">
-                  Favori {{ favSortDesc ? '▼' : '▲' }}
+                  {{ t('research.marketResearch.listings.colFavorites') }} {{ favSortDesc ? '▼' : '▲' }}
                 </th>
-                <th style="width: 65px; text-align: center;">SEO</th>
-                <th style="width: 85px; text-align: center;">Pazar Puanı</th>
-                <th style="width: 190px;">Tagler</th>
+                <th style="width: 65px; text-align: center;">{{ t('research.marketResearch.listings.colSeo') }}</th>
+                <th style="width: 85px; text-align: center;">{{ t('research.marketResearch.listings.colMarketScore') }}</th>
+                <th style="width: 190px;">{{ t('research.marketResearch.listings.colTags') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngIf="!hasResults || displayItems.length === 0">
                 <td colspan="11" class="empty-state-cell">
-                  {{ isLoading ? 'Etsy canlı verileri taranıyor…' : (!hasResults ? 'Henüz canlı veri yok — yukarıdan bir anahtar kelime aratın (örn. "3d printed desk organizer").' : 'Filtreye uyan ürün yok — filtreleri sıfırlayabilirsiniz.') }}
+                  {{ isLoading ? t('research.marketResearch.listings.emptyLoading') : (!hasResults ? t('research.marketResearch.listings.emptyNoData') : t('research.marketResearch.listings.emptyFiltered')) }}
                 </td>
               </tr>
               <tr 
@@ -264,7 +265,7 @@
                 
                 <!-- Resim Thumbnail -->
                 <td class="thumb-cell">
-                  <img *ngIf="item.imageUrl" [src]="item.imageUrl" alt="Thumb" class="prod-thumb" (click)="openImageZoom(item, $event)" />
+                  <img *ngIf="item.imageUrl" [src]="item.imageUrl" [alt]="t('research.marketResearch.listings.thumbAlt')" class="prod-thumb" (click)="openImageZoom(item, $event)" />
                   <span *ngIf="!item.imageUrl" class="prod-thumb thumb-placeholder">📦</span>
                 </td>
 
@@ -275,10 +276,10 @@
                 <td class="title-cell">
                   <span class="prod-title" [title]="item.title">{{ item.title }}</span>
                   <div class="row-inline-badges" *ngIf="item.isTargetListing || item.isOpportunityListing || item.isBestseller || item.hasFreeShipping">
-                    <span *ngIf="item.isTargetListing" class="inline-pill target" title="Kullanıcının girdiği hedef ürün">🎯 Hedef İlan</span>
-                    <span *ngIf="item.isOpportunityListing" class="inline-pill opp" title="Yüksek talep + Zayıf Rakip SEO: Bu ürünü daha iyi SEO ile geçebilirsiniz">🎯 SEO Fırsatı</span>
-                    <span *ngIf="item.isBestseller" class="inline-pill best" title="Yüksek satış hacmi">🔥 Çok Satan</span>
-                    <span *ngIf="item.hasFreeShipping" class="inline-pill ship">🚚 Ücretsiz Kargo</span>
+                    <span *ngIf="item.isTargetListing" class="inline-pill target" [title]="t('research.marketResearch.listings.targetBadgeTitle')">{{ t('research.marketResearch.listings.targetBadge') }}</span>
+                    <span *ngIf="item.isOpportunityListing" class="inline-pill opp" [title]="t('research.marketResearch.listings.oppBadgeTitle')">{{ t('research.marketResearch.listings.oppBadge') }}</span>
+                    <span *ngIf="item.isBestseller" class="inline-pill best" [title]="t('research.marketResearch.listings.bestBadgeTitle')">{{ t('research.marketResearch.listings.bestBadge') }}</span>
+                    <span *ngIf="item.hasFreeShipping" class="inline-pill ship">{{ t('research.marketResearch.listings.freeShipBadge') }}</span>
                   </div>
                 </td>
 
@@ -290,21 +291,21 @@
 
                 <!-- Tahmini Satış (EverBee Modeli) -->
                 <td class="est-sales-cell">
-                  <b>{{ (item.estimatedMonthlySales ?? 0) | number }} / ay</b>
+                  <b>{{ (item.estimatedMonthlySales ?? 0) | number }} {{ t('research.marketResearch.listings.perMonthShort') }}</b>
                   <span class="velocity-pill" [ngClass]="getVelocityClass(item.salesVelocity)">
-                    {{ item.salesVelocity || '⚡ Düzenli' }}
+                    {{ item.salesVelocity || t('research.marketResearch.velocity.steady') }}
                   </span>
                 </td>
 
                 <!-- Tahmini Ciro (EverBee Modeli) -->
                 <td class="est-rev-cell">
-                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue ?? (item.priceUsd * (item.estimatedMonthlySales ?? 0))) | number:'1.0-0' }} / ay</b>
+                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue ?? (item.priceUsd * (item.estimatedMonthlySales ?? 0))) | number:'1.0-0' }} {{ t('research.marketResearch.listings.perMonthShort') }}</b>
                   <span class="try-sm">₺{{ ((item.estimatedMonthlyRevenue ?? (item.priceUsd * (item.estimatedMonthlySales ?? 0))) * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
                 </td>
 
                 <!-- Mağaza -->
                 <td class="shop-cell">
-                  <a [href]="item.shopUrl" target="_blank" (click)="$event.stopPropagation()" class="shop-link" title="Etsy Mağazasını Aç">
+                  <a [href]="item.shopUrl" target="_blank" (click)="$event.stopPropagation()" class="shop-link" [title]="t('research.marketResearch.listings.openShopTitle')">
                     {{ item.shopName }} ↗
                   </a>
                 </td>
@@ -329,7 +330,7 @@
                 <!-- Tagler -->
                 <td class="tags-cell">
                   <div class="mini-tags-wrap">
-                    <span *ngFor="let t of item.tags.slice(0, 3)" class="mini-tag">{{ t }}</span>
+                    <span *ngFor="let tag of item.tags.slice(0, 3)" class="mini-tag">{{ tag }}</span>
                     <span *ngIf="item.tags.length > 3" class="mini-tag more">+{{ item.tags.length - 3 }}</span>
                   </div>
                 </td>
@@ -346,9 +347,9 @@
           <!-- Sol: Görsel Önizleme ve Slider -->
           <div class="bottom-image-box">
             <div class="image-preview-wrap">
-              <img *ngIf="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl; else noPreview" [src]="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl" alt="Preview" class="slider-image" />
+              <img *ngIf="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl; else noPreview" [src]="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl" [alt]="t('research.marketResearch.detail.previewAlt')" class="slider-image" />
               <ng-template #noPreview>
-                <div class="no-preview">📦 Bu ilan için görsel verisi yok</div>
+                <div class="no-preview">{{ t('research.marketResearch.detail.noPreview') }}</div>
               </ng-template>
               <div class="slider-controls">
                 <button type="button" class="btn-slide" (click)="prevImage()">◀</button>
@@ -357,29 +358,29 @@
               </div>
             </div>
             <button type="button" class="btn-send-studio" (click)="sendToImageStudio()">
-              📸 Görsel Stüdyo'ya Gönder
+              {{ t('research.marketResearch.detail.sendToStudioBtn') }}
             </button>
           </div>
 
           <!-- Orta: Monospace Detay Kutusu -->
           <div class="bottom-detail-box">
             <div class="detail-content-text">
-📌 <strong>BAŞLIK:</strong> {{ selectedItem.title }}
+📌 <strong>{{ t('research.marketResearch.detail.titleLabel') }}</strong> {{ selectedItem.title }}
 
-🏪 <strong>MAĞAZA / FİYAT:</strong> {{ selectedItem.shopName }} | {{ '$' + selectedItem.priceUsd.toFixed(2) }} (₺{{ (selectedItem.priceUsd * etsyApi.exchangeRate()).toFixed(0) }})
-Mağaza Satışı: {{ selectedItem.shopSales | number }} | Yorum: {{ selectedItem.reviewCount | number }} | Puan: {{ selectedItem.reviewAverage }} ⭐
-Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem.views | number }} | Stok: {{ selectedItem.quantity }}
+🏪 <strong>{{ t('research.marketResearch.detail.shopPriceLabel') }}</strong> {{ selectedItem.shopName }} | {{ '$' + selectedItem.priceUsd.toFixed(2) }} (₺{{ (selectedItem.priceUsd * etsyApi.exchangeRate()).toFixed(0) }})
+{{ t('research.marketResearch.detail.shopMetrics', { sales: (selectedItem.shopSales | number), reviews: (selectedItem.reviewCount | number), rating: selectedItem.reviewAverage }) }}
+{{ t('research.marketResearch.detail.listingMetrics', { favorites: (selectedItem.favorites | number), views: (selectedItem.views | number), stock: selectedItem.quantity }) }}
 
-💰 <strong>EVERBEE & TOOLSY GELİR TAHMİNİ:</strong>
-Aylık Tahmini Satış: {{ (selectedItem.estimatedMonthlySales ?? 0) | number }} Adet/ay | Aylık Tahmini Ciro: &#36;{{ (selectedItem.estimatedMonthlyRevenue ?? 0) | number:'1.0-0' }}/ay (₺{{ ((selectedItem.estimatedMonthlyRevenue ?? 0) * etsyApi.exchangeRate()) | number:'1.0-0' }})
-Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziyaretçi Dönüşüm Oranı (CVR): %{{ selectedItem.conversionRateEst || 2.5 }}
+💰 <strong>{{ t('research.marketResearch.detail.revenueHeader') }}</strong>
+{{ t('research.marketResearch.detail.revenueLine', { sales: ((selectedItem.estimatedMonthlySales ?? 0) | number), revenue: ((selectedItem.estimatedMonthlyRevenue ?? 0) | number:'1.0-0'), revenueTry: (((selectedItem.estimatedMonthlyRevenue ?? 0) * etsyApi.exchangeRate()) | number:'1.0-0') }) }}
+{{ t('research.marketResearch.detail.velocityLine', { velocity: (selectedItem.salesVelocity || t('research.marketResearch.velocity.steady')), cvr: (selectedItem.conversionRateEst || 2.5) }) }}
 
-📊 <strong>SEO / PAZAR:</strong> SEO Puanı: %{{ selectedItem.seoScore }}/100 | Pazar Fırsat Puanı: %{{ selectedItem.marketScore }}/100
+📊 <strong>{{ t('research.marketResearch.detail.seoMarketLabel') }}</strong> {{ t('research.marketResearch.detail.seoMarketLine', { seo: selectedItem.seoScore, market: selectedItem.marketScore }) }}
 
-🏷️ <strong>ETİKETLER ({{ selectedItem.tags.length }}):</strong>
+🏷️ <strong>{{ t('research.marketResearch.detail.tagsLabel', { count: selectedItem.tags.length }) }}</strong>
 {{ selectedItem.tags.join(', ') }}
 
-📝 <strong>ÜRÜN AÇIKLAMASI:</strong>
+📝 <strong>{{ t('research.marketResearch.detail.descriptionLabel') }}</strong>
 {{ selectedItem.description }}
             </div>
           </div>
@@ -389,53 +390,53 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
             <!-- 1. Satır: Birincil Aksiyonlar -->
             <div class="actions-row">
               <button type="button" class="btn-action-primary clone-btn" (click)="cloneSelectedListing()">
-                🚀 Taslağa Klonla
+                {{ t('research.marketResearch.detail.btnClone') }}
               </button>
               <button type="button" class="btn-action-primary opt-btn" (click)="optimizeWithAi()">
                 <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
-                <span>AI Optimizasyon</span>
+                <span>{{ t('research.marketResearch.detail.btnAiOptimize') }}</span>
               </button>
               <button type="button" class="btn-action-neutral" (click)="trackSelectedListing()">
-                📌 Takibe Ekle
+                {{ t('research.marketResearch.detail.btnTrack') }}
               </button>
             </div>
 
             <!-- 2. Satır: Analiz Araçları -->
             <div class="actions-row">
               <button type="button" class="btn-action-neutral" (click)="openKeywordAnalysisModal()">
-                🔍 Kelime Analizi
+                {{ t('research.marketResearch.detail.btnKeywordAnalysis') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="openCompetitorAnalysisModal()">
-                🕵️ Rakip Analizi
+                {{ t('research.marketResearch.detail.btnCompetitorAnalysis') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="openShopUrl()">
-                🏪 Mağaza Aç
+                {{ t('research.marketResearch.detail.btnOpenShop') }}
               </button>
             </div>
 
             <!-- 3. Satır: Sağlık & Kopyalama -->
             <div class="actions-row">
               <button type="button" class="btn-action-neutral health-btn" (click)="openHealthScoreModal()">
-                🩺 Sağlık Skoru
+                {{ t('research.marketResearch.detail.btnHealthScore') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="copySelectedTags()">
-                🏷️ Tagleri Kopyala
+                {{ t('research.marketResearch.detail.btnCopyTags') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="copySelectedTitle()">
-                📝 Başlığı Kopyala
+                {{ t('research.marketResearch.detail.btnCopyTitle') }}
               </button>
             </div>
 
             <!-- 4. Satır: Dışa Aktarma & Linkler -->
             <div class="actions-row">
               <button type="button" class="btn-action-neutral" (click)="openEtsyListing(selectedItem)">
-                🌐 Etsy'de Aç
+                {{ t('research.marketResearch.detail.btnOpenEtsy') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="exportCsv()">
-                📊 CSV Aktar
+                {{ t('research.marketResearch.detail.btnExportCsv') }}
               </button>
               <button type="button" class="btn-action-neutral" (click)="copyListingLink()">
-                🔗 Linki Kopyala
+                {{ t('research.marketResearch.detail.btnCopyLink') }}
               </button>
             </div>
           </div>
@@ -449,23 +450,23 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
         <!-- Matrix Header & Stats Strip -->
         <div class="matrix-header-row">
           <div class="matrix-title-group">
-            <span class="table-title">🏷️ eRank & Marmalead Etiket Rekabet & Hacim Matrisi</span>
-            <span class="matrix-subtitle">İncelenen {{ items.length }} Etsy ilanında tespit edilen benzersiz altın anahtar kelimeler ve rekabet analizi</span>
+            <span class="table-title">{{ t('research.marketResearch.tagMatrix.title') }}</span>
+            <span class="matrix-subtitle">{{ t('research.marketResearch.tagMatrix.subtitle', { count: items.length }) }}</span>
           </div>
 
           <!-- Quick Actions -->
           <div class="matrix-actions-group">
-            <button class="btn-matrix-action select-13" (click)="selectAllTop13Tags()" title="Etsy algoritmasına uygun en popüler ilk 13 etiketi anında seç">
-              <span>🎯 İlk 13'ü Seç ({{ getSelectedCount() }}/13)</span>
+            <button class="btn-matrix-action select-13" (click)="selectAllTop13Tags()" [title]="t('research.marketResearch.tagMatrix.selectTop13Title')">
+              <span>{{ t('research.marketResearch.tagMatrix.selectTop13Btn', { count: getSelectedCount() }) }}</span>
             </button>
             <button class="btn-matrix-action copy-sel" (click)="copySelectedTagsToClipboard()" [disabled]="getSelectedCount() === 0">
-              <span>📋 Seçilenleri Kopyala</span>
+              <span>{{ t('research.marketResearch.tagMatrix.copySelectedBtn') }}</span>
             </button>
             <button class="btn-matrix-action push-creator" (click)="sendSelectedTagsToFastCreator()" [disabled]="getSelectedCount() === 0">
-              <span>🚀 Fast Creator'a Aktar</span>
+              <span>{{ t('research.marketResearch.tagMatrix.sendToCreatorBtn') }}</span>
             </button>
             <button class="btn-matrix-action clear-sel" (click)="clearSelectedTags()" *ngIf="getSelectedCount() > 0">
-              <span>✕ Temizle</span>
+              <span>{{ t('research.marketResearch.tagMatrix.clearBtn') }}</span>
             </button>
           </div>
         </div>
@@ -473,21 +474,21 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
         <!-- Tag Quick Stats Cards -->
         <div class="tag-stats-row">
           <div class="tag-stat-chip">
-            <span class="stat-name">İNCELENEN ETİKET:</span>
-            <span class="stat-value text-cyan">{{ topTags.length }} Adet</span>
+            <span class="stat-name">{{ t('research.marketResearch.tagMatrix.statAnalyzed') }}</span>
+            <span class="stat-value text-cyan">{{ t('research.marketResearch.tagMatrix.statAnalyzedVal', { count: topTags.length }) }}</span>
           </div>
           <div class="tag-stat-chip">
-            <span class="stat-name">ORTALAMA UZUNLUK:</span>
-            <span class="stat-value text-emerald">{{ getAvgTagLength() | number:'1.1-1' }} / 20 Karakter</span>
+            <span class="stat-name">{{ t('research.marketResearch.tagMatrix.statAvgLength') }}</span>
+            <span class="stat-value text-emerald">{{ t('research.marketResearch.tagMatrix.statAvgLengthVal', { avg: (getAvgTagLength() | number:'1.1-1') }) }}</span>
           </div>
           <div class="tag-stat-chip">
-            <span class="stat-name">LONG-TAIL ORANI:</span>
-            <span class="stat-value text-purple">%{{ getLongTailRatio() | number:'1.0-0' }} (2+ Kelime)</span>
+            <span class="stat-name">{{ t('research.marketResearch.tagMatrix.statLongTail') }}</span>
+            <span class="stat-value text-purple">{{ t('research.marketResearch.tagMatrix.statLongTailVal', { pct: (getLongTailRatio() | number:'1.0-0') }) }}</span>
           </div>
           <div class="tag-stat-chip highlight-chip">
-            <span class="stat-name">SEÇİLEN ETİKET:</span>
+            <span class="stat-name">{{ t('research.marketResearch.tagMatrix.statSelected') }}</span>
             <span class="stat-value" [ngClass]="getSelectedCount() === 13 ? 'text-emerald' : 'text-orange'">
-              {{ getSelectedCount() }} / 13 Etiket
+              {{ t('research.marketResearch.tagMatrix.statSelectedVal', { count: getSelectedCount() }) }}
             </span>
           </div>
         </div>
@@ -499,11 +500,11 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
             <input 
               type="text" 
               [(ngModel)]="tagSearchQuery" 
-              placeholder="Matris içindeki etiketleri anında filtrele (örn: dragon, organizer, gift)..." 
+              [placeholder]="t('research.marketResearch.tagMatrix.searchPlaceholder')" 
               class="tag-filter-input" />
             <button *ngIf="tagSearchQuery" class="clear-filter-btn" (click)="tagSearchQuery = ''">✕</button>
           </div>
-          <span class="filter-count-badge">{{ getFilteredTags().length }} etiket gösteriliyor</span>
+          <span class="filter-count-badge">{{ t('research.marketResearch.tagMatrix.showingCount', { count: getFilteredTags().length }) }}</span>
         </div>
 
         <!-- Tag Matrix Table -->
@@ -516,35 +517,35 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
                     type="checkbox" 
                     [checked]="isAllFilteredSelected()" 
                     (change)="toggleSelectAllFiltered()" 
-                    title="Tümünü Seç / Kaldır" />
+                    [title]="t('research.marketResearch.tagMatrix.selectAllTitle')" />
                 </th>
-                <th style="width: 45px;">Sıra</th>
-                <th>Anahtar Kelime / Etiket (Keyword)</th>
-                <th style="width: 170px;">İlan Frekansı</th>
-                <th style="width: 100px; text-align: center;">Pazar Payı</th>
-                <th style="width: 140px; text-align: center;">Marmameters Rekabet</th>
-                <th style="width: 150px; text-align: center;">Kelime Tipi</th>
-                <th style="width: 110px; text-align: center;">Karakter (Max 20)</th>
-                <th style="width: 90px; text-align: center;">İşlem</th>
+                <th style="width: 45px;">{{ t('research.marketResearch.tagMatrix.colRank') }}</th>
+                <th>{{ t('research.marketResearch.tagMatrix.colKeyword') }}</th>
+                <th style="width: 170px;">{{ t('research.marketResearch.tagMatrix.colFrequency') }}</th>
+                <th style="width: 100px; text-align: center;">{{ t('research.marketResearch.tagMatrix.colShare') }}</th>
+                <th style="width: 140px; text-align: center;">{{ t('research.marketResearch.tagMatrix.colCompetition') }}</th>
+                <th style="width: 150px; text-align: center;">{{ t('research.marketResearch.tagMatrix.colWordType') }}</th>
+                <th style="width: 110px; text-align: center;">{{ t('research.marketResearch.tagMatrix.colChars') }}</th>
+                <th style="width: 90px; text-align: center;">{{ t('research.marketResearch.tagMatrix.colAction') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngIf="getFilteredTags().length === 0">
                 <td colspan="9" class="empty-state-cell">
-                  {{ topTags.length === 0 ? 'Etiket matrisi için önce canlı bir arama yapın.' : 'Filtreye uyan etiket bulunamadı.' }}
+                  {{ topTags.length === 0 ? t('research.marketResearch.tagMatrix.emptyNoData') : t('research.marketResearch.tagMatrix.emptyFiltered') }}
                 </td>
               </tr>
               <tr 
-                *ngFor="let t of getFilteredTags(); let idx = index"
-                [class.selected-row]="isTagSelected(t.tag)"
-                (click)="toggleTagSelection(t.tag)">
+                *ngFor="let tagRow of getFilteredTags(); let idx = index"
+                [class.selected-row]="isTagSelected(tagRow.tag)"
+                (click)="toggleTagSelection(tagRow.tag)">
                 
                 <!-- Checkbox -->
                 <td style="text-align: center;" (click)="$event.stopPropagation()">
                   <input 
                     type="checkbox" 
-                    [checked]="isTagSelected(t.tag)" 
-                    (change)="toggleTagSelection(t.tag)" />
+                    [checked]="isTagSelected(tagRow.tag)" 
+                    (change)="toggleTagSelection(tagRow.tag)" />
                 </td>
 
                 <!-- Sıra -->
@@ -552,48 +553,48 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
 
                 <!-- Tag Adı -->
                 <td class="tag-name-cell">
-                  <span class="tag-name-pill" (click)="copySingleTag(t.tag, $event)" title="Tek tıklamayla panoya kopyala">
-                    {{ t.tag }}
+                  <span class="tag-name-pill" (click)="copySingleTag(tagRow.tag, $event)" [title]="t('research.marketResearch.tagMatrix.copySingleTitle')">
+                    {{ tagRow.tag }}
                   </span>
                 </td>
 
                 <!-- Frekans Barı -->
                 <td class="freq-cell">
                   <div class="freq-bar-wrap">
-                    <div class="freq-bar-fill" [style.width.%]="t.usagePercentage"></div>
-                    <span class="freq-text">{{ t.count }} / {{ items.length }} İlan</span>
+                    <div class="freq-bar-fill" [style.width.%]="tagRow.usagePercentage"></div>
+                    <span class="freq-text">{{ t('research.marketResearch.tagMatrix.freqText', { count: tagRow.count, total: items.length }) }}</span>
                   </div>
                 </td>
 
                 <!-- Pazar Payı (%) -->
                 <td style="text-align: center;" class="pct-cell">
-                  <b>%{{ t.usagePercentage | number:'1.1-1' }}</b>
+                  <b>%{{ tagRow.usagePercentage | number:'1.1-1' }}</b>
                 </td>
 
                 <!-- Marmalead Marmameters Rekabet Çubuğu -->
                 <td style="text-align: center;">
-                  <span class="marmameter-badge" [ngClass]="getCompetitionBadgeClass(t.competitionLevel)">
-                    {{ t.competitionLevel }}
+                  <span class="marmameter-badge" [ngClass]="getCompetitionBadgeClass(tagRow.competitionLevel)">
+                    {{ tagRow.competitionLevel }}
                   </span>
                 </td>
 
                 <!-- Kelime Tipi (Long-tail vs Single) -->
                 <td style="text-align: center;">
-                  <span class="keyword-type-badge" [ngClass]="t.isLongTail ? 'long-tail' : 'broad'">
-                    {{ t.isLongTail ? '🎯 ' + t.wordCount + ' Kelime' : '⚠️ Tek Kelime' }}
+                  <span class="keyword-type-badge" [ngClass]="tagRow.isLongTail ? 'long-tail' : 'broad'">
+                    {{ tagRow.isLongTail ? t('research.marketResearch.tagMatrix.longTailWords', { count: tagRow.wordCount }) : t('research.marketResearch.tagMatrix.singleWord') }}
                   </span>
                 </td>
 
                 <!-- Karakter Sayısı (Etsy 20 limit) -->
                 <td style="text-align: center;">
-                  <span class="char-len-badge" [ngClass]="t.charLength <= 20 ? 'valid-char' : 'invalid-char'">
-                    {{ t.charLength }} / 20 Karakter
+                  <span class="char-len-badge" [ngClass]="tagRow.charLength <= 20 ? 'valid-char' : 'invalid-char'">
+                    {{ t('research.marketResearch.tagMatrix.charLen', { len: tagRow.charLength }) }}
                   </span>
                 </td>
 
                 <!-- Hızlı Kopyala Butonu -->
                 <td style="text-align: center;" (click)="$event.stopPropagation()">
-                  <button class="btn-copy-sm" (click)="copySingleTag(t.tag, $event)" title="Panoya Kopyala">
+                  <button class="btn-copy-sm" (click)="copySingleTag(tagRow.tag, $event)" [title]="t('research.marketResearch.tagMatrix.copyBtnTitle')">
                     📋
                   </button>
                 </td>
@@ -607,35 +608,35 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
       <div class="modal-backdrop" *ngIf="showKeywordModal" (click)="showKeywordModal = false">
         <div class="modal-card-analysis" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>🔍 Kelime Yoğunluk & Eksik Etiket Analizi</h3>
+            <h3>{{ t('research.marketResearch.keywordModal.title') }}</h3>
             <button class="btn-close-modal" (click)="showKeywordModal = false">✕</button>
           </div>
           <div class="modal-body" *ngIf="selectedItem">
             <p class="kw-title">{{ selectedItem.title }}</p>
             <div class="kw-stats-row">
-              <span class="kw-stat">SEO Gücü: <b>%{{ selectedItem.seoScore }}</b></span>
-              <span class="kw-stat">Etiket: <b>{{ selectedItem.tags.length }}/13</b></span>
-              <span class="kw-stat">Eksik Altın Etiket: <b>{{ getMissingGoldTags().length }}</b></span>
+              <span class="kw-stat">{{ t('research.marketResearch.keywordModal.seoStrength') }} <b>%{{ selectedItem.seoScore }}</b></span>
+              <span class="kw-stat">{{ t('research.marketResearch.keywordModal.tags') }} <b>{{ selectedItem.tags.length }}/13</b></span>
+              <span class="kw-stat">{{ t('research.marketResearch.keywordModal.missingGold') }} <b>{{ getMissingGoldTags().length }}</b></span>
             </div>
 
-            <h4 class="kw-section-title">İlanın Etiketleri ({{ selectedItem.tags.length }})</h4>
+            <h4 class="kw-section-title">{{ t('research.marketResearch.keywordModal.listingTags', { count: selectedItem.tags.length }) }}</h4>
             <div class="kw-tag-cloud">
-              <span *ngFor="let t of selectedItem.tags" class="kw-tag">{{ t }}</span>
+              <span *ngFor="let itemTag of selectedItem.tags" class="kw-tag">{{ itemTag }}</span>
             </div>
 
-            <h4 class="kw-section-title">Pazarın İlk 10 Altın Etiketi</h4>
+            <h4 class="kw-section-title">{{ t('research.marketResearch.keywordModal.top10Gold') }}</h4>
             <div class="kw-gold-list">
-              <div *ngFor="let t of topTags.slice(0, 10)" class="kw-gold-row" [class.owned]="isTagOwnedByItem(t.tag)">
-                <span class="kw-gold-icon">{{ isTagOwnedByItem(t.tag) ? '✅' : '➕' }}</span>
-                <span class="kw-gold-name">{{ t.tag }}</span>
-                <span class="kw-gold-meta">%{{ t.usagePercentage | number:'1.1-1' }} kullanım · {{ t.competitionLevel }}</span>
+              <div *ngFor="let goldTag of topTags.slice(0, 10)" class="kw-gold-row" [class.owned]="isTagOwnedByItem(goldTag.tag)">
+                <span class="kw-gold-icon">{{ isTagOwnedByItem(goldTag.tag) ? '✅' : '➕' }}</span>
+                <span class="kw-gold-name">{{ goldTag.tag }}</span>
+                <span class="kw-gold-meta">{{ t('research.marketResearch.keywordModal.usageMeta', { pct: (goldTag.usagePercentage | number:'1.1-1'), level: goldTag.competitionLevel }) }}</span>
               </div>
-              <p *ngIf="topTags.length === 0" class="kw-hint">Önce canlı bir arama yapın — pazar etiketleri burada listelenir.</p>
+              <p *ngIf="topTags.length === 0" class="kw-hint">{{ t('research.marketResearch.keywordModal.emptyHint') }}</p>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="copyMissingGoldTags()">📋 Eksik Altın Etiketleri Kopyala</button>
-            <button class="btn-secondary-modal" (click)="showKeywordModal = false">Kapat</button>
+            <button class="btn-primary-modal" (click)="copyMissingGoldTags()">{{ t('research.marketResearch.keywordModal.copyMissingBtn') }}</button>
+            <button class="btn-secondary-modal" (click)="showKeywordModal = false">{{ t('research.marketResearch.keywordModal.closeBtn') }}</button>
           </div>
         </div>
       </div>
@@ -644,29 +645,29 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
       <div class="modal-backdrop" *ngIf="showCompareModal" (click)="closeCompareModal()">
         <div class="modal-card-analysis compare-modal-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>📊 Çoklu Kelime Karşılaştırma</h3>
+            <h3>{{ t('research.marketResearch.compareModal.title') }}</h3>
             <button class="btn-close-modal" (click)="closeCompareModal()">✕</button>
           </div>
           <div class="modal-body">
             <div class="compare-input-row">
               <input type="text" class="compare-input" [(ngModel)]="compareInput"
-                     placeholder='Kelimeleri virgülle ayırın — örn: "dragon lamp, desk organizer, fidget toy"'
+                     [placeholder]="t('research.marketResearch.compareModal.placeholder')"
                      (keyup.enter)="runComparison()" />
               <button class="btn-compare-run" (click)="runComparison()" [disabled]="isComparing">
-                {{ isComparing ? '⏳ Analiz ediliyor...' : '⚖️ Karşılaştır' }}
+                {{ isComparing ? t('research.marketResearch.compareModal.comparingBtn') : t('research.marketResearch.compareModal.compareBtn') }}
               </button>
             </div>
-            <p class="compare-hint">Her kelime için canlı Etsy verisi taranır (ilk 25 ilan örneklemi). Aynı aramalar 10 dk önbellekten döner.</p>
+            <p class="compare-hint">{{ t('research.marketResearch.compareModal.hint') }}</p>
 
             <div *ngIf="compareResults.length > 0" class="compare-table-wrap">
               <table class="compare-table">
                 <thead>
                   <tr>
-                    <th>Metrik</th>
+                    <th>{{ t('research.marketResearch.compareModal.colMetric') }}</th>
                     <th *ngFor="let r of compareResults">
                       <div class="compare-kw-head">
                         <span class="compare-kw">{{ r.keyword }}</span>
-                        <button class="btn-apply-kw" (click)="applyKeywordFromCompare(r.keyword)" title="Bu kelimeyle ana aramayı başlat">↗ Bu kelimeyle ara</button>
+                        <button class="btn-apply-kw" (click)="applyKeywordFromCompare(r.keyword)" [title]="t('research.marketResearch.compareModal.applyKeywordTitle')">{{ t('research.marketResearch.compareModal.applyKeywordBtn') }}</button>
                       </div>
                     </th>
                   </tr>
@@ -681,7 +682,7 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-secondary-modal" (click)="closeCompareModal()">Kapat</button>
+            <button class="btn-secondary-modal" (click)="closeCompareModal()">{{ t('research.marketResearch.compareModal.closeBtn') }}</button>
           </div>
         </div>
       </div>
@@ -690,42 +691,42 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
       <div class="modal-backdrop" *ngIf="showTrackingModal" (click)="showTrackingModal = false">
         <div class="modal-card-analysis compare-modal-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>📈 Takip Edilen Kelimeler ({{ trackedKeywords.length }})</h3>
+            <h3>{{ t('research.marketResearch.trackingModal.title', { count: trackedKeywords.length }) }}</h3>
             <button class="btn-close-modal" (click)="showTrackingModal = false">✕</button>
           </div>
           <div class="modal-body">
-            <p class="compare-hint">Her "Takibe Al" işlemi, o kelime için tarihli bir pazar anlık görüntüsü (snapshot) kaydeder. Yeni taramalarla değişim (▲/▼) otomatik hesaplanır.</p>
+            <p class="compare-hint">{{ t('research.marketResearch.trackingModal.hint') }}</p>
 
-            <div *ngIf="isLoadingTracked" class="kw-hint">Takip listesi yükleniyor…</div>
+            <div *ngIf="isLoadingTracked" class="kw-hint">{{ t('research.marketResearch.trackingModal.loading') }}</div>
             <div *ngIf="!isLoadingTracked && trackedKeywords.length === 0" class="kw-hint">
-              Henüz takip edilen kelime yok. Arama yaptıktan sonra "📌 Kelimeyi Takibe Al" ile ilk snapshot'ı kaydedin.
+              {{ t('research.marketResearch.trackingModal.empty') }}
             </div>
 
             <div class="tracked-list" *ngIf="!isLoadingTracked">
-              <div *ngFor="let t of trackedKeywords" class="tracked-row">
+              <div *ngFor="let tracked of trackedKeywords" class="tracked-row">
                 <div class="tracked-main">
-                  <span class="tracked-kw">{{ t.item.displayName }}</span>
-                  <span class="tracked-date">{{ formatTrackedDate(t.latest?.capturedAt) }} · {{ t.snapshots.length }} tarama</span>
+                  <span class="tracked-kw">{{ tracked.item.displayName }}</span>
+                  <span class="tracked-date">{{ formatTrackedDate(tracked.latest?.capturedAt) }} · {{ t('research.marketResearch.trackingModal.scansCount', { count: tracked.snapshots.length }) }}</span>
                 </div>
                 <div class="tracked-metrics">
-                  <span class="tracked-metric">AOV: <b>{{ '$' + (t.latest?.price ?? 0).toFixed(2) }}</b>
-                    <span [ngClass]="deltaClass(t.latest?.price, t.previous?.price)">{{ getDelta(t.latest?.price, t.previous?.price) }}</span>
+                  <span class="tracked-metric">{{ t('research.marketResearch.trackingModal.aovLabel') }} <b>{{ '$' + (tracked.latest?.price ?? 0).toFixed(2) }}</b>
+                    <span [ngClass]="deltaClass(tracked.latest?.price, tracked.previous?.price)">{{ getDelta(tracked.latest?.price, tracked.previous?.price) }}</span>
                   </span>
-                  <span class="tracked-metric">Fırsat: <b>%{{ t.latest?.opportunityScore ?? '—' }}</b>
-                    <span [ngClass]="deltaClass(t.latest?.opportunityScore, t.previous?.opportunityScore)">{{ getDelta(t.latest?.opportunityScore, t.previous?.opportunityScore) }}</span>
+                  <span class="tracked-metric">{{ t('research.marketResearch.trackingModal.opportunityLabel') }} <b>%{{ tracked.latest?.opportunityScore ?? '—' }}</b>
+                    <span [ngClass]="deltaClass(tracked.latest?.opportunityScore, tracked.previous?.opportunityScore)">{{ getDelta(tracked.latest?.opportunityScore, tracked.previous?.opportunityScore) }}</span>
                   </span>
-                  <span class="tracked-metric">İlan: <b>{{ (t.latest?.resultCount ?? 0).toLocaleString('tr-TR') }}</b></span>
+                  <span class="tracked-metric">{{ t('research.marketResearch.trackingModal.listingsLabel') }} <b>{{ (tracked.latest?.resultCount ?? 0).toLocaleString('tr-TR') }}</b></span>
                 </div>
                 <div class="tracked-actions">
-                  <button class="btn-apply-kw" (click)="applyTrackedKeyword(t.item.displayName)" title="Bu kelimeyle ana aramayı başlat">↗ Ara</button>
-                  <button class="btn-apply-kw" (click)="refreshTrackedKeyword(t.item.displayName)" title="Yeni snapshot kaydet">🔄 Güncelle</button>
-                  <button class="btn-apply-kw danger" (click)="deleteTrackedKeyword(t.item.displayName)" title="Takibi sil">🗑 Sil</button>
+                  <button class="btn-apply-kw" (click)="applyTrackedKeyword(tracked.item.displayName)" [title]="t('research.marketResearch.trackingModal.searchTitle')">{{ t('research.marketResearch.trackingModal.searchBtn') }}</button>
+                  <button class="btn-apply-kw" (click)="refreshTrackedKeyword(tracked.item.displayName)" [title]="t('research.marketResearch.trackingModal.refreshTitle')">{{ t('research.marketResearch.trackingModal.refreshBtn') }}</button>
+                  <button class="btn-apply-kw danger" (click)="deleteTrackedKeyword(tracked.item.displayName)" [title]="t('research.marketResearch.trackingModal.deleteTitle')">{{ t('research.marketResearch.trackingModal.deleteBtn') }}</button>
                 </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-secondary-modal" (click)="showTrackingModal = false">Kapat</button>
+            <button class="btn-secondary-modal" (click)="showTrackingModal = false">{{ t('research.marketResearch.trackingModal.closeBtn') }}</button>
           </div>
         </div>
       </div>
@@ -739,7 +740,7 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
       <div class="modal-backdrop" *ngIf="showHealthModal" (click)="showHealthModal = false">
         <div class="modal-card-analysis" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>🩺 Canlı İlan SEO & Rekabet Zafiyeti Denetimi</h3>
+            <h3>{{ t('research.marketResearch.healthModal.title') }}</h3>
             <button class="btn-close-modal" (click)="showHealthModal = false">✕</button>
           </div>
           <div class="modal-body" *ngIf="selectedItem && getHealthAudit(selectedItem) as audit">
@@ -748,7 +749,7 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
                 {{ audit.grade }} (%{{ audit.totalScore }})
               </div>
               <div class="gauge-label">
-                SEO: %{{ selectedItem.seoScore }} • Pazar Fırsatı: %{{ selectedItem.marketScore }} • {{ selectedItem.shopName }}
+                {{ t('research.marketResearch.healthModal.gaugeLabel', { seo: selectedItem.seoScore, market: selectedItem.marketScore, shop: selectedItem.shopName }) }}
               </div>
             </div>
 
@@ -763,17 +764,18 @@ Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziy
             </div>
 
             <div class="competitor-gaps-box" *ngIf="audit.competitorGaps.length > 0">
-              <div class="gaps-title">🎯 Bu Rakibi Sıralamada Geçmek İçin Fırsatlar ({{ audit.competitorGaps.length }})</div>
+              <div class="gaps-title">{{ t('research.marketResearch.healthModal.gapsTitle', { count: audit.competitorGaps.length }) }}</div>
               <ul class="gaps-list">
                 <li *ngFor="let gap of audit.competitorGaps">{{ gap }}</li>
               </ul>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="cloneSelectedListing()">🚀 Bu İlanı Klonla & Eksiklerini Kapat</button>
-            <button class="btn-secondary-modal" (click)="showHealthModal = false">Kapat</button>
+            <button class="btn-primary-modal" (click)="cloneSelectedListing()">{{ t('research.marketResearch.healthModal.cloneFixBtn') }}</button>
+            <button class="btn-secondary-modal" (click)="showHealthModal = false">{{ t('research.marketResearch.healthModal.closeBtn') }}</button>
           </div>
         </div>
       </div>
 
     </div>
+    </ng-container>

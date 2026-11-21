@@ -1,0 +1,64 @@
+{
+  "title": "AI Görsel Stüdyosu & Arka Plan Sihirbazı",
+  "subtitle": "Anti-ban EXIF temizleme, yapay zeka ile arka plan değiştirme ve 2000x2000px Etsy optimizasyonu",
+  "exifShieldBadge": "Anti-Ban EXIF Koruması Aktif",
+  "canvas": {
+    "title": "Etsy Kare Çıktı (2000 x 2000 px)",
+    "ratioBadge": "1:1 Kare",
+    "sceneBgAlt": "Sahne Arka Planı",
+    "productAlt": "Ürün",
+    "activeScene": "Sahne: {{name}}",
+    "clearSceneTitle": "Arka planı kaldır",
+    "clearSceneBtn": "✕ Fonu Kaldır",
+    "processingOverlay": "Yapay Zeka Arka Planı İşliyor..."
+  },
+  "exif": {
+    "cameraLensLabel": "Kamera & Lens Meta Verisi:",
+    "cleaned": "Temizlendi",
+    "gpsLabel": "GPS Konum İmzası:",
+    "reset": "Sıfırlandı",
+    "pHashLabel": "pHash Koruması:",
+    "uniquified": "Benzersizleştirildi"
+  },
+  "actions": {
+    "uploadPhoto": "Yeni Fotoğraf Yükle",
+    "download2000": "2000x2000px İndir",
+    "sendToListing": "İlan Oluşturucuya Aktar"
+  },
+  "controls": {
+    "sceneSelectorTitle": "1. Yapay Zeka Arka Plan & Sahne Seçici",
+    "sceneSelectorHint": "Ürününüzün arkasını otomatik temizler ve lüks stüdyo fonlarına yerleştirir.",
+    "enhancementTitle": "2. Işık ve Canlılık Ayarları",
+    "brightness": "Parlaklık (Brightness)",
+    "contrast": "Kontrast (Contrast)",
+    "saturation": "Doygunluk (Saturation)"
+  },
+  "scenes": {
+    "studio_white": {
+      "name": "Stüdyo Sonsuz Beyaz",
+      "desc": "Kusursuz pürüzsüz açık fon (Etsy Best Practice)"
+    },
+    "marble_surface": {
+      "name": "Lüks Carrara Mermer Masa",
+      "desc": "Modern doğal damarlı mermer zemin"
+    },
+    "nordic_wood": {
+      "name": "İskandinav Meşe Ahşap Zemin",
+      "desc": "Sıcak rustik doğal ahşap dokusu"
+    },
+    "boho_shelf": {
+      "name": "Bohem Salon & Yaşam Alanı",
+      "desc": "Sıcak ev ortamı ve yeşil bitki arka planı"
+    },
+    "custom": "Özel Sahne"
+  },
+  "toast": {
+    "sceneApplied": "Sahne \"{{name}}\" arka plana yerleştirildi! (Ürününüz korundu)",
+    "sceneCleared": "Arka plan sahnesi kaldırıldı, orijinal ürün fona döndü.",
+    "photoUploaded": "Fotoğraf yüklendi & EXIF meta verileri temizlendi!",
+    "photoDropped": "Sürüklenen fotoğraf yüklendi ve EXIF sıfırlandı!",
+    "downloadedClean": "2000x2000px Etsy karesi indirildi!",
+    "downloadedComposite": "2000x2000px Etsy kompozit görseli indirildi!",
+    "downloadedProduct": "2000x2000px Ürün görseli indirildi!"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "title": "Kargo Entegrasyonları Hub'ı & Navlun Karşılaştırma",
+  "subtitle": "4 taşıyıcı (Aras Global, ShipEntegra, Shiptomore, Navlungo) üzerinden anlık navlun ve Hızlı Gümrük Ödemesi (DDP) simülasyonu",
+  "calculatingBtn": "⏳ Hesaplanıyor...",
+  "recalculateBtn": "⚡ Fiyatları Yeniden Hesapla",
+  "labelToast": {
+    "title": "{{carrier}} Uluslararası Kargo Barkodu Oluşturuldu!",
+    "trackingLabel": "Takip Numarası:",
+    "destination": "(Hedef: {{country}})"
+  },
+  "calculator": {
+    "destinationCountry": "Varış Ülkesi:",
+    "countries": {
+      "US": "🇺🇸 Amerika Birleşik Devletleri (ABD)",
+      "GB": "🇬🇧 Birleşik Krallık (İngiltere)",
+      "DE": "🇩🇪 Almanya",
+      "CA": "🇨🇦 Kanada",
+      "FR": "🇫🇷 Fransa",
+      "AU": "🇦🇺 Avustralya"
+    },
+    "weightGrams": "Paket Ağırlığı (Gram):",
+    "dimensionsLabel": "Ebatlar (cm): En x Boy x Yükseklik",
+    "dimWidthPlaceholder": "En",
+    "dimLengthPlaceholder": "Boy",
+    "dimHeightPlaceholder": "Yük",
+    "hsCodeLabel": "GTİP / HS Kodu:",
+    "declaredValueLabel": "Gümrük Beyan ($):",
+    "billableLabel": "Faturalandırılacak ({{desi}} Desi):",
+    "kgUnit": "{{kg}} kg"
+  },
+  "card": {
+    "bestValueBadge": "🌟 EN KÂRLI TAŞIYICI",
+    "calculating": "Hesaplanıyor...",
+    "freightOnly": "Sadece Navlun",
+    "liveApiQuote": "Canlı API Teklifi",
+    "contractTariff": "Sözleşme Tarifesi",
+    "baseFreight": "Baz Navlun",
+    "fuelAndExtra": "Yakıt + Ek Ücret",
+    "fastCustomsDdp": "🛡️ Hızlı Gümrük (DDP)",
+    "allInclusiveTotal": "Her Şey Dahil Toplam",
+    "customsIncluded": "(Gümrük Dahil)",
+    "openWithFreightBtn": "🚀 Navlun İle Aç",
+    "applyDdpBtn": "🛡️ DDP Uygula"
+  },
+  "carriers": {
+    "aras": {
+      "name": "Aras Global Kargo",
+      "eta": "2-5 İş Günü",
+      "trackingType": "Widect / UPS Express"
+    },
+    "shipentegra": {
+      "name": "ShipEntegra Kargo",
+      "eta": "3-6 İş Günü",
+      "trackingType": "Amerika Eko Plus / Express"
+    },
+    "navlungo": {
+      "name": "Navlungo Kargo",
+      "eta": "3-7 İş Günü",
+      "trackingType": "Widect Eco / UPS Saver"
+    },
+    "shiptomore": {
+      "name": "Shiptomore Kargo",
+      "eta": "2-4 İş Günü",
+      "trackingType": "FedEx / UPS DDP Express"
+    }
+  }
+}

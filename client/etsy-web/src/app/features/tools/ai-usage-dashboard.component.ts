@@ -2,6 +2,7 @@ import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, inj
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService, AiProviderBalanceDto } from '../../core/services/etsy-api.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { Chart, registerables } from 'chart.js';
@@ -26,21 +27,23 @@ interface UsageRecord {
 @Component({
   selector: 'app-ai-usage-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, AiLogoComponent],
+  imports: [CommonModule, FormsModule, RouterLink, AiLogoComponent, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="usage-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">📊</div>
           <div>
-            <h1 class="page-title">AI Token, Model & Bakiye Takip Merkezi</h1>
-            <p class="page-subtitle">DeepSeek, Gemini, OpenAI, Claude ve Grok resmi logoları, sıfır-mock canlı bakiyeleri ve analitik grafikleri</p>
+            <h1 class="page-title">{{ t('tools.aiUsage.title') }}</h1>
+            <p class="page-subtitle">{{ t('tools.aiUsage.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-refresh" [disabled]="isLoadingBalances" (click)="loadData()">
-            <span>{{ isLoadingBalances ? '⏳ Bakiye Çekiliyor...' : '⚡ Canlı Bakiyeleri Yenile' }}</span>
+            <span>{{ isLoadingBalances ? t('tools.aiUsage.refreshingBalances') : t('tools.aiUsage.refreshBalances') }}</span>
           </button>
         </div>
       </div>
@@ -50,16 +53,16 @@ interface UsageRecord {
         <div class="selector-left">
           <!-- BRAND SELECTOR -->
           <div class="filter-item">
-            <label class="selector-label">🎯 İNCELENEN MARKA:</label>
+            <label class="selector-label">{{ t('tools.aiUsage.selectedBrandLabel') }}</label>
             <div class="dropdown-wrapper">
               <div class="brand-logo-preview" *ngIf="selectedBrand !== 'ALL' && selectedBrand !== 'ACTIVE_ONLY'">
                 <app-ai-logo [provider]="selectedBrand" [size]="20"></app-ai-logo>
               </div>
               <select [(ngModel)]="selectedBrand" (change)="onBrandChange()" class="brand-dropdown">
-                <option value="ALL">🌐 Tüm Markalar (5 Sağlayıcı)</option>
-                <option value="ACTIVE_ONLY">⚡ Sadece Tanımlı Markalar (DeepSeek, Gemini)</option>
+                <option value="ALL">{{ t('tools.aiUsage.allProviders') }}</option>
+                <option value="ACTIVE_ONLY">{{ t('tools.aiUsage.activeOnlyProviders') }}</option>
                 <option *ngFor="let p of providerBalances" [value]="p.provider">
-                  {{ p.provider }} {{ p.isActiveProvider ? '⭐ (Aktif Birincil Motor)' : (!p.isAvailable ? '⚪ (Tanımlanmadı)' : '') }}
+                  {{ p.provider }} {{ p.isActiveProvider ? t('tools.aiUsage.activePrimarySuffix') : (!p.isAvailable ? t('tools.aiUsage.unconfiguredSuffix') : '') }}
                 </option>
               </select>
             </div>
@@ -67,14 +70,14 @@ interface UsageRecord {
 
           <!-- PERIOD SELECTOR -->
           <div class="filter-item">
-            <label class="selector-label">📅 DÖNEM:</label>
+            <label class="selector-label">{{ t('tools.aiUsage.periodLabel') }}</label>
             <div class="dropdown-wrapper">
               <select [(ngModel)]="selectedPeriod" (change)="onPeriodChange()" class="period-dropdown">
-                <option value="30d">🗓️ Son 30 Gün</option>
-                <option value="this_month">📅 Bu Ay (Cari Dönem)</option>
-                <option value="last_month">⏮️ Geçen Ay (Önceki Dönem)</option>
-                <option value="90d">📊 Son 90 Gün (Son 3 Ay)</option>
-                <option value="all">🌐 Tüm Zamanlar (Arşiv)</option>
+                <option value="30d">{{ t('tools.aiUsage.periods.30dOption') }}</option>
+                <option value="this_month">{{ t('tools.aiUsage.periods.thisMonthOption') }}</option>
+                <option value="last_month">{{ t('tools.aiUsage.periods.lastMonthOption') }}</option>
+                <option value="90d">{{ t('tools.aiUsage.periods.90dOption') }}</option>
+                <option value="all">{{ t('tools.aiUsage.periods.allOption') }}</option>
               </select>
             </div>
           </div>
@@ -83,7 +86,7 @@ interface UsageRecord {
         <div class="selector-right" *ngIf="activeProviderInfo">
           <div class="active-badge-pill">
             <app-ai-logo [provider]="activeProviderInfo.provider" [size]="16"></app-ai-logo>
-            <span class="active-text">Aktif Birincil Motor: <strong>{{ activeProviderInfo.provider }} ({{ activeProviderInfo.activeModel }})</strong></span>
+            <span class="active-text">{{ t('tools.aiUsage.activePrimaryEngine') }} <strong>{{ activeProviderInfo.provider }} ({{ activeProviderInfo.activeModel }})</strong></span>
           </div>
         </div>
       </div>
@@ -91,24 +94,24 @@ interface UsageRecord {
       <!-- KPI METRICS STRIP (STRICT ZERO-MOCK: ONLY LIVE/SQLITE VALUES) -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">HARCANAN TOKEN ({{ getPeriodLabel() }})</span>
+          <span class="kpi-label">{{ t('tools.aiUsage.kpi.tokensUsed', { period: getPeriodLabel() }) }}</span>
           <span class="kpi-val text-blue">{{ displayTokens | number }}</span>
-          <span class="kpi-sub">Girdi: {{ displayPromptTokens | number }} / Çıktı: {{ displayCompletionTokens | number }}</span>
+          <span class="kpi-sub">{{ t('tools.aiUsage.kpi.inputOutput', { prompt: (displayPromptTokens | number), completion: (displayCompletionTokens | number) }) }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">HARCANAN MALİYET ({{ getPeriodLabel() }})</span>
+          <span class="kpi-label">{{ t('tools.aiUsage.kpi.costSpent', { period: getPeriodLabel() }) }}</span>
           <span class="kpi-val text-green">\${{ displayCostUsd | number:'1.2-4' }}</span>
           <span class="kpi-sub">₺{{ displayCostTry | number:'1.2-2' }} TRY</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">KALAN BAKİYE (USD & TRY)</span>
+          <span class="kpi-label">{{ t('tools.aiUsage.kpi.remainingBalance') }}</span>
           <span class="kpi-val text-emerald">\${{ displayRemainingBalanceUsd | number:'1.2-2' }}</span>
           <span class="kpi-sub highlight-try">₺{{ displayRemainingBalanceTry | number:'1.2-2' }} TRY</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">TOPLAM AI İSTEK / ÇAĞRISI</span>
-          <span class="kpi-val text-purple">{{ displayCalls }} Çağrı</span>
-          <span class="kpi-sub">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? 'Seçili sağlayıcılar toplamı' : (selectedBrand + ' toplam çağrısı') }}</span>
+          <span class="kpi-label">{{ t('tools.aiUsage.kpi.totalCalls') }}</span>
+          <span class="kpi-val text-purple">{{ t('tools.aiUsage.kpi.callsCount', { count: displayCalls }) }}</span>
+          <span class="kpi-sub">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? t('tools.aiUsage.kpi.selectedProvidersTotal') : t('tools.aiUsage.kpi.brandTotalCalls', { brand: selectedBrand }) }}</span>
         </div>
       </div>
 
@@ -118,8 +121,8 @@ interface UsageRecord {
         <div class="chart-card glass-card">
           <div class="chart-header">
             <div>
-              <h3 class="chart-title">🤖 Yapay Zeka Sağlayıcı Token Dağılımı</h3>
-              <p class="chart-subtitle">Seçili dönem ({{ getPeriodLabel() }}) içindeki token tüketim oranları</p>
+              <h3 class="chart-title">{{ t('tools.aiUsage.charts.donutTitle') }}</h3>
+              <p class="chart-subtitle">{{ t('tools.aiUsage.charts.donutSubtitle', { period: getPeriodLabel() }) }}</p>
             </div>
             <div class="chart-tag">{{ getPeriodLabel() }}</div>
           </div>
@@ -127,7 +130,7 @@ interface UsageRecord {
             <canvas #tokenDonutCanvas></canvas>
             <div *ngIf="isDonutEmpty" class="chart-empty-overlay">
               <span class="empty-icon">📊</span>
-              <span>Bu dönem için harcanan token kaydı yok (0 Token / ₺0.00 TRY)</span>
+              <span>{{ t('tools.aiUsage.charts.donutEmpty') }}</span>
             </div>
           </div>
         </div>
@@ -136,16 +139,16 @@ interface UsageRecord {
         <div class="chart-card glass-card">
           <div class="chart-header">
             <div>
-              <h3 class="chart-title">📈 Modül Bazlı AI Tüketim Analizi</h3>
-              <p class="chart-subtitle">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? 'Tüm modüllerin token tüketimi' : (selectedBrand + ' markasının modül tüketimi') }}</p>
+              <h3 class="chart-title">{{ t('tools.aiUsage.charts.barTitle') }}</h3>
+              <p class="chart-subtitle">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? t('tools.aiUsage.charts.barSubtitleAll') : t('tools.aiUsage.charts.barSubtitleBrand', { brand: selectedBrand }) }}</p>
             </div>
-            <div class="chart-tag">Modül Analitiği</div>
+            <div class="chart-tag">{{ t('tools.aiUsage.charts.barTag') }}</div>
           </div>
           <div class="chart-body">
             <canvas #moduleBarCanvas></canvas>
             <div *ngIf="isBarEmpty" class="chart-empty-overlay">
               <span class="empty-icon">📉</span>
-              <span>Bu dönemde modül bazlı tüketim kaydı oluşmadı (0 Çağrı)</span>
+              <span>{{ t('tools.aiUsage.charts.barEmpty') }}</span>
             </div>
           </div>
         </div>
@@ -161,57 +164,57 @@ interface UsageRecord {
             <div>
               <div class="brand-title-row">
                 <h2 class="focus-brand-name">{{ selectedBrandInfo.provider }}</h2>
-                <span class="active-tag" *ngIf="selectedBrandInfo.isActiveProvider">⭐ SİSTEMİN AKTİF BİRİNCİL MOTORU</span>
+                <span class="active-tag" *ngIf="selectedBrandInfo.isActiveProvider">{{ t('tools.aiUsage.focus.activePrimaryTag') }}</span>
                 <span class="status-pill" [class.success]="selectedBrandInfo.isAvailable">
-                  {{ selectedBrandInfo.isAvailable ? '● Çevrimiçi & Hazır' : '⚪ Tanımlanmadı / Kullanılmıyor' }}
+                  {{ selectedBrandInfo.isAvailable ? t('tools.aiUsage.focus.onlineReady') : t('tools.aiUsage.focus.notConfigured') }}
                 </span>
               </div>
               <p class="focus-model-text">
-                Kullanılan Model: <strong>{{ selectedBrandInfo.activeModel }}</strong> &nbsp;|&nbsp; 
-                Birim Tarife: <span class="text-slate">{{ selectedBrandInfo.tokenUnitTariff }}</span>
+                {{ t('tools.aiUsage.focus.activeModel') }} <strong>{{ selectedBrandInfo.activeModel }}</strong> &nbsp;|&nbsp; 
+                {{ t('tools.aiUsage.focus.unitTariff') }} <span class="text-slate">{{ selectedBrandInfo.tokenUnitTariff }}</span>
               </p>
             </div>
           </div>
 
           <div class="focus-topup-actions">
             <a [href]="selectedBrandInfo.topUpUrl" target="_blank" rel="noopener noreferrer" class="btn-topup" *ngIf="selectedBrandInfo.isAvailable">
-              💳 {{ selectedBrandInfo.provider }} Bakiye Yükle (Top Up) ↗
+              {{ t('tools.aiUsage.focus.topUpBtn', { provider: selectedBrandInfo.provider }) }}
             </a>
             <a routerLink="/settings/ai-models" class="btn-topup btn-setup" *ngIf="!selectedBrandInfo.isAvailable">
-              ⚙️ {{ selectedBrandInfo.provider }} API Anahtarı Tanımla ↗
+              {{ t('tools.aiUsage.focus.setupKeyBtn', { provider: selectedBrandInfo.provider }) }}
             </a>
           </div>
         </div>
 
         <div class="focus-metrics-row">
           <div class="focus-metric-box remaining-box">
-            <span class="f-label">KALAN BAKİYE ($ USD)</span>
+            <span class="f-label">{{ t('tools.aiUsage.focus.remainingUsd') }}</span>
             <span class="f-val-usd" [class.zero-val]="!selectedBrandInfo.isAvailable">\${{ selectedBrandInfo.totalBalanceUsd | number:'1.2-2' }}</span>
             <span class="f-val-try" [class.zero-val]="!selectedBrandInfo.isAvailable">₺{{ (selectedBrandInfo.totalBalanceUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
             <span class="f-status-msg">{{ selectedBrandInfo.statusMessage }}</span>
           </div>
 
           <div class="focus-metric-box">
-            <span class="f-label">HARCANAN TUTAR ({{ getPeriodLabel() }})</span>
+            <span class="f-label">{{ t('tools.aiUsage.focus.spentAmount', { period: getPeriodLabel() }) }}</span>
             <span class="f-val-cost">\${{ selectedBrandInfo.totalCostUsd | number:'1.2-4' }}</span>
             <span class="f-sub-try">₺{{ (selectedBrandInfo.totalCostUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
-            <span class="f-sub-desc">Dönemsel SQLite harcaması</span>
+            <span class="f-sub-desc">{{ t('tools.aiUsage.focus.periodicSqliteSpend') }}</span>
           </div>
 
           <div class="focus-metric-box">
-            <span class="f-label">KULLANILAN TOKEN ({{ getPeriodLabel() }})</span>
+            <span class="f-label">{{ t('tools.aiUsage.focus.tokensUsed', { period: getPeriodLabel() }) }}</span>
             <span class="f-val-num text-blue">{{ selectedBrandInfo.totalTokensUsed | number }}</span>
             <span class="f-token-detail">
-              Girdi: {{ selectedBrandInfo.promptTokensUsed | number }} &nbsp;|&nbsp; Çıktı: {{ selectedBrandInfo.completionTokensUsed | number }}
+              {{ t('tools.aiUsage.focus.inputLabel') }} {{ selectedBrandInfo.promptTokensUsed | number }} &nbsp;|&nbsp; {{ t('tools.aiUsage.focus.outputLabel') }} {{ selectedBrandInfo.completionTokensUsed | number }}
             </span>
-            <span class="f-sub-desc">Gerçek SQLite tüketimi</span>
+            <span class="f-sub-desc">{{ t('tools.aiUsage.focus.actualSqliteUsage') }}</span>
           </div>
 
           <div class="focus-metric-box">
-            <span class="f-label">TOPLAM API ÇAĞRISI</span>
-            <span class="f-val-num text-purple">{{ selectedBrandInfo.totalApiRequests }} İstek</span>
-            <span class="f-key-masked">API Key: <code>{{ selectedBrandInfo.maskedApiKey }}</code></span>
-            <span class="f-sub-desc">VDS SQLite güvencesinde kayıtlı</span>
+            <span class="f-label">{{ t('tools.aiUsage.focus.totalApiCalls') }}</span>
+            <span class="f-val-num text-purple">{{ t('tools.aiUsage.focus.requestsCount', { count: selectedBrandInfo.totalApiRequests }) }}</span>
+            <span class="f-key-masked">{{ t('tools.aiUsage.focus.apiKeyLabel') }} <code>{{ selectedBrandInfo.maskedApiKey }}</code></span>
+            <span class="f-sub-desc">{{ t('tools.aiUsage.focus.storedInSqlite') }}</span>
           </div>
         </div>
       </div>
@@ -227,13 +230,13 @@ interface UsageRecord {
               <app-ai-logo [provider]="p.provider" [size]="24"></app-ai-logo>
               <span class="provider-badge" [ngClass]="getBrandClass(p.provider)">{{ p.provider }}</span>
             </div>
-            <span class="primary-indicator" *ngIf="p.isActiveProvider">⭐ Aktif Motor</span>
-            <span class="unconfigured-indicator" *ngIf="!p.isAvailable">⚪ Tanımlanmadı</span>
+            <span class="primary-indicator" *ngIf="p.isActiveProvider">{{ t('tools.aiUsage.card.activeEngine') }}</span>
+            <span class="unconfigured-indicator" *ngIf="!p.isAvailable">{{ t('tools.aiUsage.card.notConfigured') }}</span>
           </div>
 
           <div class="card-balance-banner" [class.unconfigured-banner]="!p.isAvailable">
             <div class="banner-left">
-              <span class="banner-label">Kalan Bakiye:</span>
+              <span class="banner-label">{{ t('tools.aiUsage.card.remainingBalance') }}</span>
               <span class="banner-usd" [class.zero-val]="!p.isAvailable">\${{ p.totalBalanceUsd | number:'1.2-2' }}</span>
             </div>
             <div class="banner-right">
@@ -242,35 +245,35 @@ interface UsageRecord {
           </div>
 
           <p class="provider-desc">
-            Model: <strong>{{ p.activeModel }}</strong><br>
+            {{ t('tools.aiUsage.card.modelLabel') }} <strong>{{ p.activeModel }}</strong><br>
             <small class="tariff-hint">{{ p.tokenUnitTariff }}</small>
-            <span class="unconfigured-hint" *ngIf="!p.isAvailable">API anahtarı tanımlanmadı. Kullanılmıyor.</span>
+            <span class="unconfigured-hint" *ngIf="!p.isAvailable">{{ t('tools.aiUsage.card.unconfiguredHint') }}</span>
           </p>
 
           <div class="provider-meta">
             <div class="meta-item">
-              <span class="m-label">Harcanan Token:</span>
+              <span class="m-label">{{ t('tools.aiUsage.card.tokensUsed') }}</span>
               <span class="m-val"><b>{{ p.totalTokensUsed | number }}</b></span>
             </div>
             <div class="meta-item">
-              <span class="m-label">Toplam İstek:</span>
-              <span class="m-val"><b>{{ p.totalApiRequests }} Çağrı</b></span>
+              <span class="m-label">{{ t('tools.aiUsage.card.totalRequests') }}</span>
+              <span class="m-val"><b>{{ t('tools.aiUsage.card.callsCount', { count: p.totalApiRequests }) }}</b></span>
             </div>
             <div class="meta-item">
-              <span class="m-label">Maliyet:</span>
+              <span class="m-label">{{ t('tools.aiUsage.card.cost') }}</span>
               <span class="m-val text-green"><b>\${{ p.totalCostUsd | number:'1.2-4' }}</b></span>
             </div>
           </div>
 
           <div class="card-footer-action">
             <a [href]="p.topUpUrl" target="_blank" rel="noopener noreferrer" class="card-btn-topup" *ngIf="p.isAvailable">
-              Bakiye Yükle (Top Up) ↗
+              {{ t('tools.aiUsage.card.topUp') }}
             </a>
             <a routerLink="/settings/ai-models" class="card-btn-setup" *ngIf="!p.isAvailable">
-              ⚙️ Anahtar Ekle
+              {{ t('tools.aiUsage.card.addKey') }}
             </a>
             <button type="button" class="btn-inspect-brand" (click)="selectBrand(p.provider)">
-              Detayları İncele →
+              {{ t('tools.aiUsage.card.inspectDetails') }}
             </button>
           </div>
         </div>
@@ -281,14 +284,14 @@ interface UsageRecord {
         <div class="table-header">
           <div>
             <h2 class="table-title">
-              {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? ('Son AI Çağrı Günlüğü (Tüm Markalar - ' + getPeriodLabel() + ')') : (selectedBrand + ' Markasına Ait Çağrı Günlüğü (' + getPeriodLabel() + ')') }}
+              {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? t('tools.aiUsage.history.titleAll', { period: getPeriodLabel() }) : t('tools.aiUsage.history.titleBrand', { brand: selectedBrand, period: getPeriodLabel() }) }}
             </h2>
-            <p class="table-subtitle">VDS SQLite veritabanında depolanan her bir AI token tüketimi, model ve yanıt süresi</p>
+            <p class="table-subtitle">{{ t('tools.aiUsage.history.subtitle') }}</p>
           </div>
           <div class="filter-row">
             <select [(ngModel)]="selectedBrand" class="filter-select" (change)="onBrandChange()">
-              <option value="ALL">Tüm Sağlayıcılar</option>
-              <option value="ACTIVE_ONLY">Sadece Tanımlı Markalar</option>
+              <option value="ALL">{{ t('tools.aiUsage.history.filterAll') }}</option>
+              <option value="ACTIVE_ONLY">{{ t('tools.aiUsage.history.filterActiveOnly') }}</option>
               <option *ngFor="let p of providerBalances" [value]="p.provider">{{ p.provider }}</option>
             </select>
           </div>
@@ -298,15 +301,15 @@ interface UsageRecord {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Zaman</th>
-                <th>Modül</th>
-                <th>Sağlayıcı</th>
-                <th>Model</th>
-                <th>Girdi / Çıktı Token</th>
-                <th>Toplam Token</th>
-                <th>Maliyet ($)</th>
-                <th>Maliyet (₺)</th>
-                <th>Durum</th>
+                <th>{{ t('tools.aiUsage.history.colTime') }}</th>
+                <th>{{ t('tools.aiUsage.history.colModule') }}</th>
+                <th>{{ t('tools.aiUsage.history.colProvider') }}</th>
+                <th>{{ t('tools.aiUsage.history.colModel') }}</th>
+                <th>{{ t('tools.aiUsage.history.colPromptCompletion') }}</th>
+                <th>{{ t('tools.aiUsage.history.colTotalTokens') }}</th>
+                <th>{{ t('tools.aiUsage.history.colCostUsd') }}</th>
+                <th>{{ t('tools.aiUsage.history.colCostTry') }}</th>
+                <th>{{ t('tools.aiUsage.history.colStatus') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -331,7 +334,7 @@ interface UsageRecord {
               </tr>
               <tr *ngIf="filteredHistory.length === 0">
                 <td colspan="9" class="empty-table-cell">
-                  {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? ('Seçili dönemde (' + getPeriodLabel() + ') kayıtlı AI çağrı günlüğü bulunmuyor (0 Çağrı / 0 Token).') : (selectedBrand + ' markası için bu dönemde kayıtlı çağrı günlüğü bulunmuyor.') }}
+                  {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? t('tools.aiUsage.history.emptyAll', { period: getPeriodLabel() }) : t('tools.aiUsage.history.emptyBrand', { brand: selectedBrand }) }}
                 </td>
               </tr>
             </tbody>
@@ -339,6 +342,7 @@ interface UsageRecord {
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .usage-container {
@@ -999,6 +1003,7 @@ interface UsageRecord {
 })
 export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   @ViewChild('tokenDonutCanvas') tokenDonutCanvas!: ElementRef<HTMLCanvasElement>;
@@ -1096,16 +1101,19 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   getPeriodLabel(): string {
     switch (this.selectedPeriod) {
-      case 'this_month': return 'Bu Ay';
-      case 'last_month': return 'Geçen Ay';
-      case '90d': return 'Son 90 Gün';
-      case 'all': return 'Tüm Zamanlar';
-      default: return 'Son 30 Gün';
+      case 'this_month': return this.transloco.translate('tools.aiUsage.periods.thisMonth');
+      case 'last_month': return this.transloco.translate('tools.aiUsage.periods.lastMonth');
+      case '90d': return this.transloco.translate('tools.aiUsage.periods.90d');
+      case 'all': return this.transloco.translate('tools.aiUsage.periods.all');
+      default: return this.transloco.translate('tools.aiUsage.periods.30d');
     }
   }
 
   ngOnInit(): void {
     this.loadData();
+    this.transloco.langChanges$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      setTimeout(() => this.updateCharts(), 50);
+    });
   }
 
   ngAfterViewInit(): void {
@@ -1155,7 +1163,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
             totalTokens: h.totalTokens || h.total_tokens || 0,
             costUsd: h.costUsd || h.cost_usd || 0,
             costTry: h.costTry || h.cost_try || Number(((h.costUsd || h.cost_usd || 0) * this.exchangeRate).toFixed(2)),
-            status: h.status || 'Başarılı'
+            status: h.status || this.transloco.translate('tools.aiUsage.history.defaultStatus')
           }));
         } else {
           this.history = [];
@@ -1220,10 +1228,11 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     const ctx = this.tokenDonutCanvas.nativeElement.getContext('2d');
     if (!ctx) return;
 
+    const tokenUnit = this.transloco.translate('tools.aiUsage.charts.tokenUnit');
     this.donutChart = new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: this.isDonutEmpty ? ['Veri Yok'] : labels,
+        labels: this.isDonutEmpty ? [this.transloco.translate('tools.aiUsage.charts.donutNoDataLabel')] : labels,
         datasets: [{
           data: this.isDonutEmpty ? [1] : data,
           backgroundColor: this.isDonutEmpty ? ['rgba(255, 255, 255, 0.05)'] : backgroundColors,
@@ -1249,7 +1258,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
             callbacks: {
               label: (context) => {
                 const val = Number(context.raw || 0);
-                return ` ${context.label}: ${val.toLocaleString()} Token`;
+                return ` ${context.label}: ${val.toLocaleString()} ${tokenUnit}`;
               }
             }
           }
@@ -1267,9 +1276,11 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
       this.barChart = null;
     }
 
+    const defaultModule = this.transloco.translate('tools.aiUsage.charts.defaultModule');
+    const tokenUnit = this.transloco.translate('tools.aiUsage.charts.tokenUnit');
     const moduleMap = new Map<string, number>();
     for (const h of this.filteredHistory) {
-      const mod = h.moduleName || 'Genel';
+      const mod = h.moduleName || defaultModule;
       moduleMap.set(mod, (moduleMap.get(mod) || 0) + (h.totalTokens || 0));
     }
 
@@ -1285,9 +1296,9 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     this.barChart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: this.isBarEmpty ? ['Modül Verisi Yok'] : labels,
+        labels: this.isBarEmpty ? [this.transloco.translate('tools.aiUsage.charts.barNoDataLabel')] : labels,
         datasets: [{
-          label: 'Harcanan Token',
+          label: this.transloco.translate('tools.aiUsage.charts.barDatasetLabel'),
           data: this.isBarEmpty ? [0] : data,
           backgroundColor: 'rgba(56, 189, 248, 0.45)',
           borderColor: '#38bdf8',
@@ -1314,7 +1325,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
           tooltip: {
             enabled: !this.isBarEmpty,
             callbacks: {
-              label: (context) => ` ${Number(context.raw || 0).toLocaleString()} Token`
+              label: (context) => ` ${Number(context.raw || 0).toLocaleString()} ${tokenUnit}`
             }
           }
         }

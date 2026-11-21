@@ -1,0 +1,81 @@
+{
+  "fab": {
+    "title": "{{ provider }} Mağaza Danışmanı",
+    "label": "{{ provider }} Danışmanı"
+  },
+  "dragDrop": {
+    "title": "Dosyayı Buraya Bırakın",
+    "subtitle": "Resim, Excel, PDF, CSV veya Belge"
+  },
+  "header": {
+    "defaultTitle": "{{ provider }} AI Asistanı",
+    "newChatTitle": "Yeni Sohbet Başlat",
+    "newChatBtn": "Yeni",
+    "historyTitle": "Geçmiş Sohbetler",
+    "settingsTitle": "Yapay Zeka & Model Ayarları (DeepSeek, OpenAI, Claude, Grok, Gemini)",
+    "clearTitle": "Sohbeti Temizle (/clear)",
+    "closeTitle": "Kapat"
+  },
+  "history": {
+    "title": "📜 Geçmiş Sohbetler ({{ count }})",
+    "empty": "Henüz kayıtlı geçmiş sohbetiniz yok.",
+    "messageCount": "💬 {{ count }} mesaj",
+    "generating": "Yanıt üretiliyor...",
+    "deleteTitle": "Bu sohbeti sil"
+  },
+  "messages": {
+    "authorUser": "Siz",
+    "authorAssistant": "{{ provider }} Asistanı",
+    "zoomTitle": "Tam boyutta büyütmek için tıklayın",
+    "attachedImageAlt": "Ekli Görsel",
+    "zoomBadge": "🔍 Büyüt",
+    "defaultImageName": "Görsel.png",
+    "thinkingFallback": "{{ provider }} düşünüyor ve mağazanızı analiz ediyor..."
+  },
+  "quickChips": {
+    "liveMarket": "⚡ Canlı Pazar & Kargo Modülü",
+    "netProfit": "💰 Net Kâr & Durum",
+    "missingCosts": "⚠️ Eksik Maliyet",
+    "productViability": "🔍 Bu Ürün Satılır mı?",
+    "pricingAdvice": "🏷️ Fiyat & Kâr Tavsiyesi",
+    "trendingModels": "🔥 Trend 3D Modeller"
+  },
+  "quickPrompts": {
+    "liveMarket": "Bu ürün Etsy'de kaça satılır ve canlı kargo teklifleri nedir? Pazar araştırması ve kargo motorunu çalıştırır mısın?",
+    "netProfit": "Bugünkü net kârım, cirom ve mağaza durumum nedir?",
+    "missingCosts": "Maliyeti veya kargo faturası eksik olan siparişler var mı?",
+    "productViability": "Bu ürün Etsy'de satılır mı? Pazar talebi ve rekabet analizi yapar mısın?",
+    "pricingAdvice": "Yeni ekleyeceğimiz bir ürün için perakende satış fiyatı, kargo ve net kâr tavsiyesi verir misin?",
+    "trendingModels": "Etsy ve MakerWorld'de en çok kazandıran viral 3D modeller ve kârlılıkları neler?"
+  },
+  "attachments": {
+    "removeTitle": "Kaldır",
+    "clearAllTitle": "Tüm ekleri temizle",
+    "clearAllBtn": "✕ Tümünü Temizle",
+    "clipboardTableName": "Panodan_Tablo.tsv",
+    "singlePrompt": "📎 {{ name }} dosyasını inceler misin?",
+    "multiPrompt": "📎 {{ count }} adet ekli belge/resim inceler misin?"
+  },
+  "input": {
+    "attachTitle": "Resim, Excel, PDF veya Belge Ekle (Ctrl+V ile de yapıştırabilirsiniz)",
+    "placeholder": "Sorunuzu yazın veya resim/belge yapıştırın (Ctrl+V)..."
+  },
+  "session": {
+    "newChatTitle": "Yeni Sohbet",
+    "defaultReviewTitle": "Ürün İncelemesi"
+  },
+  "welcome": {
+    "html": "Selamlar! Ben mağazanızın canlı <strong>{{ provider }} AI</strong> danışmanıyım. 🚀<br><br>VDS sunucu finans motorundaki tüm siparişleriniz, kârlılık dökümleriniz ve anlık dolar kuru (<strong>1$ = {{ rate }} ₺</strong>) arka planda hafızama yüklenmiş durumda.<br><br>Size nasıl yardımcı olabilirim?<br>• <strong>📸 Görsel İncelemesi:</strong> Ürün fotoğrafı yapıştırarak (Ctrl+V) veya yükleyerek Etsy'de satılıp satılmayacağını ve kaça satılacağını danışabilirsiniz.<br>• <strong>📊 Excel & PDF Denetimi:</strong> Kargo faturası, maliyet tablosu veya sipariş raporu yükleyip analizi başlatabilirsiniz.<br>• <strong>💰 Finans & Net Kâr:</strong> Mağazanızın kârlılık dökümünü ve eksik maliyetlerini inceleyebiliriz."
+  },
+  "errors": {
+    "connectionDelay": "Üzgünüm, yanıt oluşturulurken bir bağlantı gecikmesi oluştu. Lütfen tekrar deneyiniz."
+  },
+  "extract": {
+    "csvTruncated": "*(Tablodan ilk 50 satır gösteriliyor, toplam {{ total }} satır)*",
+    "pdfContent": "[PDF İçeriği: {{ fileName }}]",
+    "pdfAttached": "[PDF Belgesi Eklendi: {{ fileName }}]",
+    "excelTable": "[Excel Tablosu: {{ fileName }} — Toplam {{ rows }} Satır]",
+    "excelCells": "[Excel Hücre Verileri: {{ fileName }}]",
+    "excelAttached": "[Excel Belgesi Eklendi: {{ fileName }}]"
+  }
+}

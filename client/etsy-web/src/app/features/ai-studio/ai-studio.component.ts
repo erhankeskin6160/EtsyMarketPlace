@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 
 interface ScenePreset {
   id: string;
@@ -14,8 +15,10 @@ interface ScenePreset {
 @Component({
   selector: 'app-ai-studio',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope({ scope: 'ai-studio', alias: 'aiStudio' })],
   template: `
+    <ng-container *transloco="let t">
     <div class="studio-container">
       <!-- TOP HEADER -->
       <div class="studio-header">
@@ -30,8 +33,8 @@ interface ScenePreset {
             </svg>
           </div>
           <div>
-            <h1 class="page-title">AI Görsel Stüdyosu & Arka Plan Sihirbazı</h1>
-            <p class="page-subtitle">Anti-ban EXIF temizleme, yapay zeka ile arka plan değiştirme ve 2000x2000px Etsy optimizasyonu</p>
+            <h1 class="page-title">{{ t('aiStudio.title') }}</h1>
+            <p class="page-subtitle">{{ t('aiStudio.subtitle') }}</p>
           </div>
         </div>
 
@@ -40,7 +43,7 @@ interface ScenePreset {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             </svg>
-            <span>Anti-Ban EXIF Koruması Aktif</span>
+            <span>{{ t('aiStudio.exifShieldBadge') }}</span>
           </div>
         </div>
       </div>
@@ -52,8 +55,8 @@ interface ScenePreset {
         <div class="canvas-col">
           <div class="canvas-card">
             <div class="canvas-header">
-              <span class="canvas-title">Etsy Kare Çıktı (2000 x 2000 px)</span>
-              <span class="ratio-badge">1:1 Square</span>
+              <span class="canvas-title">{{ t('aiStudio.canvas.title') }}</span>
+              <span class="ratio-badge">{{ t('aiStudio.canvas.ratioBadge') }}</span>
             </div>
 
             <!-- DROPZONE OR PREVIEW -->
@@ -63,19 +66,19 @@ interface ScenePreset {
               (drop)="onDrop($event)">
               
               <!-- Background Scene Layer -->
-              <img *ngIf="backgroundSceneUrl" [src]="backgroundSceneUrl" class="scene-background-img" alt="Sahne Arka Planı" />
+              <img *ngIf="backgroundSceneUrl" [src]="backgroundSceneUrl" class="scene-background-img" [alt]="t('aiStudio.canvas.sceneBgAlt')" />
 
               <!-- Foreground Product Image Layer -->
-              <img [src]="activeImageUrl" class="main-preview-img" [class.with-background]="!!backgroundSceneUrl" [style.filter]="currentFilter" alt="Product" />
+              <img [src]="activeImageUrl" class="main-preview-img" [class.with-background]="!!backgroundSceneUrl" [style.filter]="currentFilter" [alt]="t('aiStudio.canvas.productAlt')" />
 
               <div *ngIf="backgroundSceneUrl" class="active-scene-pill">
-                <span>Sahne: {{ getSelectedSceneName() }}</span>
-                <button (click)="clearScene()" class="btn-clear-scene" title="Arka planı kaldır">✕ Fonu Kaldır</button>
+                <span>{{ t('aiStudio.canvas.activeScene', { name: t(getSelectedSceneNameKey()) }) }}</span>
+                <button (click)="clearScene()" class="btn-clear-scene" [title]="t('aiStudio.canvas.clearSceneTitle')">{{ t('aiStudio.canvas.clearSceneBtn') }}</button>
               </div>
 
               <div *ngIf="isProcessing" class="processing-overlay">
                 <div class="spinner"></div>
-                <span>Yapay Zeka Arka Planı İşliyor...</span>
+                <span>{{ t('aiStudio.canvas.processingOverlay') }}</span>
               </div>
             </div>
 
@@ -83,15 +86,15 @@ interface ScenePreset {
             <div class="exif-status-bar">
               <div class="exif-item">
                 <span class="exif-dot green"></span>
-                <span>Kamera & Lens Meta Verisi: <strong>Temizlendi</strong></span>
+                <span>{{ t('aiStudio.exif.cameraLensLabel') }} <strong>{{ t('aiStudio.exif.cleaned') }}</strong></span>
               </div>
               <div class="exif-item">
                 <span class="exif-dot green"></span>
-                <span>GPS Konum İmzası: <strong>Sıfırlandı</strong></span>
+                <span>{{ t('aiStudio.exif.gpsLabel') }} <strong>{{ t('aiStudio.exif.reset') }}</strong></span>
               </div>
               <div class="exif-item">
                 <span class="exif-dot green"></span>
-                <span>pHash Koruması: <strong>Benzersizleştirildi</strong></span>
+                <span>{{ t('aiStudio.exif.pHashLabel') }} <strong>{{ t('aiStudio.exif.uniquified') }}</strong></span>
               </div>
             </div>
 
@@ -104,7 +107,7 @@ interface ScenePreset {
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                Yeni Fotoğraf Yükle
+                {{ t('aiStudio.actions.uploadPhoto') }}
               </label>
 
               <button class="btn-download" (click)="downloadImage()">
@@ -113,7 +116,7 @@ interface ScenePreset {
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                2000x2000px İndir
+                {{ t('aiStudio.actions.download2000') }}
               </button>
 
               <button class="btn-send-to-listing" (click)="sendToListing()">
@@ -121,7 +124,7 @@ interface ScenePreset {
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                   <polyline points="12 5 19 12 12 19"></polyline>
                 </svg>
-                İlan Oluşturucuya Aktar
+                {{ t('aiStudio.actions.sendToListing') }}
               </button>
             </div>
           </div>
@@ -132,8 +135,8 @@ interface ScenePreset {
           
           <!-- SCENES -->
           <div class="control-card">
-            <span class="control-label">1. Yapay Zeka Arka Plan & Sahne Seçici</span>
-            <p class="control-hint">Ürününüzün arkasını otomatik temizler ve lüks stüdyo fonlarına yerleştirir.</p>
+            <span class="control-label">{{ t('aiStudio.controls.sceneSelectorTitle') }}</span>
+            <p class="control-hint">{{ t('aiStudio.controls.sceneSelectorHint') }}</p>
 
             <div class="scenes-list">
               <div 
@@ -144,8 +147,8 @@ interface ScenePreset {
                 
                 <span class="scene-icon">{{ s.icon }}</span>
                 <div class="scene-info">
-                  <span class="scene-name">{{ s.name }}</span>
-                  <span class="scene-desc">{{ s.desc }}</span>
+                  <span class="scene-name">{{ t('aiStudio.scenes.' + s.id + '.name') }}</span>
+                  <span class="scene-desc">{{ t('aiStudio.scenes.' + s.id + '.desc') }}</span>
                 </div>
               </div>
             </div>
@@ -153,11 +156,11 @@ interface ScenePreset {
 
           <!-- ENHANCEMENT CONTROLS -->
           <div class="control-card">
-            <span class="control-label">2. Işık ve Canlılık Ayarları</span>
+            <span class="control-label">{{ t('aiStudio.controls.enhancementTitle') }}</span>
             
             <div class="slider-group">
               <div class="slider-header">
-                <span>Parlaklık (Brightness)</span>
+                <span>{{ t('aiStudio.controls.brightness') }}</span>
                 <span>{{ brightness }}%</span>
               </div>
               <input type="range" min="80" max="130" [(ngModel)]="brightness" (input)="updateFilter()" class="slider-input" />
@@ -165,7 +168,7 @@ interface ScenePreset {
 
             <div class="slider-group">
               <div class="slider-header">
-                <span>Kontrast (Contrast)</span>
+                <span>{{ t('aiStudio.controls.contrast') }}</span>
                 <span>{{ contrast }}%</span>
               </div>
               <input type="range" min="80" max="140" [(ngModel)]="contrast" (input)="updateFilter()" class="slider-input" />
@@ -173,7 +176,7 @@ interface ScenePreset {
 
             <div class="slider-group">
               <div class="slider-header">
-                <span>Doygunluk (Saturation)</span>
+                <span>{{ t('aiStudio.controls.saturation') }}</span>
                 <span>{{ saturation }}%</span>
               </div>
               <input type="range" min="80" max="150" [(ngModel)]="saturation" (input)="updateFilter()" class="slider-input" />
@@ -189,6 +192,7 @@ interface ScenePreset {
 
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .studio-container {
@@ -543,6 +547,7 @@ interface ScenePreset {
   `]
 })
 export class AiStudioComponent {
+  private transloco = inject(TranslocoService);
   activeImageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1000&auto=format&fit=crop&q=80';
   backgroundSceneUrl = '';
   selectedSceneId = '';
@@ -587,8 +592,10 @@ export class AiStudioComponent {
 
   constructor(private router: Router) {}
 
-  getSelectedSceneName(): string {
-    return this.scenes.find(s => s.id === this.selectedSceneId)?.name || 'Özel Sahne';
+  getSelectedSceneNameKey(): string {
+    return this.scenes.some(s => s.id === this.selectedSceneId)
+      ? `aiStudio.scenes.${this.selectedSceneId}.name`
+      : 'aiStudio.scenes.custom';
   }
 
   selectScene(scene: ScenePreset): void {
@@ -601,7 +608,8 @@ export class AiStudioComponent {
     setTimeout(() => {
       this.backgroundSceneUrl = scene.previewUrl;
       this.isProcessing = false;
-      this.toastMessage = `Sahne "${scene.name}" arka plana yerleştirildi! (Ürününüz korundu)`;
+      const sceneName = this.transloco.translate(`aiStudio.scenes.${scene.id}.name`);
+      this.toastMessage = this.transloco.translate('aiStudio.toast.sceneApplied', { name: sceneName });
       setTimeout(() => this.toastMessage = '', 3000);
     }, 600);
   }
@@ -609,7 +617,7 @@ export class AiStudioComponent {
   clearScene(): void {
     this.selectedSceneId = '';
     this.backgroundSceneUrl = '';
-    this.toastMessage = 'Arka plan sahnesi kaldırıldı, orijinal ürün fona döndü.';
+    this.toastMessage = this.transloco.translate('aiStudio.toast.sceneCleared');
     setTimeout(() => this.toastMessage = '', 3000);
   }
 
@@ -623,7 +631,7 @@ export class AiStudioComponent {
       const reader = new FileReader();
       reader.onload = (e: any) => {
         this.activeImageUrl = e.target.result;
-        this.toastMessage = 'Fotoğraf yüklendi & EXIF meta verileri temizlendi!';
+        this.toastMessage = this.transloco.translate('aiStudio.toast.photoUploaded');
         setTimeout(() => this.toastMessage = '', 3000);
       };
       reader.readAsDataURL(file);
@@ -641,7 +649,7 @@ export class AiStudioComponent {
       const reader = new FileReader();
       reader.onload = (e: any) => {
         this.activeImageUrl = e.target.result;
-        this.toastMessage = 'Sürüklenen fotoğraf yüklendi ve EXIF sıfırlandı!';
+        this.toastMessage = this.transloco.translate('aiStudio.toast.photoDropped');
         setTimeout(() => this.toastMessage = '', 3000);
       };
       reader.readAsDataURL(file);
@@ -656,7 +664,7 @@ export class AiStudioComponent {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      this.toastMessage = '2000x2000px Etsy karesi indirildi!';
+      this.toastMessage = this.transloco.translate('aiStudio.toast.downloadedClean');
       setTimeout(() => this.toastMessage = '', 3000);
       return;
     }
@@ -690,7 +698,7 @@ export class AiStudioComponent {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          this.toastMessage = '2000x2000px Etsy kompozit görseli indirildi!';
+          this.toastMessage = this.transloco.translate('aiStudio.toast.downloadedComposite');
         } catch {
           const a = document.createElement('a');
           a.href = this.activeImageUrl;
@@ -698,7 +706,7 @@ export class AiStudioComponent {
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          this.toastMessage = '2000x2000px Ürün görseli indirildi!';
+          this.toastMessage = this.transloco.translate('aiStudio.toast.downloadedProduct');
         }
         setTimeout(() => this.toastMessage = '', 3000);
       };

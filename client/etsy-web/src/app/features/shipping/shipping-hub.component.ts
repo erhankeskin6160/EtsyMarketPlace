@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 
 export interface CarrierRate {
   id: string;
@@ -27,8 +28,10 @@ export interface CarrierRate {
 @Component({
   selector: 'app-shipping-hub',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('shipping')],
   template: `
+    <ng-container *transloco="let t">
     <div class="shipping-view">
       <!-- HEADER -->
       <div class="shipping-header">
@@ -42,14 +45,14 @@ export interface CarrierRate {
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Kargo Entegrasyonları Hub'ı & Navlun Karşılaştırma</h1>
-            <p class="page-subtitle">4 taşıyıcı (Aras Global, ShipEntegra, Shiptomore, Navlungo) üzerinden anlık navlun ve Hızlı Gümrük Ödemesi (DDP) simülasyonu</p>
+            <h1 class="page-title">{{ t('shipping.title') }}</h1>
+            <p class="page-subtitle">{{ t('shipping.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-right">
           <button class="btn-primary-ship" (click)="calculateRates()" [disabled]="isLoading">
-            {{ isLoading ? '⏳ Hesaplanıyor...' : '⚡ Fiyatları Yeniden Hesapla' }}
+            {{ isLoading ? t('shipping.calculatingBtn') : t('shipping.recalculateBtn') }}
           </button>
         </div>
       </div>
@@ -59,8 +62,8 @@ export interface CarrierRate {
         <div class="toast-left">
           <span class="toast-icon">📦</span>
           <div>
-            <strong>{{ labelSuccessInfo.carrier }} Uluslararası Kargo Barkodu Oluşturuldu!</strong>
-            <p>Takip Numarası: <code>{{ labelSuccessInfo.trackingNumber }}</code> (Hedef: {{ labelSuccessInfo.country }})</p>
+            <strong>{{ t('shipping.labelToast.title', { carrier: labelSuccessInfo.carrier }) }}</strong>
+            <p>{{ t('shipping.labelToast.trackingLabel') }} <code>{{ labelSuccessInfo.trackingNumber }}</code> {{ t('shipping.labelToast.destination', { country: labelSuccessInfo.country }) }}</p>
           </div>
         </div>
         <button class="btn-close-toast" (click)="labelSuccessInfo = null">✕</button>
@@ -70,46 +73,46 @@ export interface CarrierRate {
       <div class="glass-card calc-card">
         <div class="calc-row">
           <div class="field-col">
-            <label class="field-label">Varış Ülkesi:</label>
+            <label class="field-label">{{ t('shipping.calculator.destinationCountry') }}</label>
             <select [(ngModel)]="destinationCountry" class="field-select" (change)="calculateRates()">
-              <option value="US">🇺🇸 Amerika Birleşik Devletleri (ABD)</option>
-              <option value="GB">🇬🇧 Birleşik Krallık (İngiltere)</option>
-              <option value="DE">🇩🇪 Almanya</option>
-              <option value="CA">🇨🇦 Kanada</option>
-              <option value="FR">🇫🇷 Fransa</option>
-              <option value="AU">🇦🇺 Avustralya</option>
+              <option value="US">{{ t('shipping.calculator.countries.US') }}</option>
+              <option value="GB">{{ t('shipping.calculator.countries.GB') }}</option>
+              <option value="DE">{{ t('shipping.calculator.countries.DE') }}</option>
+              <option value="CA">{{ t('shipping.calculator.countries.CA') }}</option>
+              <option value="FR">{{ t('shipping.calculator.countries.FR') }}</option>
+              <option value="AU">{{ t('shipping.calculator.countries.AU') }}</option>
             </select>
           </div>
 
           <div class="field-col">
-            <label class="field-label">Paket Ağırlığı (Gram):</label>
+            <label class="field-label">{{ t('shipping.calculator.weightGrams') }}</label>
             <input type="number" [(ngModel)]="weightGrams" class="field-input" (change)="calculateRates()" />
           </div>
 
           <div class="field-col">
-            <label class="field-label">Ebatlar (cm): En x Boy x Yükseklik</label>
+            <label class="field-label">{{ t('shipping.calculator.dimensionsLabel') }}</label>
             <div class="dims-group">
-              <input type="number" [(ngModel)]="dimWidth" class="field-input-dim" (change)="calculateRates()" placeholder="En" />
+              <input type="number" [(ngModel)]="dimWidth" class="field-input-dim" (change)="calculateRates()" [placeholder]="t('shipping.calculator.dimWidthPlaceholder')" />
               <span>×</span>
-              <input type="number" [(ngModel)]="dimLength" class="field-input-dim" (change)="calculateRates()" placeholder="Boy" />
+              <input type="number" [(ngModel)]="dimLength" class="field-input-dim" (change)="calculateRates()" [placeholder]="t('shipping.calculator.dimLengthPlaceholder')" />
               <span>×</span>
-              <input type="number" [(ngModel)]="dimHeight" class="field-input-dim" (change)="calculateRates()" placeholder="Yük" />
+              <input type="number" [(ngModel)]="dimHeight" class="field-input-dim" (change)="calculateRates()" [placeholder]="t('shipping.calculator.dimHeightPlaceholder')" />
             </div>
           </div>
 
           <div class="field-col">
-            <label class="field-label">GTİP / HS Kodu:</label>
+            <label class="field-label">{{ t('shipping.calculator.hsCodeLabel') }}</label>
             <input type="text" [(ngModel)]="hsCode" class="field-input" (change)="calculateRates()" placeholder="3926909990" />
           </div>
 
           <div class="field-col" style="max-width: 145px;">
-            <label class="field-label">Gümrük Beyan ($):</label>
+            <label class="field-label">{{ t('shipping.calculator.declaredValueLabel') }}</label>
             <input type="number" step="0.5" min="0.01" [(ngModel)]="declaredValueUsd" class="field-input" (change)="calculateRates()" />
           </div>
 
           <div class="field-col desi-col">
-            <label class="field-label">Faturalandırılacak ({{ desi | number:'1.2-2' }} Desi):</label>
-            <span class="desi-value">{{ billableKg | number:'1.2-2' }} kg</span>
+            <label class="field-label">{{ t('shipping.calculator.billableLabel', { desi: (desi | number:'1.2-2') }) }}</label>
+            <span class="desi-value">{{ t('shipping.calculator.kgUnit', { kg: (billableKg | number:'1.2-2') }) }}</span>
           </div>
         </div>
       </div>
@@ -118,46 +121,47 @@ export interface CarrierRate {
       <div class="carriers-grid">
         <div *ngFor="let c of carriers" class="glass-card carrier-card" [class.best-card]="c.isBestValue">
           <div class="carrier-badge-row">
-            <span *ngIf="c.isBestValue" class="badge-best">🌟 EN KÂRLI TAŞIYICI</span>
-            <span class="carrier-eta">{{ c.eta }}</span>
+            <span *ngIf="c.isBestValue" class="badge-best">{{ t('shipping.card.bestValueBadge') }}</span>
+            <span class="carrier-eta">{{ c.eta || t('shipping.carriers.' + c.id + '.eta') }}</span>
           </div>
 
           <div class="carrier-brand-row">
             <span class="carrier-logo">{{ c.logo }}</span>
             <div class="carrier-info">
-              <h3 class="carrier-name">{{ c.name }}</h3>
-              <span class="carrier-type">{{ c.trackingType }}</span>
+              <h3 class="carrier-name">{{ t('shipping.carriers.' + c.id + '.name') }}</h3>
+              <span class="carrier-type">{{ c.trackingType || t('shipping.carriers.' + c.id + '.trackingType') }}</span>
             </div>
           </div>
 
           <div class="price-box">
             <div class="price-usd">{{ c.totalUsd === null ? '—' : ('$' + (c.totalUsd | number:'1.2-2')) }}</div>
-            <div class="price-try">{{ c.totalTry ? ('₺' + (c.totalTry | number:'1.2-2')) : 'Hesaplanıyor...' }}</div>
-            <span class="tax-info">{{ c.badgeText || 'Sadece Navlun' }}</span>
+            <div class="price-try">{{ c.totalTry ? ('₺' + (c.totalTry | number:'1.2-2')) : t('shipping.card.calculating') }}</div>
+            <span class="tax-info">{{ c.badgeText || t(c.badgeKey || 'shipping.card.freightOnly') }}</span>
           </div>
 
           <div class="hub-breakdown-box" *ngIf="c.totalUsd !== null">
-            <div class="hb-row"><span>Baz Navlun</span><span>{{ c.costUsd !== null ? ('$' + (c.costUsd | number:'1.2-2')) : '—' }}</span></div>
-            <div class="hb-row"><span>Yakıt + Ek Ücret</span><span>{{ '$' + (((c.fuelSurchargeUsd || 0) + (c.additionalFeeUsd || 0)) | number:'1.2-2') }}</span></div>
-            <div class="hb-row ddp"><span>🛡️ Hızlı Gümrük (DDP)</span><span>{{ c.fastCustomsPaymentUsd != null ? ('+$' + (c.fastCustomsPaymentUsd | number:'1.2-2')) : '—' }}</span></div>
+            <div class="hb-row"><span>{{ t('shipping.card.baseFreight') }}</span><span>{{ c.costUsd !== null ? ('$' + (c.costUsd | number:'1.2-2')) : '—' }}</span></div>
+            <div class="hb-row"><span>{{ t('shipping.card.fuelAndExtra') }}</span><span>{{ '$' + (((c.fuelSurchargeUsd || 0) + (c.additionalFeeUsd || 0)) | number:'1.2-2') }}</span></div>
+            <div class="hb-row ddp"><span>{{ t('shipping.card.fastCustomsDdp') }}</span><span>{{ c.fastCustomsPaymentUsd != null ? ('+$' + (c.fastCustomsPaymentUsd | number:'1.2-2')) : '—' }}</span></div>
             <div class="hb-row grand">
-              <span>Her Şey Dahil Toplam</span>
+              <span>{{ t('shipping.card.allInclusiveTotal') }}</span>
               <span>{{ c.grandTotalUsd != null ? ('$' + (c.grandTotalUsd | number:'1.2-2')) : ('$' + (c.totalUsd | number:'1.2-2')) }}</span>
             </div>
-            <div class="hb-try" *ngIf="c.grandTotalTry">₺{{ c.grandTotalTry | number:'1.2-2' }} (Gümrük Dahil)</div>
+            <div class="hb-try" *ngIf="c.grandTotalTry">₺{{ c.grandTotalTry | number:'1.2-2' }} {{ t('shipping.card.customsIncluded') }}</div>
           </div>
 
           <div class="carrier-btn-row">
             <button class="btn-create-label" (click)="sendToOrders(c, false)">
-              🚀 Navlun İle Aç
+              {{ t('shipping.card.openWithFreightBtn') }}
             </button>
             <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c, true)">
-              🛡️ DDP Uygula
+              {{ t('shipping.card.applyDdpBtn') }}
             </button>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .shipping-view {
@@ -459,6 +463,7 @@ export interface CarrierRate {
 })
 export class ShippingHubComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   destinationCountry = 'US';
   weightGrams = 250;
   dimWidth = 15;
@@ -470,50 +475,50 @@ export class ShippingHubComponent implements OnInit {
   billableKg = 0.6;
   isLoading = false;
 
-  carriers: (CarrierRate & { totalTry?: number; badgeText?: string })[] = [
+  carriers: (CarrierRate & { totalTry?: number; badgeText?: string; badgeKey?: string })[] = [
     {
       id: 'aras',
       name: 'Aras Global Kargo',
       logo: '🚚',
-      eta: '2-5 İş Günü',
+      eta: '',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Widect / UPS Express'
+      trackingType: ''
     },
     {
       id: 'shipentegra',
       name: 'ShipEntegra Kargo',
       logo: '📦',
-      eta: '3-6 İş Günü',
+      eta: '',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Amerika Eko Plus / Express'
+      trackingType: ''
     },
     {
       id: 'navlungo',
       name: 'Navlungo Kargo',
       logo: '🚢',
-      eta: '3-7 İş Günü',
+      eta: '',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Widect Eco / UPS Saver'
+      trackingType: ''
     },
     {
       id: 'shiptomore',
       name: 'Shiptomore Kargo',
       logo: '✈️',
-      eta: '2-4 İş Günü',
+      eta: '',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'FedEx / UPS DDP Express'
+      trackingType: ''
     }
   ];
 
@@ -573,7 +578,10 @@ export class ShippingHubComponent implements OnInit {
             card.grandTotalTry = bestForCarrier.grandTotalTry != null ? Number(bestForCarrier.grandTotalTry) : card.totalTry;
             card.eta = bestForCarrier.estimatedDays || card.eta;
             card.trackingType = bestForCarrier.serviceType || card.trackingType;
-            card.badgeText = bestForCarrier.quoteSourceBadge || (bestForCarrier.isLive ? 'Canlı API Teklifi' : 'Sözleşme Tarifesi');
+            card.badgeText = bestForCarrier.quoteSourceBadge || '';
+            card.badgeKey = bestForCarrier.quoteSourceBadge
+              ? undefined
+              : (bestForCarrier.isLive ? 'shipping.card.liveApiQuote' : 'shipping.card.contractTariff');
             if (card.totalUsd < minPrice) {
               minPrice = card.totalUsd;
             }
@@ -593,10 +601,14 @@ export class ShippingHubComponent implements OnInit {
   sendToOrders(c: CarrierRate, includeCustoms: boolean = false): void {
     if (c.totalUsd === null) return;
     const appliedCost = includeCustoms ? (c.grandTotalUsd ?? c.totalUsd) : c.totalUsd;
+    const carrierName = c.trackingType
+      || this.transloco.translate(`shipping.carriers.${c.id}.trackingType`)
+      || this.transloco.translate(`shipping.carriers.${c.id}.name`)
+      || c.name;
     this.router.navigate(['/orders'], {
       queryParams: {
         carrierKey: c.id,
-        carrierName: c.trackingType || c.name,
+        carrierName,
         carrierCost: appliedCost ?? ''
       }
     });

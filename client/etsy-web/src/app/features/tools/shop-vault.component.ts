@@ -1,14 +1,17 @@
 import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-shop-vault',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('tools')],
   template: `
+    <ng-container *transloco="let t">
     <div class="vault-view">
       <!-- HEADER -->
       <div class="vault-header">
@@ -20,13 +23,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             </svg>
           </div>
           <div>
-            <h1 class="page-title">Mağaza Kasası & Anti-Ban Yedekleme (.etsyvault)</h1>
-            <p class="page-subtitle">Tek tıkla tüm mağazanızı şifreli yedekleyin, olası kapanmalara karşı yeni mağazaya anti-ban ile taşıyın</p>
+            <h1 class="page-title">{{ t('tools.shopVault.title') }}</h1>
+            <p class="page-subtitle">{{ t('tools.shopVault.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-badge">
-          <span>🛡️ Kasa Durumu: Güvenli</span>
+          <span>{{ t('tools.shopVault.vaultStatusBadge') }}</span>
         </div>
       </div>
 
@@ -36,37 +39,37 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         <!-- CARD 1: CREATE BACKUP -->
         <div class="glass-card">
           <div class="card-head">
-            <span class="card-label">1. Tam Mağaza Yedeği Oluştur (.etsyvault)</span>
-            <span class="shop-pill">Mağaza: {{ etsyApi.activeShopId() }}</span>
+            <span class="card-label">{{ t('tools.shopVault.backupCard.label') }}</span>
+            <span class="shop-pill">{{ t('tools.shopVault.backupCard.shopPill', { shopId: etsyApi.activeShopId() }) }}</span>
           </div>
           
           <p class="card-desc">
-            Aktif mağazanızdaki tüm <strong>ilanlar, başlıklar, 13 etiketler, fiyatlar, varyasyonlar, stoklar ve HD fotoğraf bağlantıları</strong> tek bir şifreli dosya olarak paketlenir.
+            {{ t('tools.shopVault.backupCard.descPrefix') }}<strong>{{ t('tools.shopVault.backupCard.descStrong') }}</strong>{{ t('tools.shopVault.backupCard.descSuffix') }}
           </p>
 
           <div class="backup-options">
             <label class="custom-chk">
               <input type="checkbox" [(ngModel)]="includeImages" />
-              <span>Yüksek Çözünürlüklü Fotoğraf Manifestini Dahil Et</span>
+              <span>{{ t('tools.shopVault.backupCard.includeImages') }}</span>
             </label>
             <label class="custom-chk">
               <input type="checkbox" [(ngModel)]="includeInactive" />
-              <span>Taslak ve Pasif İlanları da Yedekle</span>
+              <span>{{ t('tools.shopVault.backupCard.includeInactive') }}</span>
             </label>
           </div>
 
           <div class="vault-summary-box">
             <div class="v-stat">
               <span class="v-num">{{ totalListingsCount }}</span>
-              <span class="v-lbl">Yedeklenecek İlan</span>
+              <span class="v-lbl">{{ t('tools.shopVault.backupCard.statListings') }}</span>
             </div>
             <div class="v-stat">
               <span class="v-num">{{ totalTagsCount }}</span>
-              <span class="v-lbl">Toplam Etiket</span>
+              <span class="v-lbl">{{ t('tools.shopVault.backupCard.statTags') }}</span>
             </div>
             <div class="v-stat">
               <span class="v-num">100%</span>
-              <span class="v-lbl">Şifreleme (AES-256)</span>
+              <span class="v-lbl">{{ t('tools.shopVault.backupCard.statEncryption') }}</span>
             </div>
           </div>
 
@@ -76,19 +79,19 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            {{ isBackingUp ? 'Paketleniyor...' : '💾 .etsyvault Dosyası Oluştur ve İndir' }}
+            {{ isBackingUp ? t('tools.shopVault.backupCard.btnPackaging') : t('tools.shopVault.backupCard.btnCreate') }}
           </button>
         </div>
 
         <!-- CARD 2: RESTORE & MIGRATION -->
         <div class="glass-card">
           <div class="card-head">
-            <span class="card-label">2. Yedekten Geri Yükle & Anti-Ban Taşıma (Migration)</span>
-            <span class="shield-pill">Anti-Ban Destekli</span>
+            <span class="card-label">{{ t('tools.shopVault.restoreCard.label') }}</span>
+            <span class="shield-pill">{{ t('tools.shopVault.restoreCard.shieldPill') }}</span>
           </div>
 
           <p class="card-desc">
-            Eski mağazanız kapandıysa veya yeni bir mağaza açtıysanız, <b>.etsyvault</b> dosyasını yükleyerek tüm ürünleri tek hamlede aktarabilirsiniz.
+            {{ t('tools.shopVault.restoreCard.descPrefix') }}<b>.etsyvault</b>{{ t('tools.shopVault.restoreCard.descSuffix') }}
           </p>
 
           <div class="drop-zone" (click)="fileInput.click()">
@@ -98,23 +101,23 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
               <polyline points="17 8 12 3 7 8"></polyline>
               <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
-            <span class="drop-title">{{ uploadedFileName || '.etsyvault Dosyasını Sürükleyin veya Seçin' }}</span>
-            <span class="drop-sub">Otomatik pHash ve EXIF temizleyici uygulanır</span>
+            <span class="drop-title">{{ uploadedFileName || t('tools.shopVault.restoreCard.dropTitle') }}</span>
+            <span class="drop-sub">{{ t('tools.shopVault.restoreCard.dropSub') }}</span>
           </div>
 
           <div class="backup-options">
             <label class="custom-chk">
               <input type="checkbox" [(ngModel)]="autoRewriteSeo" />
-              <span>Yapay Zeka ile Başlık ve Açıklamaları Yeniden İfade Et (Anti-Duplicate)</span>
+              <span>{{ t('tools.shopVault.restoreCard.autoRewriteSeo') }}</span>
             </label>
             <label class="custom-chk">
               <input type="checkbox" [(ngModel)]="asDraft" />
-              <span>Ürünleri Taslak (Draft) Olarak Aç (Güvenli Mod)</span>
+              <span>{{ t('tools.shopVault.restoreCard.asDraft') }}</span>
             </label>
           </div>
 
           <button class="btn-restore" [disabled]="!uploadedFileName || isRestoring" (click)="restoreBackup()">
-            🚀 Yeni Mağazaya Taşıma Başlat
+            {{ t('tools.shopVault.restoreCard.btnRestore') }}
           </button>
         </div>
 
@@ -125,6 +128,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         ✓ {{ statusMessage }}
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .vault-view {
@@ -349,6 +353,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class ShopVaultComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   includeImages = true;
   includeInactive = true;
   autoRewriteSeo = true;
@@ -443,12 +448,15 @@ export class ShopVaultComponent implements OnInit {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        this.statusMessage = `Mağaza yedeği (${exportItems.length} ilan, ${totalTags} etiket) başarıyla .etsyvault formatında şifrelendi ve indirildi!`;
+        this.statusMessage = this.transloco.translate('tools.shopVault.toasts.backupSuccess', {
+          listings: exportItems.length,
+          tags: totalTags
+        });
         setTimeout(() => this.statusMessage = '', 4500);
       },
       error: () => {
         this.isBackingUp = false;
-        this.statusMessage = 'Yedekleme dosyası hazırlanırken hata oluştu.';
+        this.statusMessage = this.transloco.translate('tools.shopVault.toasts.backupError');
         setTimeout(() => this.statusMessage = '', 4000);
       }
     });
@@ -465,7 +473,11 @@ export class ShopVaultComponent implements OnInit {
           if (parsed && parsed.listings && Array.isArray(parsed.listings)) {
             this.parsedListingsCount = parsed.listings.length;
             this.parsedTagsCount = parsed.listings.reduce((acc: number, item: any) => acc + (item.tags?.length || 0), 0);
-            this.statusMessage = `✓ "${file.name}" doğrulandı: ${this.parsedListingsCount} ilan ve ${this.parsedTagsCount} etiket bulundu.`;
+            this.statusMessage = this.transloco.translate('tools.shopVault.toasts.fileVerified', {
+              fileName: file.name,
+              listings: this.parsedListingsCount,
+              tags: this.parsedTagsCount
+            });
             setTimeout(() => this.statusMessage = '', 4000);
           }
         } catch {
@@ -481,10 +493,16 @@ export class ShopVaultComponent implements OnInit {
     this.isRestoring = true;
     setTimeout(() => {
       this.isRestoring = false;
-      const countMsg = this.parsedListingsCount > 0 
-        ? `(${this.parsedListingsCount} ilan ve ${this.parsedTagsCount} etiket)`
+      const countInfo = this.parsedListingsCount > 0
+        ? this.transloco.translate('tools.shopVault.toasts.restoreCountInfo', {
+            listings: this.parsedListingsCount,
+            tags: this.parsedTagsCount
+          })
         : '';
-      this.statusMessage = `🎉 "${this.uploadedFileName}" yedeği ${countMsg} başarıyla yeni mağazaya aktarıldı ve taslaklar oluşturuldu!`;
+      this.statusMessage = this.transloco.translate('tools.shopVault.toasts.restoreSuccess', {
+        fileName: this.uploadedFileName,
+        countInfo
+      });
       setTimeout(() => this.statusMessage = '', 5000);
     }, 1500);
   }

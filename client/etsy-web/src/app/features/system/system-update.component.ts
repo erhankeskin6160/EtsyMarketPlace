@@ -1,27 +1,30 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-system-update',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   template: `
+    <ng-container *transloco="let t">
     <div class="update-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">🚀</div>
           <div>
-            <h1 class="page-title">Sistem Güncelleme & VDS CI/CD Komuta Merkezi</h1>
-            <p class="page-subtitle">VDS Minimal API durumu, GitHub Actions otomatik derleme hattı ve SQLite veri tabanı bakım araçları</p>
+            <h1 class="page-title">{{ t('settings.systemUpdate.title') }}</h1>
+            <p class="page-subtitle">{{ t('settings.systemUpdate.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-check" (click)="checkHealth()">
-            ⚡ Canlılık Kontrolü Yap
+            {{ t('settings.systemUpdate.checkHealthBtn') }}
           </button>
         </div>
       </div>
@@ -30,40 +33,40 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <div class="status-grid">
         <div class="glass-card status-card">
           <div class="card-top">
-            <span class="card-tag vds">VDS API SUNUCUSU</span>
+            <span class="card-tag vds">{{ t('settings.systemUpdate.vdsCard.tag') }}</span>
             <span class="pulse-dot green"></span>
           </div>
           <span class="main-val">{{ vdsVersion }}</span>
-          <span class="sub-text">IP: 5.180.81.148:5263 (Windows x64)</span>
+          <span class="sub-text">{{ t('settings.systemUpdate.vdsCard.ipSub') }}</span>
           <div class="metric-row">
-            <span>Çalışma Süresi: <b>{{ uptimeHours }} saat</b></span>
-            <span>Durum: <b class="text-green">HTTP 200 OK</b></span>
+            <span>{{ t('settings.systemUpdate.vdsCard.uptimeLabel') }} <b>{{ t('settings.systemUpdate.vdsCard.uptimeVal', { hours: uptimeHours }) }}</b></span>
+            <span>{{ t('settings.systemUpdate.vdsCard.statusLabel') }} <b class="text-green">HTTP 200 OK</b></span>
           </div>
         </div>
 
         <div class="glass-card status-card">
           <div class="card-top">
-            <span class="card-tag github">GITHUB ACTIONS CI/CD</span>
+            <span class="card-tag github">{{ t('settings.systemUpdate.githubCard.tag') }}</span>
             <span class="pulse-dot purple"></span>
           </div>
-          <span class="main-val">Branch: development</span>
-          <span class="sub-text">Son Commit: <code>5a97d8b</code> (Otomatik Derleme)</span>
+          <span class="main-val">{{ t('settings.systemUpdate.githubCard.branch') }}</span>
+          <span class="sub-text">{{ t('settings.systemUpdate.githubCard.lastCommitPrefix') }} <code>5a97d8b</code> {{ t('settings.systemUpdate.githubCard.lastCommitSuffix') }}</span>
           <div class="metric-row">
-            <span>Test Durumu: <b class="text-green">631/631 Geçti</b></span>
-            <span>Hata: <b>0</b></span>
+            <span>{{ t('settings.systemUpdate.githubCard.testStatusLabel') }} <b class="text-green">{{ t('settings.systemUpdate.githubCard.testStatusVal') }}</b></span>
+            <span>{{ t('settings.systemUpdate.githubCard.errorsLabel') }} <b>0</b></span>
           </div>
         </div>
 
         <div class="glass-card status-card">
           <div class="card-top">
-            <span class="card-tag db">SQLITE VERİTABANI</span>
+            <span class="card-tag db">{{ t('settings.systemUpdate.dbCard.tag') }}</span>
             <span class="pulse-dot blue"></span>
           </div>
-          <span class="main-val">WAL Mode Aktif</span>
-          <span class="sub-text">Konum: %CommonApplicationData%/etsy-finance.db</span>
+          <span class="main-val">{{ t('settings.systemUpdate.dbCard.walMode') }}</span>
+          <span class="sub-text">{{ t('settings.systemUpdate.dbCard.location') }}</span>
           <div class="metric-row">
-            <span>Bütünlük: <b class="text-green">Bozulma Yok</b></span>
-            <span>Şifreleme: <b>AES-256</b></span>
+            <span>{{ t('settings.systemUpdate.dbCard.integrityLabel') }} <b class="text-green">{{ t('settings.systemUpdate.dbCard.integrityVal') }}</b></span>
+            <span>{{ t('settings.systemUpdate.dbCard.encryptionLabel') }} <b>AES-256</b></span>
           </div>
         </div>
       </div>
@@ -75,40 +78,41 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
       <!-- MAINTENANCE & ACTIONS -->
       <div class="actions-section glass-card">
-        <h2 class="section-title">Sistem Bakım & Güncelleme Aksiyonları</h2>
+        <h2 class="section-title">{{ t('settings.systemUpdate.actions.sectionTitle') }}</h2>
         <div class="actions-grid">
           <div class="action-card">
             <div class="action-info">
-              <span class="act-name">VDS Derleme Kuyruğunu Tetikle</span>
-              <p class="act-desc">GitHub repository'deki son development commit'ini VDS üzerinde otomatik çeker ve API servisini yeniden başlatır.</p>
+              <span class="act-name">{{ t('settings.systemUpdate.actions.vdsBuildTitle') }}</span>
+              <p class="act-desc">{{ t('settings.systemUpdate.actions.vdsBuildDesc') }}</p>
             </div>
             <button class="btn-action-primary" (click)="triggerVdsBuild()" [disabled]="isBuilding">
-              {{ isBuilding ? 'Derleniyor...' : '⚡ VDS Derlemesini Başlat' }}
+              {{ isBuilding ? t('settings.systemUpdate.actions.buildingBtn') : t('settings.systemUpdate.actions.startBuildBtn') }}
             </button>
           </div>
 
           <div class="action-card">
             <div class="action-info">
-              <span class="act-name">SQLite VACUUM & İndeks Yenileme</span>
-              <p class="act-desc">Silinen kayıtların bıraktığı boşlukları temizler, veritabanı dosyasını küçültür ve B-Tree indekslerini yeniden oluşturur.</p>
+              <span class="act-name">{{ t('settings.systemUpdate.actions.vacuumTitle') }}</span>
+              <p class="act-desc">{{ t('settings.systemUpdate.actions.vacuumDesc') }}</p>
             </div>
             <button class="btn-action-secondary" (click)="vacuumDatabase()">
-              Veritabanını Optimize Et
+              {{ t('settings.systemUpdate.actions.vacuumBtn') }}
             </button>
           </div>
 
           <div class="action-card">
             <div class="action-info">
-              <span class="act-name">Acil Güvenlik Kilit Modu (Emergency Lock)</span>
-              <p class="act-desc">Etsy OAuth veya AI token sızıntısı şüphesinde tüm oturumları derhal askıya alır ve tokenları geçersiz kılar.</p>
+              <span class="act-name">{{ t('settings.systemUpdate.actions.emergencyTitle') }}</span>
+              <p class="act-desc">{{ t('settings.systemUpdate.actions.emergencyDesc') }}</p>
             </div>
             <button class="btn-action-danger" (click)="emergencyLock()">
-              🔒 Tüm Oturumları Sıfırla
+              {{ t('settings.systemUpdate.actions.emergencyBtn') }}
             </button>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .update-container {
@@ -289,6 +293,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class SystemUpdateComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   vdsVersion = 'v2.4.0-Production';
@@ -306,12 +311,12 @@ export class SystemUpdateComponent implements OnInit {
         if (info) {
           this.vdsVersion = `v${info.version || '2.4.0'} (${info.database || 'SQLite-WAL'})`;
           this.uptimeHours = Math.round((info.uptimeSeconds || 511200) / 3600);
-          this.toastMessage = '✓ VDS API sunucusu sağlıklı yanıt verdi: HTTP 200 OK (Latency: 28ms)';
+          this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.healthOk');
           setTimeout(() => this.toastMessage = '', 3000);
         }
       },
       error: () => {
-        this.toastMessage = '✓ VDS API durumu kontrol edildi (5.180.81.148 aktif).';
+        this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.healthFallback');
         setTimeout(() => this.toastMessage = '', 3000);
       }
     });
@@ -319,29 +324,29 @@ export class SystemUpdateComponent implements OnInit {
 
   triggerVdsBuild(): void {
     this.isBuilding = true;
-    this.toastMessage = '⚡ GitHub Actions VDS otomatik derleme iş akışına yönlendiriliyor...';
+    this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.buildRedirecting');
     setTimeout(() => {
       this.isBuilding = false;
-      this.toastMessage = '✓ GitHub Actions VDS derleme sayfası açıldı. Derleme adımları ve testler canlı izlenebilir.';
+      this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.buildOpened');
       window.open('https://github.com/erhankeskin6160/EtsyMarketPlace/actions', '_blank');
       setTimeout(() => this.toastMessage = '', 5000);
     }, 1000);
   }
 
   vacuumDatabase(): void {
-    this.toastMessage = '⏳ SQLite veri tabanı indeksleri taranıyor ve optimize ediliyor...';
+    this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.vacuumRunning');
     this.checkHealth();
     setTimeout(() => {
-      this.toastMessage = '✓ SQLite VACUUM ve WAL checkpoint işlemi başarıyla tamamlandı. Veri tabanı optimize edildi.';
+      this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.vacuumDone');
       setTimeout(() => this.toastMessage = '', 4500);
     }, 1200);
   }
 
   emergencyLock(): void {
-    const confirmed = confirm('DİKKAT: Acil Güvenlik Kilidi aktif edildiğinde tüm aktif oturumlar askıya alınacak ve yerel erişim tokenları temizlenecektir.\n\nOnaylıyor musunuz?');
+    const confirmed = confirm(this.transloco.translate('settings.systemUpdate.toasts.emergencyConfirm'));
     if (!confirmed) return;
 
-    this.toastMessage = '🔒 Acil güvenlik kilidi aktif edildi: Tüm aktif oturumlar ve yerel tokenlar temizlendi.';
+    this.toastMessage = this.transloco.translate('settings.systemUpdate.toasts.emergencyActivated');
     setTimeout(() => {
       localStorage.removeItem('etsy_access_token');
       localStorage.removeItem('etsy_refresh_token');

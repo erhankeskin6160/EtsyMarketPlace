@@ -1,27 +1,30 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   template: `
+    <ng-container *transloco="let t">
     <div class="notify-container">
       <!-- HEADER -->
       <div class="page-header">
         <div class="header-left">
           <div class="icon-box">🔔</div>
           <div>
-            <h1 class="page-title">Telegram & Bildirim Entegrasyon Merkezi</h1>
-            <p class="page-subtitle">Siparişler, kargo maliyet uyarıları ve günlük finansal brifingler için güvenli VDS SQLite Telegram botu</p>
+            <h1 class="page-title">{{ t('settings.notifications.title') }}</h1>
+            <p class="page-subtitle">{{ t('settings.notifications.subtitle') }}</p>
           </div>
         </div>
         <div class="header-actions">
           <button class="btn-save" (click)="saveSettings()">
-            💾 Ayarları VDS SQLite'a Kaydet
+            {{ t('settings.notifications.saveBtn') }}
           </button>
         </div>
       </div>
@@ -30,8 +33,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <div class="security-banner glass-card">
         <div class="sec-icon">🛡️</div>
         <div class="sec-text">
-          <strong>Uçtan Uca Şifreli VDS Güvenliği:</strong>
-          <span>Bot token'ınız tarayıcıda (localStorage) saklanmaz; VDS sunucusunda Microsoft DataProtection AES-256 ile şifreli olarak SQLite veritabanında muhafaza edilir.</span>
+          <strong>{{ t('settings.notifications.securityTitle') }}</strong>
+          <span>{{ t('settings.notifications.securityDesc') }}</span>
         </div>
       </div>
 
@@ -44,35 +47,35 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       <div class="settings-grid">
         <!-- LEFT: BOT CONFIGURATION -->
         <div class="glass-card config-card">
-          <h2 class="card-title">1. Telegram Bot Yapılandırması</h2>
-          <p class="card-desc">&#64;BotFather üzerinden aldığınız bot token ve mesajların iletileceği sohbet ID'si.</p>
+          <h2 class="card-title">{{ t('settings.notifications.botCard.title') }}</h2>
+          <p class="card-desc">{{ t('settings.notifications.botCard.desc') }}</p>
 
           <div class="form-group">
-            <label class="form-label">Telegram Bot Token (HTTP API):</label>
+            <label class="form-label">{{ t('settings.notifications.botCard.tokenLabel') }}</label>
             <div class="token-input-wrap">
               <input 
                 [type]="isTokenEditing ? 'text' : 'password'" 
                 [(ngModel)]="botTokenInput" 
                 class="form-input" 
-                [placeholder]="botTokenMasked ? botTokenMasked : 'Örn: 7123456789:AAH...'" />
+                [placeholder]="botTokenMasked ? botTokenMasked : t('settings.notifications.botCard.tokenPlaceholder')" />
               <button class="btn-toggle-edit" (click)="toggleTokenEdit()">
-                {{ isTokenEditing ? 'Maskele' : 'Değiştir' }}
+                {{ isTokenEditing ? t('settings.notifications.botCard.maskBtn') : t('settings.notifications.botCard.changeBtn') }}
               </button>
             </div>
             <span class="field-hint" *ngIf="botTokenMasked && !isTokenEditing">
-              Mevcut Token: <code>{{ botTokenMasked }}</code> (Şifrelenmiş VDS Kaydı)
+              {{ t('settings.notifications.botCard.currentTokenPrefix') }} <code>{{ botTokenMasked }}</code> {{ t('settings.notifications.botCard.currentTokenSuffix') }}
             </span>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Sohbet / Kanal ID (Chat ID):</label>
-            <input type="text" [(ngModel)]="chatId" class="form-input" placeholder="Örn: 12345678 veya -100123456789" />
-            <span class="field-hint">&#64;userinfobot veya kanalınıza botu yönetici ekleyip ID'yi girin.</span>
+            <label class="form-label">{{ t('settings.notifications.botCard.chatIdLabel') }}</label>
+            <input type="text" [(ngModel)]="chatId" class="form-input" [placeholder]="t('settings.notifications.botCard.chatIdPlaceholder')" />
+            <span class="field-hint">{{ t('settings.notifications.botCard.chatIdHint') }}</span>
           </div>
 
           <div class="test-row">
             <button class="btn-test" (click)="sendTestMessage()" [disabled]="!chatId">
-              📨 Test Bildirimi Gönder
+              {{ t('settings.notifications.botCard.sendTestBtn') }}
             </button>
             <span class="test-status" *ngIf="testStatus">{{ testStatus }}</span>
           </div>
@@ -80,14 +83,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
         <!-- RIGHT: EVENT SUBSCRIPTIONS -->
         <div class="glass-card config-card">
-          <h2 class="card-title">2. Bildirim Tetikleyicileri & Alarmlar</h2>
-          <p class="card-desc">Hangi durumlarda Telegram kanalınıza anlık bildirim düşeceğini seçin.</p>
+          <h2 class="card-title">{{ t('settings.notifications.triggersCard.title') }}</h2>
+          <p class="card-desc">{{ t('settings.notifications.triggersCard.desc') }}</p>
 
           <div class="toggles-list">
             <div class="toggle-item">
               <div class="toggle-info">
-                <span class="toggle-name">Telegram Entegrasyonu Aktif</span>
-                <span class="toggle-sub">Bildirim gönderim servisini genel olarak aç/kapat</span>
+                <span class="toggle-name">{{ t('settings.notifications.triggersCard.enabledTitle') }}</span>
+                <span class="toggle-sub">{{ t('settings.notifications.triggersCard.enabledSub') }}</span>
               </div>
               <label class="switch">
                 <input type="checkbox" [(ngModel)]="isEnabled" />
@@ -97,8 +100,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
             <div class="toggle-item">
               <div class="toggle-info">
-                <span class="toggle-name">Yeni Sipariş & Kargo Bildirimi</span>
-                <span class="toggle-sub">Her yeni Etsy siparişinde ürün adı, tutar ve ülke anında gelsin</span>
+                <span class="toggle-name">{{ t('settings.notifications.triggersCard.ordersTitle') }}</span>
+                <span class="toggle-sub">{{ t('settings.notifications.triggersCard.ordersSub') }}</span>
               </div>
               <label class="switch">
                 <input type="checkbox" [(ngModel)]="notifyOnOrders" />
@@ -108,8 +111,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
             <div class="toggle-item">
               <div class="toggle-info">
-                <span class="toggle-name">Eksik Kargo / Negatif Marj Alarmı</span>
-                <span class="toggle-sub">Kargo maliyeti kârı aştığında veya maliyet girilmediğinde kırmızı alarm</span>
+                <span class="toggle-name">{{ t('settings.notifications.triggersCard.stockTitle') }}</span>
+                <span class="toggle-sub">{{ t('settings.notifications.triggersCard.stockSub') }}</span>
               </div>
               <label class="switch">
                 <input type="checkbox" [(ngModel)]="notifyOnStock" />
@@ -119,8 +122,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
             <div class="toggle-item">
               <div class="toggle-info">
-                <span class="toggle-name">Günlük Akşam Finans Brifingi (Daily Brief)</span>
-                <span class="toggle-sub">Her gün 23:59'da günlük ciro, kâr ve sipariş özet tablosu</span>
+                <span class="toggle-name">{{ t('settings.notifications.triggersCard.dailyBriefTitle') }}</span>
+                <span class="toggle-sub">{{ t('settings.notifications.triggersCard.dailyBriefSub') }}</span>
               </div>
               <label class="switch">
                 <input type="checkbox" [(ngModel)]="dailyBriefEnabled" />
@@ -131,6 +134,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .notify-container {
@@ -326,6 +330,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 })
 export class NotificationSettingsComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   botTokenInput = '';
@@ -371,18 +376,18 @@ export class NotificationSettingsComponent implements OnInit {
 
   sendTestMessage(): void {
     if (!this.chatId) return;
-    this.testStatus = 'VDS ayarları doğrulanıyor...';
+    this.testStatus = this.transloco.translate('settings.notifications.messages.verifyingVds');
     this.etsyApi.getTelegramSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (s) => {
         if (s && s.isEnabled) {
-          this.testStatus = `✓ Test bildirimi Telegram kanalına (@${this.chatId}) başarıyla iletildi (HTTP 200 OK)`;
+          this.testStatus = this.transloco.translate('settings.notifications.messages.testSentOk', { chatId: this.chatId });
         } else {
-          this.testStatus = `⚠️ Lütfen önce "Telegram Entegrasyonu Aktif" kutucuğunu işaretleyin ve ayarları kaydedin.`;
+          this.testStatus = this.transloco.translate('settings.notifications.messages.enableFirstWarning');
         }
         setTimeout(() => this.testStatus = '', 4500);
       },
       error: () => {
-        this.testStatus = `✓ Test bildirimi Telegram kanalına (@${this.chatId}) iletildi.`;
+        this.testStatus = this.transloco.translate('settings.notifications.messages.testSentFallback', { chatId: this.chatId });
         setTimeout(() => this.testStatus = '', 4500);
       }
     });
@@ -403,11 +408,11 @@ export class NotificationSettingsComponent implements OnInit {
       next: (res) => {
         this.botTokenMasked = res.botTokenMasked || this.botTokenMasked;
         this.isTokenEditing = false;
-        this.toastMessage = '✓ Telegram ayarları VDS SQLite veri tabanına başarıyla şifrelendi!';
+        this.toastMessage = this.transloco.translate('settings.notifications.messages.savedEncrypted');
         setTimeout(() => this.toastMessage = '', 4000);
       },
       error: () => {
-        this.toastMessage = '✓ Telegram ayarları başarıyla kaydedildi.';
+        this.toastMessage = this.transloco.translate('settings.notifications.messages.savedFallback');
         this.isTokenEditing = false;
         setTimeout(() => this.toastMessage = '', 4000);
       }

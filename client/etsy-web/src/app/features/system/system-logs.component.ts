@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AuditLog } from '../../core/models/auth.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -10,13 +11,16 @@ export interface LogEntry {
   level: 'INFO' | 'WARN' | 'ERROR' | 'SUCCESS';
   module: string;
   message: string;
+  messageKey?: string;
 }
 
 @Component({
   selector: 'app-system-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslocoDirective],
+  providers: [provideTranslocoScope('settings')],
   template: `
+    <ng-container *transloco="let t">
     <div class="logs-view">
       <!-- HEADER -->
       <div class="logs-header">
@@ -31,20 +35,20 @@ export interface LogEntry {
             </svg>
           </div>
           <div>
-            <h1 class="page-title">VDS Sistem Günlüğü & Denetim Kayıtları</h1>
-            <p class="page-subtitle">VDS sunucusundaki arka plan servisleri, token yenilemeleri ve API kuyruk akışı</p>
+            <h1 class="page-title">{{ t('settings.systemLogs.title') }}</h1>
+            <p class="page-subtitle">{{ t('settings.systemLogs.subtitle') }}</p>
           </div>
         </div>
 
         <div class="header-right">
           <button class="btn-refresh-logs" (click)="loadLogs()" [disabled]="isLoading">
-            {{ isLoading ? '🔄 Yükleniyor...' : '🔄 Yenile' }}
+            {{ isLoading ? t('settings.systemLogs.loadingBtn') : t('settings.systemLogs.refreshBtn') }}
           </button>
           <button class="btn-export" (click)="exportLogs()">
-            💾 Logları Dışa Aktar (.log)
+            {{ t('settings.systemLogs.exportBtn') }}
           </button>
           <button class="btn-clear" (click)="clearLogs()">
-            🗑️ Temizle
+            {{ t('settings.systemLogs.clearBtn') }}
           </button>
         </div>
       </div>
@@ -52,27 +56,27 @@ export interface LogEntry {
       <!-- SERVER STATS STRIP -->
       <div class="stats-strip">
         <div class="glass-card stat-card">
-          <span class="stat-label">VDS SUNUCU IP</span>
+          <span class="stat-label">{{ t('settings.systemLogs.stats.vdsServerIp') }}</span>
           <span class="stat-val font-mono text-cyan">5.180.81.148:5263</span>
-          <span class="stat-sub">🟢 Sistem Çalışıyor (Uptime: 99.98%)</span>
+          <span class="stat-sub">{{ t('settings.systemLogs.stats.systemRunning') }}</span>
         </div>
 
         <div class="glass-card stat-card">
-          <span class="stat-label">SQLITE VERİTABANI</span>
-          <span class="stat-val text-emerald">{{ auditLogCount }} Kayıt</span>
-          <span class="stat-sub">EtsyMarketPlace.db (Audit Tablosu)</span>
+          <span class="stat-label">{{ t('settings.systemLogs.stats.sqliteDb') }}</span>
+          <span class="stat-val text-emerald">{{ t('settings.systemLogs.stats.recordCount', { count: auditLogCount }) }}</span>
+          <span class="stat-sub">{{ t('settings.systemLogs.stats.auditTableSub') }}</span>
         </div>
 
         <div class="glass-card stat-card">
-          <span class="stat-label">AI TOKEN KULLANIMI</span>
+          <span class="stat-label">{{ t('settings.systemLogs.stats.aiTokenUsage') }}</span>
           <span class="stat-val text-purple">{{ totalUsedAiTokens | number }} / 2.000.000</span>
-          <span class="stat-sub">Gemini Spark Pro Kotası</span>
+          <span class="stat-sub">{{ t('settings.systemLogs.stats.aiQuotaSub') }}</span>
         </div>
 
         <div class="glass-card stat-card">
-          <span class="stat-label">ETSY OAUTH SAĞLIĞI</span>
-          <span class="stat-val text-orange">Mağaza: {{ activeShopId }}</span>
-          <span class="stat-sub">Token: Aktif & Otomatik Yenileniyor</span>
+          <span class="stat-label">{{ t('settings.systemLogs.stats.oauthHealth') }}</span>
+          <span class="stat-val text-orange">{{ t('settings.systemLogs.stats.shopValue', { shopId: activeShopId }) }}</span>
+          <span class="stat-sub">{{ t('settings.systemLogs.stats.oauthSub') }}</span>
         </div>
       </div>
 
@@ -83,7 +87,7 @@ export interface LogEntry {
             <span class="dot red"></span>
             <span class="dot yellow"></span>
             <span class="dot green"></span>
-            <span class="terminal-name">vds-api-audit-stream.log (Canlı Akış)</span>
+            <span class="terminal-name">{{ t('settings.systemLogs.terminal.name') }}</span>
           </div>
 
           <div class="terminal-filters">
@@ -104,17 +108,18 @@ export interface LogEntry {
 
         <div class="terminal-body font-mono">
           <div *ngIf="filteredLogs.length === 0" class="log-line">
-            <span class="log-msg text-muted">Kayıtlı sistem veya denetim günlüğü bulunamadı.</span>
+            <span class="log-msg text-muted">{{ t('settings.systemLogs.terminal.empty') }}</span>
           </div>
           <div *ngFor="let log of filteredLogs" class="log-line">
             <span class="log-time">{{ log.timestamp }}</span>
             <span class="log-badge" [ngClass]="log.level">{{ log.level }}</span>
             <span class="log-mod">[{{ log.module }}]</span>
-            <span class="log-msg">{{ log.message }}</span>
+            <span class="log-msg">{{ log.messageKey ? t(log.messageKey) : log.message }}</span>
           </div>
         </div>
       </div>
     </div>
+    </ng-container>
   `,
   styles: [`
     .logs-view {
@@ -327,6 +332,7 @@ export interface LogEntry {
 })
 export class SystemLogsComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private transloco = inject(TranslocoService);
   etsyApi = inject(EtsyApiService);
 
   showInfo = true;
@@ -342,13 +348,13 @@ export class SystemLogsComponent implements OnInit {
   }
 
   logs: LogEntry[] = [
-    { timestamp: '00:15:02', level: 'SUCCESS', module: 'ExchangeRateService', message: 'Canlı USD/TRY kuru open.er-api.com üzerinden başarıyla alındı.' },
-    { timestamp: '00:14:48', level: 'INFO', module: 'EtsyAccessTokenHandler', message: 'Mağaza için OAuth v3 token doğrulandı. Süre sonuna 48 dk kaldı.' },
-    { timestamp: '00:13:20', level: 'INFO', module: 'OrderFulfillmentService', message: 'Sipariş detayları SQLite DB üzerinden başarıyla getirildi.' },
-    { timestamp: '00:11:05', level: 'SUCCESS', module: 'ShopVaultService', message: 'İlanlar ve etiketler başarıyla AES-256 ile şifrelendi (.etsyvault hazir).' },
-    { timestamp: '00:08:42', level: 'INFO', module: 'GeminiSparkCopilot', message: 'Gemini 2.5 Flash asistan oturumu başlatıldı. JSON-RPC bağlantısı aktif.' },
-    { timestamp: '00:05:11', level: 'WARN', module: 'ShippingRateCalculator', message: 'Shiptomore API yanıt süresi 420ms (ortalama 210ms üzerinde).' },
-    { timestamp: '23:58:30', level: 'INFO', module: 'SqliteDatabaseInitializer', message: 'EtsyMarketPlace.db bütünlüğü kontrol edildi: 0 bozuk indeks, WAL modu sağlıklı.' }
+    { timestamp: '00:15:02', level: 'SUCCESS', module: 'ExchangeRateService', message: '', messageKey: 'settings.systemLogs.defaultLogs.exchangeRate' },
+    { timestamp: '00:14:48', level: 'INFO', module: 'EtsyAccessTokenHandler', message: '', messageKey: 'settings.systemLogs.defaultLogs.oauthVerified' },
+    { timestamp: '00:13:20', level: 'INFO', module: 'OrderFulfillmentService', message: '', messageKey: 'settings.systemLogs.defaultLogs.ordersFetched' },
+    { timestamp: '00:11:05', level: 'SUCCESS', module: 'ShopVaultService', message: '', messageKey: 'settings.systemLogs.defaultLogs.vaultEncrypted' },
+    { timestamp: '00:08:42', level: 'INFO', module: 'GeminiSparkCopilot', message: '', messageKey: 'settings.systemLogs.defaultLogs.copilotStarted' },
+    { timestamp: '00:05:11', level: 'WARN', module: 'ShippingRateCalculator', message: '', messageKey: 'settings.systemLogs.defaultLogs.shippingWarn' },
+    { timestamp: '23:58:30', level: 'INFO', module: 'SqliteDatabaseInitializer', message: '', messageKey: 'settings.systemLogs.defaultLogs.dbIntegrity' }
   ];
 
   ngOnInit(): void {
@@ -374,6 +380,7 @@ export class SystemLogsComponent implements OnInit {
       next: (auditLogs) => {
         this.isLoading = false;
         if (auditLogs && auditLogs.length > 0) {
+          const locale = this.transloco.getActiveLang() === 'tr' ? 'tr-TR' : 'en-US';
           const mapped: LogEntry[] = auditLogs.map(a => {
             let lvl: LogEntry['level'] = 'INFO';
             const act = (a.action || '').toUpperCase();
@@ -382,7 +389,7 @@ export class SystemLogsComponent implements OnInit {
             else if (act.includes('SUCCESS') || act.includes('LOGIN') || act.includes('REGISTER')) lvl = 'SUCCESS';
 
             const d = a.timestamp ? new Date(a.timestamp) : new Date();
-            const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString('tr-TR') : 'Canlı';
+            const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString(locale) : this.transloco.translate('settings.systemLogs.terminal.liveTime');
             const ipSuffix = a.ipAddress ? ` [IP: ${a.ipAddress}]` : '';
 
             return {
@@ -414,7 +421,9 @@ export class SystemLogsComponent implements OnInit {
   }
 
   exportLogs(): void {
-    const text = this.logs.map(l => `[${l.timestamp}] [${l.level}] [${l.module}] ${l.message}`).join('\n');
+    const text = this.logs
+      .map(l => `[${l.timestamp}] [${l.level}] [${l.module}] ${l.messageKey ? this.transloco.translate(l.messageKey) : l.message}`)
+      .join('\n');
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
