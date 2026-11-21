@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto, VariationPricingAgentResultDto, AgentCarrierQuoteSummaryDto, CompetitorListingInventoryDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { ExtensionBridgeService } from '../../core/services/extension-bridge.service';
@@ -97,6 +98,7 @@ export interface VariationRow {
 export class FastCreatorComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
   private transloco = inject(TranslocoService);
+  private localeFormat = inject(LocaleFormatService);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   extensionBridge = inject(ExtensionBridgeService);
@@ -440,7 +442,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     try {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeStr = this.localeFormat.formatTime(now);
 
       const draft: FastCreatorDraft = {
         listingType: this.listingType,

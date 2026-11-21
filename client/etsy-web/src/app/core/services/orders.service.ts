@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { EtsyApiService } from './etsy-api.service';
+import { LocaleFormatService } from '../i18n/locale-format.service';
 import { OrderFulfillmentItem, CarrierQuote, PackageSpecs, CarrierAccountSession, GtipCodeItem } from '../models/orders.models';
 
 const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
@@ -9,6 +10,7 @@ const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
   providedIn: 'root'
 })
 export class OrdersService {
+  private readonly localeFormat = inject(LocaleFormatService);
   private ordersSubject = new BehaviorSubject<OrderFulfillmentItem[]>([]);
   public orders$ = this.ordersSubject.asObservable();
   public ordersLoading = false;
@@ -44,8 +46,7 @@ export class OrdersService {
             item.statusLabel = '🟢 Bağlı';
             item.expiresAtUtc = srv.expiresAtUtc || undefined;
             if (srv.updatedAtUtc) {
-              const dt = new Date(srv.updatedAtUtc);
-              item.lastUpdated = dt.toLocaleDateString('tr-TR') + ' ' + dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+              item.lastUpdated = this.localeFormat.formatDateTime(srv.updatedAtUtc);
             }
             current[idx] = item;
             changed = true;
@@ -89,7 +90,7 @@ export class OrdersService {
                   statusLabel: '🟢 Bağlı',
                   tokenOrKey: res.bearerToken,
                   expiresAtUtc: res.expiresAtUtc || s.expiresAtUtc,
-                  lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                  lastUpdated: this.localeFormat.formatDateTime(new Date())
                 };
               }
               return s;
@@ -219,7 +220,7 @@ export class OrdersService {
         return {
           ...s,
           ...updated,
-          lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+          lastUpdated: this.localeFormat.formatDateTime(new Date())
         };
       }
       return s;
@@ -235,7 +236,7 @@ export class OrdersService {
           isConnected: false,
           statusLabel: '⚠️ Giriş Gerekli',
           tokenOrKey: '',
-          lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+          lastUpdated: this.localeFormat.formatDateTime(new Date())
         };
       }
       return s;
@@ -254,7 +255,7 @@ export class OrdersService {
           clientSecret: secret || s.clientSecret,
           apiKey: apiKey || s.apiKey,
           apiSecret: apiSecret || s.apiSecret,
-          lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+          lastUpdated: this.localeFormat.formatDateTime(new Date())
         };
       }
       return s;
@@ -314,7 +315,7 @@ export class OrdersService {
       const expDate = new Date(expMs);
 
       if (nowMs >= expMs) {
-        const expStr = expDate.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const expStr = this.localeFormat.formatDateTime(expDate);
         return { 
           isValid: false, 
           expired: true, 

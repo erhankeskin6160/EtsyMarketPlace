@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto, TrackedKeywordDto } from '../../core/services/etsy-api.service';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
@@ -74,6 +75,7 @@ export interface CompareResult {
 export class MarketResearchComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private transloco = inject(TranslocoService);
+  private localeFormat = inject(LocaleFormatService);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   extensionBridge = inject(ExtensionBridgeService);
@@ -297,7 +299,7 @@ export class MarketResearchComponent implements OnInit {
           }
           const historyTerm = res.targetListingId ? (res.keyword || `#${res.targetListingId}`) : this.searchKeyword.trim();
           this.pushHistory(historyTerm);
-          this.lastUpdatedLabel = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          this.lastUpdatedLabel = this.localeFormat.formatTime(new Date());
           if (res.targetListingId) {
             const compCount = Math.max(0, this.items.length - 1);
             this.statusText = this.transloco.translate('research.marketResearch.status.loadedTargetUpdated', {
@@ -310,7 +312,7 @@ export class MarketResearchComponent implements OnInit {
             this.statusText = this.transloco.translate('research.marketResearch.status.loadedKeywordUpdated', {
               keyword: this.searchKeyword,
               count: this.items.length,
-              total: res.total.toLocaleString(),
+              total: this.localeFormat.formatInteger(res.total),
               sort: this.getSortLabel(),
               time: this.lastUpdatedLabel
             });
@@ -1105,11 +1107,7 @@ export class MarketResearchComponent implements OnInit {
   }
 
   formatTrackedDate(iso?: string | null): string {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) + ' ' +
-      d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    return this.localeFormat.formatDateTime(iso, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
   getDelta(curr?: number | null, prev?: number | null): string {
@@ -1180,8 +1178,8 @@ export class MarketResearchComponent implements OnInit {
   get compareRows(): { label: string; values: string[] }[] {
     const rs = this.compareResults;
     if (rs.length === 0) return [];
-    const fmtInt = (n?: number | null) => (n === null || n === undefined) ? '—' : Math.round(n).toLocaleString('tr-TR');
-    const fmtUsd = (n?: number | null, d: number = 2) => (n === null || n === undefined) ? '—' : '$' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtInt = (n?: number | null) => this.localeFormat.formatInteger(n);
+    const fmtUsd = (n?: number | null, d: number = 2) => (n === null || n === undefined) ? '—' : '$' + this.localeFormat.formatNumber(Number(n), { minimumFractionDigits: d, maximumFractionDigits: d });
     const cell = (fn: (r: CompareResult) => string) => rs.map(r => (r.ok && r.res) ? fn(r) : '—');
     const unitsSuffix = this.transloco.translate('research.marketResearch.compareModal.unitsSuffix');
 

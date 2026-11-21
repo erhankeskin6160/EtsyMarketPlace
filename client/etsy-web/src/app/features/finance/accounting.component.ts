@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto, ShopListingItemDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { IncomeStatementTabComponent } from './income-statement/income-statement-tab.component';
@@ -93,6 +94,7 @@ export interface OrderCostShippingRow {
 export class AccountingComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
   private transloco = inject(TranslocoService);
+  private localeFormat = inject(LocaleFormatService);
   readonly aiSettings = inject(AiSettingsService);
   Math = Math;
   isTry = true;
@@ -1598,15 +1600,15 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (favToViewPct < 5.0) {
       bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnFav');
       diagnosis = this.transloco.translate('finance.accounting.runtime.bnFavDiag', {
-        views: totalViews.toLocaleString('tr-TR'),
-        favs: totalFavorites.toLocaleString('tr-TR'),
+        views: totalViews.toLocaleString(this.localeFormat.currentLocale),
+        favs: totalFavorites.toLocaleString(this.localeFormat.currentLocale),
         pct: favToViewPct.toFixed(1)
       });
     } else if (cartToOrderPct < 38.0) {
       bottleneckStage = this.transloco.translate('finance.accounting.runtime.bnCart');
       diagnosis = this.transloco.translate('finance.accounting.runtime.bnCartDiag', {
-        favs: totalFavorites.toLocaleString('tr-TR'),
-        carts: estimatedCarts.toLocaleString('tr-TR'),
+        favs: totalFavorites.toLocaleString(this.localeFormat.currentLocale),
+        carts: estimatedCarts.toLocaleString(this.localeFormat.currentLocale),
         pct: cartToOrderPct.toFixed(1),
         extra: Math.max(2, Math.round((estimatedCarts - activeOrders) * 0.18))
       });
@@ -1615,8 +1617,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
       diagnosis = this.transloco.translate('finance.accounting.runtime.bnTopDiag', {
         cr: overallCrPct.toFixed(2),
         cartCr: cartToOrderPct.toFixed(1),
-        views: projViews.toLocaleString('tr-TR'),
-        carts: projCarts.toLocaleString('tr-TR'),
+        views: projViews.toLocaleString(this.localeFormat.currentLocale),
+        carts: projCarts.toLocaleString(this.localeFormat.currentLocale),
         orders: estimatedOrders
       });
     }
@@ -1964,18 +1966,18 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const execSummary = this.grossSalesUsd > 0
       ? this.transloco.translate('finance.accounting.runtime.execSummaryActive', {
           period: periodLabel,
-          views: localFunnel.totalViews.toLocaleString('tr-TR'),
-          visits: localFunnel.estimatedUniqueVisits.toLocaleString('tr-TR'),
-          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
-          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+          views: localFunnel.totalViews.toLocaleString(this.localeFormat.currentLocale),
+          visits: localFunnel.estimatedUniqueVisits.toLocaleString(this.localeFormat.currentLocale),
+          favs: localFunnel.totalFavorites.toLocaleString(this.localeFormat.currentLocale),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString(this.localeFormat.currentLocale),
           orders: this.completedOrderCount,
           cr: localFunnel.overallConversionRatePct.toFixed(2),
           grossUsd: this.grossSalesUsd.toFixed(2),
           grossTry: this.formatNumber(this.grossSalesTry),
           netUsd: this.formatSignedUsd(this.realNetProfitUsd),
           netTry: this.formatSignedTry(this.realNetProfitTry),
-          projViews: localFunnel.projectedNext30dViews.toLocaleString('tr-TR'),
-          projCarts: localFunnel.projectedNext30dCarts.toLocaleString('tr-TR'),
+          projViews: localFunnel.projectedNext30dViews.toLocaleString(this.localeFormat.currentLocale),
+          projCarts: localFunnel.projectedNext30dCarts.toLocaleString(this.localeFormat.currentLocale),
           expGrossUsd: expectedGrossUsd.toFixed(2),
           expGrossTry: this.formatNumber(expectedGrossTry),
           expNetUsd: expectedNetProfitUsd.toFixed(2),
@@ -1983,9 +1985,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
         })
       : this.transloco.translate('finance.accounting.runtime.execSummaryEmpty', {
           period: periodLabel,
-          views: localFunnel.totalViews.toLocaleString('tr-TR'),
-          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
-          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+          views: localFunnel.totalViews.toLocaleString(this.localeFormat.currentLocale),
+          favs: localFunnel.totalFavorites.toLocaleString(this.localeFormat.currentLocale),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString(this.localeFormat.currentLocale),
           netTry: this.formatSignedTry(this.realNetProfitTry),
           netUsd: this.formatSignedUsd(this.realNetProfitUsd)
         });
@@ -2000,8 +2002,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
         })
       : this.transloco.translate('finance.accounting.runtime.prodAnalysisEmpty', {
           period: periodLabel,
-          favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
-          carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR')
+          favs: localFunnel.totalFavorites.toLocaleString(this.localeFormat.currentLocale),
+          carts: localFunnel.estimatedAddToCarts.toLocaleString(this.localeFormat.currentLocale)
         });
 
     const adAnalysis = totalAdsUsd > 0
@@ -2045,8 +2047,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const actions: string[] = [];
     if (localFunnel.totalFavorites > 0 || localFunnel.estimatedAddToCarts > 0) {
       actions.push(this.transloco.translate('finance.accounting.runtime.actFunnel', {
-        favs: localFunnel.totalFavorites.toLocaleString('tr-TR'),
-        carts: localFunnel.estimatedAddToCarts.toLocaleString('tr-TR'),
+        favs: localFunnel.totalFavorites.toLocaleString(this.localeFormat.currentLocale),
+        carts: localFunnel.estimatedAddToCarts.toLocaleString(this.localeFormat.currentLocale),
         bottleneck: localFunnel.funnelBottleneckStage
       }));
     }
@@ -2708,7 +2710,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   formatNumber(val: number): string {
-    return val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return this.localeFormat.formatNumber(val, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   copyValue(label: string, val: string): void {

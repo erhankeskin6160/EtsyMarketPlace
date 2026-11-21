@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import {
   EtsyApiService,
   CompetitorShopAnalysisDto,
@@ -2270,6 +2271,7 @@ export class CompetitorSpyComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private extensionBridge = inject(ExtensionBridgeService);
   private transloco = inject(TranslocoService);
+  private localeFormat = inject(LocaleFormatService);
   activeMainTab: 'competitor' | 'seasonal' = 'competitor';
   activeIntelTab: 'tags' | 'gap' | 'lqs' = 'tags';
   activeProductDetailTab: 'description' | 'tags' | 'ai-doctor' = 'description';
@@ -2359,7 +2361,7 @@ export class CompetitorSpyComponent implements OnInit {
           this.shopQueryInput = res.shop.shopName;
           this.showToast(this.transloco.translate('research.competitorSpy.messages.shopDetectedFromUrl', {
             shopName: res.shop.shopName,
-            sales: (res.shop.totalSalesCount || 0).toLocaleString()
+            sales: this.localeFormat.formatInteger(res.shop.totalSalesCount || 0)
           }));
         }
 
@@ -2620,7 +2622,7 @@ export class CompetitorSpyComponent implements OnInit {
     const diff = this.getDeltaDiff(curr, prev);
     if (diff === 0) return '';
     const prefix = diff > 0 ? '▲ +' : '▼ -';
-    const absVal = Math.abs(Math.round(diff)).toLocaleString('tr-TR');
+    const absVal = this.localeFormat.formatInteger(Math.abs(diff));
     return isCurrency ? `${prefix}$${absVal}` : `${prefix}${absVal}`;
   }
 

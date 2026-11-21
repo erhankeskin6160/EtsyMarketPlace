@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import { EtsyApiService, AiProviderBalanceDto } from '../../core/services/etsy-api.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { Chart, registerables } from 'chart.js';
@@ -1004,6 +1005,7 @@ interface UsageRecord {
 export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
   private transloco = inject(TranslocoService);
+  private localeFormat = inject(LocaleFormatService);
   etsyApi = inject(EtsyApiService);
 
   @ViewChild('tokenDonutCanvas') tokenDonutCanvas!: ElementRef<HTMLCanvasElement>;
@@ -1258,7 +1260,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
             callbacks: {
               label: (context) => {
                 const val = Number(context.raw || 0);
-                return ` ${context.label}: ${val.toLocaleString()} ${tokenUnit}`;
+                return ` ${context.label}: ${this.localeFormat.formatInteger(val)} ${tokenUnit}`;
               }
             }
           }
@@ -1325,7 +1327,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
           tooltip: {
             enabled: !this.isBarEmpty,
             callbacks: {
-              label: (context) => ` ${Number(context.raw || 0).toLocaleString()} ${tokenUnit}`
+              label: (context) => ` ${this.localeFormat.formatInteger(Number(context.raw || 0))} ${tokenUnit}`
             }
           }
         }

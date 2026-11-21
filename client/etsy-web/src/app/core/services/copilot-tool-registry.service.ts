@@ -5,6 +5,7 @@ import { map, catchError, switchMap } from 'rxjs/operators';
 import { EtsyApiService, CreateListingPayload, CreatedListingResponseDto } from './etsy-api.service';
 import { AiSettingsService } from './ai-settings.service';
 import { ChatAttachment } from './store-ai-assistant.service';
+import { LocaleFormatService } from '../i18n/locale-format.service';
 
 export interface ToolExecutionResult {
   toolName: string;
@@ -21,6 +22,7 @@ export class CopilotToolRegistryService {
   private etsyApi = inject(EtsyApiService);
   private router = inject(Router);
   private aiSettings = inject(AiSettingsService);
+  private localeFormat = inject(LocaleFormatService);
 
   private readonly FAST_CREATOR_DRAFT_KEY = 'etsy_fast_creator_draft_v1';
 
@@ -714,7 +716,7 @@ export class CopilotToolRegistryService {
   }): void {
     try {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeStr = this.localeFormat.formatTime(now);
 
       const galleryImages = data.imageUrl ? [{
         id: 'copilot-auto-1',

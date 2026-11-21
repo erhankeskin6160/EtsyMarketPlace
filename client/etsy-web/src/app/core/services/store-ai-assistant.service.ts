@@ -6,6 +6,7 @@ import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto, MarketSearchResponseDto } from './etsy-api.service';
 import { CopilotToolRegistryService, ToolExecutionResult } from './copilot-tool-registry.service';
 import { LanguageService } from '../i18n/language.service';
+import { LocaleFormatService } from '../i18n/locale-format.service';
 
 export interface ChatAttachment {
   id: string;
@@ -78,6 +79,7 @@ export class StoreAiAssistantService {
   private etsyApi = inject(EtsyApiService);
   private toolRegistry = inject(CopilotToolRegistryService);
   private languageService = inject(LanguageService);
+  private localeFormat = inject(LocaleFormatService);
 
   private conversationHistory: {
     role: 'user' | 'assistant' | 'system';
@@ -191,7 +193,7 @@ export class StoreAiAssistantService {
         const count = f?.receiptCount ?? mOrders.length;
 
         const allTimeSummaryText = af
-          ? `Tüm Zamanlar Brüt Ciro: $${Number(af.grossSales || 0).toFixed(2)} (₺${Number(af.grossSalesTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}) | Tüm Zamanlar Gerçek Net Kâr: $${Number(af.netProfit || 0).toFixed(2)} (₺${Number(af.netProfitTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}, %${Number(af.netProfitMargin || 0).toFixed(1)} marj) | Tüm Zamanlar Bankaya Yatan Payout: ₺${Number(af.bankPayoutsTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ($${Number(af.bankPayoutsUSD || 0).toFixed(2)}) | Toplam Sipariş: ${af.receiptCount || 0} adet`
+          ? `Tüm Zamanlar Brüt Ciro: $${Number(af.grossSales || 0).toFixed(2)} (₺${Number(af.grossSalesTRY || 0).toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })}) | Tüm Zamanlar Gerçek Net Kâr: $${Number(af.netProfit || 0).toFixed(2)} (₺${Number(af.netProfitTRY || 0).toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })}, %${Number(af.netProfitMargin || 0).toFixed(1)} marj) | Tüm Zamanlar Bankaya Yatan Payout: ₺${Number(af.bankPayoutsTRY || 0).toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })} ($${Number(af.bankPayoutsUSD || 0).toFixed(2)}) | Toplam Sipariş: ${af.receiptCount || 0} adet`
           : 'Tüm zamanlar verisi henüz sorgulanmadı.';
 
         const snap: StoreContextSnapshot = {
@@ -219,7 +221,7 @@ export class StoreAiAssistantService {
           allTimeSummaryText,
           activeListingsCount: lList.length,
           topListingTitles: lList.slice(0, 10).map(l => `${(l.title || 'Aktif İlan').slice(0, 48)} ($${Number(l.price || 0).toFixed(2)}, 👁️ ${l.views ?? 0} görüntülenme, ❤️ ${l.favorites ?? l.numFavorers ?? 0} favori)`),
-          lastUpdated: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+          lastUpdated: this.localeFormat.formatTime(new Date())
         };
         this.cachedSnapshot = snap;
         this.lastSnapshotTime = Date.now();
@@ -260,7 +262,7 @@ export class StoreAiAssistantService {
       allTimeSummaryText: 'Henüz yüklenmedi.',
       activeListingsCount: 0,
       topListingTitles: [],
-      lastUpdated: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+      lastUpdated: this.localeFormat.formatTime(new Date())
     };
   }
 
@@ -1500,15 +1502,15 @@ KONUŞMA DİLİ VE ÜSLUP KURALLARI:
 GÜNCEL CANLI MAĞAZA VE FİNANSAL VERİLERİ (VDS API SUNUCU FİNANS MOTORU):
 - TCMB / Canlı Döviz Kuru: 1 USD = ${snap.exchangeRate.toFixed(2)} ₺
 - Rapor Dönemi: ${snap.period} (Son Güncelleme: ${snap.lastUpdated})
-- Bu Ayki Brüt Satış Geliri: $${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
+- Bu Ayki Brüt Satış Geliri: $${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})
 - Bu Ayki Toplam Sipariş Adedi: ${snap.receiptCount} Sipariş
 - Platform Kesintileri & Komisyonlar: -$${snap.platformFeesUsd.toFixed(2)}
 - Reklam Harcamaları: Toplam -$${snap.totalAdsUsd.toFixed(2)} (İç Reklam/Etsy Ads: -$${snap.internalAdsUsd.toFixed(2)}, Dış Reklam/Offsite: -$${snap.externalAdsUsd.toFixed(2)})
 - İadeler (Ödeme Defteri Nakit Hareketi): -$${snap.refundsUsd.toFixed(2)} (Etsy ödeme defteri nakit muhasebesi gereği iade hangi ay gerçekleştiyse o ayın ödeme defteri bakiyesinden düşer; sipariş listesiyle karşılaştırarak iade detayını net açıkla.)
 - Bu Ayki Ürün + Kargo Maliyetleri (COGS - Net Kârdan ZATEN DÜŞÜLMÜŞTÜR): Toplam -$${snap.totalCostsUsd.toFixed(2)} (Kargo: -$${snap.shippingCostsUsd.toFixed(2)}, Ürün/Üretim: -$${snap.productCostsUsd.toFixed(2)})
-- GERÇEK NET KÂR (Komisyon, Reklam, İade ve $${snap.totalCostsUsd.toFixed(2)} Maliyet Düşüldükten Sonra Kalan Kesin Net Kâr): $${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
+- GERÇEK NET KÂR (Komisyon, Reklam, İade ve $${snap.totalCostsUsd.toFixed(2)} Maliyet Düşüldükten Sonra Kalan Kesin Net Kâr): $${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})
 - Gerçek Net Kâr Marjı: %${snap.netProfitMargin.toFixed(1)} (Maliyetler düşülmüş gerçek marjdır!)
-- Bankaya Aktarılan Transfer (Payout): ₺${snap.payoutsTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ($${snap.payoutsUsd.toFixed(2)})
+- Bankaya Aktarılan Transfer (Payout): ₺${snap.payoutsTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })} ($${snap.payoutsUsd.toFixed(2)})
 - Aktif İlan Sayısı: ${snap.activeListingsCount} Aktif İlan (Sadece canlı verideki gerçek sayıyı kullan, tahmin yürütme.)
 - Portföydeki Örnek İlanlar (Fiyat, Görüntülenme ve Favori İstatistikleriyle):
 ${snap.topListingTitles.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}
@@ -1732,7 +1734,7 @@ Yüklediğiniz dosyalar hafızaya alındı. Canlı döviz kuru <strong>1 USD = $
       lower.startsWith('iyi günler') || lower.includes('durum ne') || lower.includes('nasıl gidiyor')
     ) {
       return `Selamlar! Mağazanızda her şey kontrol altında. 🚀<br><br>
-Dolar kuru şu anda <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> bandında. Bu ay <strong>${snap.receiptCount} sipariş</strong> ile <strong>$${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})</strong> gerçek net kârdayız (%${snap.netProfitMargin.toFixed(1)} marj).<br><br>
+Dolar kuru şu anda <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> bandında. Bu ay <strong>${snap.receiptCount} sipariş</strong> ile <strong>$${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})</strong> gerçek net kârdayız (%${snap.netProfitMargin.toFixed(1)} marj).<br><br>
 ${snap.missingCostCount > 0 ? `⚠️ <strong>Hatırlatma:</strong> ${snap.missingCostCount} siparişimizde maliyet girişi bekleniyor.<br><br>` : ''}
 Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF faturanızı ekleyerek birlikte inceleyebiliriz!`;
     }

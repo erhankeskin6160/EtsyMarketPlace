@@ -1,47 +1,18 @@
 import { Routes } from '@angular/router';
 import { ShellComponent } from './layout/shell/shell.component';
-import { LoginComponent } from './features/auth/login.component';
-import { RegisterComponent } from './features/auth/register.component';
-import { DashboardComponent } from './features/dashboard/dashboard.component';
-import { AdminComponent } from './features/admin/admin.component';
-import { OrdersComponent } from './features/orders/orders.component';
-import { AccountingComponent } from './features/finance/accounting.component';
-import { FastCreatorComponent } from './features/listings/fast-creator.component';
-import { ProductDiscoveryComponent } from './features/listings/product-discovery.component';
-import { ProductCostManagerComponent } from './features/finance/product-cost-manager.component';
-import { AiStudioComponent } from './features/ai-studio/ai-studio.component';
-import { ProfitCalculatorComponent } from './features/finance/profit-calculator.component';
-import { Viral3DComponent } from './features/research/viral-3d.component';
-import { CompetitorSpyComponent } from './features/research/competitor-spy.component';
-import { ShopVaultComponent } from './features/tools/shop-vault.component';
-import { EtsyApiSettingsComponent } from './features/settings/etsy-api-settings.component';
-import { AiModelsSettingsComponent } from './features/settings/ai-models-settings.component';
-import { MarketResearchComponent } from './features/research/market-research.component';
-import { ShopResearchAgentComponent } from './features/research/shop-research-agent.component';
-import { AiAuditComponent } from './features/analytics/ai-audit.component';
-import { ShippingHubComponent } from './features/shipping/shipping-hub.component';
-import { SystemLogsComponent } from './features/system/system-logs.component';
-
-// 10 Parity Standalone Components
-import { AbTestDashboardComponent } from './features/analytics/ab-test-dashboard.component';
-import { AiUsageDashboardComponent } from './features/tools/ai-usage-dashboard.component';
-import { BatchQueueComponent } from './features/tools/batch-queue.component';
-import { LiveTrackingRadarComponent } from './features/tools/live-tracking.component';
-import { ShopPerformanceComponent } from './features/analytics/shop-performance.component';
-import { NotificationSettingsComponent } from './features/settings/notification-settings.component';
-import { SystemUpdateComponent } from './features/system/system-update.component';
-import { FinancialAiAnalysisComponent } from './features/finance/financial-ai-analysis.component';
-import { ExternalArbitrageRadarComponent } from './features/research/external-arbitrage.component';
-import { TaskSchedulerAutomationComponent } from './features/tools/automation-scheduler.component';
-import { SubscriptionPlansComponent } from './features/settings/subscription-plans.component';
-
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 import { subscriptionFeatureGuard } from './core/guards/subscription.guard';
 
 export const routes: Routes = [
-  // Public Auth Routes
-  { path: 'auth/login', component: LoginComponent },
-  { path: 'auth/register', component: RegisterComponent },
+  // Public Auth Routes (Lazy-loaded)
+  {
+    path: 'auth/login',
+    loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent)
+  },
+  {
+    path: 'auth/register',
+    loadComponent: () => import('./features/auth/register.component').then(m => m.RegisterComponent)
+  },
 
   // Protected App Shell Routes
   {
@@ -50,52 +21,167 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
-      { path: 'dashboard', component: DashboardComponent },
-      { path: 'admin', component: AdminComponent, canActivate: [adminGuard] },
+      {
+        path: 'dashboard',
+        loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent)
+      },
+      {
+        path: 'admin',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/admin.component').then(m => m.AdminComponent)
+      },
 
       // Core Interactive Modules
-      { path: 'orders', component: OrdersComponent },
-      { path: 'finance/accounting', component: AccountingComponent, canActivate: [subscriptionFeatureGuard('financial')] },
-      { path: 'finance/profit', component: ProfitCalculatorComponent },
-      { path: 'finance/product-costs', component: ProductCostManagerComponent },
-      { path: 'listings/fast-creator', component: FastCreatorComponent },
+      {
+        path: 'orders',
+        loadComponent: () => import('./features/orders/orders.component').then(m => m.OrdersComponent)
+      },
+      {
+        path: 'finance/accounting',
+        canActivate: [subscriptionFeatureGuard('financial')],
+        loadComponent: () => import('./features/finance/accounting.component').then(m => m.AccountingComponent)
+      },
+      {
+        path: 'finance/profit',
+        loadComponent: () => import('./features/finance/profit-calculator.component').then(m => m.ProfitCalculatorComponent)
+      },
+      {
+        path: 'finance/product-costs',
+        loadComponent: () => import('./features/finance/product-cost-manager.component').then(m => m.ProductCostManagerComponent)
+      },
+      {
+        path: 'listings/fast-creator',
+        loadComponent: () => import('./features/listings/fast-creator.component').then(m => m.FastCreatorComponent)
+      },
       { path: 'listings/creator', redirectTo: 'listings/fast-creator', pathMatch: 'full' },
-      { path: 'listings/discovery', component: ProductDiscoveryComponent },
-      { path: 'ai-studio', component: AiStudioComponent, canActivate: [subscriptionFeatureGuard('ai_image')] },
+      {
+        path: 'listings/discovery',
+        loadComponent: () => import('./features/listings/product-discovery.component').then(m => m.ProductDiscoveryComponent)
+      },
+      {
+        path: 'ai-studio',
+        canActivate: [subscriptionFeatureGuard('ai_image')],
+        loadComponent: () => import('./features/ai-studio/ai-studio.component').then(m => m.AiStudioComponent)
+      },
 
       // Research & Intelligence Modules
-      { path: 'research/agent', component: ShopResearchAgentComponent },
-      { path: 'research/market', component: MarketResearchComponent },
-      { path: 'research/viral-3d', component: Viral3DComponent, canActivate: [subscriptionFeatureGuard('viral_3d')] },
-      { path: 'research/competitor', component: CompetitorSpyComponent, canActivate: [subscriptionFeatureGuard('competitor_spy')] },
-      { path: 'research/external', component: ExternalArbitrageRadarComponent, canActivate: [subscriptionFeatureGuard('external')] },
+      {
+        path: 'research/agent',
+        loadComponent: () => import('./features/research/shop-research-agent.component').then(m => m.ShopResearchAgentComponent)
+      },
+      {
+        path: 'research/market',
+        loadComponent: () => import('./features/research/market-research.component').then(m => m.MarketResearchComponent)
+      },
+      {
+        path: 'research/viral-3d',
+        canActivate: [subscriptionFeatureGuard('viral_3d')],
+        loadComponent: () => import('./features/research/viral-3d.component').then(m => m.Viral3DComponent)
+      },
+      {
+        path: 'research/competitor',
+        canActivate: [subscriptionFeatureGuard('competitor_spy')],
+        loadComponent: () => import('./features/research/competitor-spy.component').then(m => m.CompetitorSpyComponent)
+      },
+      {
+        path: 'research/external',
+        canActivate: [subscriptionFeatureGuard('external')],
+        loadComponent: () => import('./features/research/external-arbitrage.component').then(m => m.ExternalArbitrageRadarComponent)
+      },
 
       // Analytics Modules
-      { path: 'analytics/ai-audit', component: AiAuditComponent, canActivate: [subscriptionFeatureGuard('ai_audit')] },
-      { path: 'analytics/shop', component: ShopPerformanceComponent },
-      { path: 'analytics/ab-test', component: AbTestDashboardComponent, canActivate: [subscriptionFeatureGuard('ab_test')] },
+      {
+        path: 'analytics/ai-audit',
+        canActivate: [subscriptionFeatureGuard('ai_audit')],
+        loadComponent: () => import('./features/analytics/ai-audit.component').then(m => m.AiAuditComponent)
+      },
+      {
+        path: 'analytics/shop',
+        loadComponent: () => import('./features/analytics/shop-performance.component').then(m => m.ShopPerformanceComponent)
+      },
+      {
+        path: 'analytics/ab-test',
+        canActivate: [subscriptionFeatureGuard('ab_test')],
+        loadComponent: () => import('./features/analytics/ab-test-dashboard.component').then(m => m.AbTestDashboardComponent)
+      },
 
       // Finance & Tools Modules
-      { path: 'finance/ai-analysis', component: FinancialAiAnalysisComponent, canActivate: [subscriptionFeatureGuard('financial_ai')] },
-      { path: 'tools/vault', component: ShopVaultComponent, canActivate: [subscriptionFeatureGuard('shop_vault')] },
-      { path: 'tools/automation', component: TaskSchedulerAutomationComponent, canActivate: [subscriptionFeatureGuard('automation')] },
-      { path: 'tools/batch', component: BatchQueueComponent, canActivate: [subscriptionFeatureGuard('batch')] },
-      { path: 'tools/tracking', component: LiveTrackingRadarComponent },
-      { path: 'tools/ai-usage', component: AiUsageDashboardComponent },
+      {
+        path: 'finance/ai-analysis',
+        canActivate: [subscriptionFeatureGuard('financial_ai')],
+        loadComponent: () => import('./features/finance/financial-ai-analysis.component').then(m => m.FinancialAiAnalysisComponent)
+      },
+      {
+        path: 'tools/vault',
+        canActivate: [subscriptionFeatureGuard('shop_vault')],
+        loadComponent: () => import('./features/tools/shop-vault.component').then(m => m.ShopVaultComponent)
+      },
+      {
+        path: 'tools/automation',
+        canActivate: [subscriptionFeatureGuard('automation')],
+        loadComponent: () => import('./features/tools/automation-scheduler.component').then(m => m.TaskSchedulerAutomationComponent)
+      },
+      {
+        path: 'tools/batch',
+        canActivate: [subscriptionFeatureGuard('batch')],
+        loadComponent: () => import('./features/tools/batch-queue.component').then(m => m.BatchQueueComponent)
+      },
+      {
+        path: 'tools/tracking',
+        loadComponent: () => import('./features/tools/live-tracking.component').then(m => m.LiveTrackingRadarComponent)
+      },
+      {
+        path: 'tools/ai-usage',
+        loadComponent: () => import('./features/tools/ai-usage-dashboard.component').then(m => m.AiUsageDashboardComponent)
+      },
 
       // Shipping & Logistics Modules (4-Carrier Hub)
-      { path: 'shipping/aras', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
-      { path: 'shipping/shipentegra', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
-      { path: 'shipping/navlungo', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
-      { path: 'shipping/shiptomore', component: ShippingHubComponent, canActivate: [subscriptionFeatureGuard('shipping_hub')] },
+      {
+        path: 'shipping/aras',
+        canActivate: [subscriptionFeatureGuard('shipping_hub')],
+        loadComponent: () => import('./features/shipping/shipping-hub.component').then(m => m.ShippingHubComponent)
+      },
+      {
+        path: 'shipping/shipentegra',
+        canActivate: [subscriptionFeatureGuard('shipping_hub')],
+        loadComponent: () => import('./features/shipping/shipping-hub.component').then(m => m.ShippingHubComponent)
+      },
+      {
+        path: 'shipping/navlungo',
+        canActivate: [subscriptionFeatureGuard('shipping_hub')],
+        loadComponent: () => import('./features/shipping/shipping-hub.component').then(m => m.ShippingHubComponent)
+      },
+      {
+        path: 'shipping/shiptomore',
+        canActivate: [subscriptionFeatureGuard('shipping_hub')],
+        loadComponent: () => import('./features/shipping/shipping-hub.component').then(m => m.ShippingHubComponent)
+      },
 
       // System & Settings Modules
-      { path: 'settings/subscription', component: SubscriptionPlansComponent },
-      { path: 'settings/ai-models', component: AiModelsSettingsComponent },
-      { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
-      { path: 'settings/notifications', component: NotificationSettingsComponent },
-      { path: 'settings/update', component: SystemUpdateComponent },
-      { path: 'system/logs', component: SystemLogsComponent }
+      {
+        path: 'settings/subscription',
+        loadComponent: () => import('./features/settings/subscription-plans.component').then(m => m.SubscriptionPlansComponent)
+      },
+      {
+        path: 'settings/ai-models',
+        loadComponent: () => import('./features/settings/ai-models-settings.component').then(m => m.AiModelsSettingsComponent)
+      },
+      {
+        path: 'settings/etsy-api',
+        loadComponent: () => import('./features/settings/etsy-api-settings.component').then(m => m.EtsyApiSettingsComponent)
+      },
+      {
+        path: 'settings/notifications',
+        loadComponent: () => import('./features/settings/notification-settings.component').then(m => m.NotificationSettingsComponent)
+      },
+      {
+        path: 'settings/update',
+        loadComponent: () => import('./features/system/system-update.component').then(m => m.SystemUpdateComponent)
+      },
+      {
+        path: 'system/logs',
+        loadComponent: () => import('./features/system/system-logs.component').then(m => m.SystemLogsComponent)
+      }
     ]
   },
 
