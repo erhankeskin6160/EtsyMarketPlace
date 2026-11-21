@@ -23,7 +23,7 @@ public sealed class ShopDnaProfile
     public IReadOnlyList<string> TopPerformingTags { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> CategoryKeywords { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> ForbiddenKeywords { get; set; } = Array.Empty<string>();
-    public ResearchScheduleCadence ScheduleCadence { get; set; } = ResearchScheduleCadence.Daily;
+    public ResearchScheduleCadence ScheduleCadence { get; set; } = ResearchScheduleCadence.Off;
     public DateTime? LastScheduledRunAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     public decimal DefaultShippingCostUsd { get; set; } = 0m;

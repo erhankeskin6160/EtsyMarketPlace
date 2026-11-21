@@ -26,21 +26,43 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
         string apiKey,
         CancellationToken cancellationToken = default)
     {
+        var result = await GenerateOptimizationJsonWithUsageAsync(
+            systemInstruction,
+            userPrompt,
+            model,
+            apiKey,
+            maxOutputTokens: null,
+            cancellationToken);
+        return (result.Success, result.Content, result.ErrorMessage);
+    }
+
+    public async Task<LlmJsonResult> GenerateOptimizationJsonWithUsageAsync(
+        string systemInstruction,
+        string userPrompt,
+        string model,
+        string apiKey,
+        int? maxOutputTokens = null,
+        CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return (false, null, "Gemini API anahtarı boş olamaz.");
+            return new LlmJsonResult(false, null, "Gemini API anahtarı boş olamaz.", 0, 0, 0, "Google Gemini", model ?? string.Empty);
         }
 
         var trimmedModel = (model ?? string.Empty).Trim();
         if (trimmedModel.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
         {
+            var resolvedDeepSeekModel = trimmedModel.Contains("reasoner", StringComparison.OrdinalIgnoreCase)
+                ? "deepseek-reasoner"
+                : "deepseek-chat";
             return await CallOpenAiCompatibleOptimizationAsync(
                 "https://api.deepseek.com/chat/completions",
                 "DeepSeek",
-                trimmedModel.Contains("reasoner", StringComparison.OrdinalIgnoreCase) ? "deepseek-reasoner" : "deepseek-chat",
+                resolvedDeepSeekModel,
                 systemInstruction,
                 userPrompt,
                 apiKey,
+                maxOutputTokens,
                 cancellationToken);
         }
 
@@ -56,6 +78,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
                 systemInstruction,
                 userPrompt,
                 apiKey,
+                maxOutputTokens,
                 cancellationToken);
         }
 
@@ -63,11 +86,12 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
         {
             return await CallOpenAiCompatibleOptimizationAsync(
                 "https://api.x.ai/v1/chat/completions",
-                "xAI Grok",
+                "Grok",
                 trimmedModel,
                 systemInstruction,
                 userPrompt,
                 apiKey,
+                maxOutputTokens,
                 cancellationToken);
         }
 
@@ -78,11 +102,15 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
                 systemInstruction,
                 userPrompt,
                 apiKey,
+                maxOutputTokens,
                 cancellationToken);
         }
 
         var normalizedModel = EtsyAiModelNormalizer.NormalizeGeminiTextModel(model);
         var geminiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(normalizedModel)}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+        var effectiveMaxTokens = maxOutputTokens.HasValue && maxOutputTokens.Value > 0
+            ? Math.Clamp(maxOutputTokens.Value, 128, 8192)
+            : 4096;
 
         var payload = new
         {
@@ -102,7 +130,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
             {
                 temperature = 0.35,
                 topP = 0.95,
-                maxOutputTokens = 4096,
+                maxOutputTokens = effectiveMaxTokens,
                 responseMimeType = "application/json"
             }
         };
@@ -125,7 +153,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
             }
             catch { }
 
-            return (false, null, errMsg);
+            return new LlmJsonResult(false, null, errMsg, 0, 0, 0, "Google Gemini", normalizedModel);
         }
 
         try
@@ -138,11 +166,12 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
                 .GetProperty("text")
                 .GetString();
 
-            return (true, candidateText, null);
+            var (promptTokens, completionTokens, totalTokens) = ExtractGeminiUsage(doc.RootElement);
+            return new LlmJsonResult(true, candidateText, null, promptTokens, completionTokens, totalTokens, "Google Gemini", normalizedModel);
         }
         catch (Exception ex)
         {
-            return (false, null, $"Gemini yanıtı işlenemedi: {ex.Message}");
+            return new LlmJsonResult(false, null, $"Gemini yanıtı işlenemedi: {ex.Message}", 0, 0, 0, "Google Gemini", normalizedModel);
         }
     }
 
@@ -293,30 +322,35 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
         return results;
     }
 
-    private async Task<(bool Success, string? Content, string? ErrorMessage)> CallOpenAiCompatibleOptimizationAsync(
+    private async Task<LlmJsonResult> CallOpenAiCompatibleOptimizationAsync(
         string endpointUrl,
         string providerLabel,
         string modelName,
         string systemInstruction,
         string userPrompt,
         string apiKey,
+        int? maxOutputTokens,
         CancellationToken cancellationToken)
     {
-        var payload = new
+        var payloadDict = new Dictionary<string, object>
         {
-            model = modelName,
-            messages = new[]
+            ["model"] = modelName,
+            ["messages"] = new[]
             {
                 new { role = "system", content = systemInstruction + "\n\nIMPORTANT: Return ONLY valid JSON matching the requested schema. Do not wrap in markdown code fences." },
                 new { role = "user", content = userPrompt }
             },
-            temperature = 0.35,
-            response_format = new { type = "json_object" }
+            ["temperature"] = 0.35,
+            ["response_format"] = new { type = "json_object" }
         };
+        if (maxOutputTokens.HasValue && maxOutputTokens.Value > 0)
+        {
+            payloadDict["max_tokens"] = Math.Clamp(maxOutputTokens.Value, 128, 8192);
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-        req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        req.Content = new StringContent(JsonSerializer.Serialize(payloadDict), Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(req, cancellationToken);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -335,7 +369,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
             }
             catch { }
 
-            return (false, null, errMsg);
+            return new LlmJsonResult(false, null, errMsg, 0, 0, 0, providerLabel, modelName);
         }
 
         try
@@ -347,25 +381,31 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
                 .GetProperty("content")
                 .GetString();
 
-            return (true, StripMarkdownJsonFences(candidateText), null);
+            var (promptTokens, completionTokens, totalTokens) = ExtractOpenAiUsage(doc.RootElement);
+            return new LlmJsonResult(true, StripMarkdownJsonFences(candidateText), null, promptTokens, completionTokens, totalTokens, providerLabel, modelName);
         }
         catch (Exception ex)
         {
-            return (false, null, $"{providerLabel} yanıtı işlenemedi: {ex.Message}");
+            return new LlmJsonResult(false, null, $"{providerLabel} yanıtı işlenemedi: {ex.Message}", 0, 0, 0, providerLabel, modelName);
         }
     }
 
-    private async Task<(bool Success, string? Content, string? ErrorMessage)> CallClaudeOptimizationAsync(
+    private async Task<LlmJsonResult> CallClaudeOptimizationAsync(
         string modelName,
         string systemInstruction,
         string userPrompt,
         string apiKey,
+        int? maxOutputTokens,
         CancellationToken cancellationToken)
     {
+        var effectiveMaxTokens = maxOutputTokens.HasValue && maxOutputTokens.Value > 0
+            ? Math.Clamp(maxOutputTokens.Value, 128, 8192)
+            : 4096;
+
         var payload = new
         {
             model = modelName,
-            max_tokens = 4096,
+            max_tokens = effectiveMaxTokens,
             temperature = 0.35,
             system = systemInstruction + "\n\nIMPORTANT: Return ONLY valid JSON matching the requested schema. Do not wrap in markdown code fences.",
             messages = new[]
@@ -396,7 +436,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
             }
             catch { }
 
-            return (false, null, errMsg);
+            return new LlmJsonResult(false, null, errMsg, 0, 0, 0, "Claude", modelName);
         }
 
         try
@@ -407,12 +447,45 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
                 .GetProperty("text")
                 .GetString();
 
-            return (true, StripMarkdownJsonFences(candidateText), null);
+            var (promptTokens, completionTokens, totalTokens) = ExtractClaudeUsage(doc.RootElement);
+            return new LlmJsonResult(true, StripMarkdownJsonFences(candidateText), null, promptTokens, completionTokens, totalTokens, "Claude", modelName);
         }
         catch (Exception ex)
         {
-            return (false, null, $"Claude yanıtı işlenemedi: {ex.Message}");
+            return new LlmJsonResult(false, null, $"Claude yanıtı işlenemedi: {ex.Message}", 0, 0, 0, "Claude", modelName);
         }
+    }
+
+    private static (int Prompt, int Completion, int Total) ExtractOpenAiUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
+            return (0, 0, 0);
+
+        var prompt = usage.TryGetProperty("prompt_tokens", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
+        var completion = usage.TryGetProperty("completion_tokens", out var c) && c.TryGetInt32(out var cv) ? cv : 0;
+        var total = usage.TryGetProperty("total_tokens", out var t) && t.TryGetInt32(out var tv) ? tv : prompt + completion;
+        return (prompt, completion, total);
+    }
+
+    private static (int Prompt, int Completion, int Total) ExtractGeminiUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("usageMetadata", out var usage) || usage.ValueKind != JsonValueKind.Object)
+            return (0, 0, 0);
+
+        var prompt = usage.TryGetProperty("promptTokenCount", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
+        var completion = usage.TryGetProperty("candidatesTokenCount", out var c) && c.TryGetInt32(out var cv) ? cv : 0;
+        var total = usage.TryGetProperty("totalTokenCount", out var t) && t.TryGetInt32(out var tv) ? tv : prompt + completion;
+        return (prompt, completion, total);
+    }
+
+    private static (int Prompt, int Completion, int Total) ExtractClaudeUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
+            return (0, 0, 0);
+
+        var prompt = usage.TryGetProperty("input_tokens", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
+        var completion = usage.TryGetProperty("output_tokens", out var c) && c.TryGetInt32(out var cv) ? cv : 0;
+        return (prompt, completion, prompt + completion);
     }
 
     private static string? StripMarkdownJsonFences(string? raw)

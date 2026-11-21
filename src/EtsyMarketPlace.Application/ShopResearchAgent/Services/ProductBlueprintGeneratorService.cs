@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.MarketResearch;
 using EtsyMarketPlace.Application.ShopResearchAgent.Models;
@@ -18,6 +19,8 @@ using EtsyMarketPlace.Domain.ShopResearchAgent;
 /// </summary>
 public sealed class ProductBlueprintGeneratorService
 {
+    public const string UsageModuleName = "Mağaza Araştırma Ajanı";
+
     private static readonly string[] FillerWords =
     [
         "free shipping", "best seller", "bestseller", "fast shipping", "ready to ship", "on sale"
@@ -27,13 +30,16 @@ public sealed class ProductBlueprintGeneratorService
 
     private readonly IGeminiListingApiClient? _llmClient;
     private readonly IpRiskPolicyService _ipRiskPolicy;
+    private readonly IAiUsageRecorder? _usageRecorder;
 
     public ProductBlueprintGeneratorService(
         IGeminiListingApiClient? llmClient = null,
-        IpRiskPolicyService? ipRiskPolicy = null)
+        IpRiskPolicyService? ipRiskPolicy = null,
+        IAiUsageRecorder? usageRecorder = null)
     {
         _llmClient = llmClient;
         _ipRiskPolicy = ipRiskPolicy ?? new IpRiskPolicyService();
+        _usageRecorder = usageRecorder;
     }
 
     public ProductBlueprintDto BuildDeterministicBlueprint(
@@ -82,16 +88,17 @@ public sealed class ProductBlueprintGeneratorService
             materials);
     }
 
-    public async Task EnrichTopCandidatesAsync(
+    public async Task<(int PromptTokens, int CompletionTokens, int TotalTokens, decimal EstimatedCostUsd)> EnrichTopCandidatesAsync(
         IReadOnlyList<ResearchCandidate> winners,
         ShopDnaProfile dna,
         IReadOnlyDictionary<Guid, IReadOnlyList<MarketTagFrequencyDto>>? marketTagsByRunOrCandidate = null,
         string? model = null,
         string? apiKey = null,
+        bool useAi = false,
         CancellationToken ct = default)
     {
         if (winners == null || winners.Count == 0)
-            return;
+            return (0, 0, 0, 0m);
 
         var blueprintsById = new Dictionary<Guid, ProductBlueprintDto>();
         foreach (var c in winners)
@@ -116,12 +123,17 @@ public sealed class ProductBlueprintGeneratorService
             blueprintsById[c.CandidateId] = bp;
         }
 
-        // Single batched LLM call ONLY for top winners when credentials are configured
-        if (_llmClient != null && !string.IsNullOrWhiteSpace(apiKey))
+        var promptTokens = 0;
+        var completionTokens = 0;
+        var totalTokens = 0;
+        var costUsd = 0m;
+
+        // Single batched LLM call ONLY for top 5 winners when user opted into Balanced/FullAi mode
+        if (useAi && _llmClient != null && !string.IsNullOrWhiteSpace(apiKey))
         {
             try
             {
-                var topBatch = winners.Take(8).Select(c => new
+                var topBatch = winners.Take(5).Select(c => new
                 {
                     candidateId = c.CandidateId,
                     rawTitle = c.Title,
@@ -129,14 +141,14 @@ public sealed class ProductBlueprintGeneratorService
                     sellPriceUsd = c.EstimatedSellPriceUsd,
                     monopolyPct = c.TopShopConcentrationPct,
                     freeShippingPct = c.FreeShippingRatioPct,
-                    tags = blueprintsById[c.CandidateId].LongTailTags
+                    tags = blueprintsById[c.CandidateId].LongTailTags.Take(6)
                 }).ToList();
 
                 var sysPrompt =
                     "Sen kıdemli bir Etsy SEO ve Ürün Farklılaştırma uzmanısın. Verilen ürün adayları için rakipten kopyalamayan, " +
                     "telif/marka kelimesi içermeyen, yüksek dönüşümlü ürün blueprint'i üret. " +
                     "KISITLAR: mobileTitle55 en fazla 55 karakter (İngilizce), fullTitle140 en fazla 140 karakter (İngilizce), " +
-                    "differentiationAngle/competitorGap/aiMockupBrief Türkçe. " +
+                    "differentiationAngle/competitorGap/aiMockupBrief kısa ve öz Türkçe. " +
                     "Yanıtı YALNIZCA geçerli bir JSON nesnesi olarak ver: " +
                     "{\"blueprints\":[{\"candidateId\":\"guid\",\"mobileTitle55\":\"...\",\"fullTitle140\":\"...\",\"differentiationAngle\":\"...\",\"competitorGap\":\"...\",\"aiMockupBrief\":\"...\"}]}";
 
@@ -144,15 +156,34 @@ public sealed class ProductBlueprintGeneratorService
                 {
                     shopNiche = dna.PrimaryNiche,
                     supports3DPrint = dna.Supports3DPrint,
-                    materials = dna.PreferredMaterials,
+                    materials = dna.PreferredMaterials.Take(4),
                     candidates = topBatch
                 }, JsonOptions);
 
                 var resolvedModel = string.IsNullOrWhiteSpace(model) ? "gemini-2.5-flash" : model;
-                var (ok, content, _) = await _llmClient.GenerateOptimizationJsonAsync(sysPrompt, userPrompt, resolvedModel, apiKey, ct);
-                if (ok && !string.IsNullOrWhiteSpace(content))
+                var llmResult = await _llmClient.GenerateOptimizationJsonWithUsageAsync(
+                    sysPrompt, userPrompt, resolvedModel, apiKey, maxOutputTokens: 1200, ct);
+
+                promptTokens = llmResult.PromptTokens;
+                completionTokens = llmResult.CompletionTokens;
+                totalTokens = llmResult.TotalTokens > 0 ? llmResult.TotalTokens : promptTokens + completionTokens;
+                costUsd = AiPriceCalculator.CalculateCostUsd(
+                    string.IsNullOrWhiteSpace(llmResult.ResolvedModel) ? resolvedModel : llmResult.ResolvedModel,
+                    promptTokens,
+                    completionTokens);
+
+                if (_usageRecorder != null)
                 {
-                    MergeLlmBlueprints(content, blueprintsById, dna.ForbiddenKeywords);
+                    await _usageRecorder.RecordAsync(
+                        UsageModuleName,
+                        llmResult,
+                        $"Ürün Blueprint (Top {topBatch.Count})",
+                        ct);
+                }
+
+                if (llmResult.Success && !string.IsNullOrWhiteSpace(llmResult.Content))
+                {
+                    MergeLlmBlueprints(llmResult.Content, blueprintsById, dna.ForbiddenKeywords);
                 }
             }
             catch
@@ -169,6 +200,8 @@ public sealed class ProductBlueprintGeneratorService
             c.SuggestedTags = bp.LongTailTags;
             c.BlueprintJson = JsonSerializer.Serialize(bp, JsonOptions);
         }
+
+        return (promptTokens, completionTokens, totalTokens, costUsd);
     }
 
     private void MergeLlmBlueprints(

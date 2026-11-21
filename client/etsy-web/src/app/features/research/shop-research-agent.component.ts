@@ -65,9 +65,10 @@ export class ShopResearchAgentComponent {
 
   // Editable DNA form fields
   focusHint = '';
+  aiMode: 0 | 1 | 2 = 0; // 0=Ekonomik (0 Token), 1=Dengeli (Top 5 Blueprint), 2=Tam AI
   forbiddenKeywordsInput = '';
   materialsInput = '';
-  scheduleCadence: ResearchScheduleCadence = 1;
+  scheduleCadence: ResearchScheduleCadence = 0;
   minMarginPct = 25;
   priceMinUsd = 15;
   priceMaxUsd = 75;
@@ -267,7 +268,7 @@ export class ShopResearchAgentComponent {
       supports3DPrint: this.supports3DPrint,
       preferredMaterials: materials,
       forbiddenKeywords: forbidden,
-      scheduleCadence: Number(this.scheduleCadence) as ResearchScheduleCadence,
+      scheduleCadence: 0,
       defaultShippingCostUsd: Number(this.defaultShippingCostUsd) || 0,
       defaultPackagingCostUsd: Number(this.defaultPackagingCostUsd) || 1,
       returnReserveRatePct: Number(this.returnReserveRatePct) || 4
@@ -280,7 +281,7 @@ export class ShopResearchAgentComponent {
           this.syncFormFromDna(updated);
           this.savingDna.set(false);
           this.errorMessage.set(null);
-          this.statusMessage.set('Mağaza DNA kısıtları, navlun maliyetleri ve tarama takvimi kaydedildi.');
+          this.statusMessage.set('Mağaza DNA kısıtları ve landed maliyet ayarları kaydedildi (Yalnızca Manuel Mod).');
         },
         error: (err) => {
           if (this.etsyApi.activeShopId() !== requestedShopId) return;
@@ -309,7 +310,7 @@ export class ShopResearchAgentComponent {
     this.statusMessage.set('V3 Ajanı 6 aşamalı çoklu kaynak taramasını başlattı...');
     this.startSseStream();
 
-    this.agentService.runResearch(this.focusHint, 10)
+    this.agentService.runResearch(this.focusHint, 10, this.aiMode)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (run) => {

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.MarketResearch;
 using EtsyMarketPlace.Application.ProductOpportunity;
@@ -16,14 +17,17 @@ using EtsyMarketPlace.Domain.ShopResearchAgent;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 
 /// <summary>
-/// V3 Personalized autonomous/on-demand product research agent scoped strictly to a single user's Etsy shop.
+/// V3 Personalized on-demand product research agent scoped strictly to a single user's Etsy shop.
 /// Integrates: 6-stage SSE refinery funnel, Live Ledger + TR->US Landed Unit Economics,
 /// Monopoly/Free-Shipping/Seasonal/Keyword-Momentum Demand Validation, False-Positive Guards,
 /// 3-Tier IP Risk Policy, Hybrid Cannibalization Guard, Critic Reflection Loop,
-/// Thompson Sampling Bandit Learning, Competitor Shop Mining, 3D Model Lake, and Product Blueprints.
+/// Thompson Sampling Bandit Learning, Competitor Shop Mining, 3D Model Lake, Product Blueprints,
+/// and exact AI token/cost telemetry.
 /// </summary>
 public sealed class ShopResearchAgentOrchestrator
 {
+    public const string UsageModuleName = "Mağaza Araştırma Ajanı";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IShopResearchRepository _repository;
@@ -42,6 +46,7 @@ public sealed class ShopResearchAgentOrchestrator
     private readonly BanditLearningService _banditLearning;
     private readonly ProductBlueprintGeneratorService _blueprintGenerator;
     private readonly IResearchProgressHub? _progressHub;
+    private readonly IAiUsageRecorder? _usageRecorder;
 
     private sealed class FunnelCounters
     {
@@ -70,7 +75,8 @@ public sealed class ShopResearchAgentOrchestrator
         IMarketKeywordTrackingService? keywordTrackingService = null,
         BanditLearningService? banditLearning = null,
         ProductBlueprintGeneratorService? blueprintGenerator = null,
-        IResearchProgressHub? progressHub = null)
+        IResearchProgressHub? progressHub = null,
+        IAiUsageRecorder? usageRecorder = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _listingService = listingService ?? throw new ArgumentNullException(nameof(listingService));
@@ -86,7 +92,8 @@ public sealed class ShopResearchAgentOrchestrator
         _notifier = notifier;
         _keywordTrackingService = keywordTrackingService;
         _banditLearning = banditLearning ?? new BanditLearningService(_repository);
-        _blueprintGenerator = blueprintGenerator ?? new ProductBlueprintGeneratorService(_llmClient, _ipRiskPolicy);
+        _usageRecorder = usageRecorder;
+        _blueprintGenerator = blueprintGenerator ?? new ProductBlueprintGeneratorService(_llmClient, _ipRiskPolicy, _usageRecorder);
         _progressHub = progressHub;
     }
 
@@ -160,12 +167,13 @@ public sealed class ShopResearchAgentOrchestrator
             var (activeSeason, seasonalBoostPct) = ResolveActiveSeason();
             var keywordMomentumMap = await LoadKeywordMomentumMapSafeAsync(ct);
 
-            // Stage 2: Hypothesis & Query Planning (Thompson Bandit + Season + Optional LLM)
+            // Stage 2: Hypothesis & Query Planning (Thompson Bandit + Season + Optional LLM in FullAi mode)
+            var aiMode = request?.AiMode ?? ResearchAiMode.Economic;
             PublishProgress(ownerUserId, shopId, run.RunId, "hypotheses", "2. Hipotez & Bandit", 2, 0, 0,
                 "Thompson Sampling bandit ağırlıklarıyla mağazaya özel arama hipotezleri planlanıyor...");
 
-            var (queries, explorationQuery, hypothesesJson) = await PlanQueriesAsync(
-                dna, recentDecisions, banditArms, activeSeason, request, ct);
+            var (queries, explorationQuery, hypothesesJson, planTokens, planCostUsd) = await PlanQueriesAsync(
+                dna, recentDecisions, banditArms, activeSeason, request, aiMode, ct);
             run.SearchQueriesUsed = queries;
             run.ExplorationQueryUsed = explorationQuery;
             run.HypothesesJson = hypothesesJson;
@@ -418,8 +426,15 @@ public sealed class ShopResearchAgentOrchestrator
                 funnel.ScannedCount, ranked.Count,
                 $"{ranked.Count} kazanan aday için 55 krk mobil başlık, varyasyon merdiveni ve mockup brifi hazırlanıyor...");
 
-            await _blueprintGenerator.EnrichTopCandidatesAsync(
-                ranked, dna, marketTagsByCandidate, request?.Model, request?.ApiKey, ct);
+            var useBlueprintAi = aiMode is ResearchAiMode.Balanced or ResearchAiMode.FullAi;
+            var (_, _, blueprintTokens, blueprintCostUsd) = await _blueprintGenerator.EnrichTopCandidatesAsync(
+                ranked, dna, marketTagsByCandidate, request?.Model, request?.ApiKey, useBlueprintAi, ct);
+
+            var totalAiTokens = planTokens + blueprintTokens;
+            var totalAiCostUsd = planCostUsd + blueprintCostUsd;
+            var aiSummaryTag = totalAiTokens > 0
+                ? $" | AI: {totalAiTokens:N0} token (~${totalAiCostUsd:F4})"
+                : " | AI: 0 token (Ekonomik Mod)";
 
             var telemetry = new ResearchFunnelTelemetry(
                 funnel.ScannedCount,
@@ -443,7 +458,7 @@ public sealed class ShopResearchAgentOrchestrator
             if (ranked.Count > 0)
             {
                 run.Summary = $"V3 Tarama Tamamlandı: {funnel.ScannedCount} ürün incelendi ({run.SearchQueriesUsed.Count} sorgu, {run.CriticIterations} critic turu); " +
-                    $"canlı kesinti (%{run.EffectiveShopFeeRatePct:F1}), navlun & tekel doğrulamasından geçen {ranked.Count} ürün blueprint'i hazırlandı.";
+                    $"canlı kesinti (%{run.EffectiveShopFeeRatePct:F1}), navlun & tekel doğrulamasından geçen {ranked.Count} ürün blueprint'i hazırlandı.{aiSummaryTag}";
             }
             else if (attemptedMarketQueries > 0 && failedMarketQueries == attemptedMarketQueries)
             {
@@ -452,7 +467,7 @@ public sealed class ShopResearchAgentOrchestrator
             }
             else
             {
-                run.Summary = $"V3 Tarama tamamlandı ({funnel.ScannedCount} ürün tarandı) ancak mevcut talep, net kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.";
+                run.Summary = $"V3 Tarama tamamlandı ({funnel.ScannedCount} ürün tarandı) ancak mevcut talep, net kâr marjı, telif ve yamyamlaşma kriterlerini geçen yeni aday bulunamadı.{aiSummaryTag}";
             }
 
             await _repository.SaveRunAsync(run, ct);
@@ -637,29 +652,34 @@ public sealed class ShopResearchAgentOrchestrator
             DateTime.UtcNow));
     }
 
-    private async Task<(IReadOnlyList<string> Queries, string? ExplorationQuery, string HypothesesJson)> PlanQueriesAsync(
+    private async Task<(IReadOnlyList<string> Queries, string? ExplorationQuery, string HypothesesJson, int TotalTokens, decimal EstimatedCostUsd)> PlanQueriesAsync(
         ShopDnaProfile dna,
         IReadOnlyList<CandidateDecisionEvent> recentDecisions,
         IReadOnlyList<BanditArmState> banditArms,
         SeasonalTrendItem? activeSeason,
         RunShopResearchRequest? request,
+        ResearchAiMode aiMode,
         CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(request?.FocusHint))
         {
             var hint = request.FocusHint.Trim();
             var (fallback, exp) = BuildBanditDeterministicQueries(dna, recentDecisions, banditArms, activeSeason, hint);
-            return (fallback, exp, JsonSerializer.Serialize(new[] { new { query = hint, reason = "Kullanıcı odak ipucu" } }));
+            return (fallback, exp, JsonSerializer.Serialize(new[] { new { query = hint, reason = "Kullanıcı odak ipucu" } }), 0, 0m);
         }
 
-        if (_llmClient != null && !string.IsNullOrWhiteSpace(request?.ApiKey))
+        var planTokens = 0;
+        var planCostUsd = 0m;
+
+        // Only call LLM for query planning when user explicitly chooses FullAi mode
+        if (aiMode == ResearchAiMode.FullAi && _llmClient != null && !string.IsNullOrWhiteSpace(request?.ApiKey))
         {
             try
             {
                 var accepted = recentDecisions.Where(d => d.Decision == CandidateDecisionStatus.Accepted || d.Decision == CandidateDecisionStatus.SentToDraft)
-                    .Select(d => d.CandidateTitle).Take(6).ToList();
+                    .Select(d => d.CandidateTitle).Take(5).ToList();
                 var rejected = recentDecisions.Where(d => d.Decision == CandidateDecisionStatus.Rejected)
-                    .Select(d => $"{d.CandidateTitle} ({d.Reason})").Take(6).ToList();
+                    .Select(d => $"{d.CandidateTitle} ({d.Reason})").Take(5).ToList();
 
                 var sysPrompt =
                     "Sen uzman bir Etsy ürün araştırma ajanısın. Verilen Mağaza DNA'sına, aktif sezon sinyallerine ve geçmiş onay/red hafızasına göre " +
@@ -671,8 +691,8 @@ public sealed class ShopResearchAgentOrchestrator
                     niche = dna.PrimaryNiche,
                     priceBandUsd = $"{dna.TargetPriceMinUsd}-{dna.TargetPriceMaxUsd}",
                     supports3DPrint = dna.Supports3DPrint,
-                    topTags = dna.TopPerformingTags.Take(10),
-                    forbidden = dna.ForbiddenKeywords,
+                    topTags = dna.TopPerformingTags.Take(8),
+                    forbidden = dna.ForbiddenKeywords.Take(10),
                     activeSeason = activeSeason?.Title,
                     seasonalKeywords = activeSeason?.HighDemandKeywords.Take(4),
                     recentlyAccepted = accepted,
@@ -680,10 +700,25 @@ public sealed class ShopResearchAgentOrchestrator
                 });
 
                 var model = string.IsNullOrWhiteSpace(request.Model) ? "gemini-2.5-flash" : request.Model;
-                var (ok, content, _) = await _llmClient.GenerateOptimizationJsonAsync(sysPrompt, userPrompt, model, request.ApiKey, ct);
-                if (ok && !string.IsNullOrWhiteSpace(content))
+                var llmResult = await _llmClient.GenerateOptimizationJsonWithUsageAsync(
+                    sysPrompt, userPrompt, model, request.ApiKey, maxOutputTokens: 500, ct);
+
+                planTokens = llmResult.TotalTokens > 0
+                    ? llmResult.TotalTokens
+                    : llmResult.PromptTokens + llmResult.CompletionTokens;
+                planCostUsd = AiPriceCalculator.CalculateCostUsd(
+                    string.IsNullOrWhiteSpace(llmResult.ResolvedModel) ? model : llmResult.ResolvedModel,
+                    llmResult.PromptTokens,
+                    llmResult.CompletionTokens);
+
+                if (_usageRecorder != null)
                 {
-                    var cleanedContent = StripMarkdownJsonFences(content);
+                    await _usageRecorder.RecordAsync(UsageModuleName, llmResult, "Sorgu Planlama", ct);
+                }
+
+                if (llmResult.Success && !string.IsNullOrWhiteSpace(llmResult.Content))
+                {
+                    var cleanedContent = StripMarkdownJsonFences(llmResult.Content);
                     using var doc = JsonDocument.Parse(cleanedContent);
                     if (TryExtractQueryArray(doc.RootElement, out var arrayElement))
                     {
@@ -711,7 +746,7 @@ public sealed class ShopResearchAgentOrchestrator
                                 distinct.Contains(exploration, StringComparer.OrdinalIgnoreCase)
                                 ? exploration
                                 : distinct.Last();
-                            return (distinct, resolvedExploration, cleanedContent);
+                            return (distinct, resolvedExploration, cleanedContent, planTokens, planCostUsd);
                         }
                     }
                 }
@@ -729,7 +764,7 @@ public sealed class ShopResearchAgentOrchestrator
             mode = string.Equals(q, expQuery, StringComparison.OrdinalIgnoreCase) ? "explore" : "exploit",
             reason = string.Equals(q, expQuery, StringComparison.OrdinalIgnoreCase) ? "Keşif (%20 Exploration)" : "Thompson Bandit + Mağaza DNA"
         }));
-        return (deterministic, expQuery, json);
+        return (deterministic, expQuery, json, planTokens, planCostUsd);
     }
 
     private (IReadOnlyList<string> Queries, string? ExplorationQuery) BuildBanditDeterministicQueries(

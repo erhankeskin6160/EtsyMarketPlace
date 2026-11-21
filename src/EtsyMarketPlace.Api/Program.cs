@@ -291,10 +291,14 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Service
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.DemandValidationService>();
 builder.Services.AddSingleton<EtsyMarketPlace.Application.ShopResearchAgent.Services.IpRiskPolicyService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.BanditLearningService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.AiUsage.IAiUsageRecorder, EtsyMarketPlace.Application.AiUsage.AiUsageRecorderService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ProductBlueprintGeneratorService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ShopResearchAgent.Interfaces.IShopResearchNotifier, EtsyMarketPlace.Infrastructure.ShopResearchAgent.TelegramShopResearchNotifier>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ShopResearchAgent.Services.ShopResearchAgentOrchestrator>();
-builder.Services.AddHostedService<EtsyMarketPlace.Infrastructure.ShopResearchAgent.ShopResearchSchedulerBackgroundService>();
+if (builder.Configuration.GetValue<bool>("ShopResearchAgent:EnableAutoScheduler", false))
+{
+    builder.Services.AddHostedService<EtsyMarketPlace.Infrastructure.ShopResearchAgent.ShopResearchSchedulerBackgroundService>();
+}
 builder.Services.AddScoped<McpToolHandler>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Mcp.IEtsyOfficialMcpClient, EtsyMarketPlace.Infrastructure.Mcp.EtsyOfficialMcpClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Mcp.IMcpServerService, EtsyMarketPlace.Application.Mcp.McpServerService>();

@@ -55,7 +55,7 @@ public sealed class ShopDnaBuilderService
             TopPerformingTags = topTags,
             CategoryKeywords = categoryKeywords,
             ForbiddenKeywords = existingProfile?.ForbiddenKeywords ?? Array.Empty<string>(),
-            ScheduleCadence = existingProfile?.ScheduleCadence ?? ResearchScheduleCadence.Daily,
+            ScheduleCadence = existingProfile?.ScheduleCadence ?? ResearchScheduleCadence.Off,
             LastScheduledRunAtUtc = existingProfile?.LastScheduledRunAtUtc,
             UpdatedAtUtc = DateTime.UtcNow,
             DefaultShippingCostUsd = existingProfile?.DefaultShippingCostUsd ?? 0m,

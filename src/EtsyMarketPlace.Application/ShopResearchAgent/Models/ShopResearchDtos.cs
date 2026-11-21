@@ -21,11 +21,19 @@ public sealed record UpdateShopDnaRequest(
     decimal? ReturnReserveRatePct = null
 );
 
+public enum ResearchAiMode
+{
+    Economic = 0,
+    Balanced = 1,
+    FullAi = 2
+}
+
 public sealed record RunShopResearchRequest(
     string? FocusHint = null,
     int MaxCandidates = 10,
     string? Model = null,
-    string? ApiKey = null
+    string? ApiKey = null,
+    ResearchAiMode AiMode = ResearchAiMode.Economic
 );
 
 public sealed record RecordCandidateDecisionRequest(

@@ -154,6 +154,7 @@
 .field input,
 .field select,
 .focus-input,
+.ai-mode-select,
 .sort-box select {
   background: rgba(11, 17, 32, 0.95);
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -161,6 +162,24 @@
   padding: 0.5rem 0.7rem;
   color: #f8fafc;
   font-size: 0.85rem;
+}
+
+.ai-mode-select {
+  color: #e2e8f0;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.84rem;
+  min-width: 215px;
+  cursor: pointer;
+}
+
+.manual-mode-pill {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .checkbox-field {

@@ -180,6 +180,11 @@ public sealed class SqliteShopResearchRepository : IShopResearchRepository
         await EnsureColumnAsync(conn, "research_candidates", "warning_flags_json", "TEXT NOT NULL DEFAULT '[]'", ct);
         await EnsureColumnAsync(conn, "research_candidates", "mobile_title_55", "TEXT NOT NULL DEFAULT ''", ct);
         await EnsureColumnAsync(conn, "research_candidates", "blueprint_json", "TEXT NOT NULL DEFAULT '{}'", ct);
+
+        // Enforce manual-only mode: disable legacy automatic schedule cadences on existing profiles
+        await using var disableAutoCmd = conn.CreateCommand();
+        disableAutoCmd.CommandText = "UPDATE shop_dna_profiles SET schedule_cadence = 0 WHERE schedule_cadence != 0;";
+        await disableAutoCmd.ExecuteNonQueryAsync(ct);
     }
 
     private static async Task EnsureColumnAsync(SqliteConnection conn, string table, string column, string definition, CancellationToken ct)

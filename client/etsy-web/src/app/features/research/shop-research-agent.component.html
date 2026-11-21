@@ -53,15 +53,10 @@
         }
       </div>
       <div class="form-grid-v3">
-        <label class="field">
-          <span>Otomatik Tarama</span>
-          <select [(ngModel)]="scheduleCadence">
-            <option [ngValue]="0">Kapalı (Manuel)</option>
-            <option [ngValue]="1">Her Gün</option>
-            <option [ngValue]="2">Haftalık</option>
-            <option [ngValue]="3">Aylık</option>
-          </select>
-        </label>
+        <div class="field">
+          <span>Çalışma Modu</span>
+          <div class="manual-mode-pill">🔒 Yalnızca Manuel (Ben Başlattığımda)</div>
+        </div>
         <label class="field">
           <span>Min. Net Marj (%)</span>
           <input type="number" [(ngModel)]="minMarginPct" min="5" max="85" />
@@ -114,6 +109,11 @@
         [(ngModel)]="focusHint"
         placeholder="İsteğe bağlı odak ipucu (boş bırakırsanız Thompson Bandit + sezon sinyalleriyle hipotez üretir)..."
       />
+      <select class="ai-mode-select" [(ngModel)]="aiMode" title="Token harcamasını kontrol etmek için AI kullanım modunu seçin">
+        <option [ngValue]="0">⚡ Ekonomik (0 Token)</option>
+        <option [ngValue]="1">⚖️ Dengeli (Top 5 AI Blueprint)</option>
+        <option [ngValue]="2">🧠 Tam AI (Sorgu + Top 5 Blueprint)</option>
+      </select>
       <button class="btn-run" (click)="runAgentNow()" [disabled]="runningAgent()">
         {{ runningAgent() ? '⏳ Ajan Araştırıyor...' : '🚀 Mağazam İçin Araştır' }}
       </button>

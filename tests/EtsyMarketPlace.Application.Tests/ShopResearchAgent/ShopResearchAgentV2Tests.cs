@@ -181,7 +181,7 @@ public sealed class ShopResearchAgentV2Tests
                 "owner-llm-1",
                 "53236321",
                 ResearchTriggerType.Manual,
-                new RunShopResearchRequest(Model: "DeepSeek-V4-Flash", ApiKey: "sk-test-key"));
+                new RunShopResearchRequest(Model: "DeepSeek-V4-Flash", ApiKey: "sk-test-key", AiMode: ResearchAiMode.FullAi));
 
             Assert.Equal(ResearchRunStatus.Completed, runObject.Status);
             Assert.Contains("minimalist desk organizer", runObject.SearchQueriesUsed);
@@ -208,7 +208,7 @@ public sealed class ShopResearchAgentV2Tests
                 "owner-llm-2",
                 "53236321",
                 ResearchTriggerType.Manual,
-                new RunShopResearchRequest(Model: "gemini-2.5-flash", ApiKey: "test-gemini-key"));
+                new RunShopResearchRequest(Model: "gemini-2.5-flash", ApiKey: "test-gemini-key", AiMode: ResearchAiMode.FullAi));
 
             Assert.Equal(ResearchRunStatus.Completed, runArray.Status);
             Assert.Contains("walnut pen tray", runArray.SearchQueriesUsed);

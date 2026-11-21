@@ -6,6 +6,7 @@ import { EtsyApiService } from './etsy-api.service';
 import { AiSettingsService } from './ai-settings.service';
 
 export type ResearchScheduleCadence = 0 | 1 | 2 | 3; // 0=Off, 1=Daily, 2=Weekly, 3=Monthly
+export type ResearchAiMode = 0 | 1 | 2; // 0=Economic (0 token), 1=Balanced (Top 5 Blueprint), 2=FullAi
 export type CandidateDecisionStatus = 0 | 1 | 2 | 3; // 0=Pending, 1=Accepted, 2=Rejected, 3=SentToDraft
 export type CandidateRejectionReason = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -176,12 +177,12 @@ export class ShopResearchAgentService {
     return this.http.put<ShopDnaProfileDto>(`${this.baseUrl}/dna${this.shopQuery()}`, payload);
   }
 
-  runResearch(focusHint?: string, maxCandidates = 10): Observable<ResearchRunDto> {
+  runResearch(focusHint?: string, maxCandidates = 10, aiMode: ResearchAiMode = 0): Observable<ResearchRunDto> {
     const s = this.aiSettings.settings();
     let model: string | null = null;
     let apiKey: string | null = null;
 
-    if (s.provider !== 'Offline') {
+    if (aiMode !== 0 && s.provider !== 'Offline') {
       const activeKey = this.aiSettings.getActiveApiKey(s.provider);
       if (activeKey) {
         model = this.aiSettings.activeModelName();
@@ -196,7 +197,8 @@ export class ShopResearchAgentService {
       focusHint: focusHint?.trim() || null,
       maxCandidates,
       model,
-      apiKey
+      apiKey,
+      aiMode
     });
   }
 
