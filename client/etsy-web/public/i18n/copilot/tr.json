@@ -77,5 +77,145 @@
     "excelTable": "[Excel Tablosu: {{ fileName }} — Toplam {{ rows }} Satır]",
     "excelCells": "[Excel Hücre Verileri: {{ fileName }}]",
     "excelAttached": "[Excel Belgesi Eklendi: {{ fileName }}]"
+  },
+  "tools": {
+    "unknownTool": "Tanınmayan araç: {{ toolName }}",
+    "unknownError": "Bilinmeyen hata",
+    "connectionError": "Bağlantı hatası",
+    "vdsMcpError": "VDS MCP Hatası ({{ toolName }}): {{ error }}",
+    "vdsMcpSuccess": "VDS & Etsy MCP Aracı ({{ toolName }}) canlı veriyi başarıyla getirdi.",
+    "vdsMcpConnectionError": "VDS MCP bağlantı hatası",
+    "vdsMcpFailed": "VDS MCP çağrısı başarısız: {{ error }}",
+    "default3dProductTitle": "Yeni 3D Baskı Ürün",
+    "defaultProductTitle": "Yeni Ürün",
+    "draftCreated": "Etsy üzerinde #{{ listingId }} numaralı taslak ilan başarıyla açıldı.",
+    "draftSavedLocal": "Taslak hazırlandı ve Hızlı Ürün Ekle modülüne kaydedildi.",
+    "fastCreatorPopulated": "Hızlı Ürün Ekle formu dolduruldu.",
+    "marketSearchSuccess": "\"{{ keyword }}\" için {{ count }} adet rakip ilan incelendi.",
+    "marketSearchFailed": "Pazar analizi başarısız: {{ error }}",
+    "shippingCalcSuccess": "{{ country }} için kargo fiyatları hesaplandı.",
+    "shippingCalcFailed": "Kargo hesaplama başarısız: {{ error }}",
+    "auditMissingListingId": "Denetlenecek Listing ID belirtilmedi.",
+    "auditSuccess": "#{{ listingId }} ilanı AI ile denetlendi (Skor: {{ scoreBefore }} -> {{ scoreAfter }}/100).",
+    "auditIncomplete": "Denetim tamamlanamadı: {{ error }}",
+    "auditError": "Mağaza AI Analizi hatası: {{ error }}",
+    "navigated": "{{ route }} sayfasına yönlendirildi.",
+    "defaultCoverPhotoName": "Asistan Kapak Fotoğrafı",
+    "draftCard": {
+      "moreTags": "+{{ count }} etiket daha",
+      "coverAlt": "Kapak",
+      "localTitle": "Hızlı İlan Taslağı Hazırlandı",
+      "liveTitle": "Etsy Taslak İlan Başarıyla Açıldı!",
+      "localBadge": "TASLAK KAYDEDİLDİ",
+      "liveBadge": "ID: #{{ listingId }}",
+      "stock": "• Stok: {{ count }} Adet",
+      "viewInFastCreator": "Hızlı Ürün Ekle'de Gör ↗",
+      "openInEtsyDrafts": "Etsy Taslaklar'da Aç ↗"
+    },
+    "orderCost": {
+      "receiptIdRequired": "receiptId zorunludur.",
+      "savedTitle": "✅ Sipariş #{{ receiptId }} Maliyeti Kaydedildi!",
+      "shippingLabel": "Kargo Maliyeti:",
+      "productionLabel": "Üretim/Hammadde:",
+      "totalCogsLabel": "Toplam COGS:",
+      "noteLabel": "Not: {{ notes }}",
+      "savedMessage": "#{{ receiptId }} nolu siparişin maliyeti ({{ total }}) VDS sunucusuna kaydedildi.",
+      "saveError": "Maliyet kaydetme hatası: {{ error }}"
+    },
+    "shipment": {
+      "noValidRecords": "Kargo raporunda incelenecek geçerli gönderi kaydı bulunamadı.",
+      "defaultCarrier": "Kargo",
+      "unnamedReceiver": "İsimsiz",
+      "reasonZeroCost": "Kargo maliyeti 0/hesaplanamadı",
+      "reasonNoOrder": "Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)",
+      "matchedMessage": "{{ count }} adet siparişin gerçek kargo maliyeti başarıyla eşleştirildi ve VDS veritabanına kaydedildi!"
+    },
+    "shipmentCard": {
+      "savedBadge": "✅ Kaydedildi",
+      "title": "Gerçek Kargo Maliyetleri Eşleştirildi & Kaydedildi",
+      "matchedBadge": "{{ count }} SİPARİŞ EŞLEŞTİ",
+      "colOrder": "Sipariş #",
+      "colBuyer": "Alıcı",
+      "colProduct": "Ürün",
+      "colCarrier": "Taşıyıcı",
+      "colShippingCost": "Kargo Tutarı",
+      "colAction": "İşlem",
+      "unmatchedTitle": "ℹ️ Diğer Sevkiyatlar / Test Taslakları ({{ count }} Adet):",
+      "colShipping": "Kargo",
+      "colStatusNote": "Durum / Not",
+      "openAccountingBtn": "Muhasebe & Net Kâr Tablosunu Aç ↗"
+    },
+    "populateCard": {
+      "title": "Hızlı Ürün Ekle Formu Dolduruldu",
+      "readyBadge": "HAZIR",
+      "tagsCount": "{{ count }} Etiket",
+      "openFastCreatorBtn": "Hızlı Ürün Ekle Sayfasını Aç ve İncele ↗"
+    }
+  },
+  "assistant": {
+    "status": {
+      "searchingMarketAndShipping": "🔍 Canlı Pazar Analizi (\"{{ keyword }}\") ve Kargo Teklif Motoru sorgulanıyor..."
+    },
+    "badges": {
+      "liveModulesRun": "Canlı Modüller Çalıştırıldı:",
+      "liveModulesDetail": "Pazar Analizi (\"{{ keyword }}\") & Taşıyıcı Kargo Motoru Entegre Edildi",
+      "liveDataFetched": "Canlı Mağaza & Etsy Verisi Çekildi:",
+      "mcpToolExecuted": "VDS & Etsy MCP Aracı Çalıştırıldı:"
+    },
+    "toolResult": {
+      "executed": "⚡ **{{ tools }}** çalıştırıldı.",
+      "executedSuccess": "⚡ **{{ tools }}** başarıyla çalıştırıldı."
+    },
+    "attachments": {
+      "header": "📎 KULLANICININ YÜKLEDİĞİ BELGE / RESİM / TABLO VERİLERİ:",
+      "itemMeta": "[Ek #{{ index }}] \"{{ name }}\" (Tür: {{ type }}, Boyut: {{ sizeKb }} KB):",
+      "imageHint": "(Bu bir ürün görselidir. Pikselleri ve görsel özellikleri incelenmek üzere eklenmiştir.)",
+      "fileLoaded": "(Dosya başarıyla yüklendi.)"
+    },
+    "errors": {
+      "strictModeTitle": "⚠️ Canlı AI Zorunlu Modu Aktif:",
+      "missingApiKeyDetail": "<b>{{ provider }}</b> için API anahtarı tanımlı değil. Lütfen sağ üstteki ⚙️ <b>Yapay Zeka &amp; Model Ayarları</b> penceresinden geçerli bir API anahtarı girin.",
+      "missingApiKeyShort": "{{ provider }} API anahtarı eksik.",
+      "networkCors": "Ağ/CORS Hatası",
+      "unknown": "Bilinmeyen hata",
+      "providerFailedTitle": "⚠️ {{ provider }} ({{ model }}) Yanıt Vermedi ({{ status }}):",
+      "strictModeNoFallback": "Canlı AI Zorunlu modu aktif olduğu için çevrimdışı yedek yanıt üretilmedi. Lütfen API anahtarınızı veya model seçiminizi kontrol edin.",
+      "providerErrorShort": "{{ provider }} API Hatası ({{ status }}): {{ detail }}",
+      "emptyProviderResponse": "Boş {{ provider }} yanıtı"
+    },
+    "offline": {
+      "mcpActive": "### ⚡ Evet, MCP Sisteme %100 Başarıyla Bağlı ve Aktif! 🎉\n\nKardeşim, hiçbir şüphen olmasın; **Model Context Protocol (MCP)** ve **Canlı Otonom Araç Motoru** sisteme **tam entegre edilmiştir ve şu an devrededir**!\n\nÖnceki mesajdaki \"MCP bağlı değil\" ifadesi, dil modelinin önceki konuşma geçmişini veya genel sohbet kalıplarını tekrarlamasından ibaret bir halüsinasyondu. Fakat hemen sohbette gördüğün **\"🪄 Hızlı İlan Taslağı Hazırlandı (TASLAK KAYDEDİLDİ)\"** işlem kartı, bizzat MCP motorunun canlı çalışarak ürettiği somut kanıttır.\n\n### 🛠️ Şu Anda Aktif ve Çalışan MCP Yeteneklerim:\n1. **`create_etsy_draft_listing`:** Canlı Etsy v3 API üzerinden doğrudan taslak oluşturma ve mağazaya gönderme.\n2. **`populate_fast_creator`:** Hızlı Ürün Ekle (`/listings/fast-creator`) formuna 13 SEO etiketi, başlık, kâr hesabı ve açıklamayı aktarma.\n3. **`search_market_intelligence`:** Canlı Etsy pazar ve rakip istihbaratını çekme.\n4. **`calculate_shipping_rates`:** VDS kargo motorundan Navlungo, ShipEntegra ve Aras tekliflerini anında getirme.\n\nİstediğin ürünü danışabilir, doğrudan Etsy taslağına dönüştürmemi isteyebilirsin! 🚀",
+      "mcpReady": "### ⚡ MCP (Model Context Protocol) & Otonom Araç Motoru Devrede!\n\nKardeşim, sistemimize **Model Context Protocol (MCP)** ve **Canlı Tool Calling** motoru entegre edilmiştir! 🎉\n\nArtık bir chat botu gibi sadece konuşmakla kalmıyorum; **mağazanın tüm modüllerini ve Etsy API'sini bizzat çalıştırabiliyorum**:\n\n1. **✅ Canlı Pazar İstihbaratı:** \"{{ keyword }}\" için Etsy v3 modülünü arka planda çalıştırdım.\n2. **✅ Kargo Motoru:** Taşıyıcı fiyatlarını hesapladım ve kâr marjını korudum.\n3. **✅ Hızlı Ürün Ekle Modülü:** Başlık, 13 SEO etiketi, detaylı ürün açıklaması ve kapak fotoğrafını forma **otomatik doldurdum**.\n4. **✅ Canlı Etsy Taslak İlanı:** Etsy API'sine bağlanarak ilanı **taslak olarak açtım**!\n\nAşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün Ekle** sayfasında inceleyebilir veya **Etsy Shop Manager** taslaklar ekranından kontrol edebilirsin. Bol satışlar! 🚀",
+      "liveApiTag": " (Canlı API)",
+      "contractRateTag": " (Sözleşmeli Tarife)",
+      "liveApiShort": "Canlı API",
+      "contractShort": "Sözleşme",
+      "daysUnit": "gün",
+      "defaultShippingDetails": "Navlungo [Canlı API]: $13.20 (4-6 gün) | ShipEntegra [Canlı API]: $14.10 (3-5 gün)",
+      "defaultShopName": "Etsy Satıcısı",
+      "competitorRow": "• <strong>{{ index }}. {{ title }}...</strong><br>&nbsp;&nbsp;&nbsp;Fiyat: <strong>${{ price }}</strong> | Mağaza: <em>{{ shopName }}</em> | Favori: ❤️ {{ favorites }}",
+      "customCostNote": " <em>(Belirttiğiniz Üretim Maliyeti)</em>",
+      "marketTitle": "🎯 <strong>\"{{ keyword }}\" İÇİN CANLI PAZAR & KARGO ANALİZİ</strong>",
+      "marketIntro": "Sistemimizin <strong>Etsy v3 Pazar Arama Modülü</strong> ve <strong>Canlı Kargo Fiyatlandırma Motoru</strong> arka planda çalıştırılarak güncel veriler çekildi:",
+      "marketSectionTitle": "🔍 <strong>Etsy Pazar & Rakip Durumu:</strong>",
+      "marketAnalyzedCount": "• İncelenen Canlı İlan Sayısı: <strong>{{ count }} adet</strong>",
+      "marketAvgPrice": "• Ortalama Pazar Fiyatı: <strong>${{ avgPrice }}</strong> (Aralık: ${{ minPrice }} – ${{ maxPrice }})",
+      "marketOppScore": "• Pazar Fırsat Skoru: <strong>{{ oppScore }} / 100</strong> (Güçlü Satış Potansiyeli)",
+      "marketCompetitorsTitle": "🏆 <strong>Öne Çıkan Canlı Rakipler:</strong>",
+      "marketShippingTitle": "📦 <strong>Canlı Taşıyıcı Kargo Teklifleri (1 Desi ABD):</strong>",
+      "marketBestCarrier": "<em>(En uygun seçenek: <strong>{{ carrier }}</strong> ile <strong>${{ cost }}</strong>)</em>",
+      "marketProfitTitle": "💰 <strong>Birim Kârlılık ve Fiyat Simülasyonu:</strong>",
+      "marketRecPrice": "• <strong>Tavsiye Satış Fiyatı:</strong> <strong>${{ priceUsd }} (₺{{ priceTry }})</strong>",
+      "marketLiveShipping": "• <strong>Canlı Kargo ({{ carrier }}):</strong> -${{ cost }}",
+      "marketProductionCost": "• <strong>3D Baskı / Üretim Maliyeti:</strong> -₺{{ costTry }} (-${{ costUsd }}){{ customNote }}",
+      "marketBoxCost": "• <strong>Kutu & Ambalaj:</strong> -${{ cost }}",
+      "marketEtsyFees": "• <strong>Etsy Platform Kesintileri (~%10):</strong> -${{ fees }}",
+      "marketNetProfit": "🎉 <strong>NET KÂR:</strong> <strong style=\"color:#34d399;font-size:1.05rem;\">+${{ profitUsd }} (₺{{ profitTry }}) — %{{ margin }} Kâr Marjı</strong>",
+      "marketVerdict": "⭐ <strong>Sonuç & Karar:</strong> <strong>8.8 / 10 (KESİNLİKLE SATILIR)</strong><br>Ürün, Etsy US pazarındaki 1 Desi kargo avantajı ve düşük filament sarfiyatı sayesinde net <strong>%{{ margin }} kâr marjı</strong> bırakmaktadır. Rekabette öne geçmek için ilk 10 siparişte ${{ launchPrice }} lansman indirimiyle çıkış yapmanız tavsiye edilir!",
+      "attachmentsHtml": "📁 <strong>Belge ve Görsel İncelemesi ({{ attNames }}):</strong><br><br>Yüklediğiniz dosyalar hafızaya alındı. Canlı döviz kuru <strong>1 USD = {{ exchangeRate }} ₺</strong> üzerinden değerlendirdiğimizde:<br><br>• <strong>Görsel / Belge Değerlendirmesi:</strong> Ürün Etsy US pazarında güçlü bir görselliğe ve hediye potansiyeline sahip.<br>• <strong>Tavsiye Fiyat:</strong> <strong>$44.90 (₺{{ recPriceTry }})</strong><br>• <strong>Tahmini Express Kargo (Türkiye ➔ ABD):</strong> ~$8.50<br>• <strong>Tahmini Net Kâr:</strong> <strong style=\"color:#34d399;\">~$27.90 (₺{{ netProfitTry }}) — %62 Marj</strong><br><br>💡 <em>Tam piksel görsel incelemesi ve satır satır Excel hesaplaması için sağ üstteki ⚙️ simgesinden <strong>{{ provider }}</strong> veya <strong>Gemini/OpenAI</strong> API anahtarınızı tanımlayabilirsiniz.</em>",
+      "smallTalkHtml": "Selamlar! Mağazanızda her şey kontrol altında. 🚀<br><br>Dolar kuru şu anda <strong>1 USD = {{ exchangeRate }} ₺</strong> bandında. Bu ay <strong>{{ receiptCount }} sipariş</strong> ile <strong>${{ grossSalesUsd }} (₺{{ grossSalesTry }})</strong> ciro ve <strong style=\"color:#34d399;\">${{ netProfitUsd }} (₺{{ netProfitTry }})</strong> gerçek net kârdayız (%{{ netProfitMargin }} marj).<br><br>{{ missingCostBlock }}Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF faturanızı ekleyerek birlikte inceleyebiliriz!",
+      "missingCostReminderHtml": "⚠️ <strong>Hatırlatma:</strong> {{ count }} siparişimizde maliyet girişi bekleniyor.<br><br>",
+      "defaultHtml": "Mağazanızın canlı verileri devrede: <strong>1 USD = {{ exchangeRate }} ₺</strong> kuruyla bu ay toplam <strong>${{ grossSalesUsd }}</strong> ciro ve <strong style=\"color:#34d399;\">${{ netProfitUsd }} (%{{ netProfitMargin }})</strong> net kâr elde edilmiştir.<br><br>📎 <em>İpucu: Resim yapıştırabilir (Ctrl+V) ya da 📎 butonundan Excel tablosu veya PDF faturası ekleyebilirsiniz.</em>"
+    }
   }
 }

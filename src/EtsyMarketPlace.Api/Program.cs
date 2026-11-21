@@ -1,8 +1,10 @@
 using Asp.Versioning;
+using System.Globalization;
 using EtsyMarketPlace.Api.Middleware;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Localization;
 using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.AbTesting;
 using EtsyMarketPlace.Application.Accounting;
@@ -407,6 +409,15 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 }
 
 app.UseCors();
+
+var supportedCultures = new[] { new CultureInfo("en"), new CultureInfo("tr") };
+app.UseRequestLocalization(new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new RequestCulture("en"),
+    SupportedCultures = supportedCultures,
+    SupportedUICultures = supportedCultures,
+    ApplyCurrentCultureToResponseHeaders = true
+});
 
 var staticFileOptions = new StaticFileOptions
 {

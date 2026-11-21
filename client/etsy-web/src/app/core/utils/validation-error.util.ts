@@ -72,19 +72,57 @@ const DEFAULT_FIELD_LABELS: Record<string, string> = {
 
 const WRAPPER_PREFIX_REGEX = /^(command|request|dto|experiment|capture|query|snapshot|record)\./i;
 
+export type ValidationTranslateFn = (key: string, params?: Record<string, unknown>) => string;
+
+const DEFAULT_FALLBACK_MESSAGE =
+  'İşlem sırasında bir hata oluştu. Lütfen girdiğiniz bilgileri kontrol edip tekrar deneyin.';
+
+const GENERIC_VALIDATION_MESSAGES = new Set([
+  'Validasyon kuralları doğrulanamadı.',
+  'Validation rules failed.'
+]);
+
+const HTTP_STATUS_ERROR_KEYS: Record<number, string> = {
+  400: 'validation.errors.http400',
+  401: 'validation.errors.http401',
+  403: 'validation.errors.http403',
+  404: 'validation.errors.http404',
+  409: 'validation.errors.http409',
+  429: 'validation.errors.http429'
+};
+
+function translateOrFallback(
+  translateFn: ValidationTranslateFn | undefined,
+  key: string,
+  fallback: string,
+  params?: Record<string, unknown>
+): string {
+  if (!translateFn) return fallback;
+  const translated = translateFn(key, params);
+  return translated && translated !== key ? translated : fallback;
+}
+
 function normalizeFieldKey(rawKey: string): string {
   const cleaned = rawKey.replace(WRAPPER_PREFIX_REGEX, '').trim();
   const base = cleaned.split('[')[0].split('.')[0];
   return base || 'General';
 }
 
-function resolveFieldLabel(field: string, customLabels?: Record<string, string>): string {
+function resolveFieldLabel(
+  field: string,
+  customLabels?: Record<string, string>,
+  translateFn?: ValidationTranslateFn
+): string {
   const lower = field.toLowerCase();
   if (customLabels) {
     const customMatch = Object.entries(customLabels).find(([k]) => k.toLowerCase() === lower);
     if (customMatch) return customMatch[1];
   }
-  return DEFAULT_FIELD_LABELS[lower] || field;
+  const defaultLabel = DEFAULT_FIELD_LABELS[lower];
+  if (defaultLabel) {
+    return translateOrFallback(translateFn, `validation.fields.${lower}`, defaultLabel);
+  }
+  return field;
 }
 
 function isRawHttpSystemMessage(msg: string | undefined | null): boolean {
@@ -104,9 +142,13 @@ function isRawHttpSystemMessage(msg: string | undefined | null): boolean {
  */
 export function extractClientValidationErrors(
   err: unknown,
-  fallbackMessage = 'İşlem sırasında bir hata oluştu. Lütfen girdiğiniz bilgileri kontrol edip tekrar deneyin.',
-  customFieldLabels?: Record<string, string>
+  fallbackMessage?: string,
+  customFieldLabels?: Record<string, string>,
+  translateFn?: ValidationTranslateFn
 ): ParsedClientError {
+  const resolvedFallback =
+    fallbackMessage ??
+    translateOrFallback(translateFn, 'validation.errors.default', DEFAULT_FALLBACK_MESSAGE);
   const httpErr = err instanceof HttpErrorResponse ? err : (err as any);
   const body = httpErr?.error;
   const fieldMap = new Map<string, { field: string; label: string; messages: Set<string> }>();
@@ -119,7 +161,7 @@ export function extractClientValidationErrors(
     if (!fieldMap.has(key)) {
       fieldMap.set(key, {
         field,
-        label: resolveFieldLabel(field, customFieldLabels),
+        label: resolveFieldLabel(field, customFieldLabels, translateFn),
         messages: new Set<string>()
       });
     }
@@ -164,11 +206,15 @@ export function extractClientValidationErrors(
 
   if (fieldErrors.length > 0) {
     const summary =
-      bodyMessage && bodyMessage !== 'Validasyon kuralları doğrulanamadı.'
+      bodyMessage && !GENERIC_VALIDATION_MESSAGES.has(bodyMessage)
         ? bodyMessage
         : fieldErrors.length === 1 && fieldErrors[0].messages.length === 1
           ? fieldErrors[0].messages[0]
-          : 'Lütfen formdaki doğrulama uyarılarını düzeltin.';
+          : translateOrFallback(
+              translateFn,
+              'validation.errors.fixValidationWarnings',
+              'Lütfen formdaki doğrulama uyarılarını düzeltin.'
+            );
 
     return {
       summary,
@@ -180,7 +226,11 @@ export function extractClientValidationErrors(
   const status = typeof httpErr?.status === 'number' ? httpErr.status : 0;
   if (status === 0) {
     return {
-      summary: 'Sunucuya bağlanılamadı. Lütfen internet veya VDS bağlantınızı kontrol edin.',
+      summary: translateOrFallback(
+        translateFn,
+        'validation.errors.network',
+        'Sunucuya bağlanılamadı. Lütfen internet veya VDS bağlantınızı kontrol edin.'
+      ),
       fieldErrors: [],
       isValidationError: false
     };
@@ -188,16 +238,27 @@ export function extractClientValidationErrors(
 
   if (status >= 500) {
     return {
-      summary: bodyMessage && !bodyMessage.startsWith('Sunucu hatası:')
-        ? bodyMessage
-        : 'Sunucu tarafında geçici bir işlem hatası oluştu. Lütfen biraz sonra tekrar deneyin.',
+      summary:
+        bodyMessage && !bodyMessage.startsWith('Sunucu hatası:') && !bodyMessage.startsWith('Server error:')
+          ? bodyMessage
+          : translateOrFallback(
+              translateFn,
+              'validation.errors.http500',
+              'Sunucu tarafında geçici bir işlem hatası oluştu. Lütfen biraz sonra tekrar deneyin.'
+            ),
       fieldErrors: [],
       isValidationError: false
     };
   }
 
+  const statusKey = HTTP_STATUS_ERROR_KEYS[status];
+  const statusFallback =
+    !bodyMessage && !fallbackMessage && statusKey
+      ? translateOrFallback(translateFn, statusKey, resolvedFallback)
+      : resolvedFallback;
+
   return {
-    summary: bodyMessage || fallbackMessage,
+    summary: bodyMessage || statusFallback,
     fieldErrors: [],
     isValidationError: status === 400
   };

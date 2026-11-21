@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { Observable, catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
@@ -75,6 +76,7 @@ export const FEATURE_DISPLAY_NAMES: Record<string, string> = {
 export class SubscriptionService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
 
   private readonly API_BASE = `${environment.apiBaseUrl}/api/subscriptions`;
   private readonly ADMIN_BASE = `${environment.apiBaseUrl}/api/admin`;
@@ -118,7 +120,19 @@ export class SubscriptionService {
 
   getFeatureDisplayName(featureId: string): string {
     const raw = (featureId || '').trim().toLowerCase();
-    return FEATURE_DISPLAY_NAMES[raw] || FEATURE_DISPLAY_NAMES[this.normalizeFeatureKey(raw)] || featureId;
+    const normalized = this.normalizeFeatureKey(raw);
+    if (FEATURE_DISPLAY_NAMES[raw]) {
+      return this.translateOrFallback(`core.features.${raw}`, FEATURE_DISPLAY_NAMES[raw]);
+    }
+    if (FEATURE_DISPLAY_NAMES[normalized]) {
+      return this.translateOrFallback(`core.features.${normalized}`, FEATURE_DISPLAY_NAMES[normalized]);
+    }
+    return featureId;
+  }
+
+  private translateOrFallback(key: string, fallback: string): string {
+    const translated = this.transloco?.translate(key);
+    return translated && translated !== key ? translated : fallback;
   }
 
   isFeatureAllowed(featureId: string): boolean {

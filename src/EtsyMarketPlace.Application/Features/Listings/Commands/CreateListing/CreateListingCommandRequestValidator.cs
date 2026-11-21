@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ListingOptimization.Validation;
 using FluentValidation;
@@ -13,8 +14,9 @@ using FluentValidation;
 /// </summary>
 public sealed class CreateListingCommandRequestValidator : AbstractValidator<CreateListingCommandRequest>
 {
-    public const string MissingShippingProfileMessage =
-        "Fiziksel ürünler için Etsy'de tanımlı bir Kargo Profili gereklidir. Lütfen Etsy Mağaza Yöneticisi alanından bir kargo profili oluşturun veya ilanı 'Dijital' olarak seçin.";
+    public static string MissingShippingProfileMessage => ValidationMessageLocalizer.Pick(
+        "Fiziksel ürünler için Etsy'de tanımlı bir Kargo Profili gereklidir. Lütfen Etsy Mağaza Yöneticisi alanından bir kargo profili oluşturun veya ilanı 'Dijital' olarak seçin.",
+        "A shipping profile configured on Etsy is required for physical products. Please create a shipping profile in Etsy Shop Manager or mark the listing as 'Digital'.");
 
     public CreateListingCommandRequestValidator(
         IValidator<FastListingPublishCommand> commandValidator,
@@ -25,7 +27,9 @@ public sealed class CreateListingCommandRequestValidator : AbstractValidator<Cre
 
         RuleFor(x => x.Command)
             .NotNull()
-            .WithMessage("İlan oluşturma verileri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "İlan oluşturma verileri boş olamaz.",
+                "Listing creation data cannot be empty."));
 
         When(x => x.Command != null, () =>
         {
@@ -35,14 +39,16 @@ public sealed class CreateListingCommandRequestValidator : AbstractValidator<Cre
                 .MustAsync(async (req, shippingProfileId, cancellationToken) =>
                     await HasValidShippingProfileAsync(req.Command, shippingProfileId, apiClient, cancellationToken))
                 .OverridePropertyName("ShippingProfileId")
-                .WithMessage(MissingShippingProfileMessage);
+                .WithMessage(_ => MissingShippingProfileMessage);
 
             When(x => !x.Command.IsDigital && x.Command.ReturnPolicyId.HasValue, () =>
             {
                 RuleFor(x => x.Command.ReturnPolicyId!.Value)
                     .GreaterThan(0)
                     .OverridePropertyName("ReturnPolicyId")
-                    .WithMessage("Geçersiz iade politikası ID'si (ReturnPolicyId 0'dan büyük olmalıdır).");
+                    .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                        "Geçersiz iade politikası ID'si (ReturnPolicyId 0'dan büyük olmalıdır).",
+                        "Invalid return policy ID (ReturnPolicyId must be greater than 0)."));
             });
         });
     }

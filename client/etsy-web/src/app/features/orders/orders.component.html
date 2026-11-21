@@ -92,7 +92,7 @@
                 <button 
                   type="button" 
                   class="btn-carrier-auto" 
-                  [class.btn-connect-mode]="s.autoLabel.includes('Bağlantı')"
+                  [class.btn-connect-mode]="s.id === 'shiptomore'"
                   (click)="openSessionModal(s)">
                   {{ s.autoLabel }}
                 </button>

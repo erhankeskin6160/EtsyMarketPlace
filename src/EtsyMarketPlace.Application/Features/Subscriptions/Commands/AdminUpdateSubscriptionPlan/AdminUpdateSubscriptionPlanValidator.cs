@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Domain.Subscriptions;
 using FluentValidation;
 
@@ -10,46 +11,66 @@ public sealed class AdminUpdateSubscriptionPlanValidator : AbstractValidator<Adm
         RuleFor(x => x.PlanId)
             .NotEmpty()
             .Must(SubscriptionPlanCode.IsValid)
-            .WithMessage("Geçersiz paket kimliği.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçersiz paket kimliği.",
+                "Invalid plan ID."));
 
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Paket güncelleme bilgileri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Paket güncelleme bilgileri boş olamaz.",
+                "Plan update details cannot be empty."));
 
         When(x => x.Request is not null, () =>
         {
             RuleFor(x => x.Request.Name)
                 .NotEmpty()
                 .MaximumLength(100)
-                .WithMessage("Paket adı gereklidir ve en fazla 100 karakter olabilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Paket adı gereklidir ve en fazla 100 karakter olabilir.",
+                    "Plan name is required and can be at most 100 characters."));
 
             RuleFor(x => x.Request.MonthlyPriceUsd)
                 .GreaterThanOrEqualTo(0m)
-                .WithMessage("Aylık USD fiyatı negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Aylık USD fiyatı negatif olamaz.",
+                    "Monthly USD price cannot be negative."));
 
             RuleFor(x => x.Request.YearlyPriceUsd)
                 .GreaterThanOrEqualTo(0m)
-                .WithMessage("Yıllık USD fiyatı negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Yıllık USD fiyatı negatif olamaz.",
+                    "Yearly USD price cannot be negative."));
 
             RuleFor(x => x.Request.MonthlyPriceTry)
                 .GreaterThanOrEqualTo(0m)
-                .WithMessage("Aylık TRY fiyatı negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Aylık TRY fiyatı negatif olamaz.",
+                    "Monthly TRY price cannot be negative."));
 
             RuleFor(x => x.Request.YearlyPriceTry)
                 .GreaterThanOrEqualTo(0m)
-                .WithMessage("Yıllık TRY fiyatı negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Yıllık TRY fiyatı negatif olamaz.",
+                    "Yearly TRY price cannot be negative."));
 
             RuleFor(x => x.Request.MaxShops)
                 .GreaterThan(0)
-                .WithMessage("Maksimum mağaza sayısı en az 1 olmalıdır.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Maksimum mağaza sayısı en az 1 olmalıdır.",
+                    "Maximum shop count must be at least 1."));
 
             RuleFor(x => x.Request.MonthlyAiTokenQuota)
                 .GreaterThanOrEqualTo(0)
-                .WithMessage("Aylık AI token kotası negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Aylık AI token kotası negatif olamaz.",
+                    "Monthly AI token quota cannot be negative."));
 
             RuleFor(x => x.Request.MaxBatchQueueSize)
                 .GreaterThanOrEqualTo(0)
-                .WithMessage("Toplu kuyruk limiti negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Toplu kuyruk limiti negatif olamaz.",
+                    "Max batch queue size cannot be negative."));
         });
     }
 }

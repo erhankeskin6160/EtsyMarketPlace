@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Features.Common.Validation;
 
 using EtsyMarketPlace.Application.Auth.Validation;
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Application.Features.AbTests.Commands.DeleteAbTest;
 using EtsyMarketPlace.Application.Features.AbTests.Commands.UpdateAbTestStatus;
 using EtsyMarketPlace.Application.Features.Admin.Commands.ToggleUserStatus;
@@ -24,7 +25,9 @@ public sealed class UploadOrdersCsvRequestValidator : AbstractValidator<UploadOr
     {
         RuleFor(x => x.Records)
             .NotEmpty()
-            .WithMessage("Yüklenecek sipariş adresi kaydı bulunamadı.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Yüklenecek sipariş adresi kaydı bulunamadı.",
+                "No order address records found to upload."));
     }
 }
 
@@ -34,11 +37,15 @@ public sealed class SyncExtensionOrdersRequestValidator : AbstractValidator<Sync
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) zorunludur.",
+                "Shop ID is required."));
 
         RuleFor(x => x.Orders)
             .NotEmpty()
-            .WithMessage("Sipariş listesi boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Sipariş listesi boş olamaz.",
+                "Order list cannot be empty."));
     }
 }
 
@@ -48,7 +55,9 @@ public sealed class GetReceiptDetailRequestValidator : AbstractValidator<GetRece
     {
         RuleFor(x => x.ReceiptId)
             .GreaterThan(0)
-            .WithMessage("Geçersiz sipariş (receipt) numarası.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçersiz sipariş (receipt) numarası.",
+                "Invalid order (receipt) ID."));
     }
 }
 
@@ -58,13 +67,17 @@ public sealed class GetCarrierQuotesRequestValidator : AbstractValidator<GetCarr
     {
         RuleFor(x => x.Query)
             .NotNull()
-            .WithMessage("Navlun sorgu parametreleri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Navlun sorgu parametreleri boş olamaz.",
+                "Shipping quote query parameters cannot be empty."));
 
         When(x => x.Query != null, () =>
         {
             RuleFor(x => x.Query.WeightKg)
                 .GreaterThan(0d)
-                .WithMessage("Paket ağırlığı 0'dan büyük olmalıdır.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Paket ağırlığı 0'dan büyük olmalıdır.",
+                    "Package weight must be greater than 0."));
         });
     }
 }
@@ -75,17 +88,23 @@ public sealed class SavePaymentReserveSnapshotCommandValidator : AbstractValidat
     {
         RuleFor(x => x.Snapshot)
             .NotNull()
-            .WithMessage("Ödeme rezerv verisi boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Ödeme rezerv verisi boş olamaz.",
+                "Payment reserve data cannot be empty."));
 
         When(x => x.Snapshot != null, () =>
         {
             RuleFor(x => x.Snapshot.ShopId)
                 .NotEmpty()
-                .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Mağaza kimliği (Shop ID) zorunludur.",
+                    "Shop ID is required."));
 
             RuleFor(x => x.Snapshot.ReservePercent)
                 .InclusiveBetween(0m, 100m)
-                .WithMessage("Rezerv oranı %0 ile %100 arasında olmalıdır.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Rezerv oranı %0 ile %100 arasında olmalıdır.",
+                    "Reserve rate must be between 0% and 100%."));
         });
     }
 }
@@ -98,7 +117,9 @@ public sealed class GetBankPayoutsRequestValidator : AbstractValidator<GetBankPa
         {
             RuleFor(x => x.StartDate)
                 .Must((req, start) => start!.Value <= req.EndDate!.Value)
-                .WithMessage("Başlangıç tarihi bitiş tarihinden sonra olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
+                    "Start date cannot be after end date."));
         });
     }
 }
@@ -109,14 +130,18 @@ public sealed class EnqueueBatchItemsRequestValidator : AbstractValidator<Enqueu
     {
         RuleFor(x => x.Items)
             .NotEmpty()
-            .WithMessage("Kuyruğa eklenecek en az 1 ürün olmalıdır.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kuyruğa eklenecek en az 1 ürün olmalıdır.",
+                "At least 1 item must be provided to enqueue."));
 
         When(x => x.Items != null, () =>
         {
             RuleFor(x => x.Items.Count)
                 .LessThanOrEqualTo(50)
                 .OverridePropertyName("Items")
-                .WithMessage("Tek seferde en fazla 50 ürün kuyruğa eklenebilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Tek seferde en fazla 50 ürün kuyruğa eklenebilir.",
+                    "At most 50 items can be enqueued at once."));
         });
     }
 }
@@ -127,11 +152,15 @@ public sealed class ProcessBatchItemRequestValidator : AbstractValidator<Process
     {
         RuleFor(x => x.Id)
             .GreaterThan(0)
-            .WithMessage("Geçerli bir kuyruk kayıt numarası belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir kuyruk kayıt numarası belirtilmelidir.",
+                "A valid queue item ID must be specified."));
 
         RuleFor(x => x.OverallScore)
             .InclusiveBetween(0, 100)
-            .WithMessage("Kalite puanı 0 ile 100 arasında olmalıdır.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kalite puanı 0 ile 100 arasında olmalıdır.",
+                "Quality score must be between 0 and 100."));
     }
 }
 
@@ -141,7 +170,9 @@ public sealed class UpdateAbTestStatusRequestValidator : AbstractValidator<Updat
     {
         RuleFor(x => x.Id)
             .GreaterThan(0)
-            .WithMessage("Güncellenecek A/B testi kimliği geçersiz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Güncellenecek A/B testi kimliği geçersiz.",
+                "Invalid A/B test ID to update."));
     }
 }
 
@@ -151,7 +182,9 @@ public sealed class DeleteAbTestRequestValidator : AbstractValidator<DeleteAbTes
     {
         RuleFor(x => x.Id)
             .GreaterThan(0)
-            .WithMessage("Silinecek A/B testi kimliği geçersiz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Silinecek A/B testi kimliği geçersiz.",
+                "Invalid A/B test ID to delete."));
     }
 }
 
@@ -161,11 +194,15 @@ public sealed class UpdateUserCommandRequestValidator : AbstractValidator<Update
     {
         RuleFor(x => x.Id)
             .NotEmpty()
-            .WithMessage("Güncellenecek kullanıcı kimliği belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Güncellenecek kullanıcı kimliği belirtilmelidir.",
+                "User ID to update must be specified."));
 
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Kullanıcı güncelleme verileri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kullanıcı güncelleme verileri boş olamaz.",
+                "User update data cannot be empty."));
 
         When(x => x.Request != null, () =>
         {
@@ -180,7 +217,9 @@ public sealed class ToggleUserStatusRequestValidator : AbstractValidator<ToggleU
     {
         RuleFor(x => x.Id)
             .NotEmpty()
-            .WithMessage("Durumu değiştirilecek kullanıcı kimliği belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Durumu değiştirilecek kullanıcı kimliği belirtilmelidir.",
+                "User ID whose status will be toggled must be specified."));
     }
 }
 
@@ -190,7 +229,9 @@ public sealed class SaveTrackingCaptureRequestValidator : AbstractValidator<Save
     {
         RuleFor(x => x.Capture)
             .NotNull()
-            .WithMessage("Takip görüntüsü boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Takip görüntüsü boş olamaz.",
+                "Tracking capture data cannot be empty."));
     }
 }
 
@@ -200,7 +241,9 @@ public sealed class DeleteTrackingItemRequestValidator : AbstractValidator<Delet
     {
         RuleFor(x => x.Id)
             .GreaterThan(0)
-            .WithMessage("Silinecek takip kaydı kimliği geçersiz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Silinecek takip kaydı kimliği geçersiz.",
+                "Invalid tracking item ID to delete."));
     }
 }
 
@@ -210,6 +253,8 @@ public sealed class RecordAiUsageRequestValidator : AbstractValidator<RecordAiUs
     {
         RuleFor(x => x.Record)
             .NotNull()
-            .WithMessage("AI kullanım kaydı boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "AI kullanım kaydı boş olamaz.",
+                "AI usage record cannot be empty."));
     }
 }

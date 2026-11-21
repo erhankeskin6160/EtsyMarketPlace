@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Application.Common.Localization;
 using FluentValidation;
 
 namespace EtsyMarketPlace.Application.Auth.Validation;
@@ -8,10 +9,14 @@ public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
     {
         RuleFor(x => x.UsernameOrEmail)
             .NotEmpty()
-            .WithMessage("Kullanıcı adı/e-posta ve şifre gereklidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kullanıcı adı/e-posta ve şifre gereklidir.",
+                "Username/email and password are required."));
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .WithMessage("Kullanıcı adı/e-posta ve şifre gereklidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kullanıcı adı/e-posta ve şifre gereklidir.",
+                "Username/email and password are required."));
     }
 }

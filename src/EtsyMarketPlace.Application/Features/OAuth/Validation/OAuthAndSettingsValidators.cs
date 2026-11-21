@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Features.OAuth.Validation;
 
 using System;
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Application.Features.OAuth;
 using EtsyMarketPlace.Application.Features.Settings;
 using FluentValidation;
@@ -11,19 +12,27 @@ public sealed class ImportEtsyTokenCommandValidator : AbstractValidator<ImportEt
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) zorunludur.",
+                "Shop ID is required."));
 
         RuleFor(x => x.AccessToken)
             .NotEmpty()
-            .WithMessage("Geçerli bir Etsy erişim anahtarı (Access Token) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir Etsy erişim anahtarı (Access Token) zorunludur.",
+                "A valid Etsy access token is required."));
 
         RuleFor(x => x.RefreshToken)
             .NotEmpty()
-            .WithMessage("Geçerli bir Etsy yenileme anahtarı (Refresh Token) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir Etsy yenileme anahtarı (Refresh Token) zorunludur.",
+                "A valid Etsy refresh token is required."));
 
         RuleFor(x => x.AccessTokenExpiresAt)
             .GreaterThan(_ => DateTimeOffset.UtcNow)
-            .WithMessage("Token son kullanma tarihi gelecekte bir zaman olmalıdır.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Token son kullanma tarihi gelecekte bir zaman olmalıdır.",
+                "Token expiration date must be in the future."));
     }
 }
 
@@ -33,11 +42,15 @@ public sealed class ExchangeEtsyOAuthCodeCommandValidator : AbstractValidator<Ex
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) zorunludur.",
+                "Shop ID is required."));
 
         RuleFor(x => x.Code)
             .NotEmpty()
-            .WithMessage("Etsy yetkilendirme kodu (Authorization Code) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Etsy yetkilendirme kodu (Authorization Code) zorunludur.",
+                "Etsy authorization code is required."));
     }
 }
 
@@ -47,7 +60,9 @@ public sealed class RefreshEtsyTokenCommandValidator : AbstractValidator<Refresh
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Token yenileme işlemi için mağaza kimliği (Shop ID) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Token yenileme işlemi için mağaza kimliği (Shop ID) zorunludur.",
+                "Shop ID is required to refresh the token."));
     }
 }
 
@@ -57,11 +72,15 @@ public sealed class SaveAiSettingsCommandRequestValidator : AbstractValidator<Sa
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) zorunludur.",
+                "Shop ID is required."));
 
         RuleFor(x => x.SettingsJson)
             .NotEmpty()
-            .WithMessage("Kaydedilecek AI ayar verisi boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kaydedilecek AI ayar verisi boş olamaz.",
+                "AI settings data to save cannot be empty."));
     }
 }
 
@@ -71,13 +90,17 @@ public sealed class SaveEtsyCredentialsCommandRequestValidator : AbstractValidat
     {
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Etsy kimlik bilgileri isteği boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Etsy kimlik bilgileri isteği boş olamaz.",
+                "Etsy credentials request cannot be empty."));
 
         When(x => x.Request != null, () =>
         {
             RuleFor(x => x.Request.ShopId)
                 .NotEmpty()
-                .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Mağaza kimliği (Shop ID) zorunludur.",
+                    "Shop ID is required."));
         });
     }
 }
@@ -88,19 +111,25 @@ public sealed class SaveTelegramSettingsCommandRequestValidator : AbstractValida
     {
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Telegram bildirim ayarları isteği boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Telegram bildirim ayarları isteği boş olamaz.",
+                "Telegram notification settings request cannot be empty."));
 
         When(x => x.Request != null, () =>
         {
             RuleFor(x => x.Request.ShopId)
                 .NotEmpty()
-                .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Mağaza kimliği (Shop ID) zorunludur.",
+                    "Shop ID is required."));
 
             When(x => x.Request.IsEnabled, () =>
             {
                 RuleFor(x => x.Request.ChatId)
                     .NotEmpty()
-                    .WithMessage("Telegram bildirimleri aktifken Chat ID alanı zorunludur.");
+                    .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                        "Telegram bildirimleri aktifken Chat ID alanı zorunludur.",
+                        "Chat ID is required when Telegram notifications are enabled."));
             });
         });
     }
@@ -112,17 +141,23 @@ public sealed class SaveCarrierSessionCommandRequestValidator : AbstractValidato
     {
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Kargo taşıyıcı oturum isteği boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kargo taşıyıcı oturum isteği boş olamaz.",
+                "Shipping carrier session request cannot be empty."));
 
         When(x => x.Request != null, () =>
         {
             RuleFor(x => x.Request.ShopId)
                 .NotEmpty()
-                .WithMessage("Mağaza kimliği (Shop ID) zorunludur.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Mağaza kimliği (Shop ID) zorunludur.",
+                    "Shop ID is required."));
 
             RuleFor(x => x.Request.CarrierId)
                 .NotEmpty()
-                .WithMessage("Kargo taşıyıcı kodu (Carrier ID) belirtilmelidir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Kargo taşıyıcı kodu (Carrier ID) belirtilmelidir.",
+                    "Shipping carrier ID must be specified."));
         });
     }
 }

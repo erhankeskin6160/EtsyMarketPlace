@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Domain.Subscriptions;
 using FluentValidation;
 
@@ -9,31 +10,43 @@ public sealed class CreateCheckoutSessionValidator : AbstractValidator<CreateChe
     {
         RuleFor(x => x.UserId)
             .NotEmpty()
-            .WithMessage("Kullanıcı kimliği gereklidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Kullanıcı kimliği gereklidir.",
+                "User ID is required."));
 
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Ödeme oturumu isteği boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Ödeme oturumu isteği boş olamaz.",
+                "Checkout session request cannot be empty."));
 
         When(x => x.Request is not null, () =>
         {
             RuleFor(x => x.Request.PlanId)
                 .NotEmpty()
-                .WithMessage("Paket kimliği gereklidir.")
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Paket kimliği gereklidir.",
+                    "Plan ID is required."))
                 .Must(SubscriptionPlanCode.IsValid)
-                .WithMessage("Geçersiz abonelik paketi seçildi. (starter, growth, pro, enterprise)");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Geçersiz abonelik paketi seçildi. (starter, growth, pro, enterprise)",
+                    "Invalid subscription plan selected (starter, growth, pro, enterprise)."));
 
             RuleFor(x => x.Request.BillingCycle)
                 .Must(c => string.IsNullOrWhiteSpace(c) ||
                            string.Equals(c.Trim(), "Monthly", StringComparison.OrdinalIgnoreCase) ||
                            string.Equals(c.Trim(), "Yearly", StringComparison.OrdinalIgnoreCase))
-                .WithMessage("Faturalama dönemi 'Monthly' veya 'Yearly' olmalıdır.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Faturalama dönemi 'Monthly' veya 'Yearly' olmalıdır.",
+                    "Billing cycle must be 'Monthly' or 'Yearly'."));
 
             RuleFor(x => x.Request.Currency)
                 .Must(c => string.IsNullOrWhiteSpace(c) ||
                            string.Equals(c.Trim(), "USD", StringComparison.OrdinalIgnoreCase) ||
                            string.Equals(c.Trim(), "TRY", StringComparison.OrdinalIgnoreCase))
-                .WithMessage("Para birimi 'USD' veya 'TRY' olmalıdır.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Para birimi 'USD' veya 'TRY' olmalıdır.",
+                    "Currency must be 'USD' or 'TRY'."));
         });
     }
 }

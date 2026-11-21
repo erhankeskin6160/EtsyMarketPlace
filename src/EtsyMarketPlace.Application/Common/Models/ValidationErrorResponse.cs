@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EtsyMarketPlace.Application.Common.Localization;
 
 namespace EtsyMarketPlace.Application.Common.Models;
 
@@ -11,7 +12,7 @@ public class ValidationErrorResponse : ServiceResponse
     {
         Success = false;
         Message = errors.Values.SelectMany(x => x).FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
-            ?? ResponseMessage.ValidationError;
+            ?? ValidationMessageLocalizer.ValidationFailedSummary;
         StatusCode = 400;
         Errors = errors;
     }

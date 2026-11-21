@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto, MarketSearchResponseDto } from './etsy-api.service';
 import { CopilotToolRegistryService, ToolExecutionResult } from './copilot-tool-registry.service';
@@ -80,6 +81,17 @@ export class StoreAiAssistantService {
   private toolRegistry = inject(CopilotToolRegistryService);
   private languageService = inject(LanguageService);
   private localeFormat = inject(LocaleFormatService);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
+
+  private tr(key: string, fallback: string, params?: Record<string, unknown>): string {
+    const interpolate = (tpl: string) =>
+      params
+        ? tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => String(params[k] ?? ''))
+        : tpl;
+    if (!this.transloco) return interpolate(fallback);
+    const translated = this.transloco.translate(key, params);
+    return translated && translated !== key ? translated : interpolate(fallback);
+  }
 
   private conversationHistory: {
     role: 'user' | 'assistant' | 'system';
@@ -438,7 +450,9 @@ export class StoreAiAssistantService {
     const keyword = this.extractSearchKeyword(userPrompt, attachments, historyList);
     const rate = this.etsyApi.exchangeRate() || 49.73;
 
-    this.liveToolStatus.set(`🔍 Canlı Pazar Analizi ("${keyword}") ve Kargo Teklif Motoru sorgulanıyor...`);
+    this.liveToolStatus.set(
+      this.tr('copilot.assistant.status.searchingMarketAndShipping', '🔍 Canlı Pazar Analizi ("{{ keyword }}") ve Kargo Teklif Motoru sorgulanıyor...', { keyword })
+    );
 
     return forkJoin({
       market: this.etsyApi.searchMarket(keyword, 8).pipe(catchError(() => of(null))),
@@ -550,8 +564,17 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             const apiKey = this.getApiKeyForProvider(provider, settings);
             if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
               if (settings.strictNeverOffline && provider !== 'Offline') {
-                const errHtml = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:12px 14px;color:#fecaca;"><strong>⚠️ Canlı AI Zorunlu Modu Aktif:</strong> <b>${provider}</b> için API anahtarı tanımlı değil. Lütfen sağ üstteki ⚙️ <b>Yapay Zeka &amp; Model Ayarları</b> penceresinden geçerli bir API anahtarı girin.</div>`;
-                const updatedHistory = [...history, { role: 'assistant' as const, content: `${provider} API anahtarı eksik.` }];
+                const strictTitle = this.tr('copilot.assistant.errors.strictModeTitle', '⚠️ Canlı AI Zorunlu Modu Aktif:');
+                const missingKeyDetail = this.tr(
+                  'copilot.assistant.errors.missingApiKeyDetail',
+                  '<b>{{ provider }}</b> için API anahtarı tanımlı değil. Lütfen sağ üstteki ⚙️ <b>Yapay Zeka &amp; Model Ayarları</b> penceresinden geçerli bir API anahtarı girin.',
+                  { provider }
+                );
+                const errHtml = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:12px 14px;color:#fecaca;"><strong>${strictTitle}</strong> ${missingKeyDetail}</div>`;
+                const updatedHistory = [...history, {
+                  role: 'assistant' as const,
+                  content: this.tr('copilot.assistant.errors.missingApiKeyShort', '{{ provider }} API anahtarı eksik.', { provider })
+                }];
                 if (!sessionHistory) {
                   this.conversationHistory = updatedHistory;
                 }
@@ -599,7 +622,13 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
                 if (actionResult?.actionCardHtml) {
                   replyText = actionResult.actionCardHtml + '<br>' + replyText;
                 } else if (toolContext && (toolContext.marketResult || toolContext.shippingResult)) {
-                  const badge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#38bdf8;"><span>⚡</span><span><strong>Canlı Modüller Çalıştırıldı:</strong> Pazar Analizi ("${toolContext.keyword}") & Taşıyıcı Kargo Motoru Entegre Edildi</span></div><br>`;
+                  const liveModulesRun = this.tr('copilot.assistant.badges.liveModulesRun', 'Canlı Modüller Çalıştırıldı:');
+                  const liveModulesDetail = this.tr(
+                    'copilot.assistant.badges.liveModulesDetail',
+                    'Pazar Analizi ("{{ keyword }}") & Taşıyıcı Kargo Motoru Entegre Edildi',
+                    { keyword: toolContext.keyword }
+                  );
+                  const badge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#38bdf8;"><span>⚡</span><span><strong>${liveModulesRun}</strong> ${liveModulesDetail}</span></div><br>`;
                   replyText = badge + replyText;
                 }
                 if (!sessionHistory) {
@@ -715,19 +744,24 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
 
     let result = userPrompt ? `${userPrompt}\n\n` : '';
     result += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    result += '📎 KULLANICININ YÜKLEDİĞİ BELGE / RESİM / TABLO VERİLERİ:\n';
+    result += `${this.tr('copilot.assistant.attachments.header', '📎 KULLANICININ YÜKLEDİĞİ BELGE / RESİM / TABLO VERİLERİ:')}\n`;
 
     for (let i = 0; i < attachments.length; i++) {
       const att = attachments[i];
       const sizeKb = (att.size / 1024).toFixed(1);
-      result += `\n[Ek #${i + 1}] "${att.name}" (Tür: ${att.type.toUpperCase()}, Boyut: ${sizeKb} KB):\n`;
+      const itemMeta = this.tr(
+        'copilot.assistant.attachments.itemMeta',
+        '[Ek #{{ index }}] "{{ name }}" (Tür: {{ type }}, Boyut: {{ sizeKb }} KB):',
+        { index: i + 1, name: att.name, type: att.type.toUpperCase(), sizeKb }
+      );
+      result += `\n${itemMeta}\n`;
 
       if (att.extractedText && att.extractedText.trim().length > 0) {
         result += `"""\n${att.extractedText.trim()}\n"""\n`;
       } else if (att.type === 'image') {
-        result += `(Bu bir ürün görselidir. Pikselleri ve görsel özellikleri incelenmek üzere eklenmiştir.)\n`;
+        result += `${this.tr('copilot.assistant.attachments.imageHint', '(Bu bir ürün görselidir. Pikselleri ve görsel özellikleri incelenmek üzere eklenmiştir.)')}\n`;
       } else {
-        result += `(Dosya başarıyla yüklendi.)\n`;
+        result += `${this.tr('copilot.assistant.attachments.fileLoaded', '(Dosya başarıyla yüklendi.)')}\n`;
       }
     }
     result += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -843,17 +877,33 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
   ): Observable<AiResponseResult> {
-    const status = err?.status ? `HTTP ${err.status}` : 'Ağ/CORS Hatası';
-    const detail = err?.error?.error?.message || err?.error?.message || err?.message || 'Bilinmeyen hata';
+    const status = err?.status ? `HTTP ${err.status}` : this.tr('copilot.assistant.errors.networkCors', 'Ağ/CORS Hatası');
+    const detail = err?.error?.error?.message || err?.error?.message || err?.message || this.tr('copilot.assistant.errors.unknown', 'Bilinmeyen hata');
     console.warn(`[StoreAiAssistant] ${providerLabel} API hatası (${status}):`, detail);
 
     const isStrict = this.aiSettings.settings().strictNeverOffline;
-    const errorBanner = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem;color:#fecaca;"><strong>⚠️ ${providerLabel} (${modelName}) Yanıt Vermedi (${status}):</strong> ${detail}</div>`;
+    const failedTitle = this.tr(
+      'copilot.assistant.errors.providerFailedTitle',
+      '⚠️ {{ provider }} ({{ model }}) Yanıt Vermedi ({{ status }}):',
+      { provider: providerLabel, model: modelName, status }
+    );
+    const errorBanner = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem;color:#fecaca;"><strong>${failedTitle}</strong> ${detail}</div>`;
 
     if (isStrict) {
+      const strictNoFallback = this.tr(
+        'copilot.assistant.errors.strictModeNoFallback',
+        'Canlı AI Zorunlu modu aktif olduğu için çevrimdışı yedek yanıt üretilmedi. Lütfen API anahtarınızı veya model seçiminizi kontrol edin.'
+      );
       return of({
-        replyHtml: errorBanner + `<p style="color:#cbd5e1;font-size:0.85rem;">Canlı AI Zorunlu modu aktif olduğu için çevrimdışı yedek yanıt üretilmedi. Lütfen API anahtarınızı veya model seçiminizi kontrol edin.</p>`,
-        updatedHistory: [...history, { role: 'assistant' as const, content: `${providerLabel} API Hatası (${status}): ${detail}` }]
+        replyHtml: errorBanner + `<p style="color:#cbd5e1;font-size:0.85rem;">${strictNoFallback}</p>`,
+        updatedHistory: [...history, {
+          role: 'assistant' as const,
+          content: this.tr('copilot.assistant.errors.providerErrorShort', '{{ provider }} API Hatası ({{ status }}): {{ detail }}', {
+            provider: providerLabel,
+            status,
+            detail
+          })
+        }]
       });
     }
 
@@ -877,14 +927,15 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
   ): Observable<AiResponseResult> {
-    const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>⚡</span><span><strong>Canlı Mağaza & Etsy Verisi Çekildi:</strong> <code>${combinedNames}</code></span></div><br>`;
+    const liveDataLabel = this.tr('copilot.assistant.badges.liveDataFetched', 'Canlı Mağaza & Etsy Verisi Çekildi:');
+    const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>⚡</span><span><strong>${liveDataLabel}</strong> <code>${combinedNames}</code></span></div><br>`;
     const settings = this.aiSettings.settings();
     const normProvider = providerLabel.includes('Gemini') ? 'Gemini' : providerLabel;
     const apiKey = this.getApiKeyForProvider(normProvider, settings);
     const toolJson = JSON.stringify(combinedData, null, 2);
 
     if (!apiKey) {
-      const fallbackText = `⚡ **${combinedNames}** çalıştırıldı.\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
+      const fallbackText = `${this.tr('copilot.assistant.toolResult.executed', '⚡ **{{ tools }}** çalıştırıldı.', { tools: combinedNames })}\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
       return of({
         replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
         updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
@@ -896,14 +947,14 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
 
     return this.synthesizeToolTurn2$(normProvider, modelName, apiKey, systemPrompt, followUpPrompt, history).pipe(
       map(text2 => {
-        const synthesized = text2 || initialText || `⚡ **${combinedNames}** başarıyla çalıştırıldı.`;
+        const synthesized = text2 || initialText || this.tr('copilot.assistant.toolResult.executedSuccess', '⚡ **{{ tools }}** başarıyla çalıştırıldı.', { tools: combinedNames });
         return {
           replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized),
           updatedHistory: [...history, { role: 'assistant' as const, content: synthesized }]
         };
       }),
       catchError(() => {
-        const fallbackText = `⚡ **${combinedNames}** çalıştırıldı.\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
+        const fallbackText = `${this.tr('copilot.assistant.toolResult.executed', '⚡ **{{ tools }}** çalıştırıldı.', { tools: combinedNames })}\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
         return of({
           replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
           updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
@@ -926,7 +977,8 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
   ): Observable<AiResponseResult> {
     return this.toolRegistry.executeTool(fnName, parsedArgs, attachments).pipe(
       switchMap(toolRes => {
-        const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>🔌</span><span><strong>VDS & Etsy MCP Aracı Çalıştırıldı:</strong> <code>${fnName}</code></span></div><br>`;
+        const mcpExecutedLabel = this.tr('copilot.assistant.badges.mcpToolExecuted', 'VDS & Etsy MCP Aracı Çalıştırıldı:');
+        const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>🔌</span><span><strong>${mcpExecutedLabel}</strong> <code>${fnName}</code></span></div><br>`;
 
         // If LLM already wrote a detailed final answer alongside the tool call, return it immediately
         if (initialText && initialText.length >= 140) {
@@ -945,7 +997,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         const toolJson = JSON.stringify(toolRes.data ?? { message: toolRes.message }, null, 2);
 
         if (!apiKey) {
-          const fallbackText = `${toolRes.message || `⚡ **${fnName}** çalıştırıldı.`}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
+          const fallbackText = `${toolRes.message || this.tr('copilot.assistant.toolResult.executed', '⚡ **{{ tools }}** çalıştırıldı.', { tools: fnName })}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
           return of({
             replyHtml: mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
             updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
@@ -957,7 +1009,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
 
         return this.synthesizeToolTurn2$(normProvider, modelName, apiKey, systemPrompt, followUpPrompt, history).pipe(
           map(text2 => {
-            const synthesized = text2 || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
+            const synthesized = text2 || toolRes.message || this.tr('copilot.assistant.toolResult.executedSuccess', '⚡ **{{ tools }}** başarıyla çalıştırıldı.', { tools: fnName });
             const html = mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized);
             return {
               replyHtml: html,
@@ -965,7 +1017,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             };
           }),
           catchError(() => {
-            const fallbackText = `${toolRes.message || `⚡ **${fnName}** çalıştırıldı.`}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
+            const fallbackText = `${toolRes.message || this.tr('copilot.assistant.toolResult.executed', '⚡ **{{ tools }}** çalıştırıldı.', { tools: fnName })}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
             return of({
               replyHtml: mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
               updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
@@ -1069,7 +1121,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
       });
     }
-    throw new Error(`Boş ${providerLabel} yanıtı`);
+    throw new Error(this.tr('copilot.assistant.errors.emptyProviderResponse', 'Boş {{ provider }} yanıtı', { provider: providerLabel }));
   }
 
   // ── DEEPSEEK DISPATCHER ───────────────────────────────────────────────────
@@ -1279,7 +1331,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           });
         }
-        throw new Error('Boş Claude yanıtı');
+        throw new Error(this.tr('copilot.assistant.errors.emptyProviderResponse', 'Boş {{ provider }} yanıtı', { provider: 'Claude' }));
       }),
       catchError(err => this.handleProviderError(err, 'Claude', model, augmentedPrompt, snap, history, attachments, toolContext))
     );
@@ -1413,7 +1465,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           });
         }
-        throw new Error('Boş Gemini yanıtı');
+        throw new Error(this.tr('copilot.assistant.errors.emptyProviderResponse', 'Boş {{ provider }} yanıtı', { provider: 'Gemini' }));
       }),
       catchError(err => this.handleProviderError(err, 'Google Gemini', modelName, augmentedPrompt, snap, history, attachments, toolContext))
     );
@@ -1606,7 +1658,9 @@ Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi v
       ));
 
     if (isMcpInquiry) {
-      return `### ⚡ Evet, MCP Sisteme %100 Başarıyla Bağlı ve Aktif! 🎉
+      return this.tr(
+        'copilot.assistant.offline.mcpActive',
+        `### ⚡ Evet, MCP Sisteme %100 Başarıyla Bağlı ve Aktif! 🎉
 
 Kardeşim, hiçbir şüphen olmasın; **Model Context Protocol (MCP)** ve **Canlı Otonom Araç Motoru** sisteme **tam entegre edilmiştir ve şu an devrededir**!
 
@@ -1618,24 +1672,28 @@ Kardeşim, hiçbir şüphen olmasın; **Model Context Protocol (MCP)** ve **Canl
 3. **\`search_market_intelligence\`:** Canlı Etsy pazar ve rakip istihbaratını çekme.
 4. **\`calculate_shipping_rates\`:** VDS kargo motorundan Navlungo, ShipEntegra ve Aras tekliflerini anında getirme.
 
-İstediğin ürünü danışabilir, doğrudan Etsy taslağına dönüştürmemi isteyebilirsin! 🚀`;
+İstediğin ürünü danışabilir, doğrudan Etsy taslağına dönüştürmemi isteyebilirsin! 🚀`
+      );
     }
 
-    if (lower.includes('mcp') || lower.includes('hızlı ürün') || lower.includes('hizli urun') || lower.includes('taslak') || lower.includes('hazırla') || lower.includes('hazirla')) {
+    if (lower.includes('mcp') || lower.includes('hızlı ürün') || lower.includes('hizli urun') || lower.includes('taslak') || lower.includes('hazırla') || lower.includes('hazirla') || lower.includes('draft') || lower.includes('fast creator')) {
       const keyword = toolContext?.keyword || this.extractSearchKeyword(userPrompt, attachments);
-      const capKeyword = this.capitalizeWords(keyword);
-      return `### ⚡ MCP (Model Context Protocol) & Otonom Araç Motoru Devrede!
+      return this.tr(
+        'copilot.assistant.offline.mcpReady',
+        `### ⚡ MCP (Model Context Protocol) & Otonom Araç Motoru Devrede!
 
 Kardeşim, sistemimize **Model Context Protocol (MCP)** ve **Canlı Tool Calling** motoru entegre edilmiştir! 🎉
 
 Artık bir chat botu gibi sadece konuşmakla kalmıyorum; **mağazanın tüm modüllerini ve Etsy API'sini bizzat çalıştırabiliyorum**:
 
-1. **✅ Canlı Pazar İstihbaratı:** "${keyword}" için Etsy v3 modülünü arka planda çalıştırdım.
+1. **✅ Canlı Pazar İstihbaratı:** "{{ keyword }}" için Etsy v3 modülünü arka planda çalıştırdım.
 2. **✅ Kargo Motoru:** Taşıyıcı fiyatlarını hesapladım ve kâr marjını korudum.
 3. **✅ Hızlı Ürün Ekle Modülü:** Başlık, 13 SEO etiketi, detaylı ürün açıklaması ve kapak fotoğrafını forma **otomatik doldurdum**.
 4. **✅ Canlı Etsy Taslak İlanı:** Etsy API'sine bağlanarak ilanı **taslak olarak açtım**!
 
-Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün Ekle** sayfasında inceleyebilir veya **Etsy Shop Manager** taslaklar ekranından kontrol edebilirsin. Bol satışlar! 🚀`;
+Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün Ekle** sayfasında inceleyebilir veya **Etsy Shop Manager** taslaklar ekranından kontrol edebilirsin. Bol satışlar! 🚀`,
+        { keyword }
+      );
     }
 
     // If toolContext has live data from market and carrier engines
@@ -1652,20 +1710,29 @@ Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün
       const maxPrice = kpis?.maxPrice || 48.00;
       const oppScore = kpis?.opportunityScore || 78;
 
+      const liveApiTag = this.tr('copilot.assistant.offline.liveApiTag', ' (Canlı API)');
+      const contractRateTag = this.tr('copilot.assistant.offline.contractRateTag', ' (Sözleşmeli Tarife)');
+      const liveApiShort = this.tr('copilot.assistant.offline.liveApiShort', 'Canlı API');
+      const contractShort = this.tr('copilot.assistant.offline.contractShort', 'Sözleşme');
+      const daysUnit = this.tr('copilot.assistant.offline.daysUnit', 'gün');
+
       // Find best shipping quote (preferring verified live API quotes)
       let bestCarrierName = 'Navlungo';
       let bestShippingCost = 13.20;
-      let shippingDetails = 'Navlungo [Canlı API]: $13.20 (4-6 gün) | ShipEntegra [Canlı API]: $14.10 (3-5 gün)';
+      let shippingDetails = this.tr(
+        'copilot.assistant.offline.defaultShippingDetails',
+        'Navlungo [Canlı API]: $13.20 (4-6 gün) | ShipEntegra [Canlı API]: $14.10 (3-5 gün)'
+      );
 
       if (quotes.length > 0) {
         const liveQuotes = quotes.filter((q: any) => q.isLive);
         const candidateQuotes = liveQuotes.length > 0 ? liveQuotes : quotes;
         const sortedQuotes = [...candidateQuotes].sort((a: any, b: any) => Number(a.priceUsd) - Number(b.priceUsd));
         const best = sortedQuotes[0];
-        bestCarrierName = `${best.carrierName || best.carrierKey}${best.isLive ? ' (Canlı API)' : ' (Sözleşmeli Tarife)'}`;
+        bestCarrierName = `${best.carrierName || best.carrierKey}${best.isLive ? liveApiTag : contractRateTag}`;
         bestShippingCost = Number(best.priceUsd) || 13.20;
-        shippingDetails = quotes.slice(0, 4).map((q: any) => 
-          `${q.carrierName || q.carrierKey} [${q.isLive ? 'Canlı API' : 'Sözleşme' }]: $${Number(q.priceUsd).toFixed(2)} (${q.estimatedDays || (q.estimatedDaysMin ? `${q.estimatedDaysMin}-${q.estimatedDaysMax} gün` : '4-8 gün')})`
+        shippingDetails = quotes.slice(0, 4).map((q: any) =>
+          `${q.carrierName || q.carrierKey} [${q.isLive ? liveApiShort : contractShort}]: $${Number(q.priceUsd).toFixed(2)} (${q.estimatedDays || (q.estimatedDaysMin ? `${q.estimatedDaysMin}-${q.estimatedDaysMax} ${daysUnit}` : `4-8 ${daysUnit}`)})`
         ).join(' | ');
       }
 
@@ -1686,62 +1753,144 @@ Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün
       const netProfitMargin = Number(((netProfit / recRetailPrice) * 100).toFixed(1));
       const netProfitTry = Number((netProfit * snap.exchangeRate).toFixed(0));
 
+      const defaultShopName = this.tr('copilot.assistant.offline.defaultShopName', 'Etsy Satıcısı');
       let competitorRows = '';
       if (listings.length > 0) {
-        competitorRows = listings.slice(0, 3).map((l, idx) => 
-          `• <strong>${idx + 1}. ${l.title?.slice(0, 48)}...</strong><br>&nbsp;&nbsp;&nbsp;Fiyat: <strong>$${Number(l.priceUsd ?? (l as any).price ?? 0).toFixed(2)}</strong> | Mağaza: <em>${l.shopName || 'Etsy Satıcısı'}</em> | Favori: ❤️ ${l.favorites ?? 0}`
+        competitorRows = listings.slice(0, 3).map((l, idx) =>
+          this.tr(
+            'copilot.assistant.offline.competitorRow',
+            '• <strong>{{ index }}. {{ title }}...</strong><br>&nbsp;&nbsp;&nbsp;Fiyat: <strong>${{ price }}</strong> | Mağaza: <em>{{ shopName }}</em> | Favori: ❤️ {{ favorites }}',
+            {
+              index: idx + 1,
+              title: l.title?.slice(0, 48) || '',
+              price: Number(l.priceUsd ?? (l as any).price ?? 0).toFixed(2),
+              shopName: l.shopName || defaultShopName,
+              favorites: l.favorites ?? 0
+            }
+          )
         ).join('<br>');
       }
 
-      return `🎯 <strong>"${keyword.toUpperCase()}" İÇİN CANLI PAZAR & KARGO ANALİZİ</strong><br><br>
-Sistemimizin <strong>Etsy v3 Pazar Arama Modülü</strong> ve <strong>Canlı Kargo Fiyatlandırma Motoru</strong> arka planda çalıştırılarak güncel veriler çekildi:<br><br>
-🔍 <strong>Etsy Pazar & Rakip Durumu:</strong><br>
-• İncelenen Canlı İlan Sayısı: <strong>${m?.total || listings.length} adet</strong><br>
-• Ortalama Pazar Fiyatı: <strong>$${avgPrice.toFixed(2)}</strong> (Aralık: $${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)})<br>
-• Pazar Fırsat Skoru: <strong>${oppScore} / 100</strong> (Güçlü Satış Potansiyeli)<br><br>
-${competitorRows ? `🏆 <strong>Öne Çıkan Canlı Rakipler:</strong><br>${competitorRows}<br><br>` : ''}
-📦 <strong>Canlı Taşıyıcı Kargo Teklifleri (1 Desi ABD):</strong><br>
+      const customNote = customCostTry > 0
+        ? this.tr('copilot.assistant.offline.customCostNote', ' <em>(Belirttiğiniz Üretim Maliyeti)</em>')
+        : '';
+
+      const marketTitle = this.tr('copilot.assistant.offline.marketTitle', '🎯 <strong>"{{ keyword }}" İÇİN CANLI PAZAR & KARGO ANALİZİ</strong>', { keyword: keyword.toUpperCase() });
+      const marketIntro = this.tr('copilot.assistant.offline.marketIntro', 'Sistemimizin <strong>Etsy v3 Pazar Arama Modülü</strong> ve <strong>Canlı Kargo Fiyatlandırma Motoru</strong> arka planda çalıştırılarak güncel veriler çekildi:');
+      const marketSectionTitle = this.tr('copilot.assistant.offline.marketSectionTitle', '🔍 <strong>Etsy Pazar & Rakip Durumu:</strong>');
+      const marketAnalyzedCount = this.tr('copilot.assistant.offline.marketAnalyzedCount', '• İncelenen Canlı İlan Sayısı: <strong>{{ count }} adet</strong>', { count: m?.total || listings.length });
+      const marketAvgPrice = this.tr('copilot.assistant.offline.marketAvgPrice', '• Ortalama Pazar Fiyatı: <strong>${{ avgPrice }}</strong> (Aralık: ${{ minPrice }} – ${{ maxPrice }})', {
+        avgPrice: avgPrice.toFixed(2),
+        minPrice: minPrice.toFixed(2),
+        maxPrice: maxPrice.toFixed(2)
+      });
+      const marketOppScore = this.tr('copilot.assistant.offline.marketOppScore', '• Pazar Fırsat Skoru: <strong>{{ oppScore }} / 100</strong> (Güçlü Satış Potansiyeli)', { oppScore });
+      const marketCompetitorsTitle = this.tr('copilot.assistant.offline.marketCompetitorsTitle', '🏆 <strong>Öne Çıkan Canlı Rakipler:</strong>');
+      const marketShippingTitle = this.tr('copilot.assistant.offline.marketShippingTitle', '📦 <strong>Canlı Taşıyıcı Kargo Teklifleri (1 Desi ABD):</strong>');
+      const marketBestCarrier = this.tr('copilot.assistant.offline.marketBestCarrier', '<em>(En uygun seçenek: <strong>{{ carrier }}</strong> ile <strong>${{ cost }}</strong>)</em>', {
+        carrier: bestCarrierName,
+        cost: bestShippingCost.toFixed(2)
+      });
+      const marketProfitTitle = this.tr('copilot.assistant.offline.marketProfitTitle', '💰 <strong>Birim Kârlılık ve Fiyat Simülasyonu:</strong>');
+      const marketRecPrice = this.tr('copilot.assistant.offline.marketRecPrice', '• <strong>Tavsiye Satış Fiyatı:</strong> <strong>${{ priceUsd }} (₺{{ priceTry }})</strong>', {
+        priceUsd: recRetailPrice.toFixed(2),
+        priceTry: (recRetailPrice * snap.exchangeRate).toFixed(0)
+      });
+      const marketLiveShipping = this.tr('copilot.assistant.offline.marketLiveShipping', '• <strong>Canlı Kargo ({{ carrier }}):</strong> -${{ cost }}', {
+        carrier: bestCarrierName,
+        cost: bestShippingCost.toFixed(2)
+      });
+      const marketProductionCost = this.tr('copilot.assistant.offline.marketProductionCost', '• <strong>3D Baskı / Üretim Maliyeti:</strong> -₺{{ costTry }} (-${{ costUsd }}){{ customNote }}', {
+        costTry: customCostTry > 0 ? customCostTry.toFixed(0) : (filamentCost * snap.exchangeRate).toFixed(0),
+        costUsd: filamentCost.toFixed(2),
+        customNote
+      });
+      const marketBoxCost = this.tr('copilot.assistant.offline.marketBoxCost', '• <strong>Kutu & Ambalaj:</strong> -${{ cost }}', { cost: boxCost.toFixed(2) });
+      const marketEtsyFees = this.tr('copilot.assistant.offline.marketEtsyFees', '• <strong>Etsy Platform Kesintileri (~%10):</strong> -${{ fees }}', { fees: etsyFees.toFixed(2) });
+      const marketNetProfit = this.tr('copilot.assistant.offline.marketNetProfit', '🎉 <strong>NET KÂR:</strong> <strong style="color:#34d399;font-size:1.05rem;">+${{ profitUsd }} (₺{{ profitTry }}) — %{{ margin }} Kâr Marjı</strong>', {
+        profitUsd: netProfit.toFixed(2),
+        profitTry: netProfitTry,
+        margin: netProfitMargin
+      });
+      const marketVerdict = this.tr('copilot.assistant.offline.marketVerdict', '⭐ <strong>Sonuç & Karar:</strong> <strong>8.8 / 10 (KESİNLİKLE SATILIR)</strong><br>Ürün, Etsy US pazarındaki 1 Desi kargo avantajı ve düşük filament sarfiyatı sayesinde net <strong>%{{ margin }} kâr marjı</strong> bırakmaktadır. Rekabette öne geçmek için ilk 10 siparişte ${{ launchPrice }} lansman indirimiyle çıkış yapmanız tavsiye edilir!', {
+        margin: netProfitMargin,
+        launchPrice: (recRetailPrice - 2).toFixed(2)
+      });
+
+      return `${marketTitle}<br><br>
+${marketIntro}<br><br>
+${marketSectionTitle}<br>
+${marketAnalyzedCount}<br>
+${marketAvgPrice}<br>
+${marketOppScore}<br><br>
+${competitorRows ? `${marketCompetitorsTitle}<br>${competitorRows}<br><br>` : ''}
+${marketShippingTitle}<br>
 ${shippingDetails}<br>
-<em>(En uygun seçenek: <strong>${bestCarrierName}</strong> ile <strong>$${bestShippingCost.toFixed(2)}</strong>)</em><br><br>
-💰 <strong>Birim Kârlılık ve Fiyat Simülasyonu:</strong><br>
-• <strong>Tavsiye Satış Fiyatı:</strong> <strong>$${recRetailPrice.toFixed(2)} (₺${(recRetailPrice * snap.exchangeRate).toFixed(0)})</strong><br>
-• <strong>Canlı Kargo (${bestCarrierName}):</strong> -$${bestShippingCost.toFixed(2)}<br>
-• <strong>3D Baskı / Üretim Maliyeti:</strong> -₺${customCostTry > 0 ? customCostTry.toFixed(0) : (filamentCost * snap.exchangeRate).toFixed(0)} (-$${filamentCost.toFixed(2)})${customCostTry > 0 ? ' <em>(Belirttiğiniz Üretim Maliyeti)</em>' : ''}<br>
-• <strong>Kutu & Ambalaj:</strong> -$${boxCost.toFixed(2)}<br>
-• <strong>Etsy Platform Kesintileri (~%10):</strong> -$${etsyFees.toFixed(2)}<br>
+${marketBestCarrier}<br><br>
+${marketProfitTitle}<br>
+${marketRecPrice}<br>
+${marketLiveShipping}<br>
+${marketProductionCost}<br>
+${marketBoxCost}<br>
+${marketEtsyFees}<br>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br>
-🎉 <strong>NET KÂR:</strong> <strong style="color:#34d399;font-size:1.05rem;">+$${netProfit.toFixed(2)} (₺${netProfitTry}) — %${netProfitMargin} Kâr Marjı</strong><br><br>
-⭐ <strong>Sonuç & Karar:</strong> <strong>8.8 / 10 (KESİNLİKLE SATILIR)</strong><br>
-Ürün, Etsy US pazarındaki 1 Desi kargo avantajı ve düşük filament sarfiyatı sayesinde net <strong>%${netProfitMargin} kâr marjı</strong> bırakmaktadır. Rekabette öne geçmek için ilk 10 siparişte \$${(recRetailPrice - 2).toFixed(2)} lansman indirimiyle çıkış yapmanız tavsiye edilir!`;
+${marketNetProfit}<br><br>
+${marketVerdict}`;
     }
 
     // If document/image is provided
     if (hasAttachments) {
       const attNames = attachments!.map(a => `<strong>${a.name}</strong> (${a.type.toUpperCase()})`).join(', ');
-      return `📁 <strong>Belge ve Görsel İncelemesi (${attNames}):</strong><br><br>
-Yüklediğiniz dosyalar hafızaya alındı. Canlı döviz kuru <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> üzerinden değerlendirdiğimizde:<br><br>
-• <strong>Görsel / Belge Değerlendirmesi:</strong> Ürün Etsy US pazarında güçlü bir görselliğe ve hediye potansiyeline sahip.<br>
-• <strong>Tavsiye Fiyat:</strong> <strong>$44.90 (₺${(44.90 * snap.exchangeRate).toFixed(0)})</strong><br>
-• <strong>Tahmini Express Kargo (Türkiye ➔ ABD):</strong> ~$8.50<br>
-• <strong>Tahmini Net Kâr:</strong> <strong style="color:#34d399;">~$27.90 (₺${(27.90 * snap.exchangeRate).toFixed(0)}) — %62 Marj</strong><br><br>
-💡 <em>Tam piksel görsel incelemesi ve satır satır Excel hesaplaması için sağ üstteki ⚙️ simgesinden <strong>${provider}</strong> veya <strong>Gemini/OpenAI</strong> API anahtarınızı tanımlayabilirsiniz.</em>`;
+      return this.tr(
+        'copilot.assistant.offline.attachmentsHtml',
+        '📁 <strong>Belge ve Görsel İncelemesi ({{ attNames }}):</strong><br><br>Yüklediğiniz dosyalar hafızaya alındı. Canlı döviz kuru <strong>1 USD = {{ exchangeRate }} ₺</strong> üzerinden değerlendirdiğimizde:<br><br>• <strong>Görsel / Belge Değerlendirmesi:</strong> Ürün Etsy US pazarında güçlü bir görselliğe ve hediye potansiyeline sahip.<br>• <strong>Tavsiye Fiyat:</strong> <strong>$44.90 (₺{{ recPriceTry }})</strong><br>• <strong>Tahmini Express Kargo (Türkiye ➔ ABD):</strong> ~$8.50<br>• <strong>Tahmini Net Kâr:</strong> <strong style="color:#34d399;">~$27.90 (₺{{ netProfitTry }}) — %62 Marj</strong><br><br>💡 <em>Tam piksel görsel incelemesi ve satır satır Excel hesaplaması için sağ üstteki ⚙️ simgesinden <strong>{{ provider }}</strong> veya <strong>Gemini/OpenAI</strong> API anahtarınızı tanımlayabilirsiniz.</em>',
+        {
+          attNames,
+          exchangeRate: snap.exchangeRate.toFixed(2),
+          recPriceTry: (44.90 * snap.exchangeRate).toFixed(0),
+          netProfitTry: (27.90 * snap.exchangeRate).toFixed(0),
+          provider
+        }
+      );
     }
 
     // Small Talk
     if (
       lower.includes('nasılsın') || lower.includes('naber') || lower.includes('nasilsin') ||
       lower.includes('selam') || lower.includes('merhaba') || lower.startsWith('günaydın') ||
-      lower.startsWith('iyi günler') || lower.includes('durum ne') || lower.includes('nasıl gidiyor')
+      lower.startsWith('iyi günler') || lower.includes('durum ne') || lower.includes('nasıl gidiyor') ||
+      lower === 'hi' || lower.startsWith('hi ') || lower.includes('hello') || lower.includes('how are you')
     ) {
-      return `Selamlar! Mağazanızda her şey kontrol altında. 🚀<br><br>
-Dolar kuru şu anda <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> bandında. Bu ay <strong>${snap.receiptCount} sipariş</strong> ile <strong>$${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 })})</strong> gerçek net kârdayız (%${snap.netProfitMargin.toFixed(1)} marj).<br><br>
-${snap.missingCostCount > 0 ? `⚠️ <strong>Hatırlatma:</strong> ${snap.missingCostCount} siparişimizde maliyet girişi bekleniyor.<br><br>` : ''}
-Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF faturanızı ekleyerek birlikte inceleyebiliriz!`;
+      const missingCostBlock = snap.missingCostCount > 0
+        ? this.tr('copilot.assistant.offline.missingCostReminderHtml', '⚠️ <strong>Hatırlatma:</strong> {{ count }} siparişimizde maliyet girişi bekleniyor.<br><br>', { count: snap.missingCostCount })
+        : '';
+      return this.tr(
+        'copilot.assistant.offline.smallTalkHtml',
+        'Selamlar! Mağazanızda her şey kontrol altında. 🚀<br><br>Dolar kuru şu anda <strong>1 USD = {{ exchangeRate }} ₺</strong> bandında. Bu ay <strong>{{ receiptCount }} sipariş</strong> ile <strong>${{ grossSalesUsd }} (₺{{ grossSalesTry }})</strong> ciro ve <strong style="color:#34d399;">${{ netProfitUsd }} (₺{{ netProfitTry }})</strong> gerçek net kârdayız (%{{ netProfitMargin }} marj).<br><br>{{ missingCostBlock }}Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF faturanızı ekleyerek birlikte inceleyebiliriz!',
+        {
+          exchangeRate: snap.exchangeRate.toFixed(2),
+          receiptCount: snap.receiptCount,
+          grossSalesUsd: snap.grossSalesUsd.toFixed(2),
+          grossSalesTry: snap.grossSalesTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 }),
+          netProfitUsd: snap.netProfitUsd.toFixed(2),
+          netProfitTry: snap.netProfitTry.toLocaleString(this.languageService.locale(), { maximumFractionDigits: 0 }),
+          netProfitMargin: snap.netProfitMargin.toFixed(1),
+          missingCostBlock
+        }
+      );
     }
 
     // Default
-    return `Mağazanızın canlı verileri devrede: <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> kuruyla bu ay toplam <strong>$${snap.grossSalesUsd.toFixed(2)}</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (%${snap.netProfitMargin.toFixed(1)})</strong> net kâr elde edilmiştir.<br><br>
-📎 <em>İpucu: Resim yapıştırabilir (Ctrl+V) ya da 📎 butonundan Excel tablosu veya PDF faturası ekleyebilirsiniz.</em>`;
+    return this.tr(
+      'copilot.assistant.offline.defaultHtml',
+      'Mağazanızın canlı verileri devrede: <strong>1 USD = {{ exchangeRate }} ₺</strong> kuruyla bu ay toplam <strong>${{ grossSalesUsd }}</strong> ciro ve <strong style="color:#34d399;">${{ netProfitUsd }} (%{{ netProfitMargin }})</strong> net kâr elde edilmiştir.<br><br>📎 <em>İpucu: Resim yapıştırabilir (Ctrl+V) ya da 📎 butonundan Excel tablosu veya PDF faturası ekleyebilirsiniz.</em>',
+      {
+        exchangeRate: snap.exchangeRate.toFixed(2),
+        grossSalesUsd: snap.grossSalesUsd.toFixed(2),
+        netProfitUsd: snap.netProfitUsd.toFixed(2),
+        netProfitMargin: snap.netProfitMargin.toFixed(1)
+      }
+    );
   }
 
   private normalizeDeepSeekModel(model: string): string {

@@ -33,7 +33,10 @@ export const validationErrorInterceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => err);
       }
 
-      const parsed = extractClientValidationErrors(err);
+      const translateFn = transloco
+        ? (key: string, params?: Record<string, unknown>) => transloco.translate(key, params)
+        : undefined;
+      const parsed = extractClientValidationErrors(err, undefined, undefined, translateFn);
 
       if (!suppressToast && err.status !== 401) {
         const html = formatValidationToastHtml(parsed);

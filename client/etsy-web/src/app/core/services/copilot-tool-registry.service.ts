@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { EtsyApiService, CreateListingPayload, CreatedListingResponseDto } from './etsy-api.service';
 import { AiSettingsService } from './ai-settings.service';
 import { ChatAttachment } from './store-ai-assistant.service';
@@ -23,8 +24,19 @@ export class CopilotToolRegistryService {
   private router = inject(Router);
   private aiSettings = inject(AiSettingsService);
   private localeFormat = inject(LocaleFormatService);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
 
   private readonly FAST_CREATOR_DRAFT_KEY = 'etsy_fast_creator_draft_v1';
+
+  private tr(key: string, fallback: string, params?: Record<string, unknown>): string {
+    const interpolate = (tpl: string) =>
+      params
+        ? tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => String(params[k] ?? ''))
+        : tpl;
+    if (!this.transloco) return interpolate(fallback);
+    const translated = this.transloco.translate(key, params);
+    return translated && translated !== key ? translated : interpolate(fallback);
+  }
 
   /**
    * OpenAI / DeepSeek / Claude / Grok compatible Function Calling tool schemas.
@@ -389,7 +401,7 @@ export class CopilotToolRegistryService {
           toolName,
           success: false,
           data: null,
-          message: `Tanınmayan araç: ${toolName}`
+          message: this.tr('copilot.tools.unknownTool', 'Tanınmayan araç: {{ toolName }}', { toolName })
         });
     }
   }
@@ -414,16 +426,18 @@ export class CopilotToolRegistryService {
           success: !isError,
           data: parsedData ?? res,
           message: isError
-            ? `VDS MCP Hatası (${toolName}): ${textContent}`
-            : `VDS & Etsy MCP Aracı (${toolName}) canlı veriyi başarıyla getirdi.`
+            ? this.tr('copilot.tools.vdsMcpError', 'VDS MCP Hatası ({{ toolName }}): {{ error }}', { toolName, error: textContent })
+            : this.tr('copilot.tools.vdsMcpSuccess', 'VDS & Etsy MCP Aracı ({{ toolName }}) canlı veriyi başarıyla getirdi.', { toolName })
         };
       }),
       catchError(err => {
         return of({
           toolName,
           success: false,
-          data: { error: err?.message || 'VDS MCP bağlantı hatası' },
-          message: `VDS MCP çağrısı başarısız: ${err?.message || 'Bilinmeyen hata'}`
+          data: { error: err?.message || this.tr('copilot.tools.vdsMcpConnectionError', 'VDS MCP bağlantı hatası') },
+          message: this.tr('copilot.tools.vdsMcpFailed', 'VDS MCP çağrısı başarısız: {{ error }}', {
+            error: err?.message || this.tr('copilot.tools.unknownError', 'Bilinmeyen hata')
+          })
         });
       })
     );
@@ -431,7 +445,7 @@ export class CopilotToolRegistryService {
 
   private handleCreateEtsyDraft(args: any, attachments?: ChatAttachment[]): Observable<ToolExecutionResult> {
     const rate = this.etsyApi.exchangeRate() || 49.73;
-    const title = (args.title || 'Yeni 3D Baskı Ürün').trim();
+    const title = (args.title || this.tr('copilot.tools.default3dProductTitle', 'Yeni 3D Baskı Ürün')).trim();
     const priceUsd = Number(args.priceUsd) || 19.90;
     const desc = (args.description || 'Custom crafted artisan product. Made with high precision.').trim();
 
@@ -508,7 +522,7 @@ export class CopilotToolRegistryService {
             tagsCount: tags.length,
             state: 'draft'
           },
-          message: `Etsy üzerinde #${listingId} numaralı taslak ilan başarıyla açıldı.`,
+          message: this.tr('copilot.tools.draftCreated', 'Etsy üzerinde #{{ listingId }} numaralı taslak ilan başarıyla açıldı.', { listingId }),
           actionCardHtml: cardHtml
         };
       }),
@@ -527,7 +541,7 @@ export class CopilotToolRegistryService {
             tagsCount: tags.length,
             state: 'draft_local'
           },
-          message: `Taslak hazırlandı ve Hızlı Ürün Ekle modülüne kaydedildi.`,
+          message: this.tr('copilot.tools.draftSavedLocal', 'Taslak hazırlandı ve Hızlı Ürün Ekle modülüne kaydedildi.'),
           actionCardHtml: cardHtml
         });
       })
@@ -536,7 +550,7 @@ export class CopilotToolRegistryService {
 
   private handlePopulateFastCreator(args: any, attachments?: ChatAttachment[]): Observable<ToolExecutionResult> {
     const rate = this.etsyApi.exchangeRate() || 49.73;
-    const title = (args.title || 'Yeni Ürün').trim();
+    const title = (args.title || this.tr('copilot.tools.defaultProductTitle', 'Yeni Ürün')).trim();
     const priceUsd = Number(args.priceUsd) || 19.90;
     const desc = (args.description || '').trim();
 
@@ -570,7 +584,7 @@ export class CopilotToolRegistryService {
       toolName: 'populate_fast_creator',
       success: true,
       data: { title, priceUsd, tagsCount: tags.length },
-      message: 'Hızlı Ürün Ekle formu dolduruldu.',
+      message: this.tr('copilot.tools.fastCreatorPopulated', 'Hızlı Ürün Ekle formu dolduruldu.'),
       actionCardHtml: cardHtml
     });
   }
@@ -585,14 +599,19 @@ export class CopilotToolRegistryService {
           toolName: 'search_market_intelligence',
           success: true,
           data: res,
-          message: `"${keyword}" için ${res?.listings?.length || 0} adet rakip ilan incelendi.`
+          message: this.tr('copilot.tools.marketSearchSuccess', '"{{ keyword }}" için {{ count }} adet rakip ilan incelendi.', {
+            keyword,
+            count: res?.listings?.length || 0
+          })
         };
       }),
       catchError(err => of({
         toolName: 'search_market_intelligence',
         success: false,
         data: null,
-        message: `Pazar analizi başarısız: ${err?.message || 'Bilinmeyen hata'}`
+        message: this.tr('copilot.tools.marketSearchFailed', 'Pazar analizi başarısız: {{ error }}', {
+          error: err?.message || this.tr('copilot.tools.unknownError', 'Bilinmeyen hata')
+        })
       }))
     );
   }
@@ -615,14 +634,16 @@ export class CopilotToolRegistryService {
           toolName: 'calculate_shipping_rates',
           success: true,
           data: res,
-          message: `${country} için kargo fiyatları hesaplandı.`
+          message: this.tr('copilot.tools.shippingCalcSuccess', '{{ country }} için kargo fiyatları hesaplandı.', { country })
         };
       }),
       catchError(err => of({
         toolName: 'calculate_shipping_rates',
         success: false,
         data: null,
-        message: `Kargo hesaplama başarısız: ${err?.message || 'Bilinmeyen hata'}`
+        message: this.tr('copilot.tools.shippingCalcFailed', 'Kargo hesaplama başarısız: {{ error }}', {
+          error: err?.message || this.tr('copilot.tools.unknownError', 'Bilinmeyen hata')
+        })
       }))
     );
   }
@@ -634,7 +655,7 @@ export class CopilotToolRegistryService {
         toolName: 'audit_etsy_listing',
         success: false,
         data: null,
-        message: 'Denetlenecek Listing ID belirtilmedi.'
+        message: this.tr('copilot.tools.auditMissingListingId', 'Denetlenecek Listing ID belirtilmedi.')
       });
     }
 
@@ -662,14 +683,22 @@ export class CopilotToolRegistryService {
           success: Boolean(res?.success),
           data: res,
           message: res?.success
-            ? `#${listingId} ilanı AI ile denetlendi (Skor: ${res.seoScoreBefore} -> ${res.seoScoreAfter}/100).`
-            : `Denetim tamamlanamadı: ${res?.message || 'Bilinmeyen hata'}`
+            ? this.tr('copilot.tools.auditSuccess', '#{{ listingId }} ilanı AI ile denetlendi (Skor: {{ scoreBefore }} -> {{ scoreAfter }}/100).', {
+                listingId,
+                scoreBefore: res.seoScoreBefore,
+                scoreAfter: res.seoScoreAfter
+              })
+            : this.tr('copilot.tools.auditIncomplete', 'Denetim tamamlanamadı: {{ error }}', {
+                error: res?.message || this.tr('copilot.tools.unknownError', 'Bilinmeyen hata')
+              })
         })),
         catchError(err => of({
           toolName: 'audit_etsy_listing',
           success: false,
           data: null,
-          message: `Mağaza AI Analizi hatası: ${err?.error?.error || err?.message || 'Bağlantı hatası'}`
+          message: this.tr('copilot.tools.auditError', 'Mağaza AI Analizi hatası: {{ error }}', {
+            error: err?.error?.error || err?.message || this.tr('copilot.tools.connectionError', 'Bağlantı hatası')
+          })
         }))
       );
 
@@ -697,7 +726,7 @@ export class CopilotToolRegistryService {
       toolName: 'navigate_to_module',
       success: true,
       data: { route },
-      message: `${route} sayfasına yönlendirildi.`
+      message: this.tr('copilot.tools.navigated', '{{ route }} sayfasına yönlendirildi.', { route })
     });
   }
 
@@ -722,7 +751,7 @@ export class CopilotToolRegistryService {
         id: 'copilot-auto-1',
         url: data.imageUrl,
         isCover: true,
-        name: 'Asistan Kapak Fotoğrafı'
+        name: this.tr('copilot.tools.defaultCoverPhotoName', 'Asistan Kapak Fotoğrafı')
       }] : [];
 
       const draft = {
@@ -781,19 +810,31 @@ export class CopilotToolRegistryService {
   ): string {
     const priceTry = (priceUsd * rate).toFixed(2);
     const tagsHtml = tags.slice(0, 8).map(t => `<span style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);padding:2px 8px;border-radius:12px;font-size:0.68rem;color:#cbd5e1;">#${t}</span>`).join(' ');
-    const moreTags = tags.length > 8 ? `<span style="font-size:0.68rem;color:#94a3b8;">+${tags.length - 8} etiket daha</span>` : '';
+    const moreTags = tags.length > 8
+      ? `<span style="font-size:0.68rem;color:#94a3b8;">${this.tr('copilot.tools.draftCard.moreTags', '+{{ count }} etiket daha', { count: tags.length - 8 })}</span>`
+      : '';
 
-    const imgThumb = imageUrl ? `<div style="width:72px;height:72px;border-radius:8px;overflow:hidden;background:#0f172a;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);"><img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Kapak" /></div>` : '';
+    const coverAlt = this.tr('copilot.tools.draftCard.coverAlt', 'Kapak');
+    const imgThumb = imageUrl ? `<div style="width:72px;height:72px;border-radius:8px;overflow:hidden;background:#0f172a;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);"><img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;" alt="${coverAlt}" /></div>` : '';
+    const headingText = isLocalDraft
+      ? this.tr('copilot.tools.draftCard.localTitle', 'Hızlı İlan Taslağı Hazırlandı')
+      : this.tr('copilot.tools.draftCard.liveTitle', 'Etsy Taslak İlan Başarıyla Açıldı!');
+    const badgeText = isLocalDraft
+      ? this.tr('copilot.tools.draftCard.localBadge', 'TASLAK KAYDEDİLDİ')
+      : this.tr('copilot.tools.draftCard.liveBadge', 'ID: #{{ listingId }}', { listingId });
+    const stockText = this.tr('copilot.tools.draftCard.stock', '• Stok: {{ count }} Adet', { count: 15 });
+    const viewFastCreatorText = this.tr('copilot.tools.draftCard.viewInFastCreator', "Hızlı Ürün Ekle'de Gör ↗");
+    const openEtsyDraftsText = this.tr('copilot.tools.draftCard.openInEtsyDrafts', "Etsy Taslaklar'da Aç ↗");
 
     return `
 <div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(15,23,42,0.8) 100%);border:1px solid rgba(16,185,129,0.35);border-radius:12px;padding:14px;margin:12px 0;font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,0.3);">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:1.25rem;">${isLocalDraft ? '🪄' : '🎉'}</span>
-      <strong style="color:#10b981;font-size:0.95rem;">${isLocalDraft ? 'Hızlı İlan Taslağı Hazırlandı' : 'Etsy Taslak İlan Başarıyla Açıldı!'}</strong>
+      <strong style="color:#10b981;font-size:0.95rem;">${headingText}</strong>
     </div>
     <span style="background:rgba(16,185,129,0.2);color:#34d399;font-weight:700;font-size:0.75rem;padding:2px 8px;border-radius:6px;border:1px solid rgba(16,185,129,0.3);">
-      ${isLocalDraft ? 'TASLAK KAYDEDİLDİ' : `ID: #${listingId}`}
+      ${badgeText}
     </span>
   </div>
 
@@ -806,7 +847,7 @@ export class CopilotToolRegistryService {
       <div style="display:flex;align-items:center;gap:10px;font-size:0.78rem;">
         <span style="color:#38bdf8;font-weight:700;">$${priceUsd.toFixed(2)} USD</span>
         <span style="color:#94a3b8;">(${priceTry} ₺)</span>
-        <span style="color:#a855f7;">• Stok: 15 Adet</span>
+        <span style="color:#a855f7;">${stockText}</span>
       </div>
     </div>
   </div>
@@ -818,10 +859,10 @@ export class CopilotToolRegistryService {
 
   <div style="display:flex;flex-wrap:wrap;gap:8px;">
     <button onclick="window.__copilotNavigate('/listings/fast-creator')" style="flex:1;min-width:140px;background:#3b82f6;color:#ffffff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background 0.2s;">
-      <span>🪄</span> Hızlı Ürün Ekle'de Gör ↗
+      <span>🪄</span> ${viewFastCreatorText}
     </button>
     <a href="https://www.etsy.com/your/shops/me/tools/listings/state:draft" target="_blank" rel="noopener noreferrer" style="flex:1;min-width:140px;background:#f97316;color:#ffffff;text-decoration:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background 0.2s;">
-      <span>🛒</span> Etsy Taslaklar'da Aç ↗
+      <span>🛒</span> ${openEtsyDraftsText}
     </a>
   </div>
 </div>
@@ -840,7 +881,7 @@ export class CopilotToolRegistryService {
         toolName: 'save_order_cost',
         success: false,
         data: null,
-        message: 'receiptId zorunludur.'
+        message: this.tr('copilot.tools.orderCost.receiptIdRequired', 'receiptId zorunludur.')
       });
     }
 
@@ -852,16 +893,21 @@ export class CopilotToolRegistryService {
     }).pipe(
       map(res => {
         const total = Number((shippingCostUsd + productCostUsd + packagingCostUsd).toFixed(2));
+        const savedTitle = this.tr('copilot.tools.orderCost.savedTitle', '✅ Sipariş #{{ receiptId }} Maliyeti Kaydedildi!', { receiptId });
+        const shippingLabel = this.tr('copilot.tools.orderCost.shippingLabel', 'Kargo Maliyeti:');
+        const productionLabel = this.tr('copilot.tools.orderCost.productionLabel', 'Üretim/Hammadde:');
+        const totalCogsLabel = this.tr('copilot.tools.orderCost.totalCogsLabel', 'Toplam COGS:');
+        const noteHtml = notes ? `<br><small style="color:#94a3b8;">${this.tr('copilot.tools.orderCost.noteLabel', 'Not: {{ notes }}', { notes })}</small>` : '';
         const cardHtml = `
 <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px;margin:10px 0;">
   <div style="font-weight:700;color:#10b981;font-size:14px;margin-bottom:6px;">
-    ✅ Sipariş #${receiptId} Maliyeti Kaydedildi!
+    ${savedTitle}
   </div>
   <div style="font-size:13px;color:#e2e8f0;line-height:1.5;">
-    • Kargo Maliyeti: <strong>${shippingCostUsd.toFixed(2)}</strong><br>
-    • Üretim/Hammadde: <strong>${productCostUsd.toFixed(2)}</strong><br>
-    • Toplam COGS: <strong>${total.toFixed(2)}</strong>
-    ${notes ? `<br><small style="color:#94a3b8;">Not: ${notes}</small>` : ''}
+    • ${shippingLabel} <strong>${shippingCostUsd.toFixed(2)}</strong><br>
+    • ${productionLabel} <strong>${productCostUsd.toFixed(2)}</strong><br>
+    • ${totalCogsLabel} <strong>${total.toFixed(2)}</strong>
+    ${noteHtml}
   </div>
 </div>`;
         return {
@@ -869,14 +915,19 @@ export class CopilotToolRegistryService {
           success: true,
           data: { receiptId, totalCost: total, res },
           actionCardHtml: cardHtml,
-          message: `#${receiptId} nolu siparişin maliyeti (${total.toFixed(2)}) VDS sunucusuna kaydedildi.`
+          message: this.tr('copilot.tools.orderCost.savedMessage', '#{{ receiptId }} nolu siparişin maliyeti ({{ total }}) VDS sunucusuna kaydedildi.', {
+            receiptId,
+            total: total.toFixed(2)
+          })
         };
       }),
       catchError(err => of({
         toolName: 'save_order_cost',
         success: false,
         data: null,
-        message: `Maliyet kaydetme hatası: ${err?.message || 'Bilinmeyen hata'}`
+        message: this.tr('copilot.tools.orderCost.saveError', 'Maliyet kaydetme hatası: {{ error }}', {
+          error: err?.message || this.tr('copilot.tools.unknownError', 'Bilinmeyen hata')
+        })
       }))
     );
   }
@@ -960,7 +1011,7 @@ export class CopilotToolRegistryService {
         toolName: 'match_and_save_shipping_report',
         success: false,
         data: null,
-        message: 'Kargo raporunda incelenecek geçerli gönderi kaydı bulunamadı.'
+        message: this.tr('copilot.tools.shipment.noValidRecords', 'Kargo raporunda incelenecek geçerli gönderi kaydı bulunamadı.')
       });
     }
 
@@ -986,7 +1037,7 @@ export class CopilotToolRegistryService {
           const totalTry = sCostTry + addCostTry;
           const rate = Number(s.exchangeRate) > 0 ? Number(s.exchangeRate) : liveRate;
           const shippingUsd = s.shipmentCostUsd !== undefined ? Number(s.shipmentCostUsd) : Number((totalTry / rate).toFixed(2));
-          const supplier = s.supplierName || 'Kargo';
+          const supplier = s.supplierName || this.tr('copilot.tools.shipment.defaultCarrier', 'Kargo');
           const extId = s.externalId || s.customerSpecialCode || s.trackingNumber || s.externalOrderId || '—';
           const externalOrderId = String(s.externalOrderId || '').trim();
           const isDirectReceipt = /^\d+$/.test(externalOrderId);
@@ -1054,13 +1105,15 @@ export class CopilotToolRegistryService {
             );
           } else {
             unmatchedList.push({
-              receiverName: rName || 'İsimsiz',
+              receiverName: rName || this.tr('copilot.tools.shipment.unnamedReceiver', 'İsimsiz'),
               productName: pName || '3D Model',
               supplier,
               costTry: totalTry,
               shippingCostUsd: shippingUsd,
               status: s.shipmentStatus || 'Draft',
-              reason: shippingUsd === 0 ? 'Kargo maliyeti 0/hesaplanamadı' : 'Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)'
+              reason: shippingUsd === 0
+                ? this.tr('copilot.tools.shipment.reasonZeroCost', 'Kargo maliyeti 0/hesaplanamadı')
+                : this.tr('copilot.tools.shipment.reasonNoOrder', 'Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)')
             });
           }
         }
@@ -1080,7 +1133,9 @@ export class CopilotToolRegistryService {
                 unmatchedShipments: unmatchedList
               },
               actionCardHtml: cardHtml,
-              message: `${matchedUpdates.length} adet siparişin gerçek kargo maliyeti başarıyla eşleştirildi ve VDS veritabanına kaydedildi!`
+              message: this.tr('copilot.tools.shipment.matchedMessage', '{{ count }} adet siparişin gerçek kargo maliyeti başarıyla eşleştirildi ve VDS veritabanına kaydedildi!', {
+                count: matchedUpdates.length
+              })
             };
           })
         );
@@ -1093,6 +1148,20 @@ export class CopilotToolRegistryService {
     unmatched: any[],
     liveRate: number
   ): string {
+    const savedBadge = this.tr('copilot.tools.shipmentCard.savedBadge', '✅ Kaydedildi');
+    const cardTitle = this.tr('copilot.tools.shipmentCard.title', 'Gerçek Kargo Maliyetleri Eşleştirildi & Kaydedildi');
+    const matchedBadge = this.tr('copilot.tools.shipmentCard.matchedBadge', '{{ count }} SİPARİŞ EŞLEŞTİ', { count: matched.length });
+    const colOrder = this.tr('copilot.tools.shipmentCard.colOrder', 'Sipariş #');
+    const colBuyer = this.tr('copilot.tools.shipmentCard.colBuyer', 'Alıcı');
+    const colProduct = this.tr('copilot.tools.shipmentCard.colProduct', 'Ürün');
+    const colCarrier = this.tr('copilot.tools.shipmentCard.colCarrier', 'Taşıyıcı');
+    const colShippingCost = this.tr('copilot.tools.shipmentCard.colShippingCost', 'Kargo Tutarı');
+    const colAction = this.tr('copilot.tools.shipmentCard.colAction', 'İşlem');
+    const unmatchedTitle = this.tr('copilot.tools.shipmentCard.unmatchedTitle', 'ℹ️ Diğer Sevkiyatlar / Test Taslakları ({{ count }} Adet):', { count: unmatched.length });
+    const colShipping = this.tr('copilot.tools.shipmentCard.colShipping', 'Kargo');
+    const colStatusNote = this.tr('copilot.tools.shipmentCard.colStatusNote', 'Durum / Not');
+    const openAccountingBtn = this.tr('copilot.tools.shipmentCard.openAccountingBtn', 'Muhasebe & Net Kâr Tablosunu Aç ↗');
+
     const matchedRows = matched.map(m => `
       <tr style="border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.75rem;">
         <td style="padding:6px 8px;font-weight:700;color:#38bdf8;">#${m.receiptId}</td>
@@ -1100,7 +1169,7 @@ export class CopilotToolRegistryService {
         <td style="padding:6px 8px;color:#94a3b8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${m.productTitle}">${m.productTitle?.slice(0, 24)}...</td>
         <td style="padding:6px 8px;color:#cbd5e1;">${m.supplier}</td>
         <td style="padding:6px 8px;font-weight:700;color:#10b981;">${m.shippingCostUsd.toFixed(2)} <span style="font-weight:400;color:#64748b;font-size:0.68rem;">(${m.costTry.toFixed(2)} ₺)</span></td>
-        <td style="padding:6px 8px;"><span style="background:rgba(16,185,129,0.2);color:#34d399;padding:2px 6px;border-radius:4px;font-size:0.68rem;font-weight:600;">✅ Kaydedildi</span></td>
+        <td style="padding:6px 8px;"><span style="background:rgba(16,185,129,0.2);color:#34d399;padding:2px 6px;border-radius:4px;font-size:0.68rem;font-weight:600;">${savedBadge}</span></td>
       </tr>
     `).join('');
 
@@ -1119,10 +1188,10 @@ export class CopilotToolRegistryService {
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:1.2rem;">⚡</span>
-      <strong style="color:#10b981;font-size:0.92rem;">Gerçek Kargo Maliyetleri Eşleştirildi & Kaydedildi</strong>
+      <strong style="color:#10b981;font-size:0.92rem;">${cardTitle}</strong>
     </div>
     <span style="background:rgba(16,185,129,0.25);color:#34d399;font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:6px;">
-      ${matched.length} SİPARİŞ EŞLEŞTİ
+      ${matchedBadge}
     </span>
   </div>
 
@@ -1131,12 +1200,12 @@ export class CopilotToolRegistryService {
     <table style="width:100%;border-collapse:collapse;text-align:left;">
       <thead>
         <tr style="background:rgba(255,255,255,0.04);font-size:0.7rem;color:#94a3b8;">
-          <th style="padding:5px 8px;">Sipariş #</th>
-          <th style="padding:5px 8px;">Alıcı</th>
-          <th style="padding:5px 8px;">Ürün</th>
-          <th style="padding:5px 8px;">Taşıyıcı</th>
-          <th style="padding:5px 8px;">Kargo Tutarı</th>
-          <th style="padding:5px 8px;">İşlem</th>
+          <th style="padding:5px 8px;">${colOrder}</th>
+          <th style="padding:5px 8px;">${colBuyer}</th>
+          <th style="padding:5px 8px;">${colProduct}</th>
+          <th style="padding:5px 8px;">${colCarrier}</th>
+          <th style="padding:5px 8px;">${colShippingCost}</th>
+          <th style="padding:5px 8px;">${colAction}</th>
         </tr>
       </thead>
       <tbody>
@@ -1149,17 +1218,17 @@ export class CopilotToolRegistryService {
   ${unmatched.length > 0 ? `
   <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.1);">
     <div style="font-size:0.75rem;font-weight:600;color:#f59e0b;margin-bottom:4px;">
-      ℹ️ Diğer Sevkiyatlar / Test Taslakları (${unmatched.length} Adet):
+      ${unmatchedTitle}
     </div>
     <div style="overflow-x:auto;max-height:140px;overflow-y:auto;">
       <table style="width:100%;border-collapse:collapse;text-align:left;">
         <thead>
           <tr style="font-size:0.68rem;color:#64748b;">
-            <th style="padding:3px 6px;">Alıcı</th>
-            <th style="padding:3px 6px;">Ürün</th>
-            <th style="padding:3px 6px;">Taşıyıcı</th>
-            <th style="padding:3px 6px;">Kargo</th>
-            <th style="padding:3px 6px;">Durum / Not</th>
+            <th style="padding:3px 6px;">${colBuyer}</th>
+            <th style="padding:3px 6px;">${colProduct}</th>
+            <th style="padding:3px 6px;">${colCarrier}</th>
+            <th style="padding:3px 6px;">${colShipping}</th>
+            <th style="padding:3px 6px;">${colStatusNote}</th>
           </tr>
         </thead>
         <tbody>
@@ -1172,7 +1241,7 @@ export class CopilotToolRegistryService {
 
   <div style="margin-top:12px;display:flex;gap:8px;">
     <button onclick="window.__copilotNavigate('/finance/accounting')" style="width:100%;background:#059669;color:#ffffff;border:none;padding:8px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
-      <span>📊</span> Muhasebe & Net Kâr Tablosunu Aç ↗
+      <span>📊</span> ${openAccountingBtn}
     </button>
   </div>
 </div>
@@ -1188,16 +1257,21 @@ export class CopilotToolRegistryService {
   ): string {
     const priceTry = (priceUsd * rate).toFixed(2);
     const tagsHtml = tags.slice(0, 8).map(t => `<span style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);padding:2px 8px;border-radius:12px;font-size:0.68rem;color:#cbd5e1;">#${t}</span>`).join(' ');
-    const imgThumb = imageUrl ? `<div style="width:64px;height:64px;border-radius:8px;overflow:hidden;background:#0f172a;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);"><img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Kapak" /></div>` : '';
+    const coverAlt = this.tr('copilot.tools.draftCard.coverAlt', 'Kapak');
+    const imgThumb = imageUrl ? `<div style="width:64px;height:64px;border-radius:8px;overflow:hidden;background:#0f172a;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);"><img src="${imageUrl}" style="width:100%;height:100%;object-fit:cover;" alt="${coverAlt}" /></div>` : '';
+    const cardTitle = this.tr('copilot.tools.populateCard.title', 'Hızlı Ürün Ekle Formu Dolduruldu');
+    const readyBadge = this.tr('copilot.tools.populateCard.readyBadge', 'HAZIR');
+    const tagsCountText = this.tr('copilot.tools.populateCard.tagsCount', '{{ count }} Etiket', { count: tags.length || 13 });
+    const openFastCreatorBtn = this.tr('copilot.tools.populateCard.openFastCreatorBtn', 'Hızlı Ürün Ekle Sayfasını Aç ve İncele ↗');
 
     return `
 <div style="background:linear-gradient(135deg, rgba(56,189,248,0.12) 0%, rgba(15,23,42,0.8) 100%);border:1px solid rgba(56,189,248,0.35);border-radius:12px;padding:14px;margin:12px 0;font-family:inherit;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:1.15rem;">🪄</span>
-      <strong style="color:#38bdf8;font-size:0.92rem;">Hızlı Ürün Ekle Formu Dolduruldu</strong>
+      <strong style="color:#38bdf8;font-size:0.92rem;">${cardTitle}</strong>
     </div>
-    <span style="background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:6px;">HAZIR</span>
+    <span style="background:rgba(56,189,248,0.2);color:#38bdf8;font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:6px;">${readyBadge}</span>
   </div>
 
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
@@ -1205,7 +1279,7 @@ export class CopilotToolRegistryService {
     <div style="flex:1;min-width:0;">
       <div style="font-size:0.83rem;font-weight:600;color:#f8fafc;margin-bottom:3px;word-break:break-word;">${title}</div>
       <div style="font-size:0.75rem;color:#94a3b8;">
-        <span style="color:#38bdf8;font-weight:700;">$${priceUsd.toFixed(2)} USD</span> (${priceTry} ₺) • 13 Etiket
+        <span style="color:#38bdf8;font-weight:700;">$${priceUsd.toFixed(2)} USD</span> (${priceTry} ₺) • ${tagsCountText}
       </div>
     </div>
   </div>
@@ -1215,7 +1289,7 @@ export class CopilotToolRegistryService {
   </div>
 
   <button onclick="window.__copilotNavigate('/listings/fast-creator')" style="width:100%;background:#3b82f6;color:#ffffff;border:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
-    <span>🚀</span> Hızlı Ürün Ekle Sayfasını Aç ve İncele ↗
+    <span>🚀</span> ${openFastCreatorBtn}
   </button>
 </div>
 `;

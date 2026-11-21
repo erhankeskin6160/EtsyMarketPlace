@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Application.Features.Listings.Validation;
 
 using System;
 using System.Linq;
+using EtsyMarketPlace.Application.Common.Localization;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.SuggestListingVariations;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
@@ -19,37 +20,53 @@ public sealed class UpdateListingCommandRequestValidator : AbstractValidator<Upd
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) belirtilmedi.",
+                "Shop ID was not specified."));
 
         RuleFor(x => x.ListingId)
             .NotEmpty()
-            .WithMessage("Güncellenecek ilan kimliği (Listing ID) belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Güncellenecek ilan kimliği (Listing ID) belirtilmelidir.",
+                "Listing ID to update must be specified."));
 
         RuleFor(x => x.Dto)
             .NotNull()
-            .WithMessage("İlan güncelleme verileri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "İlan güncelleme verileri boş olamaz.",
+                "Listing update data cannot be empty."));
 
         When(x => x.Dto != null, () =>
         {
             RuleFor(x => x.Dto.Title)
                 .NotEmpty()
-                .WithMessage("Ürün başlığı zorunludur.")
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Ürün başlığı zorunludur.",
+                    "Product title is required."))
                 .MaximumLength(MaxTitleLength)
-                .WithMessage($"Ürün başlığı en fazla {MaxTitleLength} karakter olabilir.")
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    $"Ürün başlığı en fazla {MaxTitleLength} karakter olabilir.",
+                    $"Product title can be at most {MaxTitleLength} characters."))
                 .Must(title => string.IsNullOrEmpty(title) || title.Count(c => c == '&') <= 1)
-                .WithMessage("Etsy kuralı gereği başlıkta '&' karakteri en fazla 1 kez kullanılabilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Etsy kuralı gereği başlıkta '&' karakteri en fazla 1 kez kullanılabilir.",
+                    "Per Etsy rules, the '&' character can be used at most once in the title."));
 
             When(x => x.Dto.Tags != null && x.Dto.Tags.Count > 0, () =>
             {
                 RuleFor(x => x.Dto.Tags.Count)
                     .LessThanOrEqualTo(MaxTagCount)
                     .OverridePropertyName("Tags")
-                    .WithMessage($"Etsy kurallarına göre en fazla {MaxTagCount} etiket girilebilir.");
+                    .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                        $"Etsy kurallarına göre en fazla {MaxTagCount} etiket girilebilir.",
+                        $"Per Etsy rules, at most {MaxTagCount} tags can be entered."));
 
                 RuleForEach(x => x.Dto.Tags)
                     .MaximumLength(MaxTagLength)
                     .OverridePropertyName("Tags")
-                    .WithMessage($"Her bir etiket en fazla {MaxTagLength} karakter olabilir.");
+                    .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                        $"Her bir etiket en fazla {MaxTagLength} karakter olabilir.",
+                        $"Each tag can be at most {MaxTagLength} characters."));
             });
         });
     }
@@ -61,20 +78,28 @@ public sealed class UpdateListingStateCommandRequestValidator : AbstractValidato
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) belirtilmedi.",
+                "Shop ID was not specified."));
 
         RuleFor(x => x.ListingId)
             .GreaterThan(0)
-            .WithMessage("Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.",
+                "A valid Listing ID must be specified."));
 
         RuleFor(x => x.State)
             .NotEmpty()
-            .WithMessage("İlan durumu belirtilmelidir.")
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "İlan durumu belirtilmelidir.",
+                "Listing state must be specified."))
             .Must(s => !string.IsNullOrWhiteSpace(s) &&
                        (s.Trim().Equals("draft", StringComparison.OrdinalIgnoreCase) ||
                         s.Trim().Equals("active", StringComparison.OrdinalIgnoreCase) ||
                         s.Trim().Equals("inactive", StringComparison.OrdinalIgnoreCase)))
-            .WithMessage("İlan durumu yalnızca 'draft', 'active' veya 'inactive' olabilir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "İlan durumu yalnızca 'draft', 'active' veya 'inactive' olabilir.",
+                "Listing state can only be 'draft', 'active', or 'inactive'."));
     }
 }
 
@@ -84,17 +109,23 @@ public sealed class AiOptimizeListingRequestValidator : AbstractValidator<AiOpti
     {
         RuleFor(x => x.ListingId)
             .NotEmpty()
-            .WithMessage("Optimize edilecek ilan kimliği belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Optimize edilecek ilan kimliği belirtilmelidir.",
+                "Listing ID to optimize must be specified."));
 
         RuleFor(x => x.Command)
             .NotNull()
-            .WithMessage("Optimizasyon parametreleri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Optimizasyon parametreleri boş olamaz.",
+                "Optimization parameters cannot be empty."));
 
         When(x => x.Command != null && !string.IsNullOrEmpty(x.Command.Title), () =>
         {
             RuleFor(x => x.Command.Title)
                 .MaximumLength(140)
-                .WithMessage("Ürün başlığı en fazla 140 karakter olabilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Ürün başlığı en fazla 140 karakter olabilir.",
+                    "Product title can be at most 140 characters."));
         });
     }
 }
@@ -107,22 +138,30 @@ public sealed class SyncListingImagesCommandValidator : AbstractValidator<SyncLi
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) belirtilmedi.",
+                "Shop ID was not specified."));
 
         RuleFor(x => x.ListingId)
             .GreaterThan(0)
-            .WithMessage("Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.",
+                "A valid Listing ID must be specified."));
 
         RuleFor(x => x.Items)
             .NotEmpty()
-            .WithMessage("İlanda en az 1 görsel bulunmalıdır.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "İlanda en az 1 görsel bulunmalıdır.",
+                "Listing must contain at least 1 image."));
 
         When(x => x.Items != null, () =>
         {
             RuleFor(x => x.Items.Count)
                 .LessThanOrEqualTo(MaxEtsyListingImages)
                 .OverridePropertyName("Items")
-                .WithMessage($"Etsy ilanlarında en fazla {MaxEtsyListingImages} görsel bulunabilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    $"Etsy ilanlarında en fazla {MaxEtsyListingImages} görsel bulunabilir.",
+                    $"Etsy listings can contain at most {MaxEtsyListingImages} images."));
         });
     }
 }
@@ -135,22 +174,30 @@ public sealed class UpdateListingImagesAltTextCommandValidator : AbstractValidat
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) belirtilmedi.",
+                "Shop ID was not specified."));
 
         RuleFor(x => x.ListingId)
             .GreaterThan(0)
-            .WithMessage("Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Geçerli bir ilan kimliği (Listing ID) belirtilmelidir.",
+                "A valid Listing ID must be specified."));
 
         RuleFor(x => x.Items)
             .NotEmpty()
-            .WithMessage("Güncellenecek görsel bulunamadı.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Güncellenecek görsel bulunamadı.",
+                "No images found to update."));
 
         When(x => x.Items != null, () =>
         {
             RuleForEach(x => x.Items)
                 .Must(item => string.IsNullOrEmpty(item.AltText) || item.AltText.Trim().Length <= MaxAltTextLength)
                 .OverridePropertyName("AltText")
-                .WithMessage($"Görsel Alt-Text açıklaması en fazla {MaxAltTextLength} karakter olabilir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    $"Görsel Alt-Text açıklaması en fazla {MaxAltTextLength} karakter olabilir.",
+                    $"Image alt-text description can be at most {MaxAltTextLength} characters."));
         });
     }
 }
@@ -161,11 +208,15 @@ public sealed class AnalyzeListingImagesCommandValidator : AbstractValidator<Ana
     {
         RuleFor(x => x.ShopId)
             .NotEmpty()
-            .WithMessage("Mağaza kimliği (Shop ID) belirtilmedi.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Mağaza kimliği (Shop ID) belirtilmedi.",
+                "Shop ID was not specified."));
 
         RuleFor(x => x.ListingId)
             .GreaterThan(0)
-            .WithMessage("Görsel analizi için geçerli bir ilan kimliği belirtilmelidir.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Görsel analizi için geçerli bir ilan kimliği belirtilmelidir.",
+                "A valid Listing ID must be specified for image analysis."));
     }
 }
 
@@ -175,17 +226,23 @@ public sealed class SuggestListingVariationsCommandValidator : AbstractValidator
     {
         RuleFor(x => x.Request)
             .NotNull()
-            .WithMessage("Varyasyon öneri verileri boş olamaz.");
+            .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                "Varyasyon öneri verileri boş olamaz.",
+                "Variation suggestion data cannot be empty."));
 
         When(x => x.Request != null, () =>
         {
             RuleFor(x => x.Request)
                 .Must(r => !string.IsNullOrWhiteSpace(r.Title) || !string.IsNullOrWhiteSpace(r.Description))
-                .WithMessage("AI varyasyon önerisi için en az ürün başlığı veya açıklaması girilmelidir.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "AI varyasyon önerisi için en az ürün başlığı veya açıklaması girilmelidir.",
+                    "At least a product title or description must be provided for AI variation suggestions."));
 
             RuleFor(x => x.Request.PriceUsd)
                 .GreaterThanOrEqualTo(0m)
-                .WithMessage("Ürün taban fiyatı negatif olamaz.");
+                .WithMessage(_ => ValidationMessageLocalizer.Pick(
+                    "Ürün taban fiyatı negatif olamaz.",
+                    "Product base price cannot be negative."));
         });
     }
 }

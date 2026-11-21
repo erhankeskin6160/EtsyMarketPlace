@@ -1,5 +1,6 @@
 import { Injectable, computed, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -101,12 +102,22 @@ const DEFAULT_SETTINGS: AiOptimizationSettings = {
   providedIn: 'root'
 })
 export class AiSettingsService {
+  private http = inject(HttpClient);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
+  private readonly activeLang = signal<string>(this.transloco?.getActiveLang() || 'tr');
+
   readonly settings = signal<AiOptimizationSettings>(this.loadSettings());
   readonly isAiModalOpen = signal<boolean>(false);
   readonly isDbSynced = signal<boolean>(false);
   readonly clonedListing = signal<ClonedMarketListing | null>(null);
 
+  private t(key: string, fallback: string, params?: Record<string, unknown>): string {
+    const translated = this.transloco?.translate(key, params);
+    return translated && translated !== key ? translated : fallback;
+  }
+
   readonly activeModelName = computed(() => {
+    this.activeLang();
     const s = this.settings();
     if (s.customModel && s.customModel.trim().length > 0) {
       return s.customModel.trim();
@@ -117,33 +128,38 @@ export class AiSettingsService {
       case 'Claude': return s.claudeModel || 'claude-3-7-sonnet';
       case 'DeepSeek': return s.deepSeekModel || 'DeepSeek-V4-Flash';
       case 'Grok': return s.grokModel || 'grok-3';
-      default: return 'Offline Kural Motoru';
+      default: return this.t('core.aiSettings.offlineRuleEngine', 'Offline Kural Motoru');
     }
   });
 
   readonly activeProvider = computed(() => this.settings().provider);
   readonly activeBadgeTextClean = computed(() => {
+    this.activeLang();
     const s = this.settings();
     const model = this.activeModelName();
-    return s.provider === 'Offline' ? 'Offline Kural Motoru' : `${s.provider} (${model})`;
+    return s.provider === 'Offline'
+      ? this.t('core.aiSettings.offlineRuleEngine', 'Offline Kural Motoru')
+      : `${s.provider} (${model})`;
   });
 
   readonly activeBadgeText = computed(() => {
+    this.activeLang();
     const s = this.settings();
     const model = this.activeModelName();
+    const label = this.t('core.aiSettings.activeBadge', `Aktif: ${s.provider} (${model})`, { provider: s.provider, model });
     switch (s.provider) {
       case 'Gemini':
-        return `🔵 Aktif: Gemini (${model})`;
+        return `🔵 ${label}`;
       case 'OpenAI':
-        return `🟢 Aktif: OpenAI (${model})`;
+        return `🟢 ${label}`;
       case 'Claude':
-        return `🟣 Aktif: Claude (${model})`;
+        return `🟣 ${label}`;
       case 'DeepSeek':
-        return `🔴 Aktif: DeepSeek (${model})`;
+        return `🔴 ${label}`;
       case 'Grok':
-        return `🟠 Aktif: Grok (${model})`;
+        return `🟠 ${label}`;
       default:
-        return `⚡ Aktif: Offline Kural Motoru`;
+        return this.t('core.aiSettings.activeOfflineBadge', '⚡ Aktif: Offline Kural Motoru');
     }
   });
 
@@ -159,9 +175,8 @@ export class AiSettingsService {
     }
   });
 
-  private http = inject(HttpClient);
-
   constructor() {
+    this.transloco?.langChanges$.subscribe(lang => this.activeLang.set(lang));
     this.hydrateFromBackend();
   }
 
@@ -275,14 +290,14 @@ export class AiSettingsService {
       this.isDbSynced.set(true);
       return {
         success: true,
-        message: res?.message || 'AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!'
+        message: res?.message || this.t('core.aiSettings.saveSuccess', 'AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!')
       };
     } catch (err: any) {
       console.error('VDS saveSettings failed:', err);
       this.isDbSynced.set(false);
       return {
         success: false,
-        message: err?.error?.error || err?.message || 'Merkezi veritabanına kayıt başarısız oldu.'
+        message: err?.error?.error || err?.message || this.t('core.aiSettings.saveError', 'Merkezi veritabanına kayıt başarısız oldu.')
       };
     }
   }
@@ -329,7 +344,7 @@ export class AiSettingsService {
       return {
         success: true,
         latencyMs: 12,
-        message: 'Çevrimdışı Kural Motoru hazır ve yerel çalışıyor. (0ms API maliyeti)'
+        message: this.t('core.aiSettings.offlineTestSuccess', 'Çevrimdışı Kural Motoru hazır ve yerel çalışıyor. (0ms API maliyeti)')
       };
     }
 
@@ -337,7 +352,11 @@ export class AiSettingsService {
       return {
         success: false,
         latencyMs: 5,
-        message: `Hata: ${provider} için geçerli bir API anahtarı girilmedi. Lütfen API anahtarınızı kontrol edin.`
+        message: this.t(
+          'core.aiSettings.missingApiKey',
+          `Hata: ${provider} için geçerli bir API anahtarı girilmedi. Lütfen API anahtarınızı kontrol edin.`,
+          { provider }
+        )
       };
     }
 
@@ -352,7 +371,11 @@ export class AiSettingsService {
           return {
             success: true,
             latencyMs: latency,
-            message: `Başarılı! Google Gemini (${targetModel}) modeline ${latency}ms içinde ping atıldı. API kotası ve yetkilendirme doğrulandı.`
+            message: this.t(
+              'core.aiSettings.geminiTestSuccess',
+              `Başarılı! Google Gemini (${targetModel}) modeline ${latency}ms içinde ping atıldı. API kotası ve yetkilendirme doğrulandı.`,
+              { model: targetModel, latency }
+            )
           };
         } else {
           const errData = await resp.json().catch(() => ({}));
@@ -360,14 +383,16 @@ export class AiSettingsService {
           return {
             success: false,
             latencyMs: latency,
-            message: `Gemini API Hatası: ${errMsg}`
+            message: this.t('core.aiSettings.geminiApiError', `Gemini API Hatası: ${errMsg}`, { message: errMsg })
           };
         }
       } catch (err: any) {
+        const fallbackErr = this.t('core.aiSettings.geminiUnreachable', 'Google Gemini sunucularına erişilemedi.');
+        const detail = err?.message || fallbackErr;
         return {
           success: false,
           latencyMs: Math.round(performance.now() - start),
-          message: `Bağlantı Hatası: ${err?.message || 'Google Gemini sunucularına erişilemedi.'}`
+          message: this.t('core.aiSettings.connectionError', `Bağlantı Hatası: ${detail}`, { message: detail })
         };
       }
     }
@@ -379,14 +404,19 @@ export class AiSettingsService {
         return {
           success: false,
           latencyMs: 0,
-          message: 'Lütfen bir DeepSeek API anahtarı giriniz.'
+          message: this.t('core.aiSettings.deepSeekKeyRequired', 'Lütfen bir DeepSeek API anahtarı giriniz.')
         };
       }
       if (!cleanKey.startsWith('sk-')) {
+        const prefix = cleanKey.slice(0, 4);
         return {
           success: false,
           latencyMs: 0,
-          message: `⚠️ Format Uyarısı: DeepSeek API anahtarları 'sk-' ile başlamalıdır (Girdiğiniz anahtar: '${cleanKey.slice(0, 4)}...'). Lütfen https://platform.deepseek.com/api_keys adresindeki anahtarı kopyalayınız.`
+          message: this.t(
+            'core.aiSettings.deepSeekKeyFormatWarning',
+            `⚠️ Format Uyarısı: DeepSeek API anahtarları 'sk-' ile başlamalıdır (Girdiğiniz anahtar: '${prefix}...'). Lütfen https://platform.deepseek.com/api_keys adresindeki anahtarı kopyalayınız.`,
+            { prefix }
+          )
         };
       }
 
@@ -401,28 +431,42 @@ export class AiSettingsService {
           return {
             success: true,
             latencyMs: latency,
-            message: `Başarılı! DeepSeek (${model}) API bağlantısı ${latency}ms içinde doğrulandı. API anahtarı ve yetkilendirme aktif.`
+            message: this.t(
+              'core.aiSettings.deepSeekTestSuccess',
+              `Başarılı! DeepSeek (${model}) API bağlantısı ${latency}ms içinde doğrulandı. API anahtarı ve yetkilendirme aktif.`,
+              { model, latency }
+            )
           };
         } else {
           const errData = await resp.json().catch(() => ({}));
           const errMsg = errData?.error?.message || `HTTP ${resp.status} ${resp.statusText}`;
           let guidance = errMsg;
           if (resp.status === 401 || errMsg.toLowerCase().includes('authentication') || errMsg.toLowerCase().includes('invalid')) {
-            guidance = `Yetkilendirme Hatası (401): DeepSeek anahtarınızı '${cleanKey.slice(-4)}' geçersiz buldu. Lütfen platform.deepseek.com/api_keys adresindeki anahtarınızı ve hesap bakiyenizi (Top-up) kontrol edin.`;
+            const suffix = cleanKey.slice(-4);
+            guidance = this.t(
+              'core.aiSettings.deepSeekAuthError',
+              `Yetkilendirme Hatası (401): DeepSeek anahtarınızı '${suffix}' geçersiz buldu. Lütfen platform.deepseek.com/api_keys adresindeki anahtarınızı ve hesap bakiyenizi (Top-up) kontrol edin.`,
+              { suffix }
+            );
           } else if (resp.status === 402 || errMsg.toLowerCase().includes('insufficient') || errMsg.toLowerCase().includes('balance')) {
-            guidance = `Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.`;
+            guidance = this.t(
+              'core.aiSettings.deepSeekBalanceError',
+              'Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.'
+            );
           }
           return {
             success: false,
             latencyMs: latency,
-            message: `DeepSeek API Hatası: ${guidance}`
+            message: this.t('core.aiSettings.deepSeekApiError', `DeepSeek API Hatası: ${guidance}`, { message: guidance })
           };
         }
       } catch (err: any) {
+        const fallbackErr = this.t('core.aiSettings.deepSeekUnreachable', 'DeepSeek sunucularına erişilemedi.');
+        const detail = err?.message || fallbackErr;
         return {
           success: false,
           latencyMs: Math.round(performance.now() - start),
-          message: `Bağlantı Hatası: ${err?.message || 'DeepSeek sunucularına erişilemedi.'}`
+          message: this.t('core.aiSettings.connectionError', `Bağlantı Hatası: ${detail}`, { message: detail })
         };
       }
     }
@@ -432,7 +476,11 @@ export class AiSettingsService {
     return {
       success: true,
       latencyMs: latency,
-      message: `Başarılı! ${provider} (${model}) modeline ${latency}ms içinde ping atıldı. API kotası ve yetkilendirme doğrulandı.`
+      message: this.t(
+        'core.aiSettings.genericTestSuccess',
+        `Başarılı! ${provider} (${model}) modeline ${latency}ms içinde ping atıldı. API kotası ve yetkilendirme doğrulandı.`,
+        { provider, model, latency }
+      )
     };
   }
 }

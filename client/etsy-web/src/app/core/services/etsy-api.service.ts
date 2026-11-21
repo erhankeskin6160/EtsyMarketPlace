@@ -1,5 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { Observable } from 'rxjs';
 import { DailyBrief, FinancialSummary, BankDeposit, EtsyConnectedShopDto } from '../models/etsy.models';
 import { AiFinancialForecastRequestDto, AiFinancialForecastResponseDto } from '../models/accounting.models';
@@ -339,6 +340,7 @@ export interface OptimizeListingResponseDto {
 })
 export class EtsyApiService {
   private http = inject(HttpClient);
+  private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
   private readonly API_BASE = environment.apiBaseUrl;
 
   // Global UI Signals
@@ -353,7 +355,12 @@ export class EtsyApiService {
   // Live Token & API Connection Signals
   readonly tokenStatus = signal<'connected' | 'expired' | 'missing' | 'error' | 'checking'>('checking');
   readonly tokenExpiresAt = signal<string | null>(null);
-  readonly tokenDetails = signal<string>('Kontrol ediliyor...');
+  readonly tokenDetails = signal<string>(this.translateOrFallback('shell.apiStatus.checking', 'Kontrol ediliyor...'));
+
+  private translateOrFallback(key: string, fallback: string, params?: Record<string, unknown>): string {
+    const translated = this.transloco?.translate(key, params);
+    return translated && translated !== key ? translated : fallback;
+  }
 
   constructor() {
     try {
@@ -375,6 +382,9 @@ export class EtsyApiService {
         this.tokenExpiresAt.set(res.expiresAt);
         if (res.exists && !res.isExpired) {
           this.tokenStatus.set('connected');
+          this.tokenDetails.set(
+            this.translateOrFallback('core.etsyApi.oauthConnected', `Etsy v3 OAuth Bağlı (${res.shopId})`, { shopId: res.shopId })
+          );
         } else if (res.exists && res.isExpired) {
           // Access token dolmuşsa kullanıcıyı rahatsız etmeden önce sessizce Etsy'den yenilemeyi dene
           this.refreshToken(res.shopId).subscribe({
@@ -382,29 +392,37 @@ export class EtsyApiService {
               if (refreshRes && !refreshRes.isExpired) {
                 this.tokenStatus.set('connected');
                 this.tokenExpiresAt.set(refreshRes.expiresAt);
-                this.tokenDetails.set(`Etsy v3 OAuth Bağlı (${res.shopId})`);
+                this.tokenDetails.set(
+                  this.translateOrFallback('core.etsyApi.oauthConnected', `Etsy v3 OAuth Bağlı (${res.shopId})`, { shopId: res.shopId })
+                );
               } else {
                 this.tokenStatus.set('expired');
-                this.tokenDetails.set(`Yeniden Yetki Gerekli (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+                const dateStr = res.expiresAt ? res.expiresAt.slice(0, 10) : '';
+                this.tokenDetails.set(
+                  this.translateOrFallback('core.etsyApi.reauthRequired', `Yeniden Yetki Gerekli (${dateStr})`, { date: dateStr })
+                );
               }
             },
             error: () => {
               this.tokenStatus.set('expired');
-              this.tokenDetails.set(`Yeniden Yetki Gerekli (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+              const dateStr = res.expiresAt ? res.expiresAt.slice(0, 10) : '';
+              this.tokenDetails.set(
+                this.translateOrFallback('core.etsyApi.reauthRequired', `Yeniden Yetki Gerekli (${dateStr})`, { date: dateStr })
+              );
             }
           });
         } else {
           this.tokenStatus.set('missing');
-          this.tokenDetails.set('Etsy API Bağlı Değil');
+          this.tokenDetails.set(this.translateOrFallback('shell.apiStatus.missing', 'Etsy API Bağlı Değil'));
         }
       },
       error: (err) => {
         if (err.status === 404) {
           this.tokenStatus.set('missing');
-          this.tokenDetails.set('Etsy API Bağlı Değil');
+          this.tokenDetails.set(this.translateOrFallback('shell.apiStatus.missing', 'Etsy API Bağlı Değil'));
         } else {
           this.tokenStatus.set('error');
-          this.tokenDetails.set('VDS API Sunucusuna Erişilemiyor');
+          this.tokenDetails.set(this.translateOrFallback('core.etsyApi.vdsUnreachable', 'VDS API Sunucusuna Erişilemiyor'));
         }
       }
     });

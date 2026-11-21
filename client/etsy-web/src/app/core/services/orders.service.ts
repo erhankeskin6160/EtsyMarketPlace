@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { EtsyApiService } from './etsy-api.service';
 import { LocaleFormatService } from '../i18n/locale-format.service';
@@ -11,6 +12,7 @@ const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
 })
 export class OrdersService {
   private readonly localeFormat = inject(LocaleFormatService);
+  private readonly transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
   private ordersSubject = new BehaviorSubject<OrderFulfillmentItem[]>([]);
   public orders$ = this.ordersSubject.asObservable();
   public ordersLoading = false;
@@ -23,8 +25,48 @@ export class OrdersService {
   public sessions$ = this.sessionsSubject.asObservable();
 
   constructor(private etsyApi: EtsyApiService) {
+    this.transloco?.langChanges$.subscribe(() => {
+      this.refreshSessionLabelsForActiveLang();
+    });
     this.syncCarrierSessionsFromServer();
     this.loadOrders();
+  }
+
+  private t(key: string, fallback: string, params?: Record<string, unknown>): string {
+    const translated = this.transloco?.translate(key, params);
+    return translated && translated !== key ? translated : fallback;
+  }
+
+  private isPlaceholderBuyerName(name: string | undefined | null): boolean {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return true;
+    return (
+      trimmed === 'Etsy Alıcısı' ||
+      trimmed === 'Etsy Buyer' ||
+      trimmed.startsWith('Etsy Siparişi #') ||
+      trimmed.startsWith('Etsy Order #')
+    );
+  }
+
+  private refreshSessionLabelsForActiveLang(): void {
+    const defaults = this.getDefaultCarrierSessions();
+    const updated = this.sessionsSubject.value.map(s => {
+      const def = defaults.find(d => d.id === s.id);
+      if (!def) return s;
+      const isApiCarrier = s.id === 'shipentegra' || s.id === 'shiptomore';
+      const statusLabel = s.isConnected
+        ? (isApiCarrier
+            ? this.t('core.orders.statusApiConnected', '🟢 API Bağlı')
+            : this.t('core.orders.statusConnected', '🟢 Bağlı'))
+        : this.t('core.orders.statusLogin', '⚠️ Giriş Yap');
+      return {
+        ...s,
+        autoLabel: def.autoLabel,
+        notes: def.notes,
+        statusLabel
+      };
+    });
+    this.sessionsSubject.next(updated);
   }
 
   /** Sunucudaki Aras Global, ShipEntegra, Navlungo, ShipToMore tokenlarını Web UI ile senkronize eder. */
@@ -43,7 +85,7 @@ export class OrdersService {
           if (srv.bearerToken && srv.bearerToken.length > 20 && srv.isConnected) {
             item.tokenOrKey = srv.bearerToken;
             item.isConnected = true;
-            item.statusLabel = '🟢 Bağlı';
+            item.statusLabel = this.t('core.orders.statusConnected', '🟢 Bağlı');
             item.expiresAtUtc = srv.expiresAtUtc || undefined;
             if (srv.updatedAtUtc) {
               item.lastUpdated = this.localeFormat.formatDateTime(srv.updatedAtUtc);
@@ -56,7 +98,7 @@ export class OrdersService {
             if (!localValid.isValid || localValid.expired) {
               item.isConnected = false;
               item.expiresAtUtc = srv.expiresAtUtc || undefined;
-              item.statusLabel = '⚠️ Giriş Yap';
+              item.statusLabel = this.t('core.orders.statusLogin', '⚠️ Giriş Yap');
               current[idx] = item;
               changed = true;
             }
@@ -87,7 +129,7 @@ export class OrdersService {
                 return {
                   ...s,
                   isConnected: true,
-                  statusLabel: '🟢 Bağlı',
+                  statusLabel: this.t('core.orders.statusConnected', '🟢 Bağlı'),
                   tokenOrKey: res.bearerToken,
                   expiresAtUtc: res.expiresAtUtc || s.expiresAtUtc,
                   lastUpdated: this.localeFormat.formatDateTime(new Date())
@@ -115,52 +157,52 @@ export class OrdersService {
         name: 'Aras Global',
         logoUrl: 'assets/shipping/aras_global.png',
         isConnected: false,
-        statusLabel: '⚠️ Giriş Yap',
-        autoLabel: '⚡ Oturum Aç',
+        statusLabel: this.t('core.orders.statusLogin', '⚠️ Giriş Yap'),
+        autoLabel: this.t('core.orders.autoLabelLogin', '⚡ Oturum Aç'),
         portalUrl: 'https://panel.arasglobalcargo.com/auth',
         tokenOrKey: '',
         lastUpdated: '-',
-        notes: 'Aras Hava Kargo API oturumunuzu güvenle bağlayın'
+        notes: this.t('core.orders.notesAras', 'Aras Hava Kargo API oturumunuzu güvenle bağlayın')
       },
       {
         id: 'shipentegra',
         name: 'ShipEntegra',
         logoUrl: 'assets/shipping/shipentegra.jpg',
         isConnected: true,
-        statusLabel: '🟢 API Bağlı',
-        autoLabel: '⚡ Oturum Aç',
+        statusLabel: this.t('core.orders.statusApiConnected', '🟢 API Bağlı'),
+        autoLabel: this.t('core.orders.autoLabelLogin', '⚡ Oturum Aç'),
         portalUrl: 'https://app.shipentegra.com/login',
         tokenOrKey: '',
         apiKey: '8501f5b8c5bbbe241d6d35eccdcdcfc3',
         apiSecret: 'f8515b70e86b0671ca653c2702b8a2295157b32b',
         lastUpdated: '14.10.2026',
-        notes: 'Resmi API Key & Secret Entegrasyonu (UPS, FedEx, Widect)'
+        notes: this.t('core.orders.notesShipentegra', 'Resmi API Key & Secret Entegrasyonu (UPS, FedEx, Widect)')
       },
       {
         id: 'navlungo',
         name: 'Navlungo',
         logoUrl: 'assets/shipping/navlungo.png',
         isConnected: false,
-        statusLabel: '⚠️ Giriş Yap',
-        autoLabel: '⚡ Oturum Aç',
+        statusLabel: this.t('core.orders.statusLogin', '⚠️ Giriş Yap'),
+        autoLabel: this.t('core.orders.autoLabelLogin', '⚡ Oturum Aç'),
         portalUrl: 'https://ship.navlungo.com/',
         tokenOrKey: '',
         lastUpdated: '-',
-        notes: 'DHL Express rota fiyatlaması'
+        notes: this.t('core.orders.notesNavlungo', 'DHL Express rota fiyatlaması')
       },
       {
         id: 'shiptomore',
         name: 'Shiptomore',
         logoUrl: 'assets/shipping/shiptomore.png',
         isConnected: true,
-        statusLabel: '🟢 API Bağlı',
-        autoLabel: '⚙️ Bağlantı',
+        statusLabel: this.t('core.orders.statusApiConnected', '🟢 API Bağlı'),
+        autoLabel: this.t('core.orders.autoLabelConnection', '⚙️ Bağlantı'),
         portalUrl: 'https://dev.shiptomore.com/portal/keys',
         tokenOrKey: 'NhuCndOc1smCm0uBInrLByukAoV5JNRj',
         apiKey: 'NhuCndOc1smCm0uBInrLByukAoV5JNRj',
         clientSecret: '',
         lastUpdated: '14.10.2026',
-        notes: 'Resmî REST API Entegrasyonu (dev.shiptomore.com)'
+        notes: this.t('core.orders.notesShiptomore', 'Resmî REST API Entegrasyonu (dev.shiptomore.com)')
       }
     ];
   }
@@ -176,11 +218,13 @@ export class OrdersService {
         list.forEach(item => {
           const def = defaults.find(d => d.id === item.id);
           if (def) {
+            item.autoLabel = def.autoLabel;
+            item.notes = def.notes;
             if (!item.apiKey && def.apiKey) { item.apiKey = def.apiKey; upgraded = true; }
             if (!item.apiSecret && def.apiSecret) { item.apiSecret = def.apiSecret; upgraded = true; }
             if (item.id === 'shipentegra' && item.apiKey && item.apiSecret) {
               item.isConnected = true;
-              item.statusLabel = '🟢 API Bağlı';
+              item.statusLabel = this.t('core.orders.statusApiConnected', '🟢 API Bağlı');
               upgraded = true;
             }
           }
@@ -188,7 +232,7 @@ export class OrdersService {
             if (def && def.tokenOrKey) {
               item.tokenOrKey = def.tokenOrKey;
               item.isConnected = true;
-              item.statusLabel = '● Bağlı';
+              item.statusLabel = this.t('core.orders.statusConnectedDot', '● Bağlı');
               upgraded = true;
             }
           }
@@ -234,7 +278,7 @@ export class OrdersService {
         return {
           ...s,
           isConnected: false,
-          statusLabel: '⚠️ Giriş Gerekli',
+          statusLabel: this.t('core.orders.statusLoginRequired', '⚠️ Giriş Gerekli'),
           tokenOrKey: '',
           lastUpdated: this.localeFormat.formatDateTime(new Date())
         };
@@ -250,7 +294,7 @@ export class OrdersService {
         return {
           ...s,
           isConnected: true,
-          statusLabel: '🟢 Bağlı',
+          statusLabel: this.t('core.orders.statusConnected', '🟢 Bağlı'),
           tokenOrKey: token,
           clientSecret: secret || s.clientSecret,
           apiKey: apiKey || s.apiKey,
@@ -271,7 +315,12 @@ export class OrdersService {
     }).subscribe({
       next: (res) => {
         if (res && res.bearerToken && !token) {
-          this.updateCarrierSession({ id: carrierId as any, isConnected: true, statusLabel: '🟢 Bağlı', tokenOrKey: res.bearerToken });
+          this.updateCarrierSession({
+            id: carrierId as any,
+            isConnected: true,
+            statusLabel: this.t('core.orders.statusConnected', '🟢 Bağlı'),
+            tokenOrKey: res.bearerToken
+          });
         }
       },
       error: () => {}
@@ -280,15 +329,15 @@ export class OrdersService {
 
   public validateJwt(token: string | null | undefined): { isValid: boolean; expired: boolean; expDate?: Date; timeLeftStr?: string; reason?: string } {
     if (!token || typeof token !== 'string') {
-      return { isValid: false, expired: true, reason: 'Token girilmedi veya boş' };
+      return { isValid: false, expired: true, reason: this.t('core.orders.jwtEmpty', 'Token girilmedi veya boş') };
     }
     const clean = token.trim();
     if (clean.includes('...') || clean.length < 30) {
-      return { isValid: false, expired: true, reason: 'Token taslak veya eksik (...)' };
+      return { isValid: false, expired: true, reason: this.t('core.orders.jwtIncomplete', 'Token taslak veya eksik (...)') };
     }
     const parts = clean.split('.');
     if (parts.length < 2) {
-      return { isValid: false, expired: true, reason: 'Geçersiz JWT formatı' };
+      return { isValid: false, expired: true, reason: this.t('core.orders.jwtInvalidFormat', 'Geçersiz JWT formatı') };
     }
     try {
       let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -303,11 +352,11 @@ export class OrdersService {
       const payload = JSON.parse(jsonStr);
 
       if (!payload || typeof payload !== 'object') {
-        return { isValid: false, expired: true, reason: 'JWT payload içeriği okunamadı' };
+        return { isValid: false, expired: true, reason: this.t('core.orders.jwtPayloadUnreadable', 'JWT payload içeriği okunamadı') };
       }
 
       if (payload.exp === undefined || payload.exp === null) {
-        return { isValid: true, expired: false, timeLeftStr: 'Süresiz / Uzun Vadeli Token' };
+        return { isValid: true, expired: false, timeLeftStr: this.t('core.orders.jwtNoExpiry', 'Süresiz / Uzun Vadeli Token') };
       }
 
       const expMs = Number(payload.exp) * 1000;
@@ -320,14 +369,16 @@ export class OrdersService {
           isValid: false, 
           expired: true, 
           expDate, 
-          reason: `Süresi doldu (${expStr})` 
+          reason: this.t('core.orders.jwtExpired', `Süresi doldu (${expStr})`, { date: expStr })
         };
       }
 
       const diffMin = Math.max(1, Math.round((expMs - nowMs) / 60000));
       const hours = Math.floor(diffMin / 60);
       const mins = diffMin % 60;
-      const timeLeftStr = hours > 0 ? `${hours} saat ${mins} dakika` : `${mins} dakika`;
+      const timeLeftStr = hours > 0
+        ? this.t('core.orders.jwtTimeLeftHoursMins', `${hours} saat ${mins} dakika`, { hours, mins })
+        : this.t('core.orders.jwtTimeLeftMins', `${mins} dakika`, { mins });
 
       return { 
         isValid: true, 
@@ -336,7 +387,7 @@ export class OrdersService {
         timeLeftStr 
       };
     } catch {
-      return { isValid: false, expired: true, reason: 'JWT çözümlenirken hata oluştu' };
+      return { isValid: false, expired: true, reason: this.t('core.orders.jwtDecodeError', 'JWT çözümlenirken hata oluştu') };
     }
   }
 
@@ -420,8 +471,8 @@ export class OrdersService {
         next: (resp) => {
           const apiItems: GtipCodeItem[] = (resp?.results || []).map((r: any) => ({
             code: r.code,
-            category: r.category || 'Gümrük Tarife',
-            description: r.description || `${r.formattedCode || r.code} Gümrük Kodu`
+            category: r.category || this.t('core.orders.gtipDefaultCategory', 'Gümrük Tarife'),
+            description: r.description || this.t('core.orders.gtipDefaultDescription', `${r.formattedCode || r.code} Gümrük Kodu`, { code: r.formattedCode || r.code })
           }));
           const merged = [...localMatches];
           apiItems.forEach(a => {
@@ -488,7 +539,7 @@ export class OrdersService {
 
             const orderItems = (item.items || []).map((it: any, idx: number) => ({
               id: it.id || `it-${item.receiptId}-${idx}`,
-              title: it.title || 'Etsy Ürünü',
+              title: it.title || this.t('core.orders.defaultProductTitle', 'Etsy Ürünü'),
               quantity: it.quantity || 1,
               price: it.price || 0,
               sku: it.sku || `SKU-${it.listingId || item.receiptId}`,
@@ -511,7 +562,7 @@ export class OrdersService {
             const isShipped = hasValidTracking && (item.status === 'shipped' || item.status === 'Shipped' || item.status === 'Fulfilled' || Boolean(item.wasShipped));
             const rawBuyer = (item.buyerName || '').trim();
             const isInvalidBuyer = !rawBuyer || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all)$/i.test(rawBuyer) || rawBuyer.length < 2;
-            const cleanBuyerName = !isInvalidBuyer ? rawBuyer : 'Etsy Alıcısı';
+            const cleanBuyerName = !isInvalidBuyer ? rawBuyer : this.t('core.orders.defaultBuyerName', 'Etsy Alıcısı');
 
 
             return {
@@ -526,15 +577,17 @@ export class OrdersService {
               city: item.city || '',
               state: item.state || '',
               postalCode: item.postalCode || '',
-              country: item.countryName || item.countryCode || 'Amerika Birleşik Devletleri',
+              country: item.countryName || item.countryCode || this.t('core.orders.defaultCountryUs', 'Amerika Birleşik Devletleri'),
               countryCode: item.countryCode || 'US',
               formattedAddress: addressParts.join(', '),
               addressSnippet: addressParts.join(', '),
               isAddressMissing: !hasAddress,
-              addressWarning: !hasAddress ? 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.' : undefined,
+              addressWarning: !hasAddress ? this.t('core.orders.addressWarningMissing', 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.') : undefined,
               iossNumber: item.iossNumber || '',
               isVatCollected: Boolean(item.isVatCollected || item.iossNumber),
-              exportType: item.exportType || (item.countryCode === 'TR' ? 'Yurtiçi' : 'Mikro İhracat (ETGB)'),
+              exportType: item.exportType || (item.countryCode === 'TR'
+                ? this.t('core.orders.exportTypeDomestic', 'Yurtiçi')
+                : this.t('core.orders.exportTypeMicroExport', 'Mikro İhracat (ETGB)')),
               orderDate: item.orderDate || '',
               status: isShipped ? 'shipped' : 'unfulfilled',
               currency: item.currency || 'USD',
@@ -551,7 +604,7 @@ export class OrdersService {
               items: orderItems.length > 0 ? orderItems : [
                 {
                   id: `it-${item.receiptId}`,
-                  title: 'Etsy Siparişi',
+                  title: this.t('core.orders.defaultOrderTitle', 'Etsy Siparişi'),
                   quantity: 1,
                   price: total,
                   sku: 'LIVE-SKU'
@@ -571,7 +624,7 @@ export class OrdersService {
           const selected = this.selectedOrderSubject.value;
           this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
           for (const order of liveOrders) {
-            if (!order.buyerName || order.buyerName === 'Etsy Alıcısı' || order.buyerName.startsWith('Etsy Siparişi #') || order.isAddressMissing) {
+            if (this.isPlaceholderBuyerName(order.buyerName) || order.isAddressMissing) {
               this.hydrateBuyerInfo(order.orderId, shopId);
             }
           }
@@ -590,15 +643,15 @@ export class OrdersService {
           const liveOrders: OrderFulfillmentItem[] = (apiAlerts || []).map(a => ({
             orderId: a.orderId,
             orderNumber: `#${a.orderId}`,
-            buyerName: 'Etsy Siparişi #' + a.orderId,
+            buyerName: this.t('core.orders.defaultOrderBuyerPrefix', `Etsy Siparişi #${a.orderId}`, { orderId: a.orderId }),
             buyerEmail: '',
-            country: 'Amerika Birleşik Devletleri',
+            country: this.t('core.orders.defaultCountryUs', 'Amerika Birleşik Devletleri'),
             countryCode: 'US',
             city: '',
             addressSnippet: '',
             isAddressMissing: true,
-            addressWarning: 'Alıcı teslimat adresi için lütfen Adres Düzenle düğmesini kullanın.',
-            exportType: 'Mikro İhracat (ETGB)',
+            addressWarning: this.t('core.orders.addressWarningUseEdit', 'Alıcı teslimat adresi için lütfen Adres Düzenle düğmesini kullanın.'),
+            exportType: this.t('core.orders.exportTypeMicroExport', 'Mikro İhracat (ETGB)'),
             orderDate: a.createdAt || '',
             status: 'unfulfilled',
             currency: a.currency || 'USD',
@@ -615,7 +668,7 @@ export class OrdersService {
             items: [
               {
                 id: `it-${a.orderId}`,
-                title: a.reason || 'Sipariş ayrıntısı',
+                title: a.reason || this.t('core.orders.defaultOrderDetail', 'Sipariş ayrıntısı'),
                 quantity: 1,
                 price: a.orderTotal || 0,
                 sku: 'LIVE-SKU'
@@ -632,7 +685,7 @@ export class OrdersService {
         },
         error: () => {
           this.ordersLoading = false;
-          this.ordersLoadError = 'Siparişler API’den yüklenemedi.';
+          this.ordersLoadError = this.t('core.orders.ordersLoadError', 'Siparişler API’den yüklenemedi.');
           this.ordersSubject.next([]);
           this.selectedOrderSubject.next(null);
         }
@@ -649,7 +702,7 @@ export class OrdersService {
         const data = res?.data || res;
         if (!data || !data.buyerName) return;
         const cleanName = String(data.buyerName).trim();
-        if (!cleanName || cleanName.startsWith('Etsy Siparişi #')) return;
+        if (this.isPlaceholderBuyerName(cleanName)) return;
 
         const currentList = this.ordersSubject.value;
         const updatedList = currentList.map(order => {
@@ -681,7 +734,7 @@ export class OrdersService {
               countryCode: data.countryCode || order.countryCode,
               addressSnippet: addressParts.join(', '),
               isAddressMissing: !hasAddress,
-              addressWarning: !hasAddress ? 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.' : undefined
+              addressWarning: !hasAddress ? this.t('core.orders.addressWarningMissing', 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.') : undefined
             };
           }
           return order;
@@ -701,7 +754,7 @@ export class OrdersService {
             const addr = addrRes?.data || addrRes;
             if (!addr || !addr.buyerName) return;
             const cleanName = String(addr.buyerName).trim();
-            if (!cleanName || cleanName.startsWith('Etsy Siparişi #')) return;
+            if (this.isPlaceholderBuyerName(cleanName)) return;
 
             const currentList = this.ordersSubject.value;
             const updatedList = currentList.map(order => {
@@ -994,13 +1047,15 @@ export class OrdersService {
               serviceCode: q.serviceCode,
               subCarrier: q.subCarrier || q.carrierName,
               logoUrl: logoMap[q.carrierKey] || 'assets/shipping/shipentegra.jpg',
-              estimatedDays: q.estimatedDays || '3-6 İş Günü',
+              estimatedDays: q.estimatedDays || this.t('core.orders.estimatedDaysBusiness', '3-6 iş günü', { range: '3-6' }),
               priceUsd,
               priceTry,
               isRecommended: Boolean(q.isRecommended),
               isLowestPrice: Boolean(q.isLowestPrice),
               isLive: Boolean(q.isLive),
-              quoteSourceBadge: q.quoteSourceBadge || (q.isLive ? 'Canlı teklif' : 'Tahmini tarife'),
+              quoteSourceBadge: q.quoteSourceBadge || (q.isLive
+                ? this.t('core.orders.quoteSourceLive', 'Canlı teklif')
+                : this.t('core.orders.quoteSourceEstimated', 'Tahmini tarife')),
               notes: q.notes,
               hasDetailedBreakdown: hasBreakdown,
               hasCustomsBreakdown: hasCustoms,
@@ -1098,10 +1153,12 @@ export class OrdersService {
     hsCode: string,
     declaredValueUsd: number,
     carrierProcessingFeeUsd: number,
-    carrierProcessingFeeLabel = 'Taşıyıcı İşlem Bedeli',
+    carrierProcessingFeeLabel?: string,
     carrierProcessingFeeListUsd?: number,
-    customsSourceBadge = 'DDP Gümrük Tarifesi'
+    customsSourceBadge?: string
   ): CarrierQuote {
+    const resolvedProcessingLabel = carrierProcessingFeeLabel ?? this.t('core.orders.carrierProcessingFee', 'Taşıyıcı İşlem Bedeli');
+    const resolvedCustomsBadge = customsSourceBadge ?? this.t('core.orders.ddpCustomsTariff', 'DDP Gümrük Tarifesi');
     const round2 = (n: number) => Number(n.toFixed(2));
     const rates = this.estimateCustomsRates(countryCode, hsCode);
     const generalDutyUsd = round2(declaredValueUsd * (rates.generalRatePercent / 100));
@@ -1115,8 +1172,8 @@ export class OrdersService {
     return {
       ...quote,
       hasCustomsBreakdown: true,
-      customsSourceBadge,
-      carrierProcessingFeeLabel,
+      customsSourceBadge: resolvedCustomsBadge,
+      carrierProcessingFeeLabel: resolvedProcessingLabel,
       carrierProcessingFeeListUsd,
       declaredValueUsd,
       hsCode,
@@ -1162,9 +1219,9 @@ export class OrdersService {
       hsCode,
       declaredValueUsd,
       carrierProcessingFeeUsd,
-      'Taşıyıcı İşlem Bedeli',
+      this.t('core.orders.carrierProcessingFee', 'Taşıyıcı İşlem Bedeli'),
       undefined,
-      'Tahmini Gümrük Tarifesi'
+      this.t('core.orders.estimatedCustomsTariff', 'Tahmini Gümrük Tarifesi')
     );
     const discountedGrandTotalUsd = round2(discountedFreight + (withCustoms.fastCustomsPaymentUsd ?? 0));
 
@@ -1175,7 +1232,9 @@ export class OrdersService {
       fuelCostUsd: fuelCost,
       fuelMultiplierPercent: round2(fuelRate * 100),
       additionalFeeUsd: clampedAdditional > 0 ? clampedAdditional : 0,
-      additionalFeeDescription: clampedAdditional > 0 ? (additionalFeeDescription || 'Yoğun sezon ek ücreti') : undefined,
+      additionalFeeDescription: clampedAdditional > 0
+        ? (additionalFeeDescription || this.t('core.orders.peakSeasonSurcharge', 'Yoğun sezon ek ücreti'))
+        : undefined,
       discountedFreightUsd: discountedFreight,
       returnPolicyNote,
       insuranceNote,
@@ -1200,7 +1259,19 @@ export class OrdersService {
     const unitDeclaredUsd = (customsOptions?.declaredValueUsd ?? 1.0) > 0 ? (customsOptions?.declaredValueUsd ?? 1.0) : 1.0;
     const quantity = Math.max(1, Math.round(customsOptions?.quantity ?? 1));
     const declaredValueUsd = Number((unitDeclaredUsd * quantity).toFixed(2));
-    const standardDdpBadge = cleanCountry === 'US' ? 'ABD Tarife + Taşıyıcı DDP Ücreti' : 'Tahmini Gümrük Tarifesi';
+    const standardDdpBadge = cleanCountry === 'US'
+      ? this.t('core.orders.usTariffPlusDdp', 'ABD Tarife + Taşıyıcı DDP Ücreti')
+      : this.t('core.orders.estimatedCustomsTariff', 'Tahmini Gümrük Tarifesi');
+    const liveBadge = this.t('core.orders.quoteSourceLive', 'Canlı teklif');
+    const estBadge = this.t('core.orders.quoteSourceEstimated', 'Tahmini tarife');
+    const peakSurcharge = this.t('core.orders.peakSeasonSurcharge', 'Yoğun sezon ek ücreti');
+    const peakSurchargeFull = this.t('core.orders.peakSeasonSurchargeFull', 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)');
+    const ddpFeeWidect = this.t('core.orders.ddpFeeWidect', 'DDP Ücreti (Widect)');
+    const ddpFeeExpress = this.t('core.orders.ddpFeeExpress', 'DDP Taşıyıcı İşlem Bedeli (Express)');
+    const ddpFeeFedex = this.t('core.orders.ddpFeeFedex', 'DDP Taşıyıcı İşlem Bedeli (FedEx)');
+    const navDdpWidect = this.t('core.orders.navlungoDdpWidect', 'Navlungo DDP Hizmeti (Widect)');
+    const navDdpExpress = this.t('core.orders.navlungoDdpExpress', 'Navlungo DDP Hizmeti (Express)');
+    const stmDdpTariff = this.t('core.orders.shiptomoreDdpTariff', 'Shiptomore DDP Tarife');
 
     const quotes: CarrierQuote[] = [];
 
@@ -1222,16 +1293,18 @@ export class OrdersService {
       serviceType: 'Widect Eco Express',
       subCarrier: 'Widect',
       logoUrl: 'assets/shipping/aras_global.png',
-      estimatedDays: '7-10 Gün',
+      estimatedDays: this.t('core.orders.estimatedDaysCalendar', '7-10 Gün', { range: '7-10' }),
       priceUsd: arasWidectUsd,
       priceTry: Number((arasWidectUsd * rate).toFixed(2)),
       isRecommended: false,
       isLive: isArasLive,
-      quoteSourceBadge: isArasLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (Widect Eco Express)' : 'Tahmini tarife (Sözleşmeli Aras Hub)',
+      quoteSourceBadge: isArasLive ? liveBadge : estBadge,
+      notes: isArasLive
+        ? this.t('core.orders.arasWidectLiveNote', 'Canlı Aras Global API Fiyatlandırması (Widect Eco Express)')
+        : this.t('core.orders.arasWidectEstNote', 'Tahmini tarife (Sözleşmeli Aras Hub)'),
       hasDetailedBreakdown: false,
       billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.45, 'DDP Ücreti (Widect)', undefined, standardDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.45, ddpFeeWidect, undefined, standardDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'aras-ups-express',
@@ -1240,16 +1313,18 @@ export class OrdersService {
       serviceType: 'UPS Express',
       subCarrier: 'UPS',
       logoUrl: 'assets/shipping/aras_global.png',
-      estimatedDays: '2-4 Gün',
+      estimatedDays: this.t('core.orders.estimatedDaysCalendar', '2-4 Gün', { range: '2-4' }),
       priceUsd: arasUpsUsd,
       priceTry: Number((arasUpsUsd * rate).toFixed(2)),
       isRecommended: false,
       isLive: isArasLive,
-      quoteSourceBadge: isArasLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (UPS Express)' : 'Hızlı UPS Hattı & Doğrudan Teslimat',
+      quoteSourceBadge: isArasLive ? liveBadge : estBadge,
+      notes: isArasLive
+        ? this.t('core.orders.arasUpsLiveNote', 'Canlı Aras Global API Fiyatlandırması (UPS Express)')
+        : this.t('core.orders.arasUpsEstNote', 'Hızlı UPS Hattı & Doğrudan Teslimat'),
       hasDetailedBreakdown: false,
       billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.45, 'DDP Taşıyıcı İşlem Bedeli (Express)', undefined, standardDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.45, ddpFeeExpress, undefined, standardDdpBadge));
 
     // ==========================================
     // 2. SHIPENTEGRA (6 TEKLİF)
@@ -1267,6 +1342,9 @@ export class OrdersService {
       seSmartExpress = Number((seSmartExpress * 0.90).toFixed(2));
     }
 
+    const freeUsReturn = this.t('core.orders.freeUsReturn', 'Amerika içi geri iade ücretsiz');
+    const insuredUpTo100 = this.t('core.orders.insuredUpTo100', "100 $'a kadar sigortalı");
+
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-eko-plus',
       carrierKey: 'shipentegra',
@@ -1275,15 +1353,15 @@ export class OrdersService {
       serviceType: 'Amerika Eko Plus',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '3-6 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '3-6 iş günü', { range: '3-6' }),
       priceUsd: seEkoPlus,
       priceTry: Number((seEkoPlus * rate).toFixed(2)),
       isRecommended: false,
       isLowestPrice: true,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: 'Amerika içi geri iade ücretsiz'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.25, 0.65, 1.45, 'Yoğun sezon ek ücreti', 'Amerika içi geri iade ücretsiz'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge,
+      notes: freeUsReturn
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.25, 0.65, 1.45, peakSurcharge, freeUsReturn));
 
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-smart-express',
@@ -1293,14 +1371,14 @@ export class OrdersService {
       serviceType: 'Smart Express',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '2-5 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '2-5 iş günü', { range: '2-5' }),
       priceUsd: seSmartExpress,
       priceTry: Number((seSmartExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: '100 $\'a kadar sigortalı'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.28, 0.85, 0.50, 'Yoğun sezon ek ücreti', undefined, '100 $\'a kadar sigortalı'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge,
+      notes: insuredUpTo100
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.28, 0.85, 0.50, peakSurcharge, undefined, insuredUpTo100));
 
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-widect',
@@ -1310,13 +1388,13 @@ export class OrdersService {
       serviceType: 'Widect',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '4-9 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '4-9 iş günü', { range: '4-9' }),
       priceUsd: seWidect,
       priceTry: Number((seWidect * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.24, 0.50, 1.45, 'Yoğun sezon ek ücreti'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.24, 0.50, 1.45, peakSurcharge));
 
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-expedited',
@@ -1326,13 +1404,13 @@ export class OrdersService {
       serviceType: 'Expedited',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '3-5 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '3-5 iş günü', { range: '3-5' }),
       priceUsd: seExpedited,
       priceTry: Number((seExpedited * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.29, 0.95, 0.50, 'Yoğun sezon ek ücreti'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.29, 0.95, 0.50, peakSurcharge));
 
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-express',
@@ -1342,13 +1420,13 @@ export class OrdersService {
       serviceType: 'Express',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '2-4 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '2-4 iş günü', { range: '2-4' }),
       priceUsd: seExpress,
       priceTry: Number((seExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, 'Yoğun sezon ek ücreti'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, peakSurcharge));
 
     quotes.push(this.withEstimatedBreakdowns({
       quoteId: 'se-ups-express',
@@ -1358,13 +1436,13 @@ export class OrdersService {
       serviceType: 'Ups Express',
       subCarrier: 'ShipEntegra',
       logoUrl: 'assets/shipping/shipentegra.jpg',
-      estimatedDays: '1-4 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '1-4 iş günü', { range: '1-4' }),
       priceUsd: seUpsExpress,
       priceTry: Number((seUpsExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShipEntegraLive,
-      quoteSourceBadge: isShipEntegraLive ? 'Canlı teklif' : 'Tahmini tarife'
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, 'Yoğun sezon ek ücreti'));
+      quoteSourceBadge: isShipEntegraLive ? liveBadge : estBadge
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, peakSurcharge));
 
     // ==========================================
     // 3. NAVLUNGO (4 TEKLİF — ÜYE PORTALI KALİBRASYONLU KIRILIM + DDP ÜCRETİ)
@@ -1387,7 +1465,10 @@ export class OrdersService {
     const navWidectDdpFee = b < 1.0 ? 0.49 : 1.50;
     const navExpressDdpFee = 4.50;
     const navDdpBadge = 'Navlungo valueAddedServices (DDP)';
-    const navReturnNote = 'DDP/DDU Seçilebilir · ABD & AB gönderilerinde gümrük peşin ödenebilir';
+    const navReturnNote = this.t('core.orders.navlungoReturnNote', 'DDP/DDU Seçilebilir · ABD & AB gönderilerinde gümrük peşin ödenebilir');
+    const navEarlyTracking = this.t('core.orders.navlungoEarlyTracking', 'Erken Takip No Aktif (Navlungo)');
+    const navOptInsurance = this.t('core.orders.navlungoOptInsurance', 'Opsiyonel Sigorta: $3.00');
+    const navPremiumTracking = this.t('core.orders.navlungoPremiumTracking', 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00');
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-widect',
@@ -1397,23 +1478,23 @@ export class OrdersService {
       serviceType: 'Widect',
       subCarrier: 'Widect',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '3-7 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '3-7 iş günü', { range: '3-7' }),
       priceUsd: navWidect,
       priceTry: Number((navWidect * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      quoteSourceBadge: isNavlungoLive ? liveBadge : estBadge,
       hasDetailedBreakdown: true,
       billableWeightKg: billable,
       baseCargoPriceUsd: navWidectBase,
       fuelCostUsd: 0,
       fuelMultiplierPercent: 0,
       additionalFeeUsd: navWidectPeak,
-      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
-      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
-      insuranceNote: 'Opsiyonel Sigorta: $3.00',
+      additionalFeeDescription: peakSurchargeFull,
+      pricingTemplate: navEarlyTracking,
+      insuranceNote: navOptInsurance,
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, navWidectDdpFee, 'Navlungo DDP Hizmeti (Widect)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navWidectDdpFee, navDdpWidect, undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-fedex',
@@ -1423,23 +1504,23 @@ export class OrdersService {
       serviceType: 'FedEx Express',
       subCarrier: 'FedEx',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '1-3 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '1-3 iş günü', { range: '1-3' }),
       priceUsd: navFedEx,
       priceTry: Number((navFedEx * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      quoteSourceBadge: isNavlungoLive ? liveBadge : estBadge,
       hasDetailedBreakdown: true,
       billableWeightKg: billable,
       baseCargoPriceUsd: navFedExBase,
       fuelCostUsd: 0,
       fuelMultiplierPercent: 0,
       additionalFeeUsd: navExpPeak,
-      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
-      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
-      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      additionalFeeDescription: peakSurchargeFull,
+      pricingTemplate: navEarlyTracking,
+      insuranceNote: navPremiumTracking,
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, navDdpExpress, undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-express',
@@ -1449,23 +1530,23 @@ export class OrdersService {
       serviceType: 'UPS Express',
       subCarrier: 'UPS',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '1-3 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '1-3 iş günü', { range: '1-3' }),
       priceUsd: navUpsExpress,
       priceTry: Number((navUpsExpress * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      quoteSourceBadge: isNavlungoLive ? liveBadge : estBadge,
       hasDetailedBreakdown: true,
       billableWeightKg: billable,
       baseCargoPriceUsd: navUpsExpressBase,
       fuelCostUsd: navUpsExpressFuel,
       fuelMultiplierPercent: navUpsExpressBase > 0 ? Number(((navUpsExpressFuel / navUpsExpressBase) * 100).toFixed(2)) : 0,
       additionalFeeUsd: navExpPeak,
-      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
-      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
-      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      additionalFeeDescription: peakSurchargeFull,
+      pricingTemplate: navEarlyTracking,
+      insuranceNote: navPremiumTracking,
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, navDdpExpress, undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-saver',
@@ -1475,23 +1556,23 @@ export class OrdersService {
       serviceType: 'UPS Expedited',
       subCarrier: 'UPS',
       logoUrl: 'assets/shipping/navlungo.png',
-      estimatedDays: '1-3 iş günü',
+      estimatedDays: this.t('core.orders.estimatedDaysBusiness', '1-3 iş günü', { range: '1-3' }),
       priceUsd: navUpsSaver,
       priceTry: Number((navUpsSaver * rate).toFixed(2)),
       isRecommended: false,
       isLive: isNavlungoLive,
-      quoteSourceBadge: isNavlungoLive ? 'Canlı teklif' : 'Tahmini tarife',
+      quoteSourceBadge: isNavlungoLive ? liveBadge : estBadge,
       hasDetailedBreakdown: true,
       billableWeightKg: billable,
       baseCargoPriceUsd: navUpsSaverBase,
       fuelCostUsd: navUpsSaverFuel,
       fuelMultiplierPercent: navUpsSaverBase > 0 ? Number(((navUpsSaverFuel / navUpsSaverBase) * 100).toFixed(2)) : 0,
       additionalFeeUsd: navExpPeak,
-      additionalFeeDescription: 'Yoğun Sezon Ek Ücreti (Peak Season Surcharge)',
-      pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
-      insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
+      additionalFeeDescription: peakSurchargeFull,
+      pricingTemplate: navEarlyTracking,
+      insuranceNote: navPremiumTracking,
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, navDdpExpress, undefined, navDdpBadge));
 
     // ==========================================
     // 4. SHIPTOMORE (2 TEKLİF: 1 CANLI, 1 TAHMİNİ)
@@ -1508,16 +1589,16 @@ export class OrdersService {
       serviceType: 'Air Priority',
       subCarrier: 'Widect',
       logoUrl: 'assets/shipping/shiptomore.png',
-      estimatedDays: '2-4 Gün',
+      estimatedDays: this.t('core.orders.estimatedDaysCalendar', '2-4 Gün', { range: '2-4' }),
       priceUsd: stmDdp,
       priceTry: Number((stmDdp * rate).toFixed(2)),
       isRecommended: true,
       isLive: isShiptomoreLive,
-      quoteSourceBadge: isShiptomoreLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: 'Hızlı Kapıdan Teslimat',
+      quoteSourceBadge: isShiptomoreLive ? liveBadge : estBadge,
+      notes: this.t('core.orders.stmDoorDelivery', 'Hızlı Kapıdan Teslimat'),
       hasDetailedBreakdown: false,
       billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.45, 'DDP Ücreti (Widect)', undefined, 'Shiptomore DDP Tarife'));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 0.45, ddpFeeWidect, undefined, stmDdpTariff));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'stm-fedex-priority',
@@ -1527,16 +1608,16 @@ export class OrdersService {
       serviceType: 'FedEx Priority Express',
       subCarrier: 'FedEx',
       logoUrl: 'assets/shipping/shiptomore.png',
-      estimatedDays: '2-4 Gün',
+      estimatedDays: this.t('core.orders.estimatedDaysCalendar', '2-4 Gün', { range: '2-4' }),
       priceUsd: stmFedEx,
       priceTry: Number((stmFedEx * rate).toFixed(2)),
       isRecommended: false,
       isLive: isShiptomoreLive,
-      quoteSourceBadge: isShiptomoreLive ? 'Canlı teklif' : 'Tahmini tarife',
-      notes: 'Doğrudan FedEx Entegrasyonu',
+      quoteSourceBadge: isShiptomoreLive ? liveBadge : estBadge,
+      notes: this.t('core.orders.stmDirectFedex', 'Doğrudan FedEx Entegrasyonu'),
       hasDetailedBreakdown: false,
       billableWeightKg: billable
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 2.50, 'DDP Taşıyıcı İşlem Bedeli (FedEx)', 4.50, 'Shiptomore DDP Tarife'));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, 2.50, ddpFeeFedex, 4.50, stmDdpTariff));
 
     // Identify lowest price
     const minPrice = Math.min(...quotes.map(q => q.priceUsd));
