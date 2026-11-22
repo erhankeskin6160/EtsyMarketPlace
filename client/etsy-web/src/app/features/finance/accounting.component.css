@@ -2242,7 +2242,43 @@
 
 @media (max-width: 768px) {
   .cro-guardrail-strip,
-  .cro-scenario-cards-grid {
+  .cro-scenario-cards-grid,
+  .funnel-steps-grid,
+  .cro-sc-metrics {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .accounting-header,
+  .header-actions,
+  .tabs-nav,
+  .tab-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tabs-nav,
+  .tab-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  .tabs-nav::-webkit-scrollbar,
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .table-container,
+  .ledger-table-wrap,
+  .table-scroll-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .kpi-cards-grid,
+  .summary-grid,
+  .charts-grid {
+    grid-template-columns: 1fr !important;
   }
 }

@@ -2283,3 +2283,28 @@
   opacity: 1;
   color: #38bdf8;
 }
+
+@media (max-width: 767.98px) {
+  .audit-header,
+  .filter-strip,
+  .bulk-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .table-wrap,
+  .table-scroll-container,
+  .audit-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .before-after-grid,
+  .kpi-strip,
+  .stats-mini-box {
+    grid-template-columns: 1fr !important;
+  }
+  .ctr-bar-row {
+    grid-template-columns: 88px 1fr 28px;
+  }
+}

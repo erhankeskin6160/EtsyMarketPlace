@@ -1106,3 +1106,28 @@
     width: 180px;
   }
 }
+
+@media (max-width: 767.98px) {
+  .preview-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .image-slider-box {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .discovery-header,
+  .filter-bar,
+  .toolbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .products-grid,
+  .stats-grid,
+  .form-row-2,
+  .form-row-3 {
+    grid-template-columns: 1fr !important;
+  }
+}

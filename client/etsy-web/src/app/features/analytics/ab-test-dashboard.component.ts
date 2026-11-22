@@ -490,7 +490,7 @@ interface AbTestCard {
       background: #0f172a;
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 16px;
-      width: 580px;
+      width: min(580px, calc(100vw - 24px));
       max-width: 90vw;
       padding: 24px;
     }
@@ -537,6 +537,29 @@ interface AbTestCard {
       border-radius: 8px;
       font-weight: 700;
       cursor: pointer;
+    }
+
+    @media (max-width: 767.98px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      .ab-header,
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .variants-grid,
+      .kpi-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .modal-card,
+      .modal-dialog {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0;
+        border-radius: 12px 12px 0 0;
+      }
     }
   `]
 })

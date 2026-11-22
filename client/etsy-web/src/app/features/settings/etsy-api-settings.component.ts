@@ -658,6 +658,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       .credentials-grid { grid-template-columns: 1fr; }
       .direct-connect-banner { flex-direction: column; align-items: flex-start; }
     }
+    @media (max-width: 767.98px) {
+      .shops-grid,
+      .actions-row {
+        grid-template-columns: 1fr !important;
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
   `]
 })
 export class EtsyApiSettingsComponent implements OnInit {

@@ -58,11 +58,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
   styles: [`
     .auth-container {
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
       background: radial-gradient(circle at center, #151e2e 0%, #0b0f19 100%);
-      padding: 20px;
+      padding: clamp(12px, 3vw, 20px);
     }
     .auth-card {
       width: 100%;
@@ -71,7 +72,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       backdrop-filter: blur(16px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-lg);
-      padding: 36px 32px;
+      padding: clamp(22px, 4vw, 36px) clamp(18px, 4vw, 32px);
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
     }
     .auth-top-bar {

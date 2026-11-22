@@ -544,6 +544,22 @@ interface ScenePreset {
     @media (max-width: 1024px) {
       .studio-body { flex-direction: column; }
     }
+    @media (max-width: 767.98px) {
+      .studio-header,
+      .studio-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .studio-sidebar,
+      .studio-controls {
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+      .presets-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+      }
+    }
   `]
 })
 export class AiStudioComponent {

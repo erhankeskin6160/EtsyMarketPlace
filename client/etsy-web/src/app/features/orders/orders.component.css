@@ -1807,13 +1807,13 @@
 
     /* SHIPTOMORE DESKTOP PARITY DIALOG STYLES */
     .stm-desktop-dialog {
-      width: 620px;
+      width: min(620px, calc(100vw - 24px));
       max-width: 95vw;
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 8px;
       box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.15);
-      padding: 24px;
+      padding: clamp(14px, 3vw, 24px);
       color: #f8fafc;
       font-family: inherit;
     }
@@ -2708,3 +2708,49 @@
     .btn-receipt-apply.ddp { background: rgba(2, 132, 199, 0.25); border-color: #38bdf8; color: #e0f2fe; }
     .btn-receipt-apply.ddp:hover, .btn-receipt-apply.ddp.selected-mode { background: #0284c7; color: #fff; }
     @media (max-width: 720px) { .customs-inputs-grid { grid-template-columns: 1fr 1fr; } .customs-presets-col { grid-column: 1 / -1; } }
+
+    @media (max-width: 991.98px) {
+      :host,
+      .orders-cockpit {
+        height: auto;
+        min-height: 100%;
+        overflow: visible;
+      }
+      .cockpit-body {
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: visible;
+        height: auto;
+      }
+      .queue-region,
+      .detail-region,
+      .quotes-region,
+      .cockpit-region {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        height: auto;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    @media (max-width: 639.98px) {
+      .profit-summary-banner {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .specs-input-grid,
+      .receipt-actions-row,
+      .customs-inputs-grid {
+        grid-template-columns: 1fr;
+      }
+      .header-title-row {
+        flex-wrap: wrap;
+        white-space: normal;
+      }
+      .page-title {
+        white-space: normal;
+        font-size: 0.95rem;
+      }
+    }

@@ -39,6 +39,16 @@
     "currencySwitchToUsd": "USD para birimine geç",
     "currencySwitchToTry": "TRY para birimine geç",
     "refreshTooltip": "Sayfayı Yenile",
+    "mobile": {
+      "openMenu": "Menüyü Aç",
+      "closeMenu": "Menüyü Kapat",
+      "quickControls": "Hızlı Kontroller",
+      "navDashboard": "Panel",
+      "navOrders": "Siparişler",
+      "navCreator": "AI İlan",
+      "navFinance": "Finans",
+      "navMenu": "Menü"
+    },
     "shopDropdown": {
       "tooltip": "Mağaza Değiştir veya Yönet",
       "title": "Bağlı Etsy Mağazaları",

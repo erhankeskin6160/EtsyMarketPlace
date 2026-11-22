@@ -1,0 +1,117 @@
+/* Etsy Enterprise Web Studio - Reusable Responsive Primitives */
+
+/* 1. Page Container */
+.r-page-container {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--space-page-y) var(--space-page-x);
+}
+
+/* 2. Responsive KPI & Card Grids */
+.r-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-gap-md);
+  min-width: 0;
+}
+
+.r-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-gap-lg);
+  min-width: 0;
+}
+
+/* 3. Split / Two-Column Layout (Stacks vertically on Tablet & Phone) */
+.r-split-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-gap-lg);
+  min-width: 0;
+}
+
+@media (max-width: 1023.98px) {
+  .r-split-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 4. Toolbar / Filter Strip */
+.r-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-gap-sm);
+}
+
+.r-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-gap-sm);
+  min-width: 0;
+}
+
+/* 5. Scrollable Horizontal Tab Strip (Touch friendly) */
+.r-tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+.r-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* 6. Safe Horizontal Table Wrapper */
+.r-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-md);
+}
+
+/* 7. Mobile Card List Conversion Helpers */
+.r-desktop-only {
+  display: block;
+}
+.r-mobile-only {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .r-desktop-only {
+    display: none !important;
+  }
+  .r-mobile-only {
+    display: block !important;
+  }
+}
+
+/* 8. Touch-friendly Interactive Minimums on Coarse Pointers / Mobile */
+@media (max-width: 767.98px), (pointer: coarse) {
+  .r-touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+}
+
+/* 9. Bottom Sheet Modal Adaptation on Small Phones */
+@media (max-width: 639.98px) {
+  .r-modal-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    margin-top: auto;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    padding-bottom: calc(16px + var(--safe-bottom)) !important;
+  }
+}

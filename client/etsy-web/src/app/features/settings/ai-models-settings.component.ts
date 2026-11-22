@@ -739,6 +739,21 @@ interface TerminalLogEntry {
       from { opacity: 0; transform: translateY(-4px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    @media (max-width: 767.98px) {
+      .providers-grid,
+      .models-grid,
+      .settings-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .modal-header,
+      .modal-footer,
+      .settings-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+    }
   `]
 })
 export class AiModelsSettingsComponent implements OnInit {

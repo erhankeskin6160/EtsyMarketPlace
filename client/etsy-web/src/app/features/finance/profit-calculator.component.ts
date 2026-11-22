@@ -595,6 +595,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .calc-inputs-grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 639.98px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .calc-header,
+      .header-actions { flex-direction: column; align-items: stretch; gap: 8px; }
+      .btn { min-height: var(--touch-target-min, 44px); }
+    }
   `]
 })
 export class ProfitCalculatorComponent implements OnInit {

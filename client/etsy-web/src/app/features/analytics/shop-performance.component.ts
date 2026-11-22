@@ -408,6 +408,28 @@ interface ProductTraffic {
     }
     .cr-pill.high { background: rgba(16, 185, 129, 0.2); color: #34d399; }
     .cr-pill.normal { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+    @media (max-width: 767.98px) {
+      .perf-header,
+      .filter-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .kpi-grid,
+      .charts-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .table-wrap,
+      .table-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .cell-title {
+        max-width: 180px;
+      }
+    }
   `]
 })
 export class ShopPerformanceComponent implements OnInit {

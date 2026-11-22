@@ -1,0 +1,54 @@
+/* Etsy Enterprise Web Studio - Responsive Design Tokens */
+:root {
+  /* Breakpoint Reference Values (used in JS BreakpointService & documentation)
+   * xs (small phone):  < 640px
+   * sm (phone/phablet): 640px - 767.98px
+   * md (tablet):        768px - 1023.98px
+   * lg (desktop):       >= 1024px
+   * xl (wide desktop):  >= 1280px
+   */
+
+  /* Touch & Interactive Targets */
+  --touch-target-min: 44px;
+  --touch-target-compact: 38px;
+
+  /* Fluid Spacing Scale */
+  --space-page-x: clamp(12px, 2.5vw, 24px);
+  --space-page-y: clamp(12px, 2.2vw, 24px);
+  --space-card: clamp(14px, 2vw, 18px);
+  --space-gap-sm: 8px;
+  --space-gap-md: 12px;
+  --space-gap-lg: 16px;
+
+  /* Shell & Navigation Dimensions */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 68px;
+  --header-height: 64px;
+  --header-height-mobile: 56px;
+  --bottom-nav-height: 62px;
+
+  /* Safe Area Insets (iOS / Android notch & home indicator) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Z-Index Layer Hierarchy */
+  --z-base: 1;
+  --z-header: 20;
+  --z-floating: 30;
+  --z-bottom-nav: 40;
+  --z-drawer-backdrop: 50;
+  --z-drawer: 60;
+  --z-dropdown: 70;
+  --z-modal-backdrop: 100;
+  --z-modal: 110;
+  --z-copilot: 9000;
+  --z-ai-hub-modal: 100000;
+}
+
+@media (max-width: 767.98px) {
+  :root {
+    --header-height: var(--header-height-mobile);
+  }
+}

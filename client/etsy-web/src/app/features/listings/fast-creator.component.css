@@ -4024,3 +4024,53 @@ input:checked + .slider:before {
   background: rgba(139, 92, 246, 0.14);
   border-color: rgba(139, 92, 246, 0.38);
 }
+
+@media (max-width: 767.98px) {
+  .creator-container {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 8px;
+  }
+  .top-command-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .bar-left,
+  .bar-center,
+  .bar-right,
+  .col-header-row {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+  .studio-col {
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+  }
+  .sales-input-grid {
+    grid-template-columns: 1fr;
+  }
+  .creator-grid,
+  .two-col-grid,
+  .form-row,
+  .price-grid,
+  .variation-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .creator-header,
+  .header-actions,
+  .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .tags-container,
+  .tags-grid {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}

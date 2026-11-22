@@ -370,6 +370,12 @@ interface ViralModel {
     }
     @media (max-width: 768px) {
       .models-grid { grid-template-columns: 1fr; }
+      .arbitrage-matrix { grid-template-columns: 1fr; }
+      .filter-bar,
+      .platform-tabs {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
     }
   `]
 })

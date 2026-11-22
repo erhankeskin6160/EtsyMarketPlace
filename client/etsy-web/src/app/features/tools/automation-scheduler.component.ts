@@ -292,6 +292,18 @@ interface ScheduledJob {
     }
     input:checked + .slider { background-color: #10b981; }
     input:checked + .slider:before { transform: translateX(20px); }
+
+    @media (max-width: 767.98px) {
+      .scheduler-header,
+      .task-row-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .tasks-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `]
 })
 export class TaskSchedulerAutomationComponent implements OnInit {

@@ -371,7 +371,7 @@ interface TrackedEntity {
       background: #0f172a;
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 16px;
-      width: 520px;
+      width: min(520px, calc(100vw - 24px));
       max-width: 90vw;
       padding: 24px;
     }
@@ -417,6 +417,27 @@ interface TrackedEntity {
       border-radius: 8px;
       font-weight: 700;
       cursor: pointer;
+    }
+
+    @media (max-width: 767.98px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      .radar-header,
+      .filter-strip {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .table-wrap,
+      .tracking-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .kpi-grid {
+        grid-template-columns: 1fr !important;
+      }
     }
   `]
 })

@@ -349,6 +349,22 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     @media (max-width: 1024px) {
       .vault-grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 767.98px) {
+      .vault-summary-box {
+        grid-template-columns: 1fr;
+      }
+      .vault-header,
+      .vault-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+    }
   `]
 })
 export class ShopVaultComponent implements OnInit {

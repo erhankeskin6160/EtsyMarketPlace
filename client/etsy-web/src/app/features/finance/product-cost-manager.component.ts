@@ -562,6 +562,26 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    @media (max-width: 767.98px) {
+      .toolbar,
+      .header-bar,
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .table-wrap,
+      .cost-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .summary-grid,
+      .stats-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `]
 })
 export class ProductCostManagerComponent implements OnInit {

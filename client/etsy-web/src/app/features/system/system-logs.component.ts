@@ -328,6 +328,26 @@ export interface LogEntry {
       color: #f1f5f9;
       word-break: break-all;
     }
+
+    @media (max-width: 767.98px) {
+      .stats-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .logs-header,
+      .logs-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .log-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .log-mod {
+        min-width: 0;
+      }
+    }
   `]
 })
 export class SystemLogsComponent implements OnInit {
