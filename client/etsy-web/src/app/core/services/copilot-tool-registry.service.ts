@@ -662,6 +662,7 @@ export class CopilotToolRegistryService {
     const s = this.aiSettings.settings();
     const provider = s.provider || 'Gemini';
     const apiKey = provider === 'DeepSeek' ? s.deepSeekApiKey
+      : provider === 'Evren' ? s.evrenApiKey
       : provider === 'OpenAI' ? s.openAiApiKey
       : provider === 'Claude' ? s.claudeApiKey
       : provider === 'Grok' ? s.grokApiKey

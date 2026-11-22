@@ -6,6 +6,7 @@ import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@js
 import { LocaleFormatService } from '../../core/i18n/locale-format.service';
 import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto, ShopListingItemDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { environment } from '../../../environments/environment';
 import { IncomeStatementTabComponent } from './income-statement/income-statement-tab.component';
 import { 
   PaymentLedgerEntry, 
@@ -1891,6 +1892,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const s = this.aiSettings.settings();
     switch (s.provider) {
       case 'DeepSeek': return (s.deepSeekApiKey || '').trim();
+      case 'Evren': return (s.evrenApiKey || '').trim();
       case 'OpenAI': return (s.openAiApiKey || '').trim();
       case 'Claude': return (s.claudeApiKey || '').trim();
       case 'Grok': return (s.grokApiKey || '').trim();
@@ -2249,7 +2251,31 @@ export class AccountingComponent implements OnInit, OnDestroy {
         `Maliyeti Eksik Sipariş Sayısı: ${this.missingCostCount} (${missingIds.map(x => '#' + x).join(', ') || 'Yok'})`;
 
       let rawJson = '';
-      if (provider === 'DeepSeek') {
+      if (provider === 'Evren') {
+        const jwt = localStorage.getItem('etsy_web_jwt_token') || '';
+        const resp = await fetch(`${environment.apiBaseUrl}/api/ai/evren/chat-completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(jwt ? { 'Authorization': `Bearer ${jwt}` } : {})
+          },
+          body: JSON.stringify({
+            apiKey,
+            model: model || 'deepseek-v4.1-flash',
+            messages: [
+              { role: 'system', content: sysPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.35,
+            jsonMode: true,
+            moduleName: 'Finansal Muhasebe AI'
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          rawJson = data?.content || '';
+        }
+      } else if (provider === 'DeepSeek') {
         const resp = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },

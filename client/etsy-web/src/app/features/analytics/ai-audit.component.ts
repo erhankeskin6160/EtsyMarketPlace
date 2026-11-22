@@ -115,6 +115,7 @@ export class AiAuditComponent implements OnInit {
     switch (s.provider) {
       case 'Gemini': return (s.geminiApiKey || '').trim();
       case 'DeepSeek': return (s.deepSeekApiKey || '').trim();
+      case 'Evren': return (s.evrenApiKey || '').trim();
       case 'OpenAI': return (s.openAiApiKey || '').trim();
       case 'Claude': return (s.claudeApiKey || '').trim();
       case 'Grok': return (s.grokApiKey || '').trim();

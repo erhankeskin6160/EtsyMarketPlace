@@ -110,6 +110,7 @@ export class ProductDiscoveryComponent implements OnInit {
       case 'OpenAI': return s.openAiApiKey || '';
       case 'Claude': return s.claudeApiKey || '';
       case 'DeepSeek': return s.deepSeekApiKey || '';
+      case 'Evren': return s.evrenApiKey || '';
       case 'Grok': return s.grokApiKey || '';
       default: return s.geminiApiKey || '';
     }

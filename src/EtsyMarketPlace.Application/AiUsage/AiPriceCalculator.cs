@@ -57,6 +57,11 @@ public static class AiPriceCalculator
             promptRatePerMillion = 2.50m;
             completionRatePerMillion = 10.00m;
         }
+        else if (model.Contains("deepseek-v4.1-flash") || model.Contains("evren") || model.StartsWith("qwen3") || model.StartsWith("glm-5") || model.StartsWith("gemma-4"))
+        {
+            // T.C. SSB EVREN Milli AI Platformu: Katkı esaslı kredi sistemi ($0.00)
+            return 0m;
+        }
         else if (model.Contains("deepseek-reasoner") || model.Contains("r1"))
         {
             // DeepSeek Reasoner (R1): $0.55 / $2.19

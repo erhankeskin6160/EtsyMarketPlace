@@ -222,6 +222,11 @@ builder.Services.AddSingleton<IEtsyRateLimitStatusProvider, EtsyRateLimitStatusP
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingApiClient, EtsyMarketPlace.Infrastructure.EtsyIntegration.EtsyListingApiClient>();
 builder.Services.AddSingleton<EtsyMarketPlace.Domain.ShopVault.Interfaces.IExifStripper, EtsyMarketPlace.Infrastructure.ShopVault.ImageSanitization.ExifStripperImageProcessor>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IGeminiListingApiClient, EtsyMarketPlace.Infrastructure.ListingOptimization.GeminiListingApiClient>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiGateway.IEvrenLlmApiClient, EtsyMarketPlace.Infrastructure.AiGateway.EvrenLlmApiClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+builder.Services.AddScoped<EtsyMarketPlace.Application.AiGateway.IEvrenAiGatewayService, EtsyMarketPlace.Application.AiGateway.EvrenAiGatewayService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IFastListingPublishService, EtsyMarketPlace.Application.ListingOptimization.FastListingPublishService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingService, EtsyMarketPlace.Application.ListingOptimization.EtsyListingService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IAiListingOptimizerUseCase, EtsyMarketPlace.Application.ListingOptimization.AiListingOptimizationUseCase>();

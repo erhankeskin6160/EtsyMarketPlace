@@ -345,14 +345,23 @@ public sealed class AiAddressParserService : IAiAddressParserService
         }
         else
         {
-            // DeepSeek & OpenAI compatible endpoint
-            string endpoint = provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase)
-                ? "https://api.openai.com/v1/chat/completions"
-                : "https://api.deepseek.com/chat/completions";
+            // Evren SSB, DeepSeek & OpenAI compatible endpoint
+            bool isEvren = provider.Equals("Evren", StringComparison.OrdinalIgnoreCase)
+                || apiKey.Trim().StartsWith("evren_llm_", StringComparison.OrdinalIgnoreCase);
+
+            string endpoint = isEvren
+                ? "https://evren-llmapi.ssyz.org.tr/v1/chat/completions"
+                : provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase)
+                    ? "https://api.openai.com/v1/chat/completions"
+                    : "https://api.deepseek.com/chat/completions";
+
+            string resolvedModel = isEvren
+                ? EtsyMarketPlace.Application.AiGateway.EvrenAiGatewayService.NormalizeEvrenModel(model)
+                : (!string.IsNullOrWhiteSpace(model) && !model.Contains("V4-Flash") ? model : "deepseek-chat");
 
             var payload = new
             {
-                model = !string.IsNullOrWhiteSpace(model) && !model.Contains("V4-Flash") ? model : "deepseek-chat",
+                model = resolvedModel,
                 messages = new[]
                 {
                     new { role = "system", content = systemPrompt },

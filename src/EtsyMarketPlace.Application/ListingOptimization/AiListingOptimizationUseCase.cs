@@ -63,6 +63,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
                     {
                         var keyProp = prov.ToLowerInvariant() switch
                         {
+                            "evren" => "evrenApiKey",
                             "deepseek" => "deepSeekApiKey",
                             "openai" => "openAiApiKey",
                             "claude" => "claudeApiKey",
@@ -79,6 +80,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
                     {
                         var modelProp = prov.ToLowerInvariant() switch
                         {
+                            "evren" => "evrenModel",
                             "deepseek" => "deepSeekModel",
                             "openai" => "openAiModel",
                             "claude" => "claudeModel",
@@ -117,6 +119,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
                 ? requestedModel
                 : activeProviderName.ToLowerInvariant() switch
                 {
+                    "evren" => "deepseek-v4.1-flash",
                     "deepseek" => "DeepSeek-V4-Flash",
                     "openai" => "gpt-4o",
                     "claude" => "claude-3-7-sonnet-20250219",

@@ -6,6 +6,7 @@ import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService } from './etsy-api.service';
 import { TaxonomyNodeLike } from '../utils/taxonomy-shortlist';
+import { environment } from '../../../environments/environment';
 
 export interface AiShippingContext {
   isDigital?: boolean;
@@ -128,7 +129,7 @@ export class EtsyListingAiService {
     if (hasLiveKey) {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<string>;
-      if (provider === 'DeepSeek') {
+      if (provider === 'DeepSeek' || provider === 'Evren') {
         callObs = this.callDeepSeekForTitle(cleanInput, activeApiKey, activeModel, currentCategory);
       } else {
         callObs = this.callGeminiForTitle(cleanInput, activeApiKey, activeModel, currentCategory);
@@ -269,15 +270,16 @@ export class EtsyListingAiService {
       );
     }
 
-    // 5. DeepSeek (DeepSeek Chat / Reasoner)
-    if (provider === 'DeepSeek' && settings.deepSeekApiKey && settings.deepSeekApiKey.trim().length > 10) {
-      const activeModel = settings.deepSeekModel || 'DeepSeek-V4-Flash';
-      return this.callDeepSeekForCategory(cleanTitle, cleanDesc, settings.deepSeekApiKey.trim(), activeModel, inputSources, candidates).pipe(
+    // 5. DeepSeek & EVREN (T.C. SSB Milli AI)
+    if ((provider === 'DeepSeek' || provider === 'Evren') && this.getActiveApiKey(settings).length > 10) {
+      const activeKey = this.getActiveApiKey(settings);
+      const activeModel = this.getActiveModel(settings);
+      return this.callDeepSeekForCategory(cleanTitle, cleanDesc, activeKey, activeModel, inputSources, candidates).pipe(
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
+          console.warn(`[EtsyListingAiService] Canlı ${provider} kategori hatası:`, err);
           if (isStrict) {
-            const detail = this.formatAiErrorMessage('DeepSeek', activeModel, err);
-            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live DeepSeek Category Error: ${detail}.`, { provider: 'DeepSeek', detail })));
+            const detail = this.formatAiErrorMessage(provider, activeModel, err);
+            return throwError(() => new Error(this.tr('core.listingAi.strictCategoryError', `❌ Live ${provider} Category Error: ${detail}.`, { provider, detail })));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
@@ -326,7 +328,7 @@ export class EtsyListingAiService {
     if (hasLiveKey) {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<string[]>;
-      if (provider === 'DeepSeek') {
+      if (provider === 'DeepSeek' || provider === 'Evren') {
         callObs = this.callDeepSeekForTags(cleanInput, activeApiKey, activeModel);
       } else {
         callObs = this.callGeminiForTags(cleanInput, activeApiKey, activeModel);
@@ -394,7 +396,7 @@ export class EtsyListingAiService {
     if (hasLiveKey) {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<string>;
-      if (provider === 'DeepSeek') {
+      if (provider === 'DeepSeek' || provider === 'Evren') {
         callObs = this.callDeepSeekForDescription(ctx, activeApiKey, activeModel);
       } else {
         callObs = this.callGeminiForDescription(ctx, activeApiKey, activeModel);
@@ -485,7 +487,7 @@ export class EtsyListingAiService {
     if (hasLiveKey) {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<any>;
-      if (provider === 'DeepSeek') {
+      if (provider === 'DeepSeek' || provider === 'Evren') {
         callObs = this.callDeepSeekForComplete(cleanInput, activeApiKey, activeModel, materials, options);
       } else {
         callObs = this.callGeminiForComplete(cleanInput, activeApiKey, activeModel, materials, options);
@@ -540,6 +542,8 @@ export class EtsyListingAiService {
     switch (settings?.provider) {
       case 'DeepSeek':
         return (settings?.deepSeekApiKey || '').trim();
+      case 'Evren':
+        return (settings?.evrenApiKey || '').trim();
       case 'OpenAI':
         return (settings?.openAiApiKey || '').trim();
       case 'Claude':
@@ -556,6 +560,8 @@ export class EtsyListingAiService {
     switch (settings?.provider) {
       case 'DeepSeek':
         return (settings?.deepSeekModel || 'DeepSeek-V4-Flash').trim();
+      case 'Evren':
+        return (settings?.evrenModel || 'deepseek-v4.1-flash').trim();
       case 'OpenAI':
         return (settings?.openAiModel || 'gpt-4o').trim();
       case 'Claude':
@@ -566,6 +572,55 @@ export class EtsyListingAiService {
       default:
         return (settings?.geminiModel || 'gemini-2.5-flash').trim();
     }
+  }
+
+  private isEvrenActive(apiKey: string): boolean {
+    return this.aiSettings.settings().provider === 'Evren' ||
+      (apiKey || '').trim().toLowerCase().startsWith('evren_llm_');
+  }
+
+  private postDeepSeekOrEvren$(
+    apiKey: string,
+    model: string,
+    messages: { role: string; content: string }[],
+    opts: { maxTokens: number; temperature: number; jsonMode?: boolean; moduleName: string }
+  ): Observable<string> {
+    if (this.isEvrenActive(apiKey)) {
+      const evrenModel = (model || 'deepseek-v4.1-flash').trim();
+      return this.http.post<any>(`${environment.apiBaseUrl}/api/ai/evren/chat-completions`, {
+        apiKey: apiKey.trim(),
+        model: evrenModel,
+        messages,
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperature,
+        jsonMode: !!opts.jsonMode,
+        moduleName: opts.moduleName
+      }).pipe(
+        map(res => (res?.content || '').trim())
+      );
+    }
+
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
+    const body: any = {
+      model: normalizedModel,
+      messages,
+      max_tokens: opts.maxTokens
+    };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = opts.temperature;
+    }
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+    return this.http.post<any>('https://api.deepseek.com/chat/completions', body, { headers }).pipe(
+      map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, opts.moduleName, res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
+        return (res?.choices?.[0]?.message?.content || '').trim();
+      })
+    );
   }
 
   private normalizeDeepSeekModelName(model?: string): string {
@@ -626,8 +681,6 @@ export class EtsyListingAiService {
   }
 
   private callDeepSeekForTitle(input: string, apiKey: string, model: string, category?: string): Observable<string> {
-    const normalizedModel = this.normalizeDeepSeekModelName(model);
-    const url = 'https://api.deepseek.com/chat/completions';
     const systemInstruction = `You are a world-class Etsy SEO specialist. Return ONLY a single line containing an optimized English Etsy title up to 140 characters.
 CRITICAL LANGUAGE RULE: The seller's raw input may be in Turkish (e.g. 'El yapımı kadın çantası'), English, or rough notes. You MUST understand the Turkish product concept, materials, and purpose, but your generated title MUST ALWAYS BE 100% IN ENGLISH. NEVER output Turkish in the title.
 The first 55 characters MUST contain the most critical search keywords for mobile visibility.
@@ -636,37 +689,19 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
 
     const userPrompt = `Product input from seller: "${input || 'Handmade Artisan Gift'}". Category: "${category || ''}". Generate a high-converting 140-character English Etsy title:`;
 
-    const body: any = {
-      model: normalizedModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 500
-    };
-    if (normalizedModel !== 'deepseek-reasoner') {
-      body.temperature = 0.35;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
-        if (res?.usage) {
-          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Başlık Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
-        }
-        const text = res?.choices?.[0]?.message?.content?.trim() || '';
-        return text.replace(/^["'`]+|["'`]+$/g, '').trim();
-      })
+    return this.postDeepSeekOrEvren$(apiKey, model, [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ], {
+      maxTokens: 500,
+      temperature: 0.35,
+      moduleName: 'Hızlı Ürün Listeleme (Başlık Üretimi)'
+    }).pipe(
+      map(text => text.replace(/^["'`]+|["'`]+$/g, '').trim())
     );
   }
 
   private callDeepSeekForTags(input: string, apiKey: string, model: string): Observable<string[]> {
-    const normalizedModel = this.normalizeDeepSeekModelName(model);
-    const url = 'https://api.deepseek.com/chat/completions';
     const systemInstruction = `You are an Etsy SEO expert. Generate exactly 13 unique, high-search-volume buyer tags for this product.
 CRITICAL LANGUAGE RULE: The seller's input may be in Turkish, English, or rough notes. You must understand the Turkish meaning and generate all 13 tags 100% in ENGLISH for Etsy US and international shoppers. NEVER output Turkish tags.
 CRITICAL ETSY RULES:
@@ -676,31 +711,15 @@ CRITICAL ETSY RULES:
 
     const userPrompt = `Product: "${input || 'Handcrafted Gift'}". Output 13 English tags JSON array:`;
 
-    const body: any = {
-      model: normalizedModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 1000
-    };
-    if (normalizedModel !== 'deepseek-reasoner') {
-      body.temperature = 0.3;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
-        if (res?.usage) {
-          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (13 Etiket Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
-        }
-        const raw = res?.choices?.[0]?.message?.content || '[]';
-        return this.parseTagsJsonResponse(raw, input);
-      })
+    return this.postDeepSeekOrEvren$(apiKey, model, [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ], {
+      maxTokens: 1000,
+      temperature: 0.3,
+      moduleName: 'Hızlı Ürün Listeleme (13 Etiket Üretimi)'
+    }).pipe(
+      map(raw => this.parseTagsJsonResponse(raw || '[]', input))
     );
   }
 
@@ -868,67 +887,33 @@ Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Mate
   }
 
   private callDeepSeekForDescription(ctx: AiDescriptionContext, apiKey: string, model: string): Observable<string> {
-    const normalizedModel = this.normalizeDeepSeekModelName(model);
-    const url = 'https://api.deepseek.com/chat/completions';
     const { systemInstruction, userPrompt } = this.buildDescriptionPrompts(ctx);
 
-    const body: any = {
-      model: normalizedModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 2500
-    };
-    if (normalizedModel !== 'deepseek-reasoner') {
-      body.temperature = 0.5;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
-        if (res?.usage) {
-          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
-        }
-        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo);
-      })
+    return this.postDeepSeekOrEvren$(apiKey, model, [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ], {
+      maxTokens: 2500,
+      temperature: 0.5,
+      moduleName: 'Hızlı Ürün Listeleme (Açıklama Üretimi)'
+    }).pipe(
+      map(text => text || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes, ctx.shippingInfo))
     );
   }
 
   private callDeepSeekForComplete(input: string, apiKey: string, model: string, materials?: string, options?: CompleteListingOptions): Observable<any> {
-    const normalizedModel = this.normalizeDeepSeekModelName(model);
-    const url = 'https://api.deepseek.com/chat/completions';
     const { systemInstruction, userPrompt } = this.buildCompleteListingPrompts(input, materials, options);
 
-    const body: any = {
-      model: normalizedModel,
-      messages: [
-        { role: 'system', content: systemInstruction },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 3500
-    };
-    if (normalizedModel !== 'deepseek-reasoner') {
-      body.temperature = 0.4;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
-        if (res?.usage) {
-          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Tam Paket)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
-        }
-        const raw = res?.choices?.[0]?.message?.content || '{}';
-        return this.parseCompleteListingJsonResponse(raw, input, materials, options);
-      })
+    return this.postDeepSeekOrEvren$(apiKey, model, [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ], {
+      maxTokens: 3500,
+      temperature: 0.4,
+      jsonMode: true,
+      moduleName: 'Hızlı Ürün Listeleme (Tam Paket)'
+    }).pipe(
+      map(raw => this.parseCompleteListingJsonResponse(raw || '{}', input, materials, options))
     );
   }
 
@@ -1407,41 +1392,28 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
     candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
-    const normalizedModel = this.normalizeDeepSeekModelName(model);
-    const url = 'https://api.deepseek.com/chat/completions';
+    const isEvren = this.isEvrenActive(apiKey);
+    const providerLabel = isEvren ? 'Evren' : 'DeepSeek';
     const userPromptText = this.buildTaxonomyUserPrompt(title, desc, false, candidates);
 
-    const body: any = {
-      model: normalizedModel,
-      messages: [
-        { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
-        { role: 'user', content: userPromptText }
-      ],
-      max_tokens: 1000
-    };
-    if (normalizedModel !== 'deepseek-reasoner') {
-      body.temperature = 0.2;
-    }
-
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
-        if (res?.usage) {
-          this.trackAiUsage('DeepSeek', normalizedModel, 'Kategori & Taksonomi Tespiti', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
-        }
-        const rawText = res?.choices?.[0]?.message?.content || '{}';
-        const parsed = this.parseTaxonomyJsonResponse(rawText);
+    return this.postDeepSeekOrEvren$(apiKey, model, [
+      { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
+      { role: 'user', content: userPromptText }
+    ], {
+      maxTokens: 1000,
+      temperature: 0.2,
+      jsonMode: true,
+      moduleName: 'Kategori & Taksonomi Tespiti'
+    }).pipe(
+      map(rawText => {
+        const parsed = this.parseTaxonomyJsonResponse(rawText || '{}');
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
           taxonomyId: Number(parsed.taxonomy_id) || 0,
           categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
-          reasoning: parsed.reasoning || 'DeepSeek derin mantık analizi ile belirlendi.',
-          providerUsed: `DeepSeek (${model})`,
+          reasoning: parsed.reasoning || `${providerLabel} derin mantık analizi ile belirlendi.`,
+          providerUsed: `${providerLabel} (${model})`,
           isLive: true,
           message: `✨ DeepSeek (${model}) ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
           inputSources: sources,

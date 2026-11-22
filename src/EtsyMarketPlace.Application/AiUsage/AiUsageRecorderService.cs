@@ -73,6 +73,7 @@ public sealed class AiUsageRecorderService : IAiUsageRecorder
             return provider.Trim();
 
         var m = (modelName ?? string.Empty).ToLowerInvariant();
+        if (m.Contains("evren") || m == "deepseek-v4.1-flash" || m.StartsWith("qwen3") || m.StartsWith("glm-5") || m.StartsWith("gemma-4")) return "Evren";
         if (m.Contains("deepseek")) return "DeepSeek";
         if (m.Contains("claude")) return "Claude";
         if (m.Contains("grok")) return "Grok";

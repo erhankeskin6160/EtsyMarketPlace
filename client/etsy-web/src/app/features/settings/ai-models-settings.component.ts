@@ -78,6 +78,16 @@ interface TerminalLogEntry {
 
               <button 
                 type="button"
+                class="provider-pill evren" 
+                [class.active]="formSettings.provider === 'Evren'"
+                (click)="selectProvider('Evren')">
+                <app-ai-logo provider="Evren" [size]="18"></app-ai-logo>
+                <span class="pill-name">EVREN (SSB)</span>
+                <span class="pill-check" *ngIf="formSettings.provider === 'Evren'">✓</span>
+              </button>
+
+              <button 
+                type="button"
                 class="provider-pill claude" 
                 [class.active]="formSettings.provider === 'Claude'"
                 (click)="selectProvider('Claude')">
@@ -167,6 +177,14 @@ interface TerminalLogEntry {
                 {{ t('settings.aiModels.llmCard.deepseekHintPrefix') }} <code>sk-</code> {{ t('settings.aiModels.llmCard.deepseekHintMiddle') }}
                 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">platform.deepseek.com/api_keys</a>
                 {{ t('settings.aiModels.llmCard.deepseekHintSuffix') }}
+              </span>
+            </div>
+            <div class="key-hint-box evren-hint" *ngIf="formSettings.provider === 'Evren'">
+              <span class="hint-icon">🇹🇷</span>
+              <span class="hint-text">
+                T.C. SSB EVREN Milli Yapay Zeka anahtarları <code>evren_llm_</code> ile başlar.
+                <a href="https://evren.ssyz.org.tr" target="_blank" rel="noopener noreferrer">evren.ssyz.org.tr</a>
+                üzerinden aldığınız anahtarı yapıştırın; tüm istekler VDS sunucusu üzerinden CORS-güvenli olarak <code>deepseek-v4.1-flash</code> ve diğer EVREN modellerine yönlendirilir.
               </span>
             </div>
           </div>
@@ -398,7 +416,7 @@ interface TerminalLogEntry {
 
     .provider-pill-grid {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
       gap: 10px;
     }
     .provider-pill {
@@ -427,6 +445,21 @@ interface TerminalLogEntry {
     .provider-pill.active.gemini { background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: #60a5fa; }
     .provider-pill.active.openai { background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; }
     .provider-pill.active.deepseek { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; }
+    .provider-pill.active.evren {
+      background: linear-gradient(135deg, rgba(225, 29, 72, 0.24), rgba(6, 182, 212, 0.18));
+      border-color: #f43f5e;
+      color: #fda4af;
+      box-shadow: 0 0 14px rgba(244, 63, 94, 0.35);
+    }
+    .key-hint-box.evren-hint {
+      background: rgba(225, 29, 72, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      color: #fecdd3;
+    }
+    .key-hint-box.evren-hint a {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
     .provider-pill.active.claude { background: rgba(168, 85, 247, 0.2); border-color: #a855f7; color: #c084fc; }
     .provider-pill.active.grok { background: rgba(249, 115, 22, 0.2); border-color: #f97316; color: #fb923c; }
     .provider-pill.active.offline { background: rgba(100, 116, 139, 0.2); border-color: #64748b; color: #94a3b8; }
@@ -737,6 +770,7 @@ export class AiModelsSettingsComponent implements OnInit {
   readonly openAiModels = ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o3-mini', 'gpt-4-turbo'];
   readonly claudeModels = ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'];
   readonly deepSeekModels = ['DeepSeek-V4-Flash', 'DeepSeek-V4-Pro', 'deepseek-chat', 'deepseek-reasoner'];
+  readonly evrenModels = ['deepseek-v4.1-flash', 'qwen3.8-flash-next', 'glm-5.3', 'gemma-4-31b', 'qwen3-vl-30b'];
   readonly grokModels = ['grok-3', 'grok-2', 'grok-beta'];
 
   readonly geminiImageModels = ['gemini-2.5-flash-image', 'imagen-3.0-generate-002'];
@@ -770,6 +804,9 @@ export class AiModelsSettingsComponent implements OnInit {
     if (prov === 'DeepSeek' && (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner')) {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
+    if (prov === 'Evren' && !this.formSettings.evrenModel) {
+      this.formSettings.evrenModel = 'deepseek-v4.1-flash';
+    }
     const now = this.getCurrentTime();
     this.terminalLogs.push({
       time: now,
@@ -784,6 +821,7 @@ export class AiModelsSettingsComponent implements OnInit {
       case 'OpenAI': return this.formSettings.openAiModel;
       case 'Claude': return this.formSettings.claudeModel;
       case 'DeepSeek': return this.formSettings.deepSeekModel;
+      case 'Evren': return this.formSettings.evrenModel || 'deepseek-v4.1-flash';
       case 'Grok': return this.formSettings.grokModel;
       default: return 'offline';
     }
@@ -795,6 +833,7 @@ export class AiModelsSettingsComponent implements OnInit {
       case 'OpenAI': this.formSettings.openAiModel = val; break;
       case 'Claude': this.formSettings.claudeModel = val; break;
       case 'DeepSeek': this.formSettings.deepSeekModel = val; break;
+      case 'Evren': this.formSettings.evrenModel = val; break;
       case 'Grok': this.formSettings.grokModel = val; break;
     }
   }
@@ -820,6 +859,7 @@ export class AiModelsSettingsComponent implements OnInit {
       case 'OpenAI': return this.formSettings.openAiApiKey;
       case 'Claude': return this.formSettings.claudeApiKey;
       case 'DeepSeek': return this.formSettings.deepSeekApiKey;
+      case 'Evren': return this.formSettings.evrenApiKey || '';
       case 'Grok': return this.formSettings.grokApiKey;
       default: return '';
     }
@@ -831,6 +871,7 @@ export class AiModelsSettingsComponent implements OnInit {
       case 'OpenAI': this.formSettings.openAiApiKey = val; break;
       case 'Claude': this.formSettings.claudeApiKey = val; break;
       case 'DeepSeek': this.formSettings.deepSeekApiKey = val; break;
+      case 'Evren': this.formSettings.evrenApiKey = val; break;
       case 'Grok': this.formSettings.grokApiKey = val; break;
     }
   }
@@ -841,6 +882,7 @@ export class AiModelsSettingsComponent implements OnInit {
       case 'OpenAI': return this.openAiModels;
       case 'Claude': return this.claudeModels;
       case 'DeepSeek': return this.deepSeekModels;
+      case 'Evren': return this.evrenModels;
       case 'Grok': return this.grokModels;
       default: return ['offline-heuristic'];
     }

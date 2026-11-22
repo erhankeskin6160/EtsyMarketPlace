@@ -50,6 +50,20 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
         }
 
         var trimmedModel = (model ?? string.Empty).Trim();
+        if (IsEvrenRequest(apiKey, trimmedModel))
+        {
+            var resolvedEvrenModel = EtsyMarketPlace.Application.AiGateway.EvrenAiGatewayService.NormalizeEvrenModel(trimmedModel);
+            return await CallOpenAiCompatibleOptimizationAsync(
+                "https://evren-llmapi.ssyz.org.tr/v1/chat/completions",
+                "Evren",
+                resolvedEvrenModel,
+                systemInstruction,
+                userPrompt,
+                apiKey,
+                maxOutputTokens,
+                cancellationToken);
+        }
+
         if (trimmedModel.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
         {
             var resolvedDeepSeekModel = trimmedModel.Contains("reasoner", StringComparison.OrdinalIgnoreCase)
@@ -188,8 +202,11 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
 
         var trimmedModel = (model ?? string.Empty).Trim();
 
-        // DeepSeek text-only models do not support vision inputs -> use text optimization gracefully
-        if (trimmedModel.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
+        var isEvren = IsEvrenRequest(apiKey, trimmedModel);
+
+        // DeepSeek official text-only models do not support vision inputs -> use text optimization gracefully
+        // (EVREN deepseek-v4.1-flash / qwen3.8-flash-next / gemma-4-31b / qwen3-vl-30b DO support vision!)
+        if (!isEvren && trimmedModel.Contains("deepseek", StringComparison.OrdinalIgnoreCase))
         {
             return await GenerateOptimizationJsonAsync(systemInstruction, userPrompt, trimmedModel, apiKey, cancellationToken);
         }
@@ -200,14 +217,20 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
             return await GenerateOptimizationJsonAsync(systemInstruction, userPrompt, trimmedModel, apiKey, cancellationToken);
         }
 
-        if (trimmedModel.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase) ||
+        if (isEvren ||
+            trimmedModel.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase) ||
             trimmedModel.StartsWith("o1", StringComparison.OrdinalIgnoreCase) ||
             trimmedModel.StartsWith("o3", StringComparison.OrdinalIgnoreCase) ||
             trimmedModel.StartsWith("o4", StringComparison.OrdinalIgnoreCase) ||
             trimmedModel.StartsWith("grok", StringComparison.OrdinalIgnoreCase))
         {
             var isGrok = trimmedModel.StartsWith("grok", StringComparison.OrdinalIgnoreCase);
-            var endpoint = isGrok ? "https://api.x.ai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
+            var endpoint = isEvren
+                ? "https://evren-llmapi.ssyz.org.tr/v1/chat/completions"
+                : isGrok ? "https://api.x.ai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
+            var effectiveVisionModel = isEvren
+                ? EtsyMarketPlace.Application.AiGateway.EvrenAiGatewayService.NormalizeEvrenModel(trimmedModel)
+                : trimmedModel;
             var contentParts = new List<object> { new { type = "text", text = userPrompt } };
             foreach (var img in loadedImages)
             {
@@ -217,7 +240,7 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
 
             var payload = new
             {
-                model = trimmedModel,
+                model = effectiveVisionModel,
                 messages = new object[]
                 {
                     new { role = "system", content = systemInstruction },
@@ -499,6 +522,22 @@ public sealed class GeminiListingApiClient : IGeminiListingApiClient
         if (clean.EndsWith("```", StringComparison.Ordinal))
             clean = clean.Substring(0, clean.Length - 3);
         return clean.Trim();
+    }
+
+    private static bool IsEvrenRequest(string? apiKey, string? model)
+    {
+        if (!string.IsNullOrWhiteSpace(apiKey) &&
+            apiKey.Trim().StartsWith("evren_llm_", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var m = (model ?? string.Empty).Trim().ToLowerInvariant();
+        return m == "deepseek-v4.1-flash" ||
+               m == "deepseek-ocr-2" ||
+               m.StartsWith("qwen3", StringComparison.OrdinalIgnoreCase) ||
+               m.StartsWith("glm-5", StringComparison.OrdinalIgnoreCase) ||
+               m.StartsWith("gemma-4", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void UnusedPlaceholder() { if (true)

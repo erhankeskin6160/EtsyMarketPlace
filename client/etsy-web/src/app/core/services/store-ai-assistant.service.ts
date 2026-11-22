@@ -8,6 +8,7 @@ import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto, MarketSear
 import { CopilotToolRegistryService, ToolExecutionResult } from './copilot-tool-registry.service';
 import { LanguageService } from '../i18n/language.service';
 import { LocaleFormatService } from '../i18n/locale-format.service';
+import { environment } from '../../../environments/environment';
 
 export interface ChatAttachment {
   id: string;
@@ -601,6 +602,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
               case 'DeepSeek':
                 reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
+              case 'Evren':
+                reply$ = this.callEvren(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
+                break;
               case 'OpenAI':
                 reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
@@ -771,6 +775,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
   private getApiKeyForProvider(provider: string, settings: any): string {
     switch (provider) {
       case 'DeepSeek': return settings.deepSeekApiKey || '';
+      case 'Evren': return settings.evrenApiKey || '';
       case 'OpenAI': return settings.openAiApiKey || '';
       case 'Claude': return settings.claudeApiKey || '';
       case 'Grok': return settings.grokApiKey || '';
@@ -832,6 +837,24 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         temperature: 0.5
       }, { headers }).pipe(
         map(res => res?.content?.find((c: any) => c?.type === 'text')?.text?.trim() || '')
+      );
+    }
+
+    if (normProvider === 'Evren') {
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        { role: 'user', content: followUpPrompt }
+      ];
+      return this.http.post<any>(`${environment.apiBaseUrl}/api/ai/evren/chat-completions`, {
+        apiKey: apiKey.trim(),
+        model: modelName || 'deepseek-v4.1-flash',
+        messages,
+        maxTokens: 2500,
+        temperature: 0.5,
+        moduleName: 'EVREN Mağaza Asistanı'
+      }).pipe(
+        map(res2 => (res2?.content || '').trim())
       );
     }
 
@@ -1170,6 +1193,47 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         return this.handleLlmChoice$(res?.choices?.[0], 'DeepSeek', normalizedModel, augmentedPrompt, snap, history, attachments, toolContext);
       }),
       catchError(err => this.handleProviderError(err, 'DeepSeek', normalizedModel, augmentedPrompt, snap, history, attachments, toolContext))
+    );
+  }
+
+  // ── EVREN (T.C. SSB MILLI AI) DISPATCHER (VDS CORS-SAFE GATEWAY) ─────────
+  private callEvren(
+    augmentedPrompt: string,
+    systemPrompt: string,
+    apiKey: string,
+    model: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    const resolvedModel = (model || 'deepseek-v4.1-flash').trim();
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      }))
+    ];
+
+    return this.http.post<any>(`${environment.apiBaseUrl}/api/ai/evren/chat-completions`, {
+      apiKey: apiKey.trim(),
+      model: resolvedModel,
+      messages,
+      maxTokens: 2500,
+      temperature: 0.6,
+      moduleName: 'EVREN Mağaza Asistanı'
+    }).pipe(
+      switchMap(res => {
+        const fakeChoice = {
+          message: {
+            role: 'assistant',
+            content: res?.content || ''
+          }
+        };
+        return this.handleLlmChoice$(fakeChoice, 'Evren', resolvedModel, augmentedPrompt, snap, history, attachments, toolContext);
+      }),
+      catchError(err => this.handleProviderError(err, 'Evren', resolvedModel, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 

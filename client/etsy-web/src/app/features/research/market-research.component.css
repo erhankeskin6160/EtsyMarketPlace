@@ -71,6 +71,7 @@
     .ai-badge-btn.badge-openai { background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #6ee7b7; }
     .ai-badge-btn.badge-claude { background: rgba(168, 85, 247, 0.22); border-color: #a855f7; color: #d8b4fe; }
     .ai-badge-btn.badge-deepseek { background: rgba(239, 68, 68, 0.22); border-color: #ef4444; color: #fca5a5; }
+    .ai-badge-btn.badge-evren { background: rgba(225, 29, 72, 0.24); border-color: #f43f5e; color: #fda4af; }
     .ai-badge-btn.badge-grok { background: rgba(249, 115, 22, 0.22); border-color: #f97316; color: #fdba74; }
     .ai-badge-btn.badge-offline { background: rgba(100, 116, 139, 0.22); border-color: #64748b; color: #cbd5e1; }
 

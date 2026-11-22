@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface AiOptimizationSettings {
-  provider: 'Gemini' | 'OpenAI' | 'Claude' | 'DeepSeek' | 'Grok' | 'Offline';
+  provider: 'Gemini' | 'OpenAI' | 'Claude' | 'DeepSeek' | 'Evren' | 'Grok' | 'Offline';
   
   // Gemini
   geminiApiKey: string;
@@ -24,6 +24,10 @@ export interface AiOptimizationSettings {
   // DeepSeek
   deepSeekApiKey: string;
   deepSeekModel: string;
+
+  // EVREN (T.C. SSB Milli AI Platformu)
+  evrenApiKey: string;
+  evrenModel: string;
   
   // xAI Grok
   grokApiKey: string;
@@ -88,6 +92,8 @@ const DEFAULT_SETTINGS: AiOptimizationSettings = {
   claudeModel: 'claude-3-7-sonnet-20250219',
   deepSeekApiKey: '',
   deepSeekModel: 'DeepSeek-V4-Flash',
+  evrenApiKey: '',
+  evrenModel: 'deepseek-v4.1-flash',
   grokApiKey: '',
   grokModel: 'grok-3',
   photoRoomApiKey: '',
@@ -127,6 +133,7 @@ export class AiSettingsService {
       case 'OpenAI': return s.openAiModel || 'gpt-4o';
       case 'Claude': return s.claudeModel || 'claude-3-7-sonnet';
       case 'DeepSeek': return s.deepSeekModel || 'DeepSeek-V4-Flash';
+      case 'Evren': return s.evrenModel || 'deepseek-v4.1-flash';
       case 'Grok': return s.grokModel || 'grok-3';
       default: return this.t('core.aiSettings.offlineRuleEngine', 'Offline Kural Motoru');
     }
@@ -156,6 +163,8 @@ export class AiSettingsService {
         return `🟣 ${label}`;
       case 'DeepSeek':
         return `🔴 ${label}`;
+      case 'Evren':
+        return `🇹🇷 ${label}`;
       case 'Grok':
         return `🟠 ${label}`;
       default:
@@ -170,6 +179,7 @@ export class AiSettingsService {
       case 'OpenAI': return 'badge-openai';
       case 'Claude': return 'badge-claude';
       case 'DeepSeek': return 'badge-deepseek';
+      case 'Evren': return 'badge-evren';
       case 'Grok': return 'badge-grok';
       default: return 'badge-offline';
     }
@@ -195,7 +205,7 @@ export class AiSettingsService {
 
             // Akıllı koruma: Eğer VDS'te bir anahtar veya ayar boş ise, fakat tarayıcının yerel depolamasında (current) doluysa, yereldeki anahtarı koru
             const keyFields: (keyof AiOptimizationSettings)[] = [
-              'geminiApiKey', 'openAiApiKey', 'claudeApiKey', 'deepSeekApiKey', 'grokApiKey',
+              'geminiApiKey', 'openAiApiKey', 'claudeApiKey', 'deepSeekApiKey', 'evrenApiKey', 'grokApiKey',
               'photoRoomApiKey', 'bflApiKey', 'ideogramApiKey', 'customModel'
             ];
             let shouldSyncBack = false;
@@ -322,6 +332,8 @@ export class AiSettingsService {
         return (s.geminiApiKey || '').trim();
       case 'DeepSeek':
         return (s.deepSeekApiKey || '').trim();
+      case 'Evren':
+        return (s.evrenApiKey || '').trim();
       case 'OpenAI':
         return (s.openAiApiKey || '').trim();
       case 'Claude':
@@ -393,6 +405,41 @@ export class AiSettingsService {
           success: false,
           latencyMs: Math.round(performance.now() - start),
           message: this.t('core.aiSettings.connectionError', `Bağlantı Hatası: ${detail}`, { message: detail })
+        };
+      }
+    }
+
+    // Real ping test for EVREN (T.C. SSB Milli AI Platformu) via CORS-safe VDS API Gateway
+    if (provider === 'Evren') {
+      const cleanKey = (key || '').trim();
+      if (!cleanKey || cleanKey.length < 8) {
+        return {
+          success: false,
+          latencyMs: 0,
+          message: 'Lütfen evren.ssyz.org.tr üzerinden aldığınız geçerli bir EVREN API anahtarı (evren_llm_...) giriniz.'
+        };
+      }
+      try {
+        const res = await firstValueFrom(
+          this.http.post<{ success: boolean; latencyMs: number; message: string; resolvedModel?: string; availableModels?: string[] }>(
+            `${environment.apiBaseUrl}/api/ai/evren/test-connection`,
+            {
+              apiKey: cleanKey,
+              model: (model || 'deepseek-v4.1-flash').trim()
+            }
+          )
+        );
+        return {
+          success: !!res?.success,
+          latencyMs: res?.latencyMs ?? Math.round(performance.now() - start),
+          message: res?.message || 'EVREN API bağlantısı doğrulandı.'
+        };
+      } catch (err: any) {
+        const detail = err?.error?.message || err?.message || 'VDS EVREN geçidine erişilemedi.';
+        return {
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          message: `EVREN Bağlantı Hatası: ${detail}`
         };
       }
     }

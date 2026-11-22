@@ -786,6 +786,12 @@
   color: #fca5a5;
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
 }
+.ai-model-hub-badge.badge-evren {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.24), rgba(6, 182, 212, 0.2));
+  border-color: #f43f5e;
+  color: #fda4af;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.3);
+}
 .ai-model-hub-badge.badge-grok {
   background: rgba(249, 115, 22, 0.22);
   border-color: #f97316;

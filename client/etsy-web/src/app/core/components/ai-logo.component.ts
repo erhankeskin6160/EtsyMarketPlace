@@ -41,6 +41,20 @@ import { CommonModule } from '@angular/common';
         <path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z" fill="#f8fafc"/>
       </svg>
 
+      <!-- EVREN (T.C. SSB Milli AI — Orbital Shield & Star) -->
+      <svg *ngIf="isProvider('evren')" [attr.width]="size" [attr.height]="size" viewBox="0 0 24 24" fill="none" class="ai-svg evren-svg">
+        <defs>
+          <linearGradient id="evrenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#e11d48" />
+            <stop offset="55%" stop-color="#f43f5e" />
+            <stop offset="100%" stop-color="#06b6d4" />
+          </linearGradient>
+        </defs>
+        <circle cx="12" cy="12" r="9.5" stroke="url(#evrenGrad)" stroke-width="1.8" />
+        <ellipse cx="12" cy="12" rx="9.5" ry="3.8" transform="rotate(-28 12 12)" stroke="#38bdf8" stroke-width="1.3" stroke-opacity="0.9" />
+        <path d="M12 5.4l1.55 4.05L17.8 11l-4.25 1.55L12 16.6l-1.55-4.05L6.2 11l4.25-1.55L12 5.4z" fill="url(#evrenGrad)" />
+      </svg>
+
       <!-- OFFLINE / MICROCHIP (Hardware CPU) -->
       <svg *ngIf="isProvider('offline')" [attr.width]="size" [attr.height]="size" viewBox="0 0 512 512" fill="none" class="ai-svg offline-svg">
         <path d="M160 80v48h192V80c0-26.5-21.5-48-48-48h-96c-26.5 0-48 21.5-48 48zM0 224v64c0 17.7 14.3 32 32 32h32v32c0 35.3 28.7 64 64 64h192c35.3 0 64-28.7 64-64v-32h32c17.7 0 32-14.3 32-32v-64c0-17.7-14.3-32-32-32h-32v-32c0-35.3-28.7-64-64-64H128c-35.3 0-64 28.7-64 64v32H32c-17.7 0-32 14.3-32 32zm128 0h256v128H128V224z" fill="#f59e0b"/>
@@ -77,6 +91,9 @@ import { CommonModule } from '@angular/common';
     .grok-svg {
       filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
     }
+    .evren-svg {
+      filter: drop-shadow(0 0 7px rgba(225, 29, 72, 0.55));
+    }
     .offline-svg {
       filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.35));
     }
@@ -92,6 +109,7 @@ export class AiLogoComponent {
     if (target === 'gemini') return p.includes('gemini');
     if (target === 'openai') return p.includes('openai') || p.includes('gpt');
     if (target === 'deepseek') return p.includes('deepseek');
+    if (target === 'evren') return p.includes('evren') || p.includes('ssb');
     if (target === 'claude') return p.includes('claude') || p.includes('anthropic');
     if (target === 'grok') return p.includes('grok') || p.includes('xai');
     if (target === 'offline') return p.includes('offline');
