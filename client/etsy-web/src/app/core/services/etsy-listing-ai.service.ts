@@ -523,7 +523,7 @@ export class EtsyListingAiService {
   }
 
   private formatAiErrorMessage(provider: string, model: string, err: any): string {
-    const rawDetail = err?.error?.error?.message || err?.error?.message || err?.message || this.tr('core.listingAi.modelNoResponse', 'Model did not respond');
+    const rawDetail = err?.error?.errorMessage || err?.error?.error?.message || err?.error?.message || err?.message || this.tr('core.listingAi.modelNoResponse', 'Model did not respond');
     if (provider === 'DeepSeek') {
       const lower = String(rawDetail).toLowerCase();
       const currentKey = this.getActiveApiKey(this.aiSettings.settings());

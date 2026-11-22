@@ -156,4 +156,37 @@ public sealed class EvrenAiGatewayServiceTests
         Assert.Equal(400, result.StatusCode);
         Assert.Null(client.LastCommand);
     }
+
+    [Fact]
+    public async Task CompleteChatAsync_PreservesUpstream401ErrorMessage_AndRecordsFailure()
+    {
+        var client = new FakeEvrenApiClient
+        {
+            ChatResponse = new EvrenChatCompletionResult(
+                Success: false,
+                Content: null,
+                ReasoningContent: null,
+                ErrorMessage: "EVREN API Anahtarı Reddedildi (HTTP 401): Invalid API key.",
+                StatusCode: 401,
+                ResolvedModel: "deepseek-v4.1-flash",
+                PromptTokens: 0,
+                CompletionTokens: 0,
+                TotalTokens: 0)
+        };
+        var recorder = new FakeUsageRecorder();
+        var sut = new EvrenAiGatewayService(client, recorder);
+
+        var msgContent = JsonSerializer.SerializeToElement("Test");
+        var result = await sut.CompleteChatAsync(new EvrenChatCompletionCommand(
+            ApiKey: "evren_llm_revoked_key_1234",
+            Model: "deepseek-v4.1-flash",
+            Messages: new[] { new EvrenChatMessageDto("user", msgContent) },
+            ModuleName: "Hızlı Ürün Listeleme"));
+
+        Assert.False(result.Success);
+        Assert.Equal(401, result.StatusCode);
+        Assert.Contains("EVREN API Anahtarı Reddedildi", result.ErrorMessage);
+        Assert.Single(recorder.Recorded);
+        Assert.False(recorder.Recorded[0].Result.Success);
+    }
 }

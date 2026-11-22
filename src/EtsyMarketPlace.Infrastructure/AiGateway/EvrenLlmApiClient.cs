@@ -28,8 +28,10 @@ public sealed class EvrenLlmApiClient : IEvrenLlmApiClient
     {
         try
         {
+            var trimmedKey = apiKey.Trim();
             using var req = new HttpRequestMessage(HttpMethod.Get, ModelsUrl);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", trimmedKey);
+            req.Headers.TryAddWithoutValidation("X-API-Key", trimmedKey);
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             using var resp = await _httpClient.SendAsync(req, cancellationToken);
@@ -106,8 +108,10 @@ public sealed class EvrenLlmApiClient : IEvrenLlmApiClient
                 payloadDict["response_format"] = new { type = "json_object" };
             }
 
+            var trimmedKey = command.ApiKey.Trim();
             using var req = new HttpRequestMessage(HttpMethod.Post, ChatCompletionsUrl);
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", command.ApiKey.Trim());
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", trimmedKey);
+            req.Headers.TryAddWithoutValidation("X-API-Key", trimmedKey);
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             req.Content = new StringContent(JsonSerializer.Serialize(payloadDict), Encoding.UTF8, "application/json");
 
@@ -116,13 +120,17 @@ public sealed class EvrenLlmApiClient : IEvrenLlmApiClient
 
             if (!resp.IsSuccessStatusCode)
             {
-                var err = ExtractErrorMessage(body, resp.ReasonPhrase ?? $"HTTP {(int)resp.StatusCode}");
+                var statusCode = (int)resp.StatusCode;
+                var err = ExtractErrorMessage(body, resp.ReasonPhrase ?? $"HTTP {statusCode}");
+                var formattedError = statusCode == 401 || statusCode == 403
+                    ? $"EVREN API Anahtarı Reddedildi (HTTP {statusCode}): {err}. Lütfen evren.ssyz.org.tr üzerinden oluşturduğunuz 'evren_llm_...' anahtarının tam ve aktif olduğunu doğrulayın."
+                    : $"EVREN API Hatası (HTTP {statusCode}): {err}";
                 return new EvrenChatCompletionResult(
                     Success: false,
                     Content: null,
                     ReasoningContent: null,
-                    ErrorMessage: $"EVREN API Hatası (HTTP {(int)resp.StatusCode}): {err}",
-                    StatusCode: (int)resp.StatusCode,
+                    ErrorMessage: formattedError,
+                    StatusCode: statusCode,
                     ResolvedModel: model,
                     PromptTokens: 0,
                     CompletionTokens: 0,

@@ -37,8 +37,22 @@ public sealed class AiGatewayController : BaseApiController
         var result = await _evrenGateway.CompleteChatAsync(request, cancellationToken);
         if (!result.Success)
         {
-            var status = result.StatusCode >= 400 && result.StatusCode <= 599 ? result.StatusCode : 502;
-            return StatusCode(status, result);
+            // Upstream EVREN 401/403 must NEVER be returned as HTTP 401/403 from VDS,
+            // otherwise the Angular JWT/validation interceptor misinterprets it as an expired user session.
+            var httpStatus = result.StatusCode == 400 ? 400 : 502;
+            var msg = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                ? "EVREN API isteği başarısız oldu."
+                : result.ErrorMessage;
+
+            return StatusCode(httpStatus, new
+            {
+                success = false,
+                message = msg,
+                error = msg,
+                errorMessage = msg,
+                upstreamStatusCode = result.StatusCode,
+                resolvedModel = result.ResolvedModel
+            });
         }
 
         return Ok(result);
