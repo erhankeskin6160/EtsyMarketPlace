@@ -851,6 +851,60 @@ Chart.register(...registerables);
       height: 240px;
       width: 100%;
     }
+
+    @media (max-width: 767.98px) {
+      .kpi-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+        gap: 10px;
+      }
+      .expenses-popover-box {
+        position: fixed;
+        top: auto;
+        bottom: calc(var(--bottom-nav-height, 62px) + var(--safe-bottom, 0px) + 8px);
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+        max-height: 75dvh;
+        overflow-y: auto;
+      }
+      .action-hub-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .card-header-flex {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chart-wrapper {
+        height: 210px;
+      }
+    }
+
+    @media (max-width: 639.98px) {
+      .kpi-grid,
+      .popover-kpi-row {
+        grid-template-columns: 1fr;
+      }
+      .order-item {
+        grid-template-columns: 1fr auto;
+        gap: 6px 10px;
+      }
+      .order-item-title {
+        max-width: 100%;
+      }
+      .popover-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .btn-goto-accounting {
+        text-align: center;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {

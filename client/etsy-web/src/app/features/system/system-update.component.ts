@@ -289,6 +289,20 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       white-space: nowrap;
     }
     .btn-action-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    @media (max-width: 767.98px) {
+      .update-actions,
+      .status-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .btn-action-primary,
+      .btn-action-danger {
+        width: 100%;
+        min-height: var(--touch-target-min, 44px);
+      }
+    }
   `]
 })
 export class SystemUpdateComponent implements OnInit {

@@ -1865,7 +1865,7 @@ export interface LqsAuditCheck {
     .seasonal-sub { margin: 0; font-size: 0.84rem; color: #94a3b8; line-height: 1.5; }
     .seasonal-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
       gap: 16px;
     }
     .seasonal-card {
@@ -2264,6 +2264,24 @@ export interface LqsAuditCheck {
       .showcase-top-grid { grid-template-columns: 1fr; }
       .main-img-stage { width: 100%; height: 260px; }
       .freq-columns { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 767.98px) {
+      .spy-header,
+      .search-bar-row,
+      .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .kpi-grid,
+      .stats-grid {
+        grid-template-columns: 1fr !important;
+      }
     }
   `]
 })

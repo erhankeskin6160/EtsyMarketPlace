@@ -326,6 +326,19 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     }
     input:checked + .slider { background-color: #10b981; }
     input:checked + .slider:before { transform: translateX(20px); }
+
+    @media (max-width: 767.98px) {
+      .notif-grid,
+      .channels-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .notif-header,
+      .channel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
   `]
 })
 export class NotificationSettingsComponent implements OnInit {

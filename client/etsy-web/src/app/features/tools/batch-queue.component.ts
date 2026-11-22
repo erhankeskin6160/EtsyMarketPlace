@@ -361,6 +361,24 @@ interface BatchItem {
       cursor: pointer;
     }
     .synced-check { color: #34d399; font-weight: 700; font-size: 0.78rem; }
+
+    @media (max-width: 767.98px) {
+      .batch-header,
+      .batch-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .batch-grid,
+      .queue-layout {
+        grid-template-columns: 1fr !important;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+    }
   `]
 })
 export class BatchQueueComponent implements OnInit {

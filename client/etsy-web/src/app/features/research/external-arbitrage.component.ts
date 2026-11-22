@@ -248,7 +248,7 @@ interface ArbitrageItem {
 
     .items-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
       gap: 20px;
     }
     .item-card {
@@ -332,6 +332,19 @@ interface ArbitrageItem {
       cursor: pointer;
     }
     .btn-import-listing:hover { filter: brightness(1.1); }
+
+    @media (max-width: 767.98px) {
+      .radar-header,
+      .search-strip {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .arbitrage-grid,
+      .cards-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `]
 })
 export class ExternalArbitrageRadarComponent implements OnInit {

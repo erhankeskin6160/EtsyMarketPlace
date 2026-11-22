@@ -459,6 +459,34 @@ export interface CarrierRate {
       background: #f97316;
       color: #fff;
     }
+
+    @media (max-width: 1023.98px) {
+      .shipping-grid,
+      .hub-layout,
+      .calc-grid,
+      .carriers-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .carrier-btn-row {
+        grid-template-columns: 1fr;
+      }
+      .carrier-tabs,
+      .tabs-bar {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .carrier-tabs::-webkit-scrollbar,
+      .tabs-bar::-webkit-scrollbar {
+        display: none;
+      }
+      .btn-send-to-order {
+        min-height: var(--touch-target-min, 44px);
+      }
+    }
   `]
 })
 export class ShippingHubComponent implements OnInit {

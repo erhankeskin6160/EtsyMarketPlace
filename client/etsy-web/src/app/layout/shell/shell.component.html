@@ -1,22 +1,73 @@
 <ng-container *transloco="let t">
 <div class="layout-wrapper">
+  <!-- MOBILE DRAWER BACKDROP -->
+  <div
+    class="drawer-backdrop"
+    *ngIf="breakpointService.isCompactLayout() && breakpointService.isDrawerOpen()"
+    (click)="breakpointService.closeDrawer()"
+    aria-hidden="true">
+  </div>
+
   <!-- SIDEBAR NAVIGATION -->
-  <aside class="sidebar" [class.collapsed]="apiService.isSidebarCollapsed()">
+  <aside
+    class="sidebar"
+    [class.collapsed]="apiService.isSidebarCollapsed() && !breakpointService.isCompactLayout()"
+    [class.drawer-open]="breakpointService.isDrawerOpen()">
     <div class="sidebar-header">
       <div class="brand">
-        <span class="brand-icon"><i class="fa-solid fa-store text-orange-500"></i></span>
-        <div class="brand-text" *ngIf="!apiService.isSidebarCollapsed()">
+        <span class="brand-icon"><i class="fa-solid fa-store text-orange-500" aria-hidden="true"></i></span>
+        <div class="brand-text" *ngIf="!apiService.isSidebarCollapsed() || breakpointService.isCompactLayout()">
           <span class="brand-title">EtsyMarketPlace</span>
           <span class="brand-sub">{{ t('shell.brandSub') }}</span>
         </div>
       </div>
-      <button class="btn-toggle" (click)="apiService.toggleSidebar()" [title]="t('shell.toggleSidebar')">
-        <i [class]="apiService.isSidebarCollapsed() ? 'fa-solid fa-chevron-right text-xs' : 'fa-solid fa-chevron-left text-xs'"></i>
+      <button
+        *ngIf="!breakpointService.isCompactLayout()"
+        type="button"
+        class="btn-toggle"
+        (click)="apiService.toggleSidebar()"
+        [title]="t('shell.toggleSidebar')"
+        [attr.aria-label]="t('shell.toggleSidebar')">
+        <i [class]="apiService.isSidebarCollapsed() ? 'fa-solid fa-chevron-right text-xs' : 'fa-solid fa-chevron-left text-xs'" aria-hidden="true"></i>
+      </button>
+      <button
+        *ngIf="breakpointService.isCompactLayout()"
+        type="button"
+        class="btn-drawer-close"
+        (click)="breakpointService.closeDrawer()"
+        [attr.aria-label]="t('shell.mobile.closeMenu')">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
     </div>
 
+    <!-- Mobile Quick Controls Strip (visible inside Drawer on small screens) -->
+    <div class="mobile-drawer-controls" *ngIf="breakpointService.isMobile()">
+      <div class="mobile-controls-title">{{ t('shell.mobile.quickControls') }}</div>
+      <div class="mobile-controls-grid">
+        <app-language-switcher></app-language-switcher>
+        <button type="button" class="header-control-btn" (click)="router.navigate(['/settings/subscription'])">
+          <span class="plan-dot"></span>
+          <span>{{ subscriptionService.activePlanBadgeLabel() }}</span>
+        </button>
+        <button type="button" class="header-control-btn" (click)="aiService.openAiSettingsModal()">
+          <app-ai-logo [provider]="aiService.activeProvider()" [size]="14"></app-ai-logo>
+          <span>{{ aiService.activeBadgeTextClean() }}</span>
+        </button>
+        <button type="button" class="header-control-btn" (click)="openRateModal()">
+          <span>1$ = {{ apiService.exchangeRate() | number:'1.2-2' }}₺</span>
+        </button>
+        <button type="button" class="header-control-btn" (click)="apiService.toggleCurrency()">
+          <span>{{ apiService.isTryCurrency() ? 'TRY (₺)' : 'USD ($)' }}</span>
+        </button>
+        <button type="button" class="header-control-btn" (click)="router.navigate([router.url])">
+          <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+          <span>{{ t('common.refresh') }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Admin Link (Only for Admin role) -->
-    <div class="admin-quick-strip" *ngIf="authService.isAdmin() && !apiService.isSidebarCollapsed()">
+    <div class="admin-quick-strip" *ngIf="authService.isAdmin() && (!apiService.isSidebarCollapsed() || breakpointService.isCompactLayout())">
       <a routerLink="/admin" routerLinkActive="active-nav" class="admin-link">
         <span class="nav-icon"><i class="fa-solid fa-crown text-amber-400"></i></span>
         <span class="nav-text">{{ t('shell.adminPanel') }}</span>
@@ -79,16 +130,27 @@
     <!-- TOP HEADER BAR -->
     <header class="top-header">
       <div class="header-left">
-        <h1 class="page-title"><i class="fa-solid fa-layer-group text-orange-500 mr-2"></i>{{ t('shell.headerTitle') }}</h1>
-        <span class="page-subtitle">{{ t('shell.headerSubtitle') }}</span>
+        <button
+          *ngIf="breakpointService.isCompactLayout()"
+          type="button"
+          class="btn-mobile-menu"
+          (click)="breakpointService.toggleDrawer()"
+          [attr.aria-label]="t('shell.mobile.openMenu')"
+          [attr.aria-expanded]="breakpointService.isDrawerOpen()">
+          <i class="fa-solid fa-bars" aria-hidden="true"></i>
+        </button>
+        <div class="header-titles">
+          <h1 class="page-title"><i class="fa-solid fa-layer-group text-orange-500 mr-2" aria-hidden="true"></i>{{ t('shell.headerTitle') }}</h1>
+          <span class="page-subtitle">{{ t('shell.headerSubtitle') }}</span>
+        </div>
       </div>
 
       <div class="header-right">
         <!-- Language Switcher (EN | TR) -->
-        <app-language-switcher></app-language-switcher>
+        <app-language-switcher class="desktop-header-control"></app-language-switcher>
 
         <!-- Active SaaS Subscription Tier Pill -->
-        <button class="header-control-btn"
+        <button class="header-control-btn desktop-header-control"
                 (click)="router.navigate(['/settings/subscription'])"
                 [title]="t('shell.subscriptionTooltip')">
           <span class="plan-dot"></span>
@@ -96,7 +158,7 @@
         </button>
 
         <!-- Active AI Model Hub Badge -->
-        <button class="header-control-btn" (click)="aiService.openAiSettingsModal()" [title]="t('shell.aiHubTooltip')">
+        <button class="header-control-btn desktop-header-control" (click)="aiService.openAiSettingsModal()" [title]="t('shell.aiHubTooltip')">
           <app-ai-logo [provider]="aiService.activeProvider()" [size]="15"></app-ai-logo>
           <span>{{ aiService.activeBadgeTextClean() }}</span>
           <i class="fa-solid fa-chevron-down header-chevron"></i>
@@ -120,13 +182,13 @@
         </button>
 
         <!-- Live Exchange Rate -->
-        <button class="header-control-btn" (click)="openRateModal()" [title]="t('shell.exchangeRateTooltip')">
+        <button class="header-control-btn desktop-header-control" (click)="openRateModal()" [title]="t('shell.exchangeRateTooltip')">
           <span>1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
           <i class="fa-solid fa-pen header-chevron"></i>
         </button>
 
         <!-- Currency Toggle -->
-        <button class="header-control-btn" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? t('shell.currencySwitchToUsd') : t('shell.currencySwitchToTry')">
+        <button class="header-control-btn desktop-header-control" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? t('shell.currencySwitchToUsd') : t('shell.currencySwitchToTry')">
           {{ apiService.isTryCurrency() ? 'TRY (₺)' : 'USD ($)' }}
         </button>
 
@@ -173,14 +235,14 @@
         </div>
 
         <!-- Refresh Button -->
-        <button class="btn-refresh" (click)="router.navigate([router.url])" [title]="t('shell.refreshTooltip')">
+        <button class="btn-refresh desktop-header-control" (click)="router.navigate([router.url])" [title]="t('shell.refreshTooltip')">
           <i class="fa-solid fa-arrows-rotate mr-1"></i> {{ t('common.refresh') }}
         </button>
 
         <!-- Logout Button -->
         <button
           type="button"
-          class="btn-header-logout"
+          class="btn-header-logout desktop-header-control"
           (click)="authService.logout()"
           [title]="t('shell.logoutTooltip')"
           [attr.aria-label]="t('shell.logoutTooltip')">
@@ -210,12 +272,44 @@
     <main class="content-body">
       <router-outlet></router-outlet>
     </main>
+
+    <!-- MOBILE BOTTOM NAVIGATION BAR (< 768px) -->
+    <nav class="mobile-bottom-nav" *ngIf="breakpointService.isMobile()" aria-label="Mobile Primary Navigation">
+      <a routerLink="/dashboard" routerLinkActive="active-bottom-nav" class="bottom-nav-item">
+        <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
+        <span>{{ t('shell.mobile.navDashboard') }}</span>
+      </a>
+      <a routerLink="/orders" routerLinkActive="active-bottom-nav" class="bottom-nav-item">
+        <i class="fa-solid fa-truck-fast" aria-hidden="true"></i>
+        <span>{{ t('shell.mobile.navOrders') }}</span>
+      </a>
+      <a routerLink="/listings/fast-creator" routerLinkActive="active-bottom-nav" class="bottom-nav-item">
+        <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+        <span>{{ t('shell.mobile.navCreator') }}</span>
+      </a>
+      <a
+        routerLink="/finance/accounting"
+        routerLinkActive="active-bottom-nav"
+        (click)="onNavItemClick($event, { id: 'financial', route: '/finance/accounting' })"
+        class="bottom-nav-item">
+        <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+        <span>{{ t('shell.mobile.navFinance') }}</span>
+      </a>
+      <button
+        type="button"
+        class="bottom-nav-item"
+        [class.active-bottom-nav]="breakpointService.isDrawerOpen()"
+        (click)="breakpointService.toggleDrawer()">
+        <i class="fa-solid fa-bars" aria-hidden="true"></i>
+        <span>{{ t('shell.mobile.navMenu') }}</span>
+      </button>
+    </nav>
   </div>
 </div>
 
 <!-- EXCHANGE RATE MODAL -->
 <div class="modal-backdrop" *ngIf="isRateModalOpen" (click)="closeRateModal()">
-  <div class="modal-dialog" (click)="$event.stopPropagation()">
+  <div class="modal-dialog r-modal-sheet" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h3><i class="fa-solid fa-coins mr-2 text-amber-400"></i>{{ t('shell.rateModal.title') }}</h3>
       <button class="modal-close" (click)="closeRateModal()" [attr.aria-label]="t('common.close')">&times;</button>

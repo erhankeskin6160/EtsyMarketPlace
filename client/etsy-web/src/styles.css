@@ -1,4 +1,7 @@
 /* Etsy Enterprise Web Studio - Global Design System */
+@import './styles/tokens.css';
+@import './styles/responsive-primitives.css';
+
 :root {
   --bg-main: #0b0f19;
   --bg-sidebar: #0f172a;
@@ -41,8 +44,15 @@ body {
   background-color: var(--bg-main);
   color: var(--text-main);
   min-height: 100vh;
-  overflow-x: hidden;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-wrap: break-word;
   line-height: 1.5;
+}
+
+img, video {
+  max-inline-size: 100%;
+  block-size: auto;
 }
 
 /* Custom Scrollbar */
@@ -189,6 +199,13 @@ body:has(.cockpit-footer) .floating-btn-wrap {
   right: 20px !important;
 }
 
+@media (max-width: 767.98px) {
+  body:has(.mobile-bottom-nav) .floating-btn-wrap {
+    bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 14px) !important;
+    right: 14px !important;
+  }
+}
+
 /* ngx-toastr Dark Cyberpunk Theme Overrides */
 .toast-container .ngx-toastr {
   background-color: #151e2e;
@@ -197,7 +214,7 @@ body:has(.cockpit-footer) .floating-btn-wrap {
   border-radius: 10px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(12px);
-  width: 380px !important;
+  width: min(380px, calc(100vw - 24px)) !important;
   font-family: inherit;
 }
 

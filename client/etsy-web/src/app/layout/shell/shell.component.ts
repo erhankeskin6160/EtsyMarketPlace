@@ -8,6 +8,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { SubscriptionService } from '../../core/services/subscription.service';
+import { BreakpointService } from '../../core/services/breakpoint.service';
 
 import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
 import { AiModelsSettingsComponent } from '../../features/settings/ai-models-settings.component';
@@ -36,6 +37,7 @@ export class ShellComponent implements OnInit {
   apiService = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   subscriptionService = inject(SubscriptionService);
+  breakpointService = inject(BreakpointService);
   router = inject(Router);
 
   isRateModalOpen = false;
@@ -56,6 +58,16 @@ export class ShellComponent implements OnInit {
 
   @HostListener('document:click')
   onDocumentClick(): void {
+    if (this.isShopDropdownOpen) {
+      this.isShopDropdownOpen = false;
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.breakpointService.isDrawerOpen()) {
+      this.breakpointService.closeDrawer();
+    }
     if (this.isShopDropdownOpen) {
       this.isShopDropdownOpen = false;
     }

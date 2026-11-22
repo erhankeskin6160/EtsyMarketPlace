@@ -39,6 +39,16 @@
     "currencySwitchToUsd": "Switch to USD currency",
     "currencySwitchToTry": "Switch to TRY currency",
     "refreshTooltip": "Refresh Page",
+    "mobile": {
+      "openMenu": "Open Menu",
+      "closeMenu": "Close Menu",
+      "quickControls": "Quick Controls",
+      "navDashboard": "Home",
+      "navOrders": "Orders",
+      "navCreator": "Creator",
+      "navFinance": "Finance",
+      "navMenu": "Menu"
+    },
     "shopDropdown": {
       "tooltip": "Switch or Manage Shop",
       "title": "Connected Etsy Shops",

@@ -523,7 +523,7 @@ interface UsageRecord {
     /* CHARTS SECTION */
     .charts-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
       gap: 18px;
     }
     .chart-card {
@@ -999,6 +999,25 @@ interface UsageRecord {
       padding: 32px;
       color: #64748b;
       font-style: italic;
+    }
+
+    @media (max-width: 767.98px) {
+      .usage-header,
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .kpi-grid,
+      .charts-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .table-wrap,
+      .usage-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
     }
   `]
 })

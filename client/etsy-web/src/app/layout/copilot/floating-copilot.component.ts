@@ -1014,6 +1014,41 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
       align-items: center;
       justify-content: center;
     }
+
+    @media (max-width: 767.98px) {
+      .floating-btn-wrap {
+        bottom: calc(var(--bottom-nav-height, 62px) + var(--safe-bottom, 0px) + 12px);
+        right: 12px;
+      }
+      .copilot-fab {
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        min-height: 40px;
+        gap: 6px;
+      }
+      .copilot-window {
+        bottom: calc(var(--bottom-nav-height, 62px) + var(--safe-bottom, 0px) + 8px);
+        right: 12px;
+        width: calc(100vw - 24px);
+        height: min(600px, calc(100dvh - var(--bottom-nav-height, 62px) - 80px));
+      }
+    }
+
+    @media (max-width: 639.98px) {
+      .copilot-window {
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+        border: none;
+        padding-bottom: var(--safe-bottom, 0px);
+      }
+      .btn-close-modal {
+        top: 10px;
+        right: 10px;
+      }
+    }
   `]
 })
 export class FloatingCopilotComponent implements OnInit {

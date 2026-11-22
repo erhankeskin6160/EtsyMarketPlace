@@ -248,7 +248,7 @@ interface PayoutForecastRow {
     .section-title { font-size: 1.1rem; font-weight: 700; color: #fff; margin: 0; }
     .insights-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
       gap: 16px;
     }
     .insight-card {
@@ -315,6 +315,25 @@ interface PayoutForecastRow {
     }
     .conf-pill.high { background: rgba(16, 185, 129, 0.15); color: #34d399; }
     .conf-pill.mid { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+    @media (max-width: 767.98px) {
+      .analysis-grid,
+      .kpi-row,
+      .cards-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .table-wrapper,
+      .data-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .data-table th,
+      .data-table td {
+        padding: 8px 10px;
+        font-size: 0.78rem;
+      }
+    }
   `]
 })
 export class FinancialAiAnalysisComponent implements OnInit {

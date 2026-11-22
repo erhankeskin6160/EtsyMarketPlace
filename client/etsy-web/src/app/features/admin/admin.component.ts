@@ -700,6 +700,32 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     }
     .pg-btn-save:hover:not(:disabled) { background: #fb923c; }
     .pg-btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    @media (max-width: 767.98px) {
+      .admin-header,
+      .admin-tabs,
+      .toolbar-row {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .admin-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .admin-tabs::-webkit-scrollbar { display: none; }
+      .table-wrap,
+      .admin-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+      }
+      .kpi-grid,
+      .stats-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
   `]
 })
 export class AdminComponent implements OnInit {
