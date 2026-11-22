@@ -57,6 +57,11 @@ jobs:
       - name: Publish API
         run: dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o .\publish-api-vds
 
+      - name: Build EF Core Migration Bundle (PostgreSQL)
+        run: |
+          dotnet tool install --tool-path .\.ef-tools dotnet-ef --version 8.*
+          .\.ef-tools\dotnet-ef.exe migrations bundle --project .\src\EtsyMarketPlace.Infrastructure\EtsyMarketPlace.Infrastructure.csproj --startup-project .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj --context EtsyMarketPlaceDbContext --configuration Release --target-runtime win-x64 --self-contained -o .\publish-api-vds\efbundle.exe --force
+
       - name: Upload API artifact
         uses: actions/upload-artifact@v4
         with:
@@ -80,6 +85,11 @@ jobs:
           name: api-publish-${{ github.sha }}
           path: publish-api-vds
 
+      - name: Apply EF Core PostgreSQL Migrations (Update-Database)
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$bundle = Join-Path $env:GITHUB_WORKSPACE 'publish-api-vds\efbundle.exe'; if (-not (Test-Path $bundle)) { Write-Warning 'efbundle.exe bulunamadi, EF migration adimi atlandi.'; exit 0 }; $candidates = @('C:\Users\Administrator\Desktop\EtsyM\Api\appsettings.Local.json', 'C:\Users\Administrator\Desktop\EtsyM\Api\appsettings.Production.json', 'C:\Users\Administrator\Desktop\EtsyM\Api\appsettings.json', (Join-Path $env:GITHUB_WORKSPACE 'publish-api-vds\appsettings.json')); $conn = $null; foreach ($f in $candidates) { if (Test-Path $f) { try { $j = Get-Content $f -Raw | ConvertFrom-Json; if ($j.ConnectionStrings -and $j.ConnectionStrings.PostgreSql) { $conn = $j.ConnectionStrings.PostgreSql; Write-Host ('PostgreSQL baglantisi okundu: ' + $f); break } } catch { } } }; if ([string]::IsNullOrWhiteSpace($conn)) { Write-Warning 'PostgreSql ConnectionString bulunamadi; API baslangic MigrateAsync adimina birakildi.'; exit 0 }; Write-Host 'EF Core PostgreSQL migration bundle calistiriliyor...'; & $bundle --connection $conn --verbose; if ($LASTEXITCODE -ne 0) { Write-Warning ('efbundle cikis kodu: ' + $LASTEXITCODE + ' (mevcut sema olabilir; API idempotent bootstrapper ile devam edilecek).') } else { Write-Host 'EF Core PostgreSQL migration basariyla uygulandi.' }"
+
       - name: Install or update API
         shell: cmd
         env:
@@ -91,3 +101,8 @@ jobs:
         shell: cmd
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "for ($v = 1; $v -le 15; $v++) { try { $h = Invoke-RestMethod 'http://127.0.0.1:5263/health' -TimeoutSec 3; if ($h.status -in @('Healthy', 'Degraded')) { Write-Host ('API basariyla dogrulandi: ' + $h.status); exit 0 } } catch { Start-Sleep -Seconds 1 } }; throw 'API health kontrolu basarisiz'"
+
+      - name: Trigger PostgreSQL Schema Bootstrap & Data Migration
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $res = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:5263/api/system/migrate-postgres' -TimeoutSec 30; Write-Host ('PostgreSQL migrate-postgres sonucu: ' + ($res | ConvertTo-Json -Compress)) } catch { Write-Warning ('migrate-postgres uyarisi: ' + $_.Exception.Message) }"
