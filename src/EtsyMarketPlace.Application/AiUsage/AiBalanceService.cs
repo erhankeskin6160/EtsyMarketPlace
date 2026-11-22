@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.Diagnostics;
 using EtsyMarketPlace.Application.EtsyIntegration;
 
@@ -16,15 +17,18 @@ public sealed class AiBalanceService : IAiBalanceService
     private readonly HttpClient _httpClient;
     private readonly IShopSettingsRepository _settingsRepo;
     private readonly IAiUsageRepository _usageRepo;
+    private readonly IUserAiSettingsResolver? _aiSettingsResolver;
 
     public AiBalanceService(
         HttpClient httpClient,
         IShopSettingsRepository settingsRepo,
-        IAiUsageRepository usageRepo)
+        IAiUsageRepository usageRepo,
+        IUserAiSettingsResolver? aiSettingsResolver = null)
     {
         _httpClient = httpClient;
         _settingsRepo = settingsRepo;
         _usageRepo = usageRepo;
+        _aiSettingsResolver = aiSettingsResolver;
     }
 
     public async Task<IReadOnlyList<AiProviderBalanceInfo>> GetProviderBalancesAsync(
@@ -50,7 +54,9 @@ public sealed class AiBalanceService : IAiBalanceService
 
         try
         {
-            var json = await _settingsRepo.GetAiSettingsJsonAsync(shopId, ct);
+            var json = _aiSettingsResolver is not null
+                ? await _aiSettingsResolver.GetEffectiveAiSettingsJsonAsync(shopId, ct)
+                : await _settingsRepo.GetAiSettingsJsonAsync(shopId, ct);
             if (!string.IsNullOrWhiteSpace(json))
             {
                 using var doc = JsonDocument.Parse(json);

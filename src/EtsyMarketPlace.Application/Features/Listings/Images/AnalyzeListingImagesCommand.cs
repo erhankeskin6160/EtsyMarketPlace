@@ -7,6 +7,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.Common.Models;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.ListingOptimization;
@@ -50,7 +51,8 @@ public sealed class AnalyzeListingImagesCommand : IRequest<ServiceResponse>
 public sealed class AnalyzeListingImagesCommandHandler(
     IEtsyListingApiClient etsyClient,
     IGeminiListingApiClient aiClient,
-    IShopSettingsRepository settingsRepo
+    IShopSettingsRepository settingsRepo,
+    IUserAiSettingsResolver? aiSettingsResolver = null
 ) : IRequestHandler<AnalyzeListingImagesCommand, ServiceResponse>
 {
     private const int MaxAltTextLength = 250;
@@ -142,7 +144,9 @@ public sealed class AnalyzeListingImagesCommandHandler(
 
         if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(request.Provider))
         {
-            var savedJson = await settingsRepo.GetAiSettingsJsonAsync(request.ShopId, ct);
+            var savedJson = aiSettingsResolver is not null
+                ? await aiSettingsResolver.GetEffectiveAiSettingsJsonAsync(request.ShopId, ct)
+                : await settingsRepo.GetAiSettingsJsonAsync(request.ShopId, ct);
             if (!string.IsNullOrWhiteSpace(savedJson))
             {
                 try

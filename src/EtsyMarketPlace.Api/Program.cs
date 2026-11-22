@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Localization;
 using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.AbTesting;
 using EtsyMarketPlace.Application.Accounting;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Banking;
@@ -184,10 +185,14 @@ builder.Services
     .AddEntityFrameworkStores<EtsyMarketPlaceDbContext>()
     .AddDefaultTokenProviders();
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
 builder.Services.AddScoped<IIdentityAuthService, EtsyMarketPlace.Infrastructure.Identity.IdentityAuthService>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
+builder.Services.AddScoped<IUserAiSettingsRepository, EfPostgreSqlUserAiSettingsRepository>();
+builder.Services.AddScoped<IUserAiSettingsResolver, UserAiSettingsResolver>();
 builder.Services.AddScoped<IAccountingRepository, EfPostgreSqlAccountingRepository>();
 builder.Services.AddScoped<ISubscriptionRepository, EfPostgreSqlSubscriptionRepository>();
 builder.Services.AddHttpClient<ISubscriptionPaymentGateway, StripeVirtualPosPaymentGateway>();

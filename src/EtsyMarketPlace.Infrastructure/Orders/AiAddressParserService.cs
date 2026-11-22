@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.Orders;
@@ -18,6 +19,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
 {
     private readonly IGeminiListingApiClient? _geminiClient;
     private readonly IShopSettingsRepository? _settingsRepo;
+    private readonly IUserAiSettingsResolver? _aiSettingsResolver;
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _config;
 
@@ -25,12 +27,14 @@ public sealed class AiAddressParserService : IAiAddressParserService
         HttpClient httpClient,
         IConfiguration config,
         IGeminiListingApiClient? geminiClient = null,
-        IShopSettingsRepository? settingsRepo = null)
+        IShopSettingsRepository? settingsRepo = null,
+        IUserAiSettingsResolver? aiSettingsResolver = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _geminiClient = geminiClient;
         _settingsRepo = settingsRepo;
+        _aiSettingsResolver = aiSettingsResolver;
     }
 
     private static readonly HashSet<string> EuCountryCodes = new(StringComparer.OrdinalIgnoreCase)
@@ -262,11 +266,13 @@ public sealed class AiAddressParserService : IAiAddressParserService
         string apiKey = string.Empty;
         string model = "deepseek-chat";
 
-        if (_settingsRepo != null)
+        if (_aiSettingsResolver != null || _settingsRepo != null)
         {
             try
             {
-                var json = await _settingsRepo.GetAiSettingsJsonAsync(shopId, ct);
+                var json = _aiSettingsResolver != null
+                    ? await _aiSettingsResolver.GetEffectiveAiSettingsJsonAsync(shopId, ct)
+                    : await _settingsRepo!.GetAiSettingsJsonAsync(shopId, ct);
                 if (!string.IsNullOrWhiteSpace(json))
                 {
                     using var doc = JsonDocument.Parse(json);

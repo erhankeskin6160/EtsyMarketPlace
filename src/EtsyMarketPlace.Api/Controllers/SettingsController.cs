@@ -1,5 +1,6 @@
 namespace EtsyMarketPlace.Api.Controllers;
 
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using EtsyMarketPlace.Api.Models;
@@ -23,20 +24,24 @@ public class SettingsController : BaseApiController
     }
 
     [HttpGet("settings/ai")]
-    [EndpointSummary("Merkezi Veritabanından AI Model ve API Anahtarlarını Getir")]
+    [EndpointSummary("Aktif Kullanıcının AI Model ve API Anahtarlarını PostgreSQL'den Getir")]
     public async Task<IActionResult> GetAiSettings([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var isApiClient = string.Equals(userId, "api-client", StringComparison.OrdinalIgnoreCase);
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var response = await _mediator.Send(new GetAiSettingsRequest(resolvedShopId), cancellationToken);
+        var response = await _mediator.Send(new GetAiSettingsRequest(resolvedShopId, userId, isApiClient), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("settings/ai")]
-    [EndpointSummary("AI Model Ayarlarını ve API Anahtarlarını Merkezi Veritabanında Sakla")]
+    [EndpointSummary("Aktif Kullanıcının AI Model Ayarlarını ve API Anahtarlarını PostgreSQL'de Şifreli Sakla")]
     public async Task<IActionResult> SaveAiSettings([FromBody] SaveAiSettingsApiRequest request, CancellationToken cancellationToken = default)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var isApiClient = string.Equals(userId, "api-client", StringComparison.OrdinalIgnoreCase);
         var resolvedShopId = ResolveShopId(request.ShopId, _config);
-        var response = await _mediator.Send(new SaveAiSettingsCommandRequest(resolvedShopId, request.SettingsJson), cancellationToken);
+        var response = await _mediator.Send(new SaveAiSettingsCommandRequest(resolvedShopId, request.SettingsJson, userId, isApiClient), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 

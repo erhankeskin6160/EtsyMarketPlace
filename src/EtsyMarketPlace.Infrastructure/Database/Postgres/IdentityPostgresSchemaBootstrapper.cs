@@ -118,6 +118,15 @@ public static class IdentityPostgresSchemaBootstrapper
             CONSTRAINT "PK_AspNetUserTokens" PRIMARY KEY ("UserId", "LoginProvider", "Name"),
             CONSTRAINT "FK_AspNetUserTokens_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS user_ai_settings (
+            user_id text NOT NULL,
+            encrypted_settings_json text NOT NULL DEFAULT '{}',
+            active_provider character varying(50) NOT NULL DEFAULT 'Gemini',
+            updated_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "PK_user_ai_settings" PRIMARY KEY (user_id),
+            CONSTRAINT "FK_user_ai_settings_AspNetUsers_user_id" FOREIGN KEY (user_id) REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
         """;
 
     public static async Task EnsureTablesExistAsync(

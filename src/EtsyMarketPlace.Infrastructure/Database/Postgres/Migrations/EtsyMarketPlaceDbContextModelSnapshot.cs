@@ -1826,6 +1826,36 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.ToTable("tracking_snapshots", (string)null);
                 });
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.UserAiSetting", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("ActiveProvider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Gemini")
+                        .HasColumnName("active_provider");
+
+                    b.Property<string>("EncryptedSettingsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}")
+                        .HasColumnName("encrypted_settings_json");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_ai_settings", (string)null);
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Subscriptions.Entities.PaymentGatewayConfig", b =>
                 {
                     b.Property<string>("Id")
@@ -2656,6 +2686,15 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                         .IsRequired();
 
                     b.Navigation("TrackingItem");
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.UserAiSetting", b =>
+                {
+                    b.HasOne("EtsyMarketPlace.Infrastructure.Identity.ApplicationIdentityUser", null)
+                        .WithOne()
+                        .HasForeignKey("EtsyMarketPlace.Domain.Entities.UserAiSetting", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

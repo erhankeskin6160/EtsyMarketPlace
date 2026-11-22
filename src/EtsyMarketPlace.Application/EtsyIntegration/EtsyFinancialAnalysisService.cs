@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.ListingOptimization;
 
 namespace EtsyMarketPlace.Application.EtsyIntegration;
@@ -17,7 +18,8 @@ public sealed class EtsyFinancialAnalysisService(
     IShopSettingsRepository? settingsRepository = null,
     IEtsyDashboardService? dashboardService = null,
     IEtsyIntegrationRepository? integrationRepository = null,
-    IEtsyListingService? listingService = null) : IEtsyFinancialAnalysisService
+    IEtsyListingService? listingService = null,
+    IUserAiSettingsResolver? aiSettingsResolver = null) : IEtsyFinancialAnalysisService
 {
     public async Task<FinancialAnalysisResult> AnalyzeAsync(
         string shopId,
@@ -1017,11 +1019,13 @@ public sealed class EtsyFinancialAnalysisService(
         var model = reqModel?.Trim() ?? string.Empty;
         var apiKey = reqApiKey?.Trim() ?? string.Empty;
 
-        if (settingsRepository != null && (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(provider)))
+        if ((aiSettingsResolver != null || settingsRepository != null) && (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(provider)))
         {
             try
             {
-                var savedJson = await settingsRepository.GetAiSettingsJsonAsync(shopId, cancellationToken);
+                var savedJson = aiSettingsResolver != null
+                    ? await aiSettingsResolver.GetEffectiveAiSettingsJsonAsync(shopId, cancellationToken)
+                    : await settingsRepository!.GetAiSettingsJsonAsync(shopId, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(savedJson))
                 {
                     using var doc = JsonDocument.Parse(savedJson);

@@ -38,6 +38,7 @@ public class EtsyMarketPlaceDbContext : IdentityDbContext<ApplicationIdentityUse
     public DbSet<ShopTelegramSetting> ShopTelegramSettings => Set<ShopTelegramSetting>();
     public DbSet<ShopCarrierSession> ShopCarrierSessions => Set<ShopCarrierSession>();
     public DbSet<ShopAiSetting> ShopAiSettings => Set<ShopAiSetting>();
+    public DbSet<UserAiSetting> UserAiSettings => Set<UserAiSetting>();
     public DbSet<ChartSnapshot> ChartSnapshots => Set<ChartSnapshot>();
     public DbSet<OrderAddress> OrderAddresses => Set<OrderAddress>();
     public DbSet<ListingAbTest> ListingAbTests => Set<ListingAbTest>();
@@ -369,6 +370,22 @@ public class EtsyMarketPlaceDbContext : IdentityDbContext<ApplicationIdentityUse
             entity.HasOne(e => e.Shop)
                 .WithOne(s => s.AiSetting)
                 .HasForeignKey<ShopAiSetting>(e => e.ShopId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 15.1. UserAiSetting (Kullanıcı bazlı şifreli AI API anahtarları — AspNetUsers 1:1 FK)
+        modelBuilder.Entity<UserAiSetting>(entity =>
+        {
+            entity.ToTable("user_ai_settings");
+            entity.HasKey(e => e.UserId);
+            entity.Property(e => e.UserId).HasColumnName("user_id").HasColumnType("text");
+            entity.Property(e => e.EncryptedSettingsJson).HasColumnName("encrypted_settings_json").HasColumnType("text").HasDefaultValue("{}");
+            entity.Property(e => e.ActiveProvider).HasColumnName("active_provider").HasMaxLength(50).HasDefaultValue("Gemini");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationIdentityUser>()
+                .WithOne()
+                .HasForeignKey<UserAiSetting>(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

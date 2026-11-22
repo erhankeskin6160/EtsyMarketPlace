@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.EtsyIntegration;
 
 public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
@@ -13,15 +14,18 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
     private readonly IGeminiListingApiClient _geminiClient;
     private readonly ListingOptimizationService _ruleOptimizer;
     private readonly IShopSettingsRepository _settingsRepo;
+    private readonly IUserAiSettingsResolver? _aiSettingsResolver;
 
     public AiListingOptimizationUseCase(
         IGeminiListingApiClient geminiClient,
         ListingOptimizationService ruleOptimizer,
-        IShopSettingsRepository settingsRepo)
+        IShopSettingsRepository settingsRepo,
+        IUserAiSettingsResolver? aiSettingsResolver = null)
     {
         _geminiClient = geminiClient ?? throw new ArgumentNullException(nameof(geminiClient));
         _ruleOptimizer = ruleOptimizer ?? throw new ArgumentNullException(nameof(ruleOptimizer));
         _settingsRepo = settingsRepo ?? throw new ArgumentNullException(nameof(settingsRepo));
+        _aiSettingsResolver = aiSettingsResolver;
     }
 
     public async Task<OptimizeListingResultDto> OptimizeListingAsync(
@@ -46,7 +50,9 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
         {
             try
             {
-                var savedJson = await _settingsRepo.GetAiSettingsJsonAsync(shopId, cancellationToken);
+                var savedJson = _aiSettingsResolver is not null
+                    ? await _aiSettingsResolver.GetEffectiveAiSettingsJsonAsync(shopId, cancellationToken)
+                    : await _settingsRepo.GetAiSettingsJsonAsync(shopId, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(savedJson))
                 {
                     using var settingsDoc = JsonDocument.Parse(savedJson);

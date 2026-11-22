@@ -1385,6 +1385,67 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<string?> GetUserAiSettingsJsonAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return null;
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await EnsureUserAiSettingsTableAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT encrypted_settings_json FROM user_ai_settings WHERE user_id = $user_id LIMIT 1;";
+        command.Parameters.AddWithValue("$user_id", userId.Trim());
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result?.ToString();
+    }
+
+    public async Task SaveUserAiSettingsJsonAsync(string userId, string encryptedSettingsJson, string activeProvider = "Gemini", CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return;
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await EnsureUserAiSettingsTableAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO user_ai_settings(user_id, encrypted_settings_json, active_provider, updated_at)
+            VALUES($user_id, $json, $provider, $updated_at)
+            ON CONFLICT(user_id) DO UPDATE SET
+                encrypted_settings_json = excluded.encrypted_settings_json,
+                active_provider = excluded.active_provider,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$user_id", userId.Trim());
+        command.Parameters.AddWithValue("$json", encryptedSettingsJson ?? "{}");
+        command.Parameters.AddWithValue("$provider", string.IsNullOrWhiteSpace(activeProvider) ? "Gemini" : activeProvider.Trim());
+        command.Parameters.AddWithValue("$updated_at", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task DeleteUserAiSettingsAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return;
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await EnsureUserAiSettingsTableAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM user_ai_settings WHERE user_id = $user_id;";
+        command.Parameters.AddWithValue("$user_id", userId.Trim());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task EnsureUserAiSettingsTableAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS user_ai_settings (
+                user_id TEXT PRIMARY KEY,
+                encrypted_settings_json TEXT NOT NULL DEFAULT '{}',
+                active_provider TEXT NOT NULL DEFAULT 'Gemini',
+                updated_at TEXT NOT NULL
+            );
+            """;
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static string MaskSecret(string? secret)
     {
         if (string.IsNullOrWhiteSpace(secret)) return string.Empty;

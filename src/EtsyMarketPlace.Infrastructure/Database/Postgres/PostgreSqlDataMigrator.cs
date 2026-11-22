@@ -8,6 +8,8 @@ using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Domain.Entities;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.Identity;
+using EtsyMarketPlace.Infrastructure.Persistence.Repositories;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -37,19 +39,22 @@ public sealed class PostgreSqlDataMigrator
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly EtsyIntegrationOptions _options;
     private readonly ILogger<PostgreSqlDataMigrator> _logger;
+    private readonly IDataProtector? _userAiSettingsProtector;
 
     public PostgreSqlDataMigrator(
         EtsyMarketPlaceDbContext db,
         UserManager<ApplicationIdentityUser> userManager,
         RoleManager<IdentityRole> roleManager,
         IOptions<EtsyIntegrationOptions> options,
-        ILogger<PostgreSqlDataMigrator> logger)
+        ILogger<PostgreSqlDataMigrator> logger,
+        IDataProtectionProvider? dataProtectionProvider = null)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
         _roleManager = roleManager ?? throw new ArgumentNullException(nameof(roleManager));
         _options = options?.Value ?? new EtsyIntegrationOptions();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _userAiSettingsProtector = dataProtectionProvider?.CreateProtector(EfPostgreSqlUserAiSettingsRepository.DataProtectionPurpose);
     }
 
     private static DateTime ParseUtc(string? raw, DateTime fallback)
@@ -843,6 +848,44 @@ public sealed class PostgreSqlDataMigrator
                 await _db.SaveChangesAsync(cancellationToken);
             }
             seededTablesCount++;
+
+            // 5.14.1. Seçenek A: Mevcut shop_ai_settings kaydını tek seferlik ve şifreli olarak
+            // yalnızca birincil SuperAdmin/Admin kullanıcısının user_ai_settings satırına aktar.
+            // Diğer tüm kullanıcılar boş ve izole başlar.
+            try
+            {
+                if (!await _db.UserAiSettings.AnyAsync(u => u.UserId == adminUser.Id, cancellationToken))
+                {
+                    var legacyShopAi = await _db.ShopAiSettings
+                        .AsNoTracking()
+                        .OrderByDescending(s => s.ShopId == defaultShopId)
+                        .ThenByDescending(s => s.UpdatedAt)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (legacyShopAi is not null && !string.IsNullOrWhiteSpace(legacyShopAi.SettingsJson) && legacyShopAi.SettingsJson.Trim() != "{}")
+                    {
+                        var rawJson = legacyShopAi.SettingsJson;
+                        var activeProvider = EfPostgreSqlUserAiSettingsRepository.ExtractActiveProvider(rawJson);
+                        var storedJson = _userAiSettingsProtector is not null
+                            ? _userAiSettingsProtector.Protect(rawJson)
+                            : rawJson;
+
+                        _db.UserAiSettings.Add(new UserAiSetting
+                        {
+                            UserId = adminUser.Id,
+                            EncryptedSettingsJson = storedJson,
+                            ActiveProvider = activeProvider,
+                            UpdatedAt = DateTime.UtcNow
+                        });
+                        await _db.SaveChangesAsync(cancellationToken);
+                        _logger.LogInformation("PostgreSQL: Mevcut shop_ai_settings ({ShopId}) tek seferlik olarak admin ({UserId}) hesabının user_ai_settings tablosuna şifreli aktarıldı.", legacyShopAi.ShopId, adminUser.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("shop_ai_settings -> user_ai_settings tek seferlik göçü atlandı: {Msg}", ex.Message);
+            }
 
             // 5.15. AuditLogs
             _db.AuditLogs.Add(new AuditLog

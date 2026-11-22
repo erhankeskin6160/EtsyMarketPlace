@@ -1,8 +1,9 @@
-import { Injectable, computed, signal, inject } from '@angular/core';
+import { Injectable, computed, effect, signal, inject, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { AuthService } from './auth.service';
 
 export interface AiOptimizationSettings {
   provider: 'Gemini' | 'OpenAI' | 'Claude' | 'DeepSeek' | 'Evren' | 'Grok' | 'Offline';
@@ -109,10 +110,12 @@ const DEFAULT_SETTINGS: AiOptimizationSettings = {
 })
 export class AiSettingsService {
   private http = inject(HttpClient);
+  private authService = inject(AuthService, { optional: true });
   private transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
   private readonly activeLang = signal<string>(this.transloco?.getActiveLang() || 'tr');
+  private activeUserId: string | null = null;
 
-  readonly settings = signal<AiOptimizationSettings>(this.loadSettings());
+  readonly settings = signal<AiOptimizationSettings>({ ...DEFAULT_SETTINGS });
   readonly isAiModalOpen = signal<boolean>(false);
   readonly isDbSynced = signal<boolean>(false);
   readonly clonedListing = signal<ClonedMarketListing | null>(null);
@@ -187,68 +190,103 @@ export class AiSettingsService {
 
   constructor() {
     this.transloco?.langChanges$.subscribe(lang => this.activeLang.set(lang));
-    this.hydrateFromBackend();
+
+    if (this.authService) {
+      effect(() => {
+        const user = this.authService!.currentUser();
+        const nextUserId = user?.id?.trim() || null;
+
+        untracked(() => {
+          if (!nextUserId) {
+            this.activeUserId = null;
+            this.settings.set({ ...DEFAULT_SETTINGS });
+            this.isDbSynced.set(false);
+            this.clearLegacySharedStorage();
+            return;
+          }
+
+          if (this.activeUserId === nextUserId) {
+            return;
+          }
+
+          this.activeUserId = nextUserId;
+          this.isDbSynced.set(false);
+          this.settings.set(this.loadSettings(nextUserId));
+          this.hydrateFromBackend(nextUserId);
+        });
+      });
+    } else {
+      this.settings.set(this.loadSettings(null));
+      this.hydrateFromBackend(null);
+    }
   }
 
-  private hydrateFromBackend(): void {
+  private getUserStorageKey(userId: string | null): string {
+    return userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
+  }
+
+  private getUserCopilotKey(userId: string | null): string {
+    return userId ? `etsy_gemini_config:${userId}` : 'etsy_gemini_config';
+  }
+
+  private clearLegacySharedStorage(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('etsy_gemini_config');
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  private hydrateFromBackend(expectedUserId: string | null): void {
     const shopId = environment.defaultShopId || '53236321';
     this.http.get<{ exists: boolean; settingsJson: string }>(`${environment.apiBaseUrl}/api/settings/ai?shopId=${shopId}`).subscribe({
       next: (res) => {
+        // Oturum değiştiyse eski isteğin yanıtını yok say (kullanıcılar arası sızıntıyı engelle)
+        if (this.activeUserId !== expectedUserId) {
+          return;
+        }
+
         if (res && res.exists && res.settingsJson) {
           try {
             const parsed = JSON.parse(res.settingsJson);
-            const current = this.settings();
             const merged: AiOptimizationSettings = {
               ...DEFAULT_SETTINGS,
               ...parsed
             };
 
-            // Akıllı koruma: Eğer VDS'te bir anahtar veya ayar boş ise, fakat tarayıcının yerel depolamasında (current) doluysa, yereldeki anahtarı koru
-            const keyFields: (keyof AiOptimizationSettings)[] = [
-              'geminiApiKey', 'openAiApiKey', 'claudeApiKey', 'deepSeekApiKey', 'evrenApiKey', 'grokApiKey',
-              'photoRoomApiKey', 'bflApiKey', 'ideogramApiKey', 'customModel'
-            ];
-            let shouldSyncBack = false;
-            for (const k of keyFields) {
-              const parsedVal = (merged[k] as string) || '';
-              const currentVal = (current[k] as string) || '';
-              if (!parsedVal.trim() && currentVal.trim()) {
-                (merged as any)[k] = currentVal;
-                shouldSyncBack = true;
-              }
-            }
-
-            if (!merged.provider && current.provider) {
-              merged.provider = current.provider;
-            }
-
             this.settings.set(merged);
             this.isDbSynced.set(true);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-
-            // Eğer yerelde var olup VDS'te eksik kalmış anahtarlar varsa VDS'i de otomatik senkronize et
-            if (shouldSyncBack) {
-              this.saveSettings(merged).catch(() => {});
-            }
+            this.persistToUserStorage(expectedUserId, merged);
+          } catch {
+            // ignore
+          }
+        } else {
+          // PostgreSQL tek doğruluk kaynağıdır: bu kullanıcının kaydı yoksa temiz varsayılan ayarlar kullanılır
+          this.settings.set({ ...DEFAULT_SETTINGS });
+          this.isDbSynced.set(true);
+          try {
+            localStorage.removeItem(this.getUserStorageKey(expectedUserId));
+            localStorage.removeItem(this.getUserCopilotKey(expectedUserId));
           } catch {
             // ignore
           }
         }
       },
       error: () => {
-        // Backend offline or unreachable, local storage remains active
+        // Backend offline or unreachable, user-scoped local storage remains active
       }
     });
   }
 
-  private loadSettings(): AiOptimizationSettings {
+  private loadSettings(userId: string | null): AiOptimizationSettings {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(this.getUserStorageKey(userId));
       let s = stored ? JSON.parse(stored) : { ...DEFAULT_SETTINGS };
 
-      // Synchronize with copilot gemini config if settings has no key
+      // Synchronize with user-scoped copilot gemini config if settings has no key
       if (!s.geminiApiKey || s.geminiApiKey.trim().length === 0) {
-        const copilotCfg = localStorage.getItem('etsy_gemini_config');
+        const copilotCfg = localStorage.getItem(this.getUserCopilotKey(userId));
         if (copilotCfg) {
           try {
             const parsedCopilot = JSON.parse(copilotCfg);
@@ -270,22 +308,28 @@ export class AiSettingsService {
     return { ...DEFAULT_SETTINGS };
   }
 
-  async saveSettings(newSettings: AiOptimizationSettings): Promise<{ success: boolean; message?: string }> {
-    this.settings.set({ ...newSettings });
+  private persistToUserStorage(userId: string | null, settings: AiOptimizationSettings): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
-      // Keep copilot config synced
-      if (newSettings.geminiApiKey) {
-        localStorage.setItem('etsy_gemini_config', JSON.stringify({
-          apiKey: newSettings.geminiApiKey,
-          model: newSettings.geminiModel || 'gemini-2.5-flash'
+      localStorage.setItem(this.getUserStorageKey(userId), JSON.stringify(settings));
+      if (settings.geminiApiKey) {
+        localStorage.setItem(this.getUserCopilotKey(userId), JSON.stringify({
+          apiKey: settings.geminiApiKey,
+          model: settings.geminiModel || 'gemini-2.5-flash'
         }));
+      } else {
+        localStorage.removeItem(this.getUserCopilotKey(userId));
       }
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
+  }
 
-    // Persist to central VDS backend database
+  async saveSettings(newSettings: AiOptimizationSettings): Promise<{ success: boolean; message?: string }> {
+    const currentUserId = this.authService?.currentUser()?.id?.trim() || this.activeUserId;
+    this.settings.set({ ...newSettings });
+    this.persistToUserStorage(currentUserId, newSettings);
+
+    // Persist to central VDS backend database (PostgreSQL user_ai_settings)
     const shopId = environment.defaultShopId || '53236321';
     try {
       const res = await firstValueFrom(

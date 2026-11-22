@@ -5,20 +5,39 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.AiSettings;
 using EtsyMarketPlace.Application.Common.Models;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.ShopPerformance;
 using MediatR;
 
-// 1. AI Settings
-public sealed record GetAiSettingsRequest(string ShopId) : IRequest<ServiceResponse>;
+// 1. AI Settings (Kullanıcı Bazlı İzolasyon — PostgreSQL user_ai_settings)
+public sealed record GetAiSettingsRequest(
+    string ShopId,
+    string? UserId = null,
+    bool IsApiClient = false) : IRequest<ServiceResponse>;
 
-public sealed class GetAiSettingsHandler(IShopSettingsRepository repository)
+public sealed class GetAiSettingsHandler(
+    IUserAiSettingsRepository userAiSettingsRepository,
+    IShopSettingsRepository shopSettingsRepository)
     : IRequestHandler<GetAiSettingsRequest, ServiceResponse>
 {
     public async Task<ServiceResponse> Handle(GetAiSettingsRequest request, CancellationToken cancellationToken)
     {
-        var json = await repository.GetAiSettingsJsonAsync(request.ShopId, cancellationToken);
+        string? json;
+        if (!string.IsNullOrWhiteSpace(request.UserId) && !request.IsApiClient)
+        {
+            json = await userAiSettingsRepository.GetUserAiSettingsJsonAsync(request.UserId.Trim(), cancellationToken);
+        }
+        else if (request.IsApiClient)
+        {
+            json = await shopSettingsRepository.GetAiSettingsJsonAsync(request.ShopId, cancellationToken);
+        }
+        else
+        {
+            return ServiceResponse.CreateError("AI ayarlarına erişmek için geçerli kullanıcı oturumu gereklidir.", HttpStatusCode.Unauthorized);
+        }
+
         var data = string.IsNullOrWhiteSpace(json)
             ? new { exists = false, settingsJson = "{}" }
             : new { exists = true, settingsJson = json };
@@ -26,9 +45,15 @@ public sealed class GetAiSettingsHandler(IShopSettingsRepository repository)
     }
 }
 
-public sealed record SaveAiSettingsCommandRequest(string ShopId, string SettingsJson) : IRequest<ServiceResponse>;
+public sealed record SaveAiSettingsCommandRequest(
+    string ShopId,
+    string SettingsJson,
+    string? UserId = null,
+    bool IsApiClient = false) : IRequest<ServiceResponse>;
 
-public sealed class SaveAiSettingsHandler(IShopSettingsRepository repository)
+public sealed class SaveAiSettingsHandler(
+    IUserAiSettingsRepository userAiSettingsRepository,
+    IShopSettingsRepository shopSettingsRepository)
     : IRequestHandler<SaveAiSettingsCommandRequest, ServiceResponse>
 {
     public async Task<ServiceResponse> Handle(SaveAiSettingsCommandRequest request, CancellationToken cancellationToken)
@@ -36,8 +61,20 @@ public sealed class SaveAiSettingsHandler(IShopSettingsRepository repository)
         if (string.IsNullOrWhiteSpace(request.SettingsJson))
             return ServiceResponse.CreateError("Ayarlar boş olamaz.", HttpStatusCode.BadRequest);
 
-        await repository.SaveAiSettingsJsonAsync(request.ShopId, request.SettingsJson, cancellationToken);
-        return ServiceResponse.CreateSuccess("AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!", new { success = true });
+        if (!string.IsNullOrWhiteSpace(request.UserId) && !request.IsApiClient)
+        {
+            await userAiSettingsRepository.SaveUserAiSettingsJsonAsync(request.UserId.Trim(), request.SettingsJson, cancellationToken);
+        }
+        else if (request.IsApiClient)
+        {
+            await shopSettingsRepository.SaveAiSettingsJsonAsync(request.ShopId, request.SettingsJson, cancellationToken);
+        }
+        else
+        {
+            return ServiceResponse.CreateError("AI ayarlarını kaydetmek için geçerli kullanıcı oturumu gereklidir.", HttpStatusCode.Unauthorized);
+        }
+
+        return ServiceResponse.CreateSuccess("AI ayarları ve API anahtarları kullanıcı hesabınıza şifreli olarak kaydedildi!", new { success = true });
     }
 }
 

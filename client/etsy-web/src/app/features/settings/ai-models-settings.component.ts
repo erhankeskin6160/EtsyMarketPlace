@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
 import { AiSettingsService, AiOptimizationSettings } from '../../core/services/ai-settings.service';
+import { AuthService } from '../../core/services/auth.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 interface TerminalLogEntry {
@@ -28,6 +29,10 @@ interface TerminalLogEntry {
           <p class="hub-subtitle">
             {{ t('settings.aiModels.subtitle') }}
           </p>
+          <div class="user-isolation-pill" *ngIf="currentUsername">
+            <span>🔐</span>
+            <span>{{ currentUsername }} hesabına özel şifreli AI anahtarları (PostgreSQL)</span>
+          </div>
         </div>
         <button *ngIf="isModal" class="btn-close-modal" (click)="closeModal()" [title]="t('settings.aiModels.closeTitle')">✕</button>
       </div>
@@ -355,6 +360,19 @@ interface TerminalLogEntry {
       font-size: 0.82rem;
       color: #94a3b8;
       margin: 0;
+    }
+    .user-isolation-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
     }
     .btn-close-modal {
       background: transparent;
@@ -761,9 +779,23 @@ export class AiModelsSettingsComponent implements OnInit {
   @Output() modalClosed = new EventEmitter<void>();
 
   private aiService = inject(AiSettingsService);
+  private authService = inject(AuthService);
   private transloco = inject(TranslocoService);
 
   formSettings: AiOptimizationSettings = { ...this.aiService.settings() };
+
+  get currentUsername(): string {
+    return this.authService.currentUser()?.username || '';
+  }
+
+  constructor() {
+    effect(() => {
+      const latest = this.aiService.settings();
+      if (!this.isSaving) {
+        this.formSettings = { ...latest };
+      }
+    });
+  }
 
   showKey = false;
   showPhotoRoomKey = false;
