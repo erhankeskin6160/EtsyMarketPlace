@@ -789,7 +789,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         return string.Empty;
     }
 
-    private static string ExtractPortalErrorSummary(string body)
+    public static string ExtractPortalErrorSummary(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return string.Empty;
         try
@@ -798,6 +798,54 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             var root = doc.RootElement;
             if (root.ValueKind == JsonValueKind.Object)
             {
+                var fieldErrors = new List<string>();
+                if (root.TryGetProperty("errors", out var errorsProp))
+                {
+                    if (errorsProp.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in errorsProp.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                var msgs = prop.Value.EnumerateArray()
+                                    .Where(x => x.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(x.GetString()))
+                                    .Select(x => x.GetString()!.Trim())
+                                    .ToList();
+                                if (msgs.Count > 0)
+                                {
+                                    fieldErrors.Add($"{prop.Name}: {string.Join(", ", msgs)}");
+                                }
+                            }
+                            else if (prop.Value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(prop.Value.GetString()))
+                            {
+                                fieldErrors.Add($"{prop.Name}: {prop.Value.GetString()!.Trim()}");
+                            }
+                        }
+                    }
+                    else if (errorsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in errorsProp.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                                fieldErrors.Add(item.GetString()!.Trim());
+                            else if (item.ValueKind == JsonValueKind.Object)
+                            {
+                                string f = item.TryGetProperty("propertyName", out var pn) ? (pn.GetString() ?? "")
+                                         : (item.TryGetProperty("field", out var fn) ? (fn.GetString() ?? "") : "");
+                                string m = item.TryGetProperty("errorMessage", out var em) ? (em.GetString() ?? "")
+                                         : (item.TryGetProperty("message", out var mm) ? (mm.GetString() ?? "") : "");
+                                if (!string.IsNullOrWhiteSpace(m))
+                                    fieldErrors.Add(string.IsNullOrWhiteSpace(f) ? m.Trim() : $"{f.Trim()}: {m.Trim()}");
+                            }
+                        }
+                    }
+                }
+
+                if (fieldErrors.Count > 0)
+                {
+                    return string.Join(" | ", fieldErrors);
+                }
+
                 foreach (string key in new[] { "message", "detail", "title", "error" })
                 {
                     if (root.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(prop.GetString()))
@@ -806,7 +854,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             }
         }
         catch { }
-        return body.Length > 250 ? body[..250] : body;
+        return body.Length > 350 ? body[..350] : body;
     }
 
     private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(

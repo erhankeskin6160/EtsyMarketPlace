@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { TRANSLOCO_LOADER, TranslocoService } from '@jsverse/transloco';
+import { ToastrService } from 'ngx-toastr';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { EtsyApiService } from './etsy-api.service';
 import { LocaleFormatService } from '../i18n/locale-format.service';
@@ -13,6 +14,7 @@ const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
 export class OrdersService {
   private readonly localeFormat = inject(LocaleFormatService);
   private readonly transloco = inject(TRANSLOCO_LOADER, { optional: true }) ? inject(TranslocoService) : null;
+  private readonly toastr = inject(ToastrService, { optional: true });
   private ordersSubject = new BehaviorSubject<OrderFulfillmentItem[]>([]);
   public orders$ = this.ordersSubject.asObservable();
   public ordersLoading = false;
@@ -325,7 +327,7 @@ export class OrdersService {
             expiresAtUtc: res.expiresAtUtc || undefined
           });
           if (res.message) {
-            alert(res.message);
+            this.toastr?.warning(res.message);
           }
           return;
         }
@@ -345,9 +347,11 @@ export class OrdersService {
           isConnected: false,
           statusLabel: this.t('core.orders.statusLogin', '⚠️ Giriş Yap')
         });
-        const msg = err?.error?.message || err?.message;
-        if (msg) {
-          alert(msg);
+        if (!err?.status) {
+          const msg = err?.error?.message || err?.message;
+          if (msg) {
+            this.toastr?.error(msg);
+          }
         }
       }
     });

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TranslocoDirective, TranslocoService, provideTranslocoScope } from '@jsverse/transloco';
+import { ToastrService } from 'ngx-toastr';
 import { OrdersService } from '../../core/services/orders.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import {
@@ -26,6 +27,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 export class OrdersComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
   private transloco = inject(TranslocoService);
+  private toastr = inject(ToastrService);
   // STATE
   allOrders: OrderFulfillmentItem[] = [];
   selectedOrder: OrderFulfillmentItem | null = null;
@@ -695,7 +697,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   executeCreateShipment(): void {
     if (!this.selectedOrder) return;
     if (this.selectedOrder.isAddressMissing) {
-      alert(this.transloco.translate('orders.messages.alertAddressRequired'));
+      this.toastr.warning(this.transloco.translate('orders.messages.alertAddressRequired'));
       return;
     }
 
@@ -706,21 +708,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const subCarrier = quote?.subCarrier || 'FedEx';
 
     if (carrierKey === 'shiptomore' && this.notifyEtsyOnShipment && !this.selectedOrder.phone?.trim()) {
-      alert(this.transloco.translate('orders.messages.alertStmPhoneRequired'));
+      this.toastr.warning(this.transloco.translate('orders.messages.alertStmPhoneRequired'));
       this.openAddressModal();
       return;
     }
 
     const destCountry = (this.selectedOrder.countryCode || 'US').toUpperCase();
     if (carrierKey === 'shiptomore' && (destCountry === 'US' || destCountry === 'CA' || destCountry === 'IE') && !this.selectedOrder.state?.trim()) {
-      alert(this.transloco.translate('orders.messages.alertStmStateRequired'));
+      this.toastr.warning(this.transloco.translate('orders.messages.alertStmStateRequired'));
       this.openAddressModal();
       return;
     }
 
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
-      alert(this.transloco.translate('orders.messages.alertInvalidReceiptId'));
+      this.toastr.warning(this.transloco.translate('orders.messages.alertInvalidReceiptId'));
       return;
     }
 
@@ -783,15 +785,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
           });
           setTimeout(() => this.saveSuccessMessage = null, 9000);
         } else {
-          alert(this.transloco.translate('orders.messages.shipmentCreateFailed', {
+          this.toastr.warning(this.transloco.translate('orders.messages.shipmentCreateFailed', {
             error: res?.message || res?.errorMessage || this.transloco.translate('orders.messages.unknownError')
           }));
         }
       },
       error: (err: any) => {
         this.isGeneratingShipment = false;
-        const errMsg = err?.error?.errorMessage || err?.error?.message || err?.message || this.transloco.translate('orders.messages.apiError');
-        alert(this.transloco.translate('orders.messages.shipmentCreateError', { error: errMsg }));
+        // HTTP 400/422/5xx hataları global interceptor tarafından toast ile gösterilir; yalnızca ağ/durumsuz hatalarda yedek toast bas.
+        if (!err?.status) {
+          const errMsg = err?.error?.errorMessage || err?.error?.message || err?.message || this.transloco.translate('orders.messages.apiError');
+          this.toastr.error(this.transloco.translate('orders.messages.shipmentCreateError', { error: errMsg }));
+        }
       }
     });
   }
@@ -814,7 +819,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   async pasteFromClipboard(): Promise<void> {
     try {
       if (!navigator.clipboard || !navigator.clipboard.readText) {
-        alert(this.transloco.translate('orders.messages.clipboardUnsupported'));
+        this.toastr.warning(this.transloco.translate('orders.messages.clipboardUnsupported'));
         return;
       }
       const text = await navigator.clipboard.readText();
@@ -826,7 +831,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.aiParseErrorMessage = this.transloco.translate('orders.messages.clipboardEmpty');
       }
     } catch (e: any) {
-      alert(this.transloco.translate('orders.messages.clipboardPermissionDenied', {
+      this.toastr.warning(this.transloco.translate('orders.messages.clipboardPermissionDenied', {
         error: e?.message || this.transloco.translate('orders.messages.clipboardManualFallback')
       }));
     }
@@ -1121,7 +1126,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.selectedOrder) return;
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
-      alert(this.transloco.translate('orders.messages.alertInvalidOrderId'));
+      this.toastr.warning(this.transloco.translate('orders.messages.alertInvalidOrderId'));
       return;
     }
     this.ordersService.updateOrderAddress(rId, this.editAddressModel).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -1149,9 +1154,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
         setTimeout(() => this.saveSuccessMessage = null, 4000);
       },
       error: (err: any) => {
-        alert(this.transloco.translate('orders.messages.addressSaveError', {
-          error: err?.error?.message || err?.message || ''
-        }));
+        if (!err?.status) {
+          this.toastr.error(this.transloco.translate('orders.messages.addressSaveError', {
+            error: err?.error?.message || err?.message || ''
+          }));
+        }
       }
     });
   }
@@ -1347,18 +1354,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
       if (val.isValid && !val.expired) {
         const locale = this.transloco.getActiveLang() === 'en' ? 'en-US' : 'tr-TR';
         const expStr = val.expDate ? val.expDate.toLocaleString(locale) : this.transloco.translate('orders.messages.jwtUnlimited');
-        alert(this.transloco.translate('orders.messages.arasTestValid', {
+        this.toastr.success(this.transloco.translate('orders.messages.arasTestValid', {
           remaining: val.timeLeftStr || this.transloco.translate('orders.messages.tokenValid'),
           expires: expStr
         }));
       } else {
-        alert(this.transloco.translate('orders.messages.arasTestInvalid', { reason: val.reason || '' }));
+        this.toastr.warning(this.transloco.translate('orders.messages.arasTestInvalid', { reason: val.reason || '' }));
       }
       return;
     }
     if (this.activeModalCarrier.id === 'shipentegra') {
       if (!this.seApiKey.trim() || !this.seApiSecret.trim()) {
-        alert(this.transloco.translate('orders.messages.seFieldsRequired'));
+        this.toastr.warning(this.transloco.translate('orders.messages.seFieldsRequired'));
         return;
       }
       this.isConnectingCarrier = true;
@@ -1370,18 +1377,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
       }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.isConnectingCarrier = false;
-          alert(this.transloco.translate('orders.messages.seTestSuccess'));
+          this.toastr.success(this.transloco.translate('orders.messages.seTestSuccess'));
         },
         error: (err) => {
           this.isConnectingCarrier = false;
-          alert(this.transloco.translate('orders.messages.seTestFailed', {
-            error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.unknownError')
-          }));
+          if (!err?.status) {
+            this.toastr.error(this.transloco.translate('orders.messages.seTestFailed', {
+              error: err?.error?.message || err?.message || this.transloco.translate('orders.messages.unknownError')
+            }));
+          }
         }
       });
       return;
     }
-    alert(this.transloco.translate('orders.messages.testNotSupported', { name: this.activeModalCarrier.name }));
+    this.toastr.info(this.transloco.translate('orders.messages.testNotSupported', { name: this.activeModalCarrier.name }));
   }
 
   disconnectSession(carrier: CarrierAccountSession): void {
@@ -1536,7 +1545,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openAddCarrierToast(): void {
-    alert(this.transloco.translate('orders.messages.addCarrierComingSoon'));
+    this.toastr.info(this.transloco.translate('orders.messages.addCarrierComingSoon'));
   }
 
   // --- HELPERS ---

@@ -165,6 +165,26 @@ public class NavlungoShipmentCreationProviderTests
     }
 
     [Fact]
+    public void ExtractPortalErrorSummary_FormatsAspNetCoreValidationProblemDetailsErrors()
+    {
+        string problemJson = @"{
+            ""type"": ""https://tools.ietf.org/html/rfc9110#section-15.5.1"",
+            ""title"": ""One or more validation errors occurred."",
+            ""status"": 400,
+            ""errors"": {
+                ""SenderShippingAddress"": [""The SenderShippingAddress field is required.""],
+                ""Packages[0].Type"": [""Invalid package type.""]
+            }
+        }";
+
+        string summary = NavlungoApiClient.ExtractPortalErrorSummary(problemJson);
+
+        Assert.Contains("SenderShippingAddress: The SenderShippingAddress field is required.", summary);
+        Assert.Contains("Packages[0].Type: Invalid package type.", summary);
+        Assert.DoesNotContain("One or more validation errors occurred.", summary);
+    }
+
+    [Fact]
     public async Task NavlungoApiClient_CreateShipmentAsync_ExecutesPortalInitQuotesApproveAndConsignment()
     {
         var calledUrls = new List<string>();
