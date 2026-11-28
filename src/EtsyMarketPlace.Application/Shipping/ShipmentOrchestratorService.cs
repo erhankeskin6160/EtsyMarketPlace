@@ -481,19 +481,33 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         if (key.Contains("navlungo"))
         {
             var settings = NavlungoSettingsStore.Load();
-            string token = (command.BearerToken ?? command.ApiKey ?? string.Empty).Trim();
+            string token = NavlungoSettings.SanitizeRawToken(command.BearerToken ?? command.ApiKey);
+            string? expiredJwtWarning = null;
             if (!string.IsNullOrWhiteSpace(token))
             {
                 if (NavlungoSettings.LooksLikeJwt(token))
                 {
-                    settings.IdToken = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-                        ? token["Bearer ".Length..].Trim()
+                    string cleanJwt = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                        ? NavlungoSettings.SanitizeRawToken(token["Bearer ".Length..])
                         : token;
-                    settings.ExpiresAtUtc = JwtTokenInspector.GetExpirationUtc(settings.CleanToken);
+                    settings.IdToken = cleanJwt;
+                    DateTime? jwtExp = JwtTokenInspector.GetExpirationUtc(cleanJwt);
+                    settings.ExpiresAtUtc = jwtExp;
+                    if (JwtTokenInspector.IsExpired(cleanJwt))
+                    {
+                        expiredJwtWarning = jwtExp.HasValue
+                            ? $"Yapıştırdığınız Navlungo JWT token'ının süresi dolmuş ({jwtExp.Value:yyyy-MM-dd HH:mm} UTC). Lütfen ship.navlungo.com üzerinden güncel token alın."
+                            : "Yapıştırdığınız Navlungo JWT token'ının süresi dolmuş. Lütfen güncel token alın.";
+                    }
                 }
                 else
                 {
                     settings.SessionCookie = token;
+                    // Yeni çerez kaydedilirken eski süresi dolmuş JWT'yi temizle
+                    if (NavlungoSettings.LooksLikeJwt(settings.CleanToken) && JwtTokenInspector.IsExpired(settings.CleanToken))
+                    {
+                        settings.IdToken = string.Empty;
+                    }
                     settings.ExpiresAtUtc = DateTime.UtcNow.AddHours(12);
                 }
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
@@ -503,7 +517,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
 
             NavlungoSettingsStore.Save(settings);
 
-            string? captureError = null;
+            string? captureError = expiredJwtWarning;
             if ((command.OpenBrowser || (string.IsNullOrWhiteSpace(token) && (!settings.IsSessionValid || !string.IsNullOrWhiteSpace(settings.SavedEmail))))
                 && _sessionManager != null)
             {
@@ -520,7 +534,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 }
             }
 
-            string activeToken = !string.IsNullOrWhiteSpace(settings.CleanToken)
+            string activeToken = !string.IsNullOrWhiteSpace(settings.CleanToken) && !JwtTokenInspector.IsExpired(settings.CleanToken)
                 ? settings.CleanToken
                 : (settings.SessionCookie ?? string.Empty);
             bool isConnected = settings.IsSessionValid;

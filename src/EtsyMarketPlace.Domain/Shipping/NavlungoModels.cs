@@ -79,22 +79,28 @@ public sealed class NavlungoSettings
     {
         get
         {
-            string t = (IdToken ?? string.Empty).Trim();
+            string t = SanitizeRawToken(IdToken);
             if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
-                t = t["Bearer ".Length..].Trim();
+                t = SanitizeRawToken(t["Bearer ".Length..]);
             }
             return t;
         }
     }
 
+    public static string SanitizeRawToken(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        return value.Trim().Trim('"', '\'').Replace("\r", string.Empty).Replace("\n", string.Empty).Trim();
+    }
+
     public static bool LooksLikeJwt(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return false;
-        string trimmed = value.Trim();
+        string trimmed = SanitizeRawToken(value);
+        if (string.IsNullOrWhiteSpace(trimmed)) return false;
         if (trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            trimmed = trimmed["Bearer ".Length..].Trim();
+            trimmed = SanitizeRawToken(trimmed["Bearer ".Length..]);
         }
         return !trimmed.Contains(';') && !trimmed.Contains('=') && trimmed.Count(c => c == '.') == 2;
     }
@@ -115,17 +121,35 @@ public sealed class NavlungoSettings
         get
         {
             string clean = CleanToken;
-            bool hasAny = !string.IsNullOrWhiteSpace(clean) || !string.IsNullOrWhiteSpace(SessionCookie);
-            if (!hasAny) return false;
-            if (LooksLikeJwt(clean) && JwtTokenInspector.IsExpired(clean))
+            bool hasJwt = LooksLikeJwt(clean);
+            bool jwtValid = hasJwt && !JwtTokenInspector.IsExpired(clean);
+            bool hasCookie = !string.IsNullOrWhiteSpace(SessionCookie);
+
+            if (jwtValid)
             {
-                return false;
+                return true;
             }
-            if (ExpiresAtUtc.HasValue && DateTime.UtcNow >= ExpiresAtUtc.Value)
+
+            // Süresi dolmuş eski bir IdToken varsa bile geçerli bir SessionCookie oturumu çalışmaya devam edebilmeli.
+            if (hasCookie)
             {
-                return false;
+                if (ExpiresAtUtc.HasValue && DateTime.UtcNow >= ExpiresAtUtc.Value)
+                {
+                    return false;
+                }
+                return true;
             }
-            return true;
+
+            if (!string.IsNullOrWhiteSpace(clean) && !hasJwt)
+            {
+                if (ExpiresAtUtc.HasValue && DateTime.UtcNow >= ExpiresAtUtc.Value)
+                {
+                    return false;
+                }
+                return true;
+            }
+
+            return false;
         }
     }
 }

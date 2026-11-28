@@ -1342,7 +1342,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   testCarrierConnection(): void {
     if (!this.activeModalCarrier) return;
-    if (this.activeModalCarrier.id === 'aras') {
+    if (this.activeModalCarrier.id === 'aras' || this.activeModalCarrier.id === 'navlungo') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
         const locale = this.transloco.getActiveLang() === 'en' ? 'en-US' : 'tr-TR';

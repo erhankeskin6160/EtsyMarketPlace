@@ -136,6 +136,35 @@ public class NavlungoShipmentCreationProviderTests
     }
 
     [Fact]
+    public void NavlungoSettings_IsSessionValid_RemainsTrue_WhenValidCookiePresentAlongsideExpiredJwt()
+    {
+        // exp = 1600000000 (2020 — expired)
+        string expiredJwt = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE2MDAwMDAwMDB9.sig";
+        var settings = new NavlungoSettings
+        {
+            IdToken = $"\"{expiredJwt}\"\r\n",
+            SessionCookie = "session_id=active-cookie",
+            ExpiresAtUtc = DateTime.UtcNow.AddHours(6)
+        };
+
+        Assert.True(NavlungoSettings.LooksLikeJwt(settings.IdToken));
+        Assert.Equal(expiredJwt, settings.CleanToken);
+        Assert.True(settings.IsSessionValid);
+    }
+
+    [Fact]
+    public void NavlungoSettings_IsSessionValid_ReturnsFalse_WhenOnlyExpiredJwtPresent()
+    {
+        string expiredJwt = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjE2MDAwMDAwMDB9.sig";
+        var settings = new NavlungoSettings
+        {
+            IdToken = $"Bearer {expiredJwt}"
+        };
+
+        Assert.False(settings.IsSessionValid);
+    }
+
+    [Fact]
     public async Task NavlungoApiClient_CreateShipmentAsync_ExecutesPortalInitQuotesApproveAndConsignment()
     {
         var calledUrls = new List<string>();

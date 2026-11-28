@@ -93,9 +93,12 @@ export class OrdersService {
             current[idx] = item;
             changed = true;
           } else if ((srv.carrierKey === 'aras' || srv.carrierKey === 'navlungo') && !srv.isConnected) {
-            // Sunucuda Aras/Navlungo tokenı geçersizse yerel süresi dolmuş tokenı kontrol et
+            // Sunucuda oturum yoksa yerel token geçerli JWT ise sunucuya senkronize etmeyi dene;
+            // geçersizse veya süresi dolmuşsa UI'ı kesinlikle bağlı değil durumuna çek.
             const localValid = this.validateJwt(item.tokenOrKey);
-            if (!localValid.isValid || localValid.expired) {
+            if (localValid.isValid && !localValid.expired && item.tokenOrKey && item.tokenOrKey.length > 30) {
+              this.connectCarrier(srv.carrierKey, item.tokenOrKey);
+            } else {
               item.isConnected = false;
               item.expiresAtUtc = srv.expiresAtUtc || undefined;
               item.statusLabel = this.t('core.orders.statusLogin', '⚠️ Giriş Yap');
@@ -314,16 +317,39 @@ export class OrdersService {
       bearerToken: token
     }).subscribe({
       next: (res) => {
-        if (res && res.bearerToken && !token) {
+        if (res && res.isConnected === false) {
+          this.updateCarrierSession({
+            id: carrierId as any,
+            isConnected: false,
+            statusLabel: this.t('core.orders.statusLogin', '⚠️ Giriş Yap'),
+            expiresAtUtc: res.expiresAtUtc || undefined
+          });
+          if (res.message) {
+            alert(res.message);
+          }
+          return;
+        }
+        if (res && (res.bearerToken || res.expiresAtUtc)) {
           this.updateCarrierSession({
             id: carrierId as any,
             isConnected: true,
             statusLabel: this.t('core.orders.statusConnected', '🟢 Bağlı'),
-            tokenOrKey: res.bearerToken
+            tokenOrKey: res.bearerToken || token,
+            expiresAtUtc: res.expiresAtUtc || undefined
           });
         }
       },
-      error: () => {}
+      error: (err) => {
+        this.updateCarrierSession({
+          id: carrierId as any,
+          isConnected: false,
+          statusLabel: this.t('core.orders.statusLogin', '⚠️ Giriş Yap')
+        });
+        const msg = err?.error?.message || err?.message;
+        if (msg) {
+          alert(msg);
+        }
+      }
     });
   }
 
