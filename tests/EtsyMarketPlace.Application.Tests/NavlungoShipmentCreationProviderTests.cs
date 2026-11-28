@@ -325,6 +325,24 @@ public class NavlungoShipmentCreationProviderTests
         Assert.Contains("Adreslerim", resp.ErrorMessage);
     }
 
+    [Fact]
+    public async Task NavlungoApiClient_CreateShipmentAsync_ReturnsExpiredSessionError_WhenStoredSenderReturns401()
+    {
+        using var http = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+
+        var client = new NavlungoApiClient(http);
+        var resp = await client.CreateShipmentAsync(new NavlungoCreateShipmentRequest
+        {
+            ReceiverName = "Bryan Sanon",
+            ReceiverCountryCode = "US"
+        }, new NavlungoSettings { SessionCookie = "session=valid" });
+
+        Assert.False(resp.IsSuccess);
+        Assert.Contains("HTTP 401", resp.ErrorMessage);
+        Assert.DoesNotContain("Adreslerim", resp.ErrorMessage);
+    }
+
     private sealed class FakeNavlungoApiClient : INavlungoApiClient
     {
         public NavlungoCreateShipmentRequest? CapturedRequest { get; private set; }

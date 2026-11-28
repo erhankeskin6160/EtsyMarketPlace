@@ -288,14 +288,19 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             req.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
         }
 
-        string rawToken = (settings.IdToken ?? string.Empty).Trim();
-        if (rawToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        string cleanJwt = settings.CleanToken;
+        if (string.IsNullOrWhiteSpace(cleanJwt) && !string.IsNullOrWhiteSpace(settings.SessionCookie))
         {
-            req.Headers.TryAddWithoutValidation("Authorization", rawToken);
+            var m = Regex.Match(settings.SessionCookie, @"(?:^|;\s*)id_token=([^;\s]+)", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                cleanJwt = NavlungoSettings.SanitizeRawToken(m.Groups[1].Value);
+            }
         }
-        else if (rawToken.Count(c => c == '.') == 2)
+
+        if (NavlungoSettings.LooksLikeJwt(cleanJwt))
         {
-            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {rawToken}");
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cleanJwt}");
         }
     }
 
@@ -455,19 +460,32 @@ public sealed class NavlungoApiClient : INavlungoApiClient
 
             await Task.WhenAll(senderShippingTask, senderInvoiceTask, gtipTask).ConfigureAwait(false);
 
-            var senderShipping = await senderShippingTask.ConfigureAwait(false);
-            var senderInvoice = await senderInvoiceTask.ConfigureAwait(false);
+            var (senderShipping, shipAddrStatus, shipAddrErr) = await senderShippingTask.ConfigureAwait(false);
+            var (senderInvoice, invAddrStatus, invAddrErr) = await senderInvoiceTask.ConfigureAwait(false);
             string resolvedGtip = await gtipTask.ConfigureAwait(false);
+
+            if (shipAddrStatus == HttpStatusCode.Unauthorized || shipAddrStatus == HttpStatusCode.Forbidden ||
+                invAddrStatus == HttpStatusCode.Unauthorized || invAddrStatus == HttpStatusCode.Forbidden)
+            {
+                int code = (int)(shipAddrStatus ?? invAddrStatus ?? HttpStatusCode.Unauthorized);
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = $"Navlungo oturum süresi dolmuş veya yetkisiz (HTTP {code}). Lütfen üst menüden 'Navlungo → Oturum Aç' penceresinden güncel Bearer JWT token'ınızı yenileyip tekrar deneyin."
+                };
+            }
 
             if (senderShipping == null || senderInvoice == null)
             {
+                string extraErr = !string.IsNullOrWhiteSpace(shipAddrErr) ? $" ({shipAddrErr})"
+                    : (!string.IsNullOrWhiteSpace(invAddrErr) ? $" ({invAddrErr})" : string.Empty);
                 string missingWhich = senderShipping == null && senderInvoice == null
                     ? "gönderici ve fatura"
                     : (senderShipping == null ? "gönderici çıkış" : "fatura");
                 return new NavlungoCreateShipmentResponse
                 {
                     IsSuccess = false,
-                    ErrorMessage = $"Navlungo hesabınızda kayıtlı {missingWhich} adresi bulunamadı. Lütfen ship.navlungo.com → Adreslerim bölümünden bir kez gönderici ve fatura adresi ekleyin."
+                    ErrorMessage = $"Navlungo hesabınızda kayıtlı {missingWhich} adresi bulunamadı{extraErr}. Lütfen ship.navlungo.com → Adreslerim bölümünden bir kez gönderici ve fatura adresi ekleyin."
                 };
             }
 
@@ -685,7 +703,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         }
     }
 
-    private async Task<System.Text.Json.Nodes.JsonObject?> FetchStoredSenderAddressAsync(
+    private async Task<(System.Text.Json.Nodes.JsonObject? Address, HttpStatusCode? StatusCode, string? ErrorDetail)> FetchStoredSenderAddressAsync(
         string relativePath,
         NavlungoSettings settings,
         CancellationToken ct)
@@ -695,11 +713,14 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             using var req = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}{relativePath}");
             ApplyPortalAuthHeaders(req, settings);
             using var res = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
-            if (!res.IsSuccessStatusCode) return null;
-
             string body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode)
+            {
+                return (null, res.StatusCode, $"HTTP {(int)res.StatusCode}");
+            }
+
             var arr = System.Text.Json.Nodes.JsonNode.Parse(body) as System.Text.Json.Nodes.JsonArray;
-            if (arr == null || arr.Count == 0) return null;
+            if (arr == null || arr.Count == 0) return (null, res.StatusCode, null);
 
             System.Text.Json.Nodes.JsonObject? chosen = null;
             foreach (var item in arr)
@@ -715,18 +736,18 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 }
             }
 
-            if (chosen == null) return null;
+            if (chosen == null) return (null, res.StatusCode, null);
 
             var cleaned = StripEmptyStringFields(chosen) as System.Text.Json.Nodes.JsonObject;
             if (cleaned != null && cleaned["identificationNumber"] == null && cleaned["taxNumber"] != null)
             {
                 cleaned["identificationNumber"] = cleaned["taxNumber"]!.DeepClone();
             }
-            return cleaned;
+            return (cleaned, res.StatusCode, null);
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return (null, null, ex.Message);
         }
     }
 

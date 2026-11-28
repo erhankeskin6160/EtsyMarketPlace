@@ -1126,49 +1126,56 @@
               </div>
             </div>
 
-            <!-- NAVLUNGO AUTOMATIC SESSION REFRESH & TOKEN CAPTURE -->
-            <div *ngIf="activeModalCarrier?.id === 'navlungo'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 12px; border-radius: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.28);">
-              <div class="guide-title" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                <span>⚡ <strong>{{ t('orders.sessionModal.navlungoTitle') }}</strong></span>
-                <span style="font-size: 0.72rem; color: #60a5fa; font-weight: 600;">{{ getCarrierRemainingValidityText(activeModalCarrier) }}</span>
+            <!-- NAVLUNGO QUICK SESSION CONNECT (BOOKMARKLET + SMART CLIPBOARD PASTE) -->
+            <div *ngIf="activeModalCarrier?.id === 'navlungo'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 14px; border-radius: 10px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+              <div class="guide-title" style="margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <span>⚡ <strong>Navlungo Hızlı Oturum Bağlantısı</strong></span>
+                <span
+                  [style.color]="getNavlungoLiveExpiryBadge().color"
+                  [style.background]="getNavlungoLiveExpiryBadge().bg"
+                  style="font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px;">
+                  {{ getNavlungoLiveExpiryBadge().text }}
+                </span>
               </div>
-              <p class="guide-text" style="margin-bottom: 10px;">
-                {{ t('orders.sessionModal.navlungoDesc') }}
+
+              <p class="guide-text" style="margin-bottom: 10px; font-size: 0.8rem; line-height: 1.45; color: #cbd5e1;">
+                Navlungo JWT oturumları <strong>1 saat</strong> geçerlidir. Kendi tarayıcınızda <code>ship.navlungo.com</code>'a giriş yapıp aşağıdaki iki yöntemden biriyle 3 saniyede bağlanabilirsiniz:
               </p>
 
-              <div class="form-row-2" style="margin-bottom: 10px;">
-                <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.navlungoEmailLabel') }}</label>
-                  <input type="text" [(ngModel)]="navlungoEmail" class="form-control" [placeholder]="t('orders.sessionModal.navlungoEmailPlaceholder')" />
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                  <label class="form-label" style="font-size: 0.75rem;">{{ t('orders.sessionModal.passwordOptionalLabel') }}</label>
-                  <input type="password" [(ngModel)]="navlungoPassword" class="form-control" placeholder="••••••••" />
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button
-                  type="button"
-                  class="btn-save-session"
-                  style="flex: 1; background: linear-gradient(135deg, #2563eb, #3b82f6); border: none;"
-                  [disabled]="isCapturingBrowserToken"
-                  (click)="triggerNavlungoBrowserCapture(false)">
-                  <span *ngIf="!isCapturingBrowserToken">{{ t('orders.sessionModal.navlungoSilentBtn') }}</span>
-                  <span *ngIf="isCapturingBrowserToken">{{ t('orders.sessionModal.navlungoRefreshingBtn') }}</span>
-                </button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
                 <button
                   type="button"
                   class="btn-test-session"
-                  [disabled]="isCapturingBrowserToken"
-                  (click)="triggerNavlungoBrowserCapture(true)"
-                  [title]="t('orders.sessionModal.navlungoBrowserTitle')">
-                  {{ t('orders.sessionModal.navlungoBrowserBtn') }}
+                  style="flex: 1; min-width: 155px;"
+                  (click)="openNavlungoPortal()">
+                  🌐 ship.navlungo.com'u Aç
+                </button>
+                <button
+                  type="button"
+                  class="btn-save-session"
+                  style="flex: 1.3; min-width: 185px; background: linear-gradient(135deg, #2563eb, #3b82f6); border: none;"
+                  [disabled]="isConnectingCarrier"
+                  (click)="pasteAndConnectNavlungoFromClipboard()">
+                  📋 Panodan Akıllı Yapıştır &amp; Bağlan
                 </button>
               </div>
 
-              <div *ngIf="browserCaptureStatus" style="margin-top: 8px; font-size: 0.78rem; padding: 6px 10px; border-radius: 6px; background: rgba(15, 23, 42, 0.55); color: #e2e8f0;">
-                {{ browserCaptureStatus }}
+              <div style="padding: 9px 11px; border-radius: 8px; background: rgba(15, 23, 42, 0.55); border: 1px dashed rgba(96, 165, 250, 0.35); font-size: 0.76rem; color: #cbd5e1; line-height: 1.45;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
+                  <strong style="color: #93c5fd;">📌 1-Tıkla Yer İmi (Tek Seferlik Kurulum)</strong>
+                  <a
+                    [href]="navlungoBookmarkletUrl"
+                    (click)="$event.preventDefault(); copyNavlungoBookmarkletInfo()"
+                    title="Chrome yer imleri çubuğuna sürükleyip bırakın"
+                    style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; background: #1d4ed8; color: #fff; font-weight: 600; font-size: 0.74rem; text-decoration: none; cursor: grab;">
+                    ⚡ Navlungo Token Yakala
+                  </a>
+                </div>
+                <div>
+                  1) Mavi <strong>⚡ Navlungo Token Yakala</strong> butonunu tarayıcı yer imi çubuğuna sürükleyin.<br/>
+                  2) <code>ship.navlungo.com</code> açıkken yer imine tıklayın (token panoya kopyalanır), ardından yukarıdaki <strong>Panodan Akıllı Yapıştır &amp; Bağlan</strong>'a basın.<br/>
+                  <span style="color: #94a3b8;">Alternatif: DevTools Network'ten <code>Copy as cURL</code> veya <code>Authorization: Bearer ...</code> kopyalayıp doğrudan yapıştırabilirsiniz.</span>
+                </div>
               </div>
             </div>
 
