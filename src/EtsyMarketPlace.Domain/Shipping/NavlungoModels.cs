@@ -44,6 +44,8 @@ public sealed class NavlungoQuoteOffer
     public string QuoteId { get; set; } = string.Empty;
     public string ShipmentId { get; set; } = string.Empty;
     public string SearchId { get; set; } = string.Empty;
+    public string SearchReference { get; set; } = string.Empty;
+    public List<string> AvailableValueAddedServices { get; set; } = new();
     public string CustomerName { get; set; } = string.Empty;
     public double ChargeableWeightKg { get; set; }
     public double VolumetricWeightKg { get; set; }

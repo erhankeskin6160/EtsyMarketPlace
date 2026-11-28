@@ -445,21 +445,40 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         {
             string countryCode = string.IsNullOrWhiteSpace(request.ReceiverCountryCode) ? "US" : request.ReceiverCountryCode.Trim().ToUpperInvariant();
             string fromCountry = string.IsNullOrWhiteSpace(request.FromCountryCode) ? "TR" : request.FromCountryCode.Trim().ToUpperInvariant();
-            decimal totalProforma = Math.Round(Math.Max(1.00m, request.UnitPriceUsd * Math.Max(1, request.Quantity)), 2, MidpointRounding.AwayFromZero);
+            decimal unitPrice = Math.Round(Math.Max(1.00m, request.UnitPriceUsd), 2, MidpointRounding.AwayFromZero);
+            int quantity = Math.Max(1, request.Quantity);
+
+            // 1a. Kullanıcının Navlungo hesabındaki kayıtlı gönderici ve fatura adreslerini çek
+            var senderShippingTask = FetchStoredSenderAddressAsync("/api/Shippers/stored-sender-shipping-address", settings, cancellationToken);
+            var senderInvoiceTask = FetchStoredSenderAddressAsync("/api/Shippers/stored-sender-invoice-address", settings, cancellationToken);
+            var gtipTask = ResolveNavlungoGtipCodeAsync(request.HsCode, countryCode, cancellationToken);
+
+            await Task.WhenAll(senderShippingTask, senderInvoiceTask, gtipTask).ConfigureAwait(false);
+
+            var senderShipping = await senderShippingTask.ConfigureAwait(false);
+            var senderInvoice = await senderInvoiceTask.ConfigureAwait(false);
+            string resolvedGtip = await gtipTask.ConfigureAwait(false);
+
+            if (senderShipping == null || senderInvoice == null)
+            {
+                string missingWhich = senderShipping == null && senderInvoice == null
+                    ? "gönderici ve fatura"
+                    : (senderShipping == null ? "gönderici çıkış" : "fatura");
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = $"Navlungo hesabınızda kayıtlı {missingWhich} adresi bulunamadı. Lütfen ship.navlungo.com → Adreslerim bölümünden bir kez gönderici ve fatura adresi ekleyin."
+                };
+            }
 
             var (phoneCode, phoneNumber) = SplitPhone(request.ReceiverPhone, countryCode);
+            bool isEu = IsEuropeanUnionCountry(countryCode);
 
             var initPayload = new
             {
-                fromCountryCode = fromCountry,
-                destinationCountryCode = countryCode,
-                destinationPostalCode = request.ReceiverPostalCode.Trim(),
-                destinationCity = request.ReceiverCity.Trim(),
-                destinationState = request.ReceiverStateCode.Trim(),
                 shipmentType = "sales",
-                proformaCurrency = "USD",
-                totalProformaPrice = totalProforma,
-                customerReference = request.CustomerReference,
+                senderShippingAddress = senderShipping,
+                senderInvoiceAddress = senderInvoice,
                 receiverAddress = new
                 {
                     addressType = "individual",
@@ -467,23 +486,27 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                     email = request.ReceiverEmail.Trim(),
                     phoneCode,
                     phoneNumber,
-                    countryCode,
-                    stateCode = request.ReceiverStateCode.Trim(),
+                    country = new
+                    {
+                        code = countryCode,
+                        alphaThree = ResolveIsoAlpha3(countryCode),
+                        isInEuropeanUnion = isEu
+                    },
+                    stateCode = NullIfEmpty(request.ReceiverStateCode),
                     city = request.ReceiverCity.Trim(),
                     postalCode = request.ReceiverPostalCode.Trim(),
                     addressLine = new
                     {
                         firstLine = request.ReceiverStreet1.Trim(),
-                        secondLine = request.ReceiverStreet2?.Trim() ?? string.Empty,
-                        thirdLine = string.Empty
+                        secondLine = NullIfEmpty(request.ReceiverStreet2)
                     }
                 },
                 packages = new[]
                 {
                     new
                     {
-                        type = "parcel",
-                        packageType = "parcel",
+                        loadType = "box",
+                        packageType = "box",
                         weight = Math.Round(request.WeightKg, 2),
                         length = Math.Round(request.LengthCm, 1),
                         width = Math.Round(request.WidthCm, 1),
@@ -491,54 +514,39 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                         quantity = 1
                     }
                 },
-                proformaInvoice = new
+                products = new[]
                 {
-                    currency = "USD",
-                    iossNumber = string.IsNullOrWhiteSpace(request.IossNumber) ? null : request.IossNumber.Trim(),
-                    products = new[]
+                    new
                     {
-                        new
-                        {
-                            description = request.ProductDescription,
-                            hsCode = request.HsCode,
-                            originCountryCode = fromCountry,
-                            quantity = Math.Max(1, request.Quantity),
-                            price = Math.Round(Math.Max(1.00m, request.UnitPriceUsd), 2, MidpointRounding.AwayFromZero)
-                        }
+                        description = request.ProductDescription,
+                        originCountry = fromCountry,
+                        gtipCode = resolvedGtip,
+                        unitPrice,
+                        quantity,
+                        currency = "USD",
+                        merchantProductIdentifier = isEu ? $"NVM-ETSY-{resolvedGtip.Replace(".", "")}" : null,
+                        nonStandardisedManufacturerProductIdentifier = isEu ? $"NVN-ETSY-{resolvedGtip.Replace(".", "")}" : null
                     }
-                }
+                },
+                proformaCurrencyCode = "USD",
+                iossNumber = NullIfEmpty(request.IossNumber)
             };
 
-            string initJson = JsonSerializer.Serialize(initPayload);
-
-            // 1. Gönderiyi başlat (POST /api/shipments/init -> 404/405 ise POST /api/shipments fallback)
-            string shipmentId = string.Empty;
-            HttpStatusCode initStatus = HttpStatusCode.BadRequest;
-            string initBody = string.Empty;
-
-            foreach (string createPath in new[] { "/api/shipments/init", "/api/shipments" })
+            var initSerializerOpts = new JsonSerializerOptions
             {
-                using var initReq = new HttpRequestMessage(HttpMethod.Post, $"{PortalApiBase}{createPath}");
-                ApplyPortalAuthHeaders(initReq, settings);
-                initReq.Content = new StringContent(initJson, Encoding.UTF8, "application/json");
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+            string initJson = JsonSerializer.Serialize(initPayload, initSerializerOpts);
 
-                using var initRes = await _httpClient.SendAsync(initReq, cancellationToken).ConfigureAwait(false);
-                initStatus = initRes.StatusCode;
-                initBody = await initRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            // 1b. Gönderiyi başlat (POST /api/shipments/init)
+            using var initReq = new HttpRequestMessage(HttpMethod.Post, $"{PortalApiBase}/api/shipments/init");
+            ApplyPortalAuthHeaders(initReq, settings);
+            initReq.Content = new StringContent(initJson, Encoding.UTF8, "application/json");
 
-                if (initRes.IsSuccessStatusCode)
-                {
-                    shipmentId = TryExtractShipmentId(initBody);
-                    if (!string.IsNullOrWhiteSpace(shipmentId))
-                    {
-                        break;
-                    }
-                }
-                else if (initRes.StatusCode != HttpStatusCode.NotFound && initRes.StatusCode != HttpStatusCode.MethodNotAllowed)
-                {
-                    break;
-                }
-            }
+            using var initRes = await _httpClient.SendAsync(initReq, cancellationToken).ConfigureAwait(false);
+            HttpStatusCode initStatus = initRes.StatusCode;
+            string initBody = await initRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            string shipmentId = initRes.IsSuccessStatusCode ? TryExtractShipmentId(initBody) : string.Empty;
 
             if (string.IsNullOrWhiteSpace(shipmentId))
             {
@@ -590,21 +598,29 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 };
             }
 
-            // 3. Seçilen teklifi onayla
-            var approvePayload = new
+            // 3. Seçilen teklifi onayla (POST /api/shipments/{shipmentId}/select-quote)
+            var selectedVas = new List<string>();
+            if ((request.IsDdp || matched.IsDdpRequired) &&
+                (matched.AvailableValueAddedServices.Count == 0 ||
+                 matched.AvailableValueAddedServices.Any(v => v.Equals("ddp", StringComparison.OrdinalIgnoreCase))))
             {
-                quoteId = matched.QuoteId,
+                selectedVas.Add("ddp");
+            }
+
+            var selectQuotePayload = new
+            {
+                searchReference = NullIfEmpty(matched.SearchReference),
                 searchId = matched.SearchId,
-                selectedValueAddedServices = request.IsDdp ? new[] { "ddp" } : Array.Empty<string>(),
-                isContractApproved = true
+                quoteId = matched.QuoteId,
+                selectedValueAddedServices = selectedVas.ToArray()
             };
-            string approveJson = JsonSerializer.Serialize(approvePayload);
+            string selectQuoteJson = JsonSerializer.Serialize(selectQuotePayload, initSerializerOpts);
 
             using var approveReq = new HttpRequestMessage(
                 HttpMethod.Post,
-                $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/quotes/{Uri.EscapeDataString(matched.QuoteId)}/approve");
+                $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/select-quote");
             ApplyPortalAuthHeaders(approveReq, settings);
-            approveReq.Content = new StringContent(approveJson, Encoding.UTF8, "application/json");
+            approveReq.Content = new StringContent(selectQuoteJson, Encoding.UTF8, "application/json");
 
             using var approveRes = await _httpClient.SendAsync(approveReq, cancellationToken).ConfigureAwait(false);
             string approveBody = await approveRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -668,6 +684,167 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             };
         }
     }
+
+    private async Task<System.Text.Json.Nodes.JsonObject?> FetchStoredSenderAddressAsync(
+        string relativePath,
+        NavlungoSettings settings,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}{relativePath}");
+            ApplyPortalAuthHeaders(req, settings);
+            using var res = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode) return null;
+
+            string body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var arr = System.Text.Json.Nodes.JsonNode.Parse(body) as System.Text.Json.Nodes.JsonArray;
+            if (arr == null || arr.Count == 0) return null;
+
+            System.Text.Json.Nodes.JsonObject? chosen = null;
+            foreach (var item in arr)
+            {
+                if (item is System.Text.Json.Nodes.JsonObject obj)
+                {
+                    chosen ??= obj;
+                    if (obj["isFavorited"]?.GetValue<bool>() == true)
+                    {
+                        chosen = obj;
+                        break;
+                    }
+                }
+            }
+
+            if (chosen == null) return null;
+
+            var cleaned = StripEmptyStringFields(chosen) as System.Text.Json.Nodes.JsonObject;
+            if (cleaned != null && cleaned["identificationNumber"] == null && cleaned["taxNumber"] != null)
+            {
+                cleaned["identificationNumber"] = cleaned["taxNumber"]!.DeepClone();
+            }
+            return cleaned;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static System.Text.Json.Nodes.JsonNode? StripEmptyStringFields(System.Text.Json.Nodes.JsonNode? node)
+    {
+        if (node == null) return null;
+        if (node is System.Text.Json.Nodes.JsonValue val)
+        {
+            if (val.TryGetValue<string>(out var s) && string.IsNullOrEmpty(s))
+                return null;
+            return val.DeepClone();
+        }
+        if (node is System.Text.Json.Nodes.JsonArray arr)
+        {
+            var newArr = new System.Text.Json.Nodes.JsonArray();
+            foreach (var el in arr)
+            {
+                var c = StripEmptyStringFields(el);
+                if (c != null) newArr.Add(c);
+            }
+            return newArr;
+        }
+        if (node is System.Text.Json.Nodes.JsonObject obj)
+        {
+            var newObj = new System.Text.Json.Nodes.JsonObject();
+            foreach (var kv in obj)
+            {
+                var c = StripEmptyStringFields(kv.Value);
+                if (c != null) newObj[kv.Key] = c;
+            }
+            return newObj.Count > 0 ? newObj : null;
+        }
+        return node.DeepClone();
+    }
+
+    private async Task<string> ResolveNavlungoGtipCodeAsync(string? rawHsCode, string countryCode, CancellationToken ct)
+    {
+        string digits = new string((rawHsCode ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length < 6) digits = "3926400000";
+
+        if (!string.Equals(countryCode, "US", StringComparison.OrdinalIgnoreCase))
+        {
+            return digits[..6];
+        }
+
+        string searchPrefix = $"{digits[..4]}.{digits.Substring(4, 2)}";
+        try
+        {
+            using var req = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://quote-search-api.navlungo.com/htsuscodes/v1?search={Uri.EscapeDataString(searchPrefix)}&limit=15");
+            req.Headers.TryAddWithoutValidation("Accept", "application/json");
+            using var res = await _httpClient.SendAsync(req, ct).ConfigureAwait(false);
+            if (res.IsSuccessStatusCode)
+            {
+                string json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    string? firstHts = null;
+                    foreach (var it in items.EnumerateArray())
+                    {
+                        if (it.TryGetProperty("htsCode", out var hc) && hc.ValueKind == JsonValueKind.String)
+                        {
+                            string code = hc.GetString()!.Trim();
+                            string codeDigits = new string(code.Where(char.IsDigit).ToArray());
+                            firstHts ??= code;
+                            if (codeDigits == digits || (digits.Length >= 8 && codeDigits.StartsWith(digits[..8], StringComparison.Ordinal)))
+                            {
+                                return code;
+                            }
+                        }
+                    }
+                    if (!string.IsNullOrWhiteSpace(firstHts)) return firstHts!;
+                }
+            }
+        }
+        catch { }
+
+        string padded = digits.Length >= 10 ? digits[..10] : digits.PadRight(10, '0');
+        return $"{padded[..4]}.{padded.Substring(4, 2)}.{padded.Substring(6, 2)}.{padded.Substring(8, 2)}";
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string ResolveIsoAlpha3(string iso2) => iso2.ToUpperInvariant() switch
+    {
+        "US" => "USA",
+        "CA" => "CAN",
+        "GB" or "UK" => "GBR",
+        "DE" => "DEU",
+        "FR" => "FRA",
+        "IT" => "ITA",
+        "ES" => "ESP",
+        "NL" => "NLD",
+        "BE" => "BEL",
+        "AT" => "AUT",
+        "CH" => "CHE",
+        "AU" => "AUS",
+        "SE" => "SWE",
+        "NO" => "NOR",
+        "DK" => "DNK",
+        "FI" => "FIN",
+        "PL" => "POL",
+        "IE" => "IRL",
+        "PT" => "PRT",
+        "TR" => "TUR",
+        _ => iso2.Length == 2 ? iso2.ToUpperInvariant() + "A" : "USA"
+    };
+
+    private static bool IsEuropeanUnionCountry(string iso2) => iso2.ToUpperInvariant() switch
+    {
+        "AT" or "BE" or "BG" or "HR" or "CY" or "CZ" or "DK" or "EE" or "FI" or "FR" or "DE" or
+        "GR" or "HU" or "IE" or "IT" or "LV" or "LT" or "LU" or "MT" or "NL" or "PL" or "PT" or
+        "RO" or "SK" or "SI" or "ES" or "SE" => true,
+        _ => false
+    };
 
     private static NavlungoQuoteOffer? SelectMatchingOffer(
         List<NavlungoQuoteOffer> offers,
@@ -1126,6 +1303,8 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             string quoteId = string.Empty;
             string shipmentId = string.Empty;
             string searchId = string.Empty;
+            string searchReference = string.Empty;
+            var availableVas = new List<string>();
             string quoteDescription = string.Empty;
             decimal price = 0;
             string currency = "USD";
@@ -1153,6 +1332,8 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 shipmentId = shIdProp.GetString() ?? "";
             if (element.TryGetProperty("searchId", out var seIdProp) && seIdProp.ValueKind == JsonValueKind.String)
                 searchId = seIdProp.GetString() ?? "";
+            if (element.TryGetProperty("searchReference", out var srProp) && srProp.ValueKind == JsonValueKind.String)
+                searchReference = srProp.GetString() ?? "";
             if (element.TryGetProperty("customerName", out var custProp) && custProp.ValueKind == JsonValueKind.String)
                 customerName = custProp.GetString() ?? "";
             if (element.TryGetProperty("quoteDescription", out var qDescProp) && qDescProp.ValueKind == JsonValueKind.String)
@@ -1247,6 +1428,10 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 foreach (var vas in vasProp.EnumerateArray())
                 {
                     string code = vas.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
+                    if (!string.IsNullOrWhiteSpace(code) && !availableVas.Contains(code, StringComparer.OrdinalIgnoreCase))
+                    {
+                        availableVas.Add(code);
+                    }
                     if (vas.TryGetProperty("price", out var vp) && TryReadMoneyObject(vp, out decimal vasAmt, out _))
                     {
                         switch (code.ToLowerInvariant())
@@ -1362,6 +1547,8 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                         QuoteId = quoteId,
                         ShipmentId = shipmentId,
                         SearchId = searchId,
+                        SearchReference = searchReference,
+                        AvailableValueAddedServices = availableVas,
                         CustomerName = customerName,
                         ChargeableWeightKg = chargeableWeightKg,
                         VolumetricWeightKg = volumetricWeightKg,

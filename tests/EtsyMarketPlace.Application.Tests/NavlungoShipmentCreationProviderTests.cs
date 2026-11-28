@@ -103,19 +103,21 @@ public class NavlungoShipmentCreationProviderTests
     }
 
     [Fact]
-    public async Task NavlungoApiClient_CreateShipmentAsync_ReturnsPortalQuoteUrl_WhenApproveFails()
+    public async Task NavlungoApiClient_CreateShipmentAsync_ReturnsPortalQuoteUrl_WhenSelectQuoteFails()
     {
         using var http = new HttpClient(new StubHandler(req =>
         {
             string url = req.RequestUri!.AbsoluteUri;
+            if (req.Method == HttpMethod.Get && url.Contains("stored-sender-"))
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(@"[{""id"":1,""contactName"":""Test"",""city"":""Ankara""}]") };
             if (req.Method == HttpMethod.Post && url == "https://api.navlungo.com/api/shipments/init")
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("\"draft-guid-42\"") };
             if (req.Method == HttpMethod.Get && url.EndsWith("/quotes"))
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StringContent(@"{""quotes"":[{""shipmentId"":""draft-guid-42"",""searchId"":""s1"",""quoteId"":""q1"",""serviceType"":""economy"",""lastMile"":""thy"",""quotePrice"":{""amount"":19.18,""currency"":{""value"":""USD""}}}]}")
+                    Content = new StringContent(@"{""quotes"":[{""shipmentId"":""draft-guid-42"",""searchId"":""s1"",""searchReference"":""SR1"",""quoteId"":""q1"",""serviceType"":""economy"",""lastMile"":""thy"",""quotePrice"":{""amount"":19.18,""currency"":{""value"":""USD""}}}]}")
                 };
-            if (req.Method == HttpMethod.Post && url.EndsWith("/approve"))
+            if (req.Method == HttpMethod.Post && url.EndsWith("/select-quote"))
                 return new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent(@"{""message"":""Yetersiz bakiye""}") };
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }));
@@ -185,16 +187,44 @@ public class NavlungoShipmentCreationProviderTests
     }
 
     [Fact]
-    public async Task NavlungoApiClient_CreateShipmentAsync_ExecutesPortalInitQuotesApproveAndConsignment()
+    public async Task NavlungoApiClient_CreateShipmentAsync_ExecutesPortalInitQuotesSelectQuoteAndConsignment()
     {
         var calledUrls = new List<string>();
+        string? capturedInitJson = null;
+        string? capturedSelectQuoteJson = null;
+
         using var http = new HttpClient(new StubHandler(req =>
         {
             string url = req.RequestUri!.AbsoluteUri;
             calledUrls.Add($"{req.Method} {url}");
 
+            if (req.Method == HttpMethod.Get && url == "https://api.navlungo.com/api/Shippers/stored-sender-shipping-address")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(@"[{""id"":223721,""contactName"":""Erhan Keskin"",""city"":""Ankara"",""postalCode"":""06000"",""country"":{""code"":""TR"",""alphaThree"":""TUR"",""isInEuropeanUnion"":false},""addressLine"":{""firstLine"":""Test Cad. No:1"",""secondLine"":""""},""phoneCode"":""+90"",""phoneNumber"":""5551112233"",""email"":""sender@example.com"",""identificationNumber"":""11111111110"",""addressType"":""individual"",""isFavorited"":true}]")
+                };
+            }
+
+            if (req.Method == HttpMethod.Get && url == "https://api.navlungo.com/api/Shippers/stored-sender-invoice-address")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(@"[{""id"":223720,""contactName"":""Erhan Keskin"",""city"":""Ankara"",""postalCode"":""06000"",""country"":{""code"":""TR"",""alphaThree"":""TUR"",""isInEuropeanUnion"":false},""addressLine"":{""firstLine"":""Test Cad. No:1""},""phoneCode"":""+90"",""phoneNumber"":""5551112233"",""email"":""sender@example.com"",""identificationNumber"":""11111111110"",""addressType"":""individual"",""isFavorited"":true}]")
+                };
+            }
+
+            if (req.Method == HttpMethod.Get && url.StartsWith("https://quote-search-api.navlungo.com/htsuscodes/v1"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(@"{""items"":[{""htsCode"":""3926.40.00.00""}]}")
+                };
+            }
+
             if (req.Method == HttpMethod.Post && url == "https://api.navlungo.com/api/shipments/init")
             {
+                capturedInitJson = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("\"bcecacf1-6161-4d17-ae6d-563fc70c61cc\"")
@@ -209,17 +239,20 @@ public class NavlungoShipmentCreationProviderTests
                         ""quotes"": [{
                             ""shipmentId"": ""bcecacf1-6161-4d17-ae6d-563fc70c61cc"",
                             ""searchId"": ""search-123"",
+                            ""searchReference"": ""SREF-999"",
                             ""quoteId"": ""quote-widect-1"",
                             ""serviceType"": ""economy"",
                             ""lastMile"": ""thy"",
-                            ""quotePrice"": { ""amount"": 19.18, ""currency"": { ""value"": ""USD"" } }
+                            ""quotePrice"": { ""amount"": 19.18, ""currency"": { ""value"": ""USD"" } },
+                            ""valueAddedServices"": [{ ""code"": ""ddp"", ""price"": { ""amount"": 2.27, ""currency"": { ""value"": ""USD"" } } }]
                         }]
                     }")
                 };
             }
 
-            if (req.Method == HttpMethod.Post && url.EndsWith("/quotes/quote-widect-1/approve"))
+            if (req.Method == HttpMethod.Post && url.EndsWith("/select-quote"))
             {
+                capturedSelectQuoteJson = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(@"{ ""lastMileTrackingNumber"": ""TRK-NAVLUNGO-999"" }")
@@ -249,6 +282,7 @@ public class NavlungoShipmentCreationProviderTests
             ReceiverStateCode = "AZ",
             ReceiverPostalCode = "85213",
             ReceiverCountryCode = "US",
+            HsCode = "3926400000",
             SelectedSubCarrier = "widect",
             SelectedServiceCode = "nav-widect",
             IsDdp = true
@@ -260,10 +294,35 @@ public class NavlungoShipmentCreationProviderTests
         Assert.Equal("bcecacf1-6161-4d17-ae6d-563fc70c61cc", resp.ShipmentId);
         Assert.Equal("TRK-NAVLUNGO-999", resp.TrackingNumber);
         Assert.Equal("https://s3.example.com/awb.pdf", resp.LabelUrl);
-        Assert.Contains("POST https://api.navlungo.com/api/shipments/init", calledUrls);
-        Assert.Contains("GET https://api.navlungo.com/api/shipments/bcecacf1-6161-4d17-ae6d-563fc70c61cc/quotes", calledUrls);
-        Assert.Contains("POST https://api.navlungo.com/api/shipments/bcecacf1-6161-4d17-ae6d-563fc70c61cc/quotes/quote-widect-1/approve", calledUrls);
-        Assert.Contains("GET https://api.navlungo.com/api/shipments/bcecacf1-6161-4d17-ae6d-563fc70c61cc/consignment", calledUrls);
+        Assert.NotNull(capturedInitJson);
+        Assert.Contains("\"proformaCurrencyCode\":\"USD\"", capturedInitJson);
+        Assert.Contains("\"senderShippingAddress\":", capturedInitJson);
+        Assert.Contains("\"senderInvoiceAddress\":", capturedInitJson);
+        Assert.Contains("\"products\":[", capturedInitJson);
+        Assert.Contains("\"gtipCode\":\"3926.40.00.00\"", capturedInitJson);
+        Assert.Contains("\"packageType\":\"box\"", capturedInitJson);
+        Assert.NotNull(capturedSelectQuoteJson);
+        Assert.Contains("\"searchReference\":\"SREF-999\"", capturedSelectQuoteJson);
+        Assert.Contains("\"quoteId\":\"quote-widect-1\"", capturedSelectQuoteJson);
+        Assert.Contains("\"selectedValueAddedServices\":[\"ddp\"]", capturedSelectQuoteJson);
+        Assert.Contains("POST https://api.navlungo.com/api/shipments/bcecacf1-6161-4d17-ae6d-563fc70c61cc/select-quote", calledUrls);
+    }
+
+    [Fact]
+    public async Task NavlungoApiClient_CreateShipmentAsync_ReturnsClearWarning_WhenStoredSenderAddressMissing()
+    {
+        using var http = new HttpClient(new StubHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]") }));
+
+        var client = new NavlungoApiClient(http);
+        var resp = await client.CreateShipmentAsync(new NavlungoCreateShipmentRequest
+        {
+            ReceiverName = "Bryan Sanon",
+            ReceiverCountryCode = "US"
+        }, new NavlungoSettings { SessionCookie = "session=valid" });
+
+        Assert.False(resp.IsSuccess);
+        Assert.Contains("Adreslerim", resp.ErrorMessage);
     }
 
     private sealed class FakeNavlungoApiClient : INavlungoApiClient
