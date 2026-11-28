@@ -230,6 +230,12 @@ public sealed class ShipmentOrchestratorServiceTests
             NavlungoQuoteRequest request,
             NavlungoSettings? settings = null,
             CancellationToken cancellationToken = default) => Task.FromResult(OffersToReturn);
+
+        public Task<NavlungoCreateShipmentResponse> CreateShipmentAsync(
+            NavlungoCreateShipmentRequest request,
+            NavlungoSettings settings,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new NavlungoCreateShipmentResponse { IsSuccess = true });
     }
 
     private sealed class FakeShiptomoreOfficialApi : IShiptomoreOfficialApi

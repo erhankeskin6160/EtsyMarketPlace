@@ -418,6 +418,397 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         }
     }
 
+    /// <summary>
+    /// Aktif ship.navlungo.com üye oturumu (Cookie / Bearer JWT) ile Navlungo Portal API üzerinden
+    /// gönderi başlatır, canlı teklifleri eşleştirir, seçilen teklifi onaylar ve takip/etiket bilgilerini döner.
+    /// </summary>
+    public async Task<NavlungoCreateShipmentResponse> CreateShipmentAsync(
+        NavlungoCreateShipmentRequest request,
+        NavlungoSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+        {
+            return new NavlungoCreateShipmentResponse { IsSuccess = false, ErrorMessage = "Navlungo gönderi isteği boş olamaz." };
+        }
+
+        if (settings == null || !settings.IsSessionValid)
+        {
+            return new NavlungoCreateShipmentResponse
+            {
+                IsSuccess = false,
+                ErrorMessage = "Navlungo oturumu geçersiz veya süresi dolmuş. Lütfen tekrar oturum açın."
+            };
+        }
+
+        try
+        {
+            string countryCode = string.IsNullOrWhiteSpace(request.ReceiverCountryCode) ? "US" : request.ReceiverCountryCode.Trim().ToUpperInvariant();
+            string fromCountry = string.IsNullOrWhiteSpace(request.FromCountryCode) ? "TR" : request.FromCountryCode.Trim().ToUpperInvariant();
+            decimal totalProforma = Math.Round(Math.Max(1.00m, request.UnitPriceUsd * Math.Max(1, request.Quantity)), 2, MidpointRounding.AwayFromZero);
+
+            var (phoneCode, phoneNumber) = SplitPhone(request.ReceiverPhone, countryCode);
+
+            var initPayload = new
+            {
+                fromCountryCode = fromCountry,
+                destinationCountryCode = countryCode,
+                destinationPostalCode = request.ReceiverPostalCode.Trim(),
+                destinationCity = request.ReceiverCity.Trim(),
+                destinationState = request.ReceiverStateCode.Trim(),
+                shipmentType = "sales",
+                proformaCurrency = "USD",
+                totalProformaPrice = totalProforma,
+                customerReference = request.CustomerReference,
+                receiverAddress = new
+                {
+                    addressType = "individual",
+                    contactName = request.ReceiverName.Trim(),
+                    email = request.ReceiverEmail.Trim(),
+                    phoneCode,
+                    phoneNumber,
+                    countryCode,
+                    stateCode = request.ReceiverStateCode.Trim(),
+                    city = request.ReceiverCity.Trim(),
+                    postalCode = request.ReceiverPostalCode.Trim(),
+                    addressLine = new
+                    {
+                        firstLine = request.ReceiverStreet1.Trim(),
+                        secondLine = request.ReceiverStreet2?.Trim() ?? string.Empty,
+                        thirdLine = string.Empty
+                    }
+                },
+                packages = new[]
+                {
+                    new
+                    {
+                        type = "parcel",
+                        packageType = "parcel",
+                        weight = Math.Round(request.WeightKg, 2),
+                        length = Math.Round(request.LengthCm, 1),
+                        width = Math.Round(request.WidthCm, 1),
+                        height = Math.Round(request.HeightCm, 1),
+                        quantity = 1
+                    }
+                },
+                proformaInvoice = new
+                {
+                    currency = "USD",
+                    iossNumber = string.IsNullOrWhiteSpace(request.IossNumber) ? null : request.IossNumber.Trim(),
+                    products = new[]
+                    {
+                        new
+                        {
+                            description = request.ProductDescription,
+                            hsCode = request.HsCode,
+                            originCountryCode = fromCountry,
+                            quantity = Math.Max(1, request.Quantity),
+                            price = Math.Round(Math.Max(1.00m, request.UnitPriceUsd), 2, MidpointRounding.AwayFromZero)
+                        }
+                    }
+                }
+            };
+
+            string initJson = JsonSerializer.Serialize(initPayload);
+
+            // 1. Gönderiyi başlat (POST /api/shipments/init -> 404/405 ise POST /api/shipments fallback)
+            string shipmentId = string.Empty;
+            HttpStatusCode initStatus = HttpStatusCode.BadRequest;
+            string initBody = string.Empty;
+
+            foreach (string createPath in new[] { "/api/shipments/init", "/api/shipments" })
+            {
+                using var initReq = new HttpRequestMessage(HttpMethod.Post, $"{PortalApiBase}{createPath}");
+                ApplyPortalAuthHeaders(initReq, settings);
+                initReq.Content = new StringContent(initJson, Encoding.UTF8, "application/json");
+
+                using var initRes = await _httpClient.SendAsync(initReq, cancellationToken).ConfigureAwait(false);
+                initStatus = initRes.StatusCode;
+                initBody = await initRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                if (initRes.IsSuccessStatusCode)
+                {
+                    shipmentId = TryExtractShipmentId(initBody);
+                    if (!string.IsNullOrWhiteSpace(shipmentId))
+                    {
+                        break;
+                    }
+                }
+                else if (initRes.StatusCode != HttpStatusCode.NotFound && initRes.StatusCode != HttpStatusCode.MethodNotAllowed)
+                {
+                    break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(shipmentId))
+            {
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = $"Navlungo gönderi başlatılamadı (HTTP {(int)initStatus}). {ExtractPortalErrorSummary(initBody)}"
+                };
+            }
+
+            string portalQuoteUrl = $"{PortalOrigin}/ship/quotes/{Uri.EscapeDataString(shipmentId)}";
+
+            // 2. Canlı teklifleri çek ve seçilen taşıyıcı/servis ile eşleştir
+            using var quotesReq = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/quotes");
+            ApplyPortalAuthHeaders(quotesReq, settings);
+
+            using var quotesRes = await _httpClient.SendAsync(quotesReq, cancellationToken).ConfigureAwait(false);
+            string quotesBody = await quotesRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!quotesRes.IsSuccessStatusCode)
+            {
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ShipmentId = shipmentId,
+                    PortalQuoteUrl = portalQuoteUrl,
+                    ErrorMessage = $"Navlungo teklifleri alınamadı (HTTP {(int)quotesRes.StatusCode}). Taslak portalda hazır: {portalQuoteUrl}"
+                };
+            }
+
+            var dummyQuoteReq = new NavlungoQuoteRequest
+            {
+                FromCountry = fromCountry,
+                ToCountry = countryCode,
+                WeightKg = request.WeightKg,
+                LengthCm = request.LengthCm,
+                WidthCm = request.WidthCm,
+                HeightCm = request.HeightCm
+            };
+            var offers = ParseNavlungoResponse(quotesBody, dummyQuoteReq);
+            var matched = SelectMatchingOffer(offers, request.SelectedSubCarrier, request.SelectedServiceCode, request.ServiceType);
+            if (matched == null || string.IsNullOrWhiteSpace(matched.QuoteId))
+            {
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ShipmentId = shipmentId,
+                    PortalQuoteUrl = portalQuoteUrl,
+                    ErrorMessage = $"Navlungo canlı teklif eşleştirilemedi ('{request.ServiceType}'). Taslak gönderiyi portaldan tamamlayabilirsiniz: {portalQuoteUrl}"
+                };
+            }
+
+            // 3. Seçilen teklifi onayla
+            var approvePayload = new
+            {
+                quoteId = matched.QuoteId,
+                searchId = matched.SearchId,
+                selectedValueAddedServices = request.IsDdp ? new[] { "ddp" } : Array.Empty<string>(),
+                isContractApproved = true
+            };
+            string approveJson = JsonSerializer.Serialize(approvePayload);
+
+            using var approveReq = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/quotes/{Uri.EscapeDataString(matched.QuoteId)}/approve");
+            ApplyPortalAuthHeaders(approveReq, settings);
+            approveReq.Content = new StringContent(approveJson, Encoding.UTF8, "application/json");
+
+            using var approveRes = await _httpClient.SendAsync(approveReq, cancellationToken).ConfigureAwait(false);
+            string approveBody = await approveRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!approveRes.IsSuccessStatusCode)
+            {
+                return new NavlungoCreateShipmentResponse
+                {
+                    IsSuccess = false,
+                    ShipmentId = shipmentId,
+                    PortalQuoteUrl = portalQuoteUrl,
+                    ErrorMessage = $"Navlungo taslak oluşturuldu ({shipmentId}) ancak teklif onayı başarısız oldu (HTTP {(int)approveRes.StatusCode}). {ExtractPortalErrorSummary(approveBody)} — Portal linki: {portalQuoteUrl}"
+                };
+            }
+
+            // 4. Takip numarası ve etiket URL'ini çek
+            string trackingNumber = ExtractTrackingFromJson(approveBody);
+            string labelUrl = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(trackingNumber))
+            {
+                using var detailReq = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}");
+                ApplyPortalAuthHeaders(detailReq, settings);
+                using var detailRes = await _httpClient.SendAsync(detailReq, cancellationToken).ConfigureAwait(false);
+                if (detailRes.IsSuccessStatusCode)
+                {
+                    string detailBody = await detailRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    trackingNumber = ExtractTrackingFromJson(detailBody);
+                }
+            }
+
+            using (var consReq = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/consignment"))
+            {
+                ApplyPortalAuthHeaders(consReq, settings);
+                using var consRes = await _httpClient.SendAsync(consReq, cancellationToken).ConfigureAwait(false);
+                if (consRes.IsSuccessStatusCode)
+                {
+                    string consBody = await consRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    labelUrl = ExtractLabelUrlFromConsignment(consBody);
+                }
+            }
+
+            return new NavlungoCreateShipmentResponse
+            {
+                IsSuccess = true,
+                ShipmentId = shipmentId,
+                TrackingNumber = trackingNumber,
+                LabelUrl = string.IsNullOrWhiteSpace(labelUrl) ? $"{PortalOrigin}/ship/myShipments/{Uri.EscapeDataString(shipmentId)}" : labelUrl,
+                PortalQuoteUrl = portalQuoteUrl
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new NavlungoCreateShipmentResponse
+            {
+                IsSuccess = false,
+                ErrorMessage = $"Navlungo gönderi oluşturma hatası: {ex.Message}"
+            };
+        }
+    }
+
+    private static NavlungoQuoteOffer? SelectMatchingOffer(
+        List<NavlungoQuoteOffer> offers,
+        string? subCarrier,
+        string? serviceCode,
+        string? serviceType)
+    {
+        if (offers.Count == 0) return null;
+
+        string needle = $"{subCarrier} {serviceCode} {serviceType}".ToLowerInvariant();
+        if (needle.Contains("widect") || needle.Contains("thy") || needle.Contains("eco"))
+        {
+            var m = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
+            if (m != null) return m;
+        }
+
+        if (needle.Contains("fedex"))
+        {
+            var m = offers.FirstOrDefault(o => o.Carrier.Equals("FedEx", StringComparison.OrdinalIgnoreCase));
+            if (m != null) return m;
+        }
+
+        if (needle.Contains("ups"))
+        {
+            bool wantsSaver = needle.Contains("saver") || needle.Contains("expedited");
+            var m = offers.FirstOrDefault(o =>
+                o.Carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase) &&
+                (wantsSaver
+                    ? o.ServiceType.Contains("Saver", StringComparison.OrdinalIgnoreCase) || o.CustomerName.Contains("Expedited", StringComparison.OrdinalIgnoreCase)
+                    : !o.ServiceType.Contains("Saver", StringComparison.OrdinalIgnoreCase)));
+            if (m != null) return m;
+
+            m = offers.FirstOrDefault(o => o.Carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase));
+            if (m != null) return m;
+        }
+
+        return offers.OrderBy(o => o.Price).FirstOrDefault();
+    }
+
+    internal static (string PhoneCode, string PhoneNumber) SplitPhone(string? rawPhone, string countryCode)
+    {
+        string digits = new string((rawPhone ?? string.Empty).Where(char.IsDigit).ToArray());
+        string cc = (countryCode ?? "US").Trim().ToUpperInvariant();
+
+        string dialDigits = cc switch
+        {
+            "US" or "CA" => "1",
+            "GB" or "UK" => "44",
+            "DE" => "49",
+            "FR" => "33",
+            "AU" => "61",
+            "NL" => "31",
+            "IT" => "39",
+            "ES" => "34",
+            "BE" => "32",
+            "AT" => "43",
+            "CH" => "41",
+            "TR" => "90",
+            _ => "1"
+        };
+
+        if (cc == "US" || cc == "CA")
+        {
+            if (digits.StartsWith("1") && digits.Length == 11)
+                return ("+1", digits[1..]);
+            return ("+1", digits.Length >= 10 ? digits[^10..] : "4805550199");
+        }
+
+        if (digits.StartsWith(dialDigits) && digits.Length > dialDigits.Length + 6)
+        {
+            return ($"+{dialDigits}", digits[dialDigits.Length..]);
+        }
+
+        if (digits.StartsWith("0") && digits.Length >= 9)
+        {
+            return ($"+{dialDigits}", digits[1..]);
+        }
+
+        return ($"+{dialDigits}", string.IsNullOrWhiteSpace(digits) ? "4805550199" : digits);
+    }
+
+    private static string ExtractTrackingFromJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("lastMileTrackingNumber", out var lm) && lm.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(lm.GetString()))
+                    return lm.GetString()!.Trim();
+                if (root.TryGetProperty("trackingNumber", out var tr) && tr.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tr.GetString()))
+                    return tr.GetString()!.Trim();
+                if (root.TryGetProperty("reference", out var rf) && rf.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(rf.GetString()))
+                    return rf.GetString()!.Trim();
+            }
+        }
+        catch { }
+        return string.Empty;
+    }
+
+    private static string ExtractLabelUrlFromConsignment(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var f in files.EnumerateArray())
+                {
+                    if (f.TryGetProperty("remoteFileUrl", out var url) && url.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(url.GetString()))
+                        return url.GetString()!.Trim();
+                }
+            }
+        }
+        catch { }
+        return string.Empty;
+    }
+
+    private static string ExtractPortalErrorSummary(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (string key in new[] { "message", "detail", "title", "error" })
+                {
+                    if (root.TryGetProperty(key, out var prop) && prop.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(prop.GetString()))
+                        return prop.GetString()!.Trim();
+                }
+            }
+        }
+        catch { }
+        return body.Length > 250 ? body[..250] : body;
+    }
+
     private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(
         NavlungoQuoteRequest request,
         NavlungoSettings? settings,

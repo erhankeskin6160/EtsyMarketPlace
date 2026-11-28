@@ -274,6 +274,11 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreat
     {
         manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ShiptomoreOfficialShipmentCreationProvider(shiptomoreApi));
     }
+    var navlungoApi = sp.GetService<EtsyMarketPlace.Application.Shipping.INavlungoApiClient>();
+    if (navlungoApi != null)
+    {
+        manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.NavlungoPortalShipmentCreationProvider(navlungoApi));
+    }
     return manager;
 });
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.IShippingSessionManager, EtsyMarketPlace.Infrastructure.Shipping.PuppeteerShippingSessionManager>();

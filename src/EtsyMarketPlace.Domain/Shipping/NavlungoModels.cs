@@ -267,3 +267,51 @@ public static class NavlungoFallbackPricing
         };
     }
 }
+
+/// <summary>
+/// Navlungo Portal API (api.navlungo.com) üzerinden gönderi oluşturma isteği.
+/// </summary>
+public sealed class NavlungoCreateShipmentRequest
+{
+    public string FromCountryCode { get; set; } = "TR";
+    public string ReceiverName { get; set; } = string.Empty;
+    public string ReceiverEmail { get; set; } = string.Empty;
+    public string ReceiverPhone { get; set; } = string.Empty;
+    public string ReceiverStreet1 { get; set; } = string.Empty;
+    public string ReceiverStreet2 { get; set; } = string.Empty;
+    public string ReceiverCity { get; set; } = string.Empty;
+    public string ReceiverStateCode { get; set; } = string.Empty;
+    public string ReceiverPostalCode { get; set; } = string.Empty;
+    public string ReceiverCountryCode { get; set; } = "US";
+
+    public double WeightKg { get; set; } = 0.4;
+    public double LengthCm { get; set; } = 20;
+    public double WidthCm { get; set; } = 15;
+    public double HeightCm { get; set; } = 10;
+
+    public string HsCode { get; set; } = "39264000";
+    public string ProductDescription { get; set; } = "Decorative Plastic Figurine Item";
+    public int Quantity { get; set; } = 1;
+    public decimal UnitPriceUsd { get; set; } = 10.00m;
+    public string IossNumber { get; set; } = string.Empty;
+
+    public string SelectedSubCarrier { get; set; } = "widect";
+    public string SelectedServiceCode { get; set; } = "nav-widect";
+    public string ServiceType { get; set; } = "Widect — Navlungo";
+    public bool IsDdp { get; set; } = true;
+    public string CustomerReference { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Navlungo Portal API gönderi oluşturma sonucu.
+/// </summary>
+public sealed class NavlungoCreateShipmentResponse
+{
+    public bool IsSuccess { get; set; }
+    public string ShipmentId { get; set; } = string.Empty;
+    public string TrackingNumber { get; set; } = string.Empty;
+    public string LabelUrl { get; set; } = string.Empty;
+    public string? LabelBase64 { get; set; }
+    public string PortalQuoteUrl { get; set; } = string.Empty;
+    public string ErrorMessage { get; set; } = string.Empty;
+}

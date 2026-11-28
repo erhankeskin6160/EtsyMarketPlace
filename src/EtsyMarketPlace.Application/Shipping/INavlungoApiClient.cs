@@ -14,4 +14,9 @@ public interface INavlungoApiClient
         NavlungoQuoteRequest request,
         NavlungoSettings? settings = null,
         CancellationToken cancellationToken = default);
+
+    Task<NavlungoCreateShipmentResponse> CreateShipmentAsync(
+        NavlungoCreateShipmentRequest request,
+        NavlungoSettings settings,
+        CancellationToken cancellationToken = default);
 }
