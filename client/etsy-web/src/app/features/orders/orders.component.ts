@@ -31,9 +31,32 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private toastr = inject(ToastrService);
   private sanitizer = inject(DomSanitizer);
 
-  readonly navlungoBookmarkletUrl: SafeUrl = this.sanitizer.bypassSecurityTrustUrl(
-    `javascript:(()=>{try{const findJwt=s=>{const m=(s||'').match(/eyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}/g);if(!m)return null;const now=Date.now()/1000;for(const t of m){try{const p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(!p.exp||p.exp>now)return t;}catch{}}return m[0];};let tok=null;for(const st of[localStorage,sessionStorage]){for(let i=0;i<st.length&&!tok;i++){const v=st.getItem(st.key(i));if(v&&v.includes('eyJ'))tok=findJwt(v);}}if(!tok)tok=findJwt(document.cookie);if(!tok){alert('Aktif Navlungo JWT bulunamadi. Lutfen ship.navlungo.com hesabina giris yapip sayfayi yenileyin.');return;}navigator.clipboard.writeText(tok).then(()=>alert('Navlungo JWT panoya kopyalandi! Simdi Etsy panelinde "Panodan Akilli Yapistir & Baglan" butonuna basin.')).catch(()=>prompt('Tokeni kopyalayin:',tok));}catch(e){alert('Token okunamadi: '+e.message);}})();`
-  );
+  readonly navlungoBookmarkletUrl: SafeUrl = this.buildNavlungoBookmarkletUrl();
+
+  private buildNavlungoBookmarkletUrl(): SafeUrl {
+    const targetOrdersUrl = `${window.location.origin}/orders`;
+    const code =
+      `javascript:(()=>{try{` +
+      `const dec=t=>{try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));}catch{return null;}};` +
+      `const ok=t=>{if(!t||typeof t!=='string'||t.split('.').length!==3)return false;const p=dec(t);return !p||!p.exp||p.exp>(Date.now()/1000+30);};` +
+      `let tok=null;` +
+      `for(const st of[sessionStorage,localStorage]){` +
+      `for(let i=0;i<st.length&&!tok;i++){` +
+      `const v=st.getItem(st.key(i));if(!v)continue;` +
+      `try{const j=JSON.parse(v);if(j&&j.access_token&&ok(j.access_token)){tok=j.access_token;break;}}catch{}` +
+      `}}` +
+      `if(!tok){for(const st of[sessionStorage,localStorage]){for(let i=0;i<st.length&&!tok;i++){` +
+      `const k=(st.key(i)||'').toLowerCase(),v=st.getItem(st.key(i))||'';` +
+      `if(k.includes('access')&&ok(v)){tok=v;break;}` +
+      `const m=v.match(/eyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}/g)||[];` +
+      `for(const c of m){const p=dec(c);if(ok(c)&&p&&(p.scope||p.scp)){tok=c;break;}}` +
+      `}}}` +
+      `if(!tok){alert('Aktif Navlungo access_token bulunamadi. Lutfen ship.navlungo.com hesabina giris yapip sayfayi yenileyin.');return;}` +
+      `if(navigator.clipboard)navigator.clipboard.writeText(tok).catch(()=>{});` +
+      `window.open('${targetOrdersUrl}#navlungo_token='+encodeURIComponent(tok),'_blank');` +
+      `}catch(e){alert('Token okunamadi: '+e.message);}})();`;
+    return this.sanitizer.bypassSecurityTrustUrl(code);
+  }
   // STATE
   allOrders: OrderFulfillmentItem[] = [];
   selectedOrder: OrderFulfillmentItem | null = null;
@@ -155,6 +178,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // 0. Bookmarklet üzerinden gelen #navlungo_token=... parçasını otomatik yakala ve URL'den temizle
+    this.consumeNavlungoHashToken();
+
     // 1. Subscribe to orders stream
     const ordersSub = this.ordersService.orders$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(orders => {
       this.allOrders = orders;
@@ -1325,6 +1351,31 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.activeModalCarrier = null;
   }
 
+  private consumeNavlungoHashToken(): void {
+    try {
+      const hash = window.location.hash || '';
+      const match = hash.match(/navlungo_token=([^&]+)/);
+      if (!match || !match[1]) return;
+
+      const rawToken = decodeURIComponent(match[1]);
+      // Güvenlik: Token'ı tarayıcı adres çubuğundan hemen temizle
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+      const extracted = this.extractNavlungoJwtFromPaste(rawToken);
+      if (!extracted) return;
+
+      const check = this.ordersService.validateJwt(extracted);
+      if (check.expired) {
+        this.toastr.warning('Aktarılan Navlungo token\'ının süresi dolmuş. Lütfen ship.navlungo.com sayfasını yenileyip tekrar deneyin.');
+        return;
+      }
+
+      this.ordersService.connectCarrier('navlungo', extracted);
+      this.toastr.success(`Navlungo oturumu otomatik bağlandı (${check.timeLeftStr || 'Aktif'}).`);
+      setTimeout(() => this.loadQuotesForSelected(), 600);
+    } catch {}
+  }
+
   openNavlungoPortal(): void {
     window.open('https://ship.navlungo.com/ship', '_blank', 'noopener');
   }
@@ -1336,7 +1387,18 @@ export class OrdersComponent implements OnInit, OnDestroy {
   extractNavlungoJwtFromPaste(raw: string): string {
     const cleaned = (raw || '').trim();
     if (!cleaned) return '';
-    // cURL, Authorization: Bearer ..., JSON veya ham metin içinden geçerli JWT'yi ayıkla
+
+    // 1. OIDC JSON nesnesi yapıştırıldıysa özellikle access_token alanını tercih et (id_token değil!)
+    if (cleaned.startsWith('{') && cleaned.includes('access_token')) {
+      try {
+        const parsed = JSON.parse(cleaned);
+        if (parsed && typeof parsed.access_token === 'string' && parsed.access_token.split('.').length === 3) {
+          return parsed.access_token.trim();
+        }
+      } catch {}
+    }
+
+    // 2. cURL, Authorization: Bearer ..., JSON veya ham metin içinden geçerli JWT'yi ayıkla
     const matches = cleaned.match(/eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g);
     if (matches && matches.length > 0) {
       for (const candidate of matches) {
